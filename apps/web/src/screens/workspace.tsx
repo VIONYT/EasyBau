@@ -8,6 +8,7 @@ import { DocumentScreen } from './document'
 import { MeasurementScreen } from './measurement'
 import { ProjectScreen } from './project'
 import { Projects } from './projects'
+import { ReportScreen } from './report'
 import { Security } from './security'
 import { Users } from './users'
 
@@ -34,7 +35,10 @@ export function Workspace({
   }, [locked, route.view, navigate])
   const current: Route = locked ? { view: 'security' } : route
   const activeTab: Tab =
-    current.view === 'project' || current.view === 'document' || current.view === 'measurement'
+    current.view === 'project' ||
+    current.view === 'document' ||
+    current.view === 'measurement' ||
+    current.view === 'report'
       ? 'projects'
       : current.view
   const tabs: { key: Tab; label: string; visible: boolean }[] = [
@@ -64,7 +68,7 @@ export function Workspace({
   const routeKey =
     current.view === 'project'
       ? `project-${current.id}`
-      : current.view === 'document' || current.view === 'measurement'
+      : current.view === 'document' || current.view === 'measurement' || current.view === 'report'
         ? `${current.view}-${current.id}`
         : current.view
   return (
@@ -103,6 +107,9 @@ export function Workspace({
         ) : null}
         {current.view === 'measurement' ? (
           <MeasurementScreen me={me} id={current.id} navigate={navigate} />
+        ) : null}
+        {current.view === 'report' ? (
+          <ReportScreen me={me} id={current.id} navigate={navigate} />
         ) : null}
         {current.view === 'contacts' ? <Contacts me={me} /> : null}
         {current.view === 'users' ? <Users /> : null}

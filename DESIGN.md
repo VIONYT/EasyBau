@@ -417,7 +417,8 @@ Bautagebuch und weitere Baustellendokumente werden einheitlich als **Berichte au
 - `diary_entry` (project_id, date, weather jsonb, temperature, work_description, incidents, materials, equipment, status: draft|signed).
 - Nach der Unterschrift ist der Eintrag gesperrt (Nachträge als verknüpfter Zusatzeintrag), weil das Bautagebuch Beweisfunktion hat (Behinderungsanzeigen, VOB/B § 6).
 - Fotos: Original unverändert gespeichert (EXIF/GPS optional behalten, Hinweis Datenschutz), plus Thumbnails. Clientseitige Komprimierung optional abschaltbar.
-- Wetter: Vorbefüllung über eine Wetter-API anhand der Baustellenkoordinaten (z. B. Open-Meteo/DWD), manuell überschreibbar.
+- Wetter: manuelle Erfassung (Wetterlage, Temperatur min./max., Bemerkung). Optional später Vorbefüllung über eine Wetter-API anhand der Baustellenkoordinaten (z. B. Open-Meteo/DWD), per `.env` schaltbar und standardmäßig aus.
+- Umsetzung: kein eigenes `diary_entry`, sondern `report` mit Vorlage `daily_site_report`; Werte je Abschnitt in `report.data` (serverseitig je Abschnittstyp validiert), Fotos in `report_photo` (Dateien derselben Projektablage), Unterschriften in `report_signature`.
 - Aus einem Eintrag heraus: „Zusatzleistung / Behinderung erkannt“ → Nachtragsentwurf mit verknüpftem Eintrag und Fotos als Nachweis.
 
 ### 4.6 Zahlungen, Abzüge und Mahnungen

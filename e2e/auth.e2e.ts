@@ -270,6 +270,58 @@ test('measurement sheet (Aufmaß) with rooms, formulas and quantity takeover', a
   await expect(page.locator('.position--item .calc')).toContainText('36,44 m²')
 })
 
+test('Bautagebuch: daily report with weather, team, work, photo and signature', async () => {
+  test.skip(!SETUP_TOKEN, 'SETUP_TOKEN must be set for a fresh stack')
+  test.setTimeout(90_000)
+
+  await page.getByRole('link', { name: /Sanierung Lindenweg/ }).click()
+  await page.getByRole('button', { name: 'Bautagebuch' }).click()
+  await page.getByRole('button', { name: 'Neuer Tagesbericht' }).click()
+  await page.getByLabel('Datum').fill('2026-11-09')
+  await page.getByRole('button', { name: 'Tagesbericht anlegen' }).click()
+  await expect(page.getByRole('heading', { name: /Bautagesbericht – 09\.11\.2026/ })).toBeVisible()
+  await expect(page).toHaveURL(/\/berichte\/[0-9a-f-]{36}$/)
+
+  // Team and working hours are prefilled (Monday: 07:00–16:00 minus 30 min).
+  await expect(page.getByLabel('Name', { exact: true }).first()).toHaveValue(ADMIN.name)
+  await expect(page.getByLabel('Stunden', { exact: true }).first()).toHaveValue('8,5')
+
+  await page.getByText('Regen', { exact: true }).click()
+  await page.getByLabel('Temperatur min. (°C)').fill('3')
+  await page.getByLabel('Temperatur max. (°C)').fill('8,5')
+  await page.getByLabel('Tätigkeit').first().fill('Wände grundiert')
+  const services = page.getByRole('group', { name: 'Ausgeführte Leistungen' })
+  await services.getByRole('button', { name: '+ Zeile' }).click()
+  await services.getByLabel('Bezeichnung').fill('Grundierung Bad')
+  await services.getByLabel('Menge').fill('36,44')
+  await services.getByLabel('Einheit').selectOption({ label: 'm²' })
+  await page
+    .getByLabel('Besondere Vorkommnisse')
+    .fill('Wasserleitung undicht, Arbeiten 1 h unterbrochen.')
+  await page
+    .locator('input[type=file][capture]')
+    .setInputFiles({ name: 'Leck.png', mimeType: 'image/png', buffer: PNG })
+  await expect(page.getByRole('img', { name: 'Leck.png' })).toBeVisible()
+  await page.getByRole('button', { name: 'Bericht speichern' }).click()
+  await expect(page.getByText('Gespeichert.')).toBeVisible()
+  await expectNoHorizontalScroll(page)
+  if (SCREENSHOTS) await page.screenshot({ path: `${SCREENSHOTS}/bautagebuch.png`, fullPage: true })
+
+  // Signing locks the report.
+  page.once('dialog', (dialog) => dialog.accept())
+  await page.getByRole('button', { name: 'Unterschreiben und abschließen' }).click()
+  await expect(page.getByText('Dieser Bericht ist unterschrieben und gesperrt.')).toBeVisible()
+  await expect(page.getByRole('button', { name: 'Bericht speichern' })).toHaveCount(0)
+  await expect(
+    page.getByText(new RegExp(`${ADMIN.name} \\(Auftragnehmer\\), unterschrieben am`)),
+  ).toBeVisible()
+
+  // The Bautagebuch of the project lists the day.
+  await page.getByRole('link', { name: /Sanierung Lindenweg/ }).click()
+  await expect(page.getByText(/Mo\.?, 09\.11\.2026/)).toBeVisible()
+  await expect(page.getByText(/Regen, 3 °C – 8,5 °C · 1 Person · 8,5 Std · 1 Foto/)).toBeVisible()
+})
+
 test('second factor fails without the security key', async () => {
   test.skip(!SETUP_TOKEN, 'SETUP_TOKEN must be set for a fresh stack')
   // Without the key the second step of the login fails with a readable message.

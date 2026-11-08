@@ -5,6 +5,13 @@ Alle wesentlichen Änderungen, vor allem solche, die Betreiber betreffen (neue V
 ## Unveröffentlicht
 
 ### Neu
+- Bautagebuch im Projekt: ein Bautagesbericht je Tag mit Wetter (Wetterlage, Temperaturen), Personal und Stunden (vorbelegt mit Projektteam und Arbeitszeiten der Firma), ausgeführten Leistungen, Material, Geräten, besonderen Vorkommnissen und Fotos (direkt mit der Kamera, abgelegt in der Projektablage unter „Fotos“).
+- Unterschrift schließt den Bericht ab: Kopfdaten (Auftraggeber, Leistungsort, Firma) werden eingefroren, Bericht und Fotos sind danach unveränderlich (Beweisfunktion, VOB/B § 6). Ergänzungen als neuer Bericht für denselben Tag.
+- Berichte laufen über Vorlagen; Regiebericht, Einsatzbericht, Abnahmeprotokoll, Bedenken-/Behinderungsanzeige u. a. sind über die API bereits nutzbar (Oberfläche folgt).
+- Datenbank-Migration `0010_site_diary`.
+
+### Behoben
+- Speichern mit `If-Match` schlug hinter dem Proxy fehl, wenn die Antwort komprimiert ausgeliefert wurde (Caddy hängt `-zstd`/`-gzip` an das ETag).
 - Aufmaß im Projekt: Aufmaßblätter als Angebotsaufmaß oder Leistungsaufmaß, Bereiche und Räume (z. B. Haus A › EG › Bad) mit Maßen L/B/H als Variablen, Zeilen mit Formeln (deutsches Zahlenformat, Vorlagen wie Wandfläche, Rechteck, Abzug Öffnung), Ergebnis live beim Tippen und maßgeblich auf dem Server gerechnet, Abzüge, Zuordnung zu LV-Positionen aus Angebot, Auftrag und Nachträgen.
 - Mengen je LV-Position mit Mehr-/Mindermengen und Hinweis ab 10 % Abweichung (VOB/B § 2 Abs. 3); „Mengen übernehmen“ setzt die Mengen in Entwürfen (Kennzeichen „aus Aufmaß“).
 - Gemeinsames Aufmaß: Abschluss mit Namen beider Seiten und Zeitstempel; danach ist das Blatt gesperrt.

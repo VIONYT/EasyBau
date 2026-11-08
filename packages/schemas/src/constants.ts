@@ -81,3 +81,33 @@ export const PRICED_POSITION_TYPES: readonly EditablePositionType[] = [
 
 /** Angebotsaufmaß (before the quote) and Leistungsaufmaß (work done, basis for invoices). */
 export const MEASUREMENT_KINDS = ['survey', 'performance'] as const
+
+/** Weather conditions in the daily site report (Bautagesbericht). */
+export const WEATHER_CONDITIONS = [
+  'sunny',
+  'partly_cloudy',
+  'overcast',
+  'rain',
+  'heavy_rain',
+  'snow',
+  'frost',
+  'storm',
+  'fog',
+] as const
+
+/** Section types of report templates this version can fill in. */
+export const SUPPORTED_SECTION_TYPES = [
+  'header',
+  'weather',
+  'staff',
+  'services',
+  'materials',
+  'equipment',
+  'text',
+  'photos',
+  'signatures',
+  'yes_no',
+  'deadline',
+] as const
+
+export const SIGNER_ROLES = ['contractor', 'client', 'other'] as const

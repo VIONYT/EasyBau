@@ -4,6 +4,7 @@ import { type ApiError, apiWithEtag } from '../api'
 import { FormError } from '../forms'
 import { t } from '../i18n'
 import type { Navigate, ProjectSection } from '../router'
+import { ProjectDiary } from './diary'
 import { ProjectDocuments } from './documents'
 import { ProjectFiles } from './files'
 import { ProjectMeasurements } from './measurements'
@@ -67,6 +68,7 @@ export function ProjectScreen({
       visible: me.permissions.includes('document.read'),
     },
     { key: 'measurements', label: t('m.title'), visible: true },
+    { key: 'diary', label: t('d.title'), visible: true },
     { key: 'files', label: t('files.title'), visible: true },
   ]
   const site = [
@@ -186,6 +188,14 @@ export function ProjectScreen({
       ) : null}
       {section === 'measurements' ? (
         <ProjectMeasurements
+          me={me}
+          projectId={project.id}
+          archived={project.archived}
+          navigate={navigate}
+        />
+      ) : null}
+      {section === 'diary' ? (
+        <ProjectDiary
           me={me}
           projectId={project.id}
           archived={project.archived}

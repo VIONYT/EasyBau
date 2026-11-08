@@ -91,8 +91,19 @@ export function etagOf(updatedAt: Date | string): string {
   return `"${new Date(updatedAt).getTime().toString(36)}"`
 }
 
+/**
+ * Normalises an ETag sent back by the client: weak marker removed, and the suffix that the
+ * proxy (Caddy `encode`) appends to compressed responses (`"abc-zstd"`, `"abc-gzip"`) stripped.
+ */
+export function normalizeEtag(tag: string): string {
+  return tag
+    .trim()
+    .replace(/^W\//, '')
+    .replace(/-(?:gzip|zstd|br)"$/, '"')
+}
+
 export function checkIfMatch(header: string | undefined, updatedAt: Date | string): void {
-  if (header && header !== etagOf(updatedAt)) {
+  if (header && normalizeEtag(header) !== etagOf(updatedAt)) {
     throw new HttpError(
       412,
       'Der Eintrag wurde inzwischen geändert. Bitte neu laden und erneut speichern.',

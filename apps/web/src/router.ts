@@ -9,14 +9,22 @@ export type Route =
   | { view: 'project'; id: string; section: ProjectSection }
   | { view: 'document'; id: string }
   | { view: 'measurement'; id: string }
+  | { view: 'report'; id: string }
 
-export type ProjectSection = 'overview' | 'documents' | 'measurements' | 'files'
+export type ProjectSection = 'overview' | 'documents' | 'measurements' | 'diary' | 'files'
 
 const UUID = '[0-9a-f-]{36}'
-const SECTIONS = { dokumente: 'documents', aufmass: 'measurements', ablage: 'files' } as const
+const SECTIONS = {
+  dokumente: 'documents',
+  aufmass: 'measurements',
+  bautagebuch: 'diary',
+  ablage: 'files',
+} as const
 
 export function parseRoute(path: string): Route {
-  const project = new RegExp(`^/projekte/(${UUID})(?:/(dokumente|aufmass|ablage))?/?$`).exec(path)
+  const project = new RegExp(
+    `^/projekte/(${UUID})(?:/(dokumente|aufmass|bautagebuch|ablage))?/?$`,
+  ).exec(path)
   if (project) {
     const section = project[2] as keyof typeof SECTIONS | undefined
     return {
@@ -29,6 +37,8 @@ export function parseRoute(path: string): Route {
   if (document) return { view: 'document', id: document[1] as string }
   const measurement = new RegExp(`^/aufmass/(${UUID})/?$`).exec(path)
   if (measurement) return { view: 'measurement', id: measurement[1] as string }
+  const report = new RegExp(`^/berichte/(${UUID})/?$`).exec(path)
+  if (report) return { view: 'report', id: report[1] as string }
   if (path.startsWith('/kontakte')) return { view: 'contacts' }
   if (path.startsWith('/benutzer')) return { view: 'users' }
   if (path.startsWith('/sicherheit')) return { view: 'security' }
@@ -50,6 +60,7 @@ export function pathOf(route: Route): string {
         overview: '',
         documents: '/dokumente',
         measurements: '/aufmass',
+        diary: '/bautagebuch',
         files: '/ablage',
       }
       return `/projekte/${route.id}${segment[route.section]}`
@@ -58,6 +69,8 @@ export function pathOf(route: Route): string {
       return `/dokumente/${route.id}`
     case 'measurement':
       return `/aufmass/${route.id}`
+    case 'report':
+      return `/berichte/${route.id}`
   }
 }
 
