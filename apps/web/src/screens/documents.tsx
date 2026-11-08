@@ -15,7 +15,9 @@ import type { Navigate } from '../router'
 
 /** „Angebot“, „2. Abschlagsrechnung“, „Nachtragsangebot N01“ … */
 export function documentLabel(
-  doc: Pick<DocumentSummary, 'type' | 'invoiceKind' | 'progressNo' | 'changeOrder'>,
+  doc: Pick<DocumentSummary, 'type' | 'invoiceKind' | 'progressNo'> & {
+    changeOrder: { number: number } | null
+  },
 ): string {
   if (doc.type === 'invoice' && doc.invoiceKind) {
     const label = t(`doc.invoice.${doc.invoiceKind}` as TextKey)

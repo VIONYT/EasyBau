@@ -191,6 +191,8 @@ export interface DocumentItem {
   discountPercent: string | null
   totalCents: number | null
   taxRatePercent: string | null
+  /** Quantity was taken over from the measurement (Aufmaß). */
+  fromMeasurement: boolean
 }
 
 export interface DocumentTaxLine {

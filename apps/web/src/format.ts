@@ -44,10 +44,11 @@ export function parseEuro(input: string): number | null {
   return match[1] ? -cents : cents
 }
 
-/** Quantity „12.5“ from the API as „12,5“. */
+/** Quantity „12.5000“ from the API or the formula engine as „12,5“. */
 export function formatQuantity(quantity: string | null | undefined): string {
   if (!quantity) return ''
-  return quantity.replace('.', ',')
+  const trimmed = quantity.includes('.') ? quantity.replace(/0+$/, '').replace(/\.$/, '') : quantity
+  return trimmed.replace('.', ',')
 }
 
 export function formatBytes(bytes: number): string {

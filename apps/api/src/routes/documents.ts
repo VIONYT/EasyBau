@@ -89,6 +89,7 @@ interface ItemRow {
   totalCents: string | null
   taxRatePercent: string | null
   taxCategory: TaxCategory | null
+  fromMeasurement: boolean
 }
 
 async function loadItems(tx: Tx, documentId: string): Promise<ItemRow[]> {
@@ -98,7 +99,7 @@ async function loadItems(tx: Tx, documentId: string): Promise<ItemRow[]> {
            trim_scale(quantity)::text as quantity, unit_id as "unitId", unit_symbol as "unitSymbol",
            unit_price_cents::text as "unitPriceCents", trim_scale(discount_percent)::text as "discountPercent",
            total_cents::text as "totalCents", trim_scale(tax_rate_percent)::text as "taxRatePercent",
-           tax_category as "taxCategory"
+           tax_category as "taxCategory", quantity_from_measurement as "fromMeasurement"
     from document_item where document_id = ${documentId}`
 }
 
@@ -148,7 +149,7 @@ function calculationError(error: unknown): never {
  * Recomputes numbering, line totals, VAT per rate and document totals of a draft and stores them.
  * The server always calculates itself; the client only shows what it gets back (rule 11 analog).
  */
-async function recalculate(tx: Tx, documentId: string): Promise<void> {
+export async function recalculate(tx: Tx, documentId: string): Promise<void> {
   const [doc] = await tx<{ taxMode: string; discountPercent: string | null }[]>`
     select tax_mode as "taxMode", discount_percent::text as "discountPercent"
     from document where id = ${documentId}`
@@ -244,7 +245,7 @@ type DocumentRow = Omit<DocumentDetail, 'items' | 'totals'> & {
   finalizedAt: Date | null
 }
 
-async function loadDocument(
+export async function loadDocument(
   tx: Tx,
   auth: AuthContext,
   id: string,
@@ -278,12 +279,13 @@ async function loadDocument(
     discountPercent: r.discountPercent,
     totalCents: r.totalCents === null ? null : Number(r.totalCents),
     taxRatePercent: r.taxRatePercent,
+    fromMeasurement: r.fromMeasurement,
   }))
   return { ...doc, items, totals: totalsOf(rows, doc), etag: etagOf(updatedRaw) }
 }
 
 /** Locks a draft for changes; finalized documents are immutable (rule 2). */
-async function lockDraft(tx: Tx, auth: AuthContext, id: string) {
+export async function lockDraft(tx: Tx, auth: AuthContext, id: string) {
   const [row] = await tx<{ id: string; status: string; updatedAt: Date; projectId: string }[]>`
     select d.id, d.status, d.updated_at as "updatedAt", d.project_id as "projectId"
     from document d join project p on p.id = d.project_id
@@ -299,7 +301,11 @@ async function lockDraft(tx: Tx, auth: AuthContext, id: string) {
   return row
 }
 
-function send(reply: FastifyReply, doc: (DocumentDetail & { etag: string }) | null, status = 200) {
+export function sendDocument(
+  reply: FastifyReply,
+  doc: (DocumentDetail & { etag: string }) | null,
+  status = 200,
+) {
   if (!doc) throw notFound('Das Dokument')
   const { etag, ...body } = doc
   return reply.status(status).header('etag', etag).send(body)
@@ -604,13 +610,13 @@ export function registerDocumentRoutes(app: FastifyInstance, services: Services)
       return loadDocument(tx, auth, documentId)
     })
     reply.header('location', `/api/v1/documents/${doc?.id}`)
-    return send(reply, doc, 201)
+    return sendDocument(reply, doc, 201)
   })
 
   app.get('/api/v1/documents/:id', async (request, reply) => {
     const auth = requirePermission(request, 'document.read')
     const { id } = parse(documentParam, request.params)
-    return send(reply, await inTenant(services, auth, (tx) => loadDocument(tx, auth, id)))
+    return sendDocument(reply, await inTenant(services, auth, (tx) => loadDocument(tx, auth, id)))
   })
 
   app.patch('/api/v1/documents/:id', async (request, reply) => {
@@ -661,7 +667,7 @@ export function registerDocumentRoutes(app: FastifyInstance, services: Services)
       await recalculate(tx, id)
       return loadDocument(tx, auth, id)
     })
-    return send(reply, doc)
+    return sendDocument(reply, doc)
   })
 
   app.delete('/api/v1/documents/:id', async (request, reply) => {
@@ -747,7 +753,7 @@ export function registerDocumentRoutes(app: FastifyInstance, services: Services)
       await recalculate(tx, id)
       return loadDocument(tx, auth, id)
     })
-    return send(reply, doc, 201)
+    return sendDocument(reply, doc, 201)
   })
 
   app.patch('/api/v1/documents/:id/items/:itemId', async (request, reply) => {
@@ -778,6 +784,7 @@ export function registerDocumentRoutes(app: FastifyInstance, services: Services)
             })
           }
           columns.quantity = input.quantity
+          columns.quantity_from_measurement = false
         }
         if (input.unitId !== undefined) {
           if (input.unitId === null) {
@@ -809,7 +816,7 @@ export function registerDocumentRoutes(app: FastifyInstance, services: Services)
       await recalculate(tx, id)
       return loadDocument(tx, auth, id)
     })
-    return send(reply, doc)
+    return sendDocument(reply, doc)
   })
 
   app.post('/api/v1/documents/:id/items/:itemId/move', async (request, reply) => {
@@ -840,7 +847,7 @@ export function registerDocumentRoutes(app: FastifyInstance, services: Services)
       }
       return loadDocument(tx, auth, id)
     })
-    return send(reply, doc)
+    return sendDocument(reply, doc)
   })
 
   app.delete('/api/v1/documents/:id/items/:itemId', async (request, reply) => {
@@ -855,6 +862,6 @@ export function registerDocumentRoutes(app: FastifyInstance, services: Services)
       await recalculate(tx, id)
       return loadDocument(tx, auth, id)
     })
-    return send(reply, doc)
+    return sendDocument(reply, doc)
   })
 }

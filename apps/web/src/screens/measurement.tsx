@@ -1,0 +1,806 @@
+import { MEASUREMENT_TEMPLATES, tryEvaluateFormula } from '@opc/domain'
+import type {
+  Me,
+  MeasurableDocumentRef,
+  MeasurableItem,
+  MeasurementLine,
+  MeasurementLocation,
+  MeasurementSheetDetail,
+  UnitSummary,
+} from '@opc/schemas'
+import { type FormEvent, useCallback, useEffect, useMemo, useState } from 'react'
+import { ApiError, api, apiWithEtag } from '../api'
+import { formatDateTime, formatQuantity } from '../format'
+import { Field, FormError, optional, SelectField, useForm, value } from '../forms'
+import { type TextKey, t } from '../i18n'
+import type { Navigate } from '../router'
+import { documentLabel } from './documents'
+
+type Sheet = MeasurementSheetDetail
+type Apply = (result: { data: Sheet; etag: string | null }) => void
+
+export function refLabel(ref: MeasurableDocumentRef): string {
+  const label = documentLabel({
+    type: ref.type,
+    invoiceKind: ref.invoiceKind,
+    progressNo: ref.progressNo,
+    changeOrder: ref.changeOrderNumber ? { number: ref.changeOrderNumber } : null,
+  })
+  return ref.number ? `${label} ${ref.number}` : `${label} (${t('doc.status.draft')})`
+}
+
+const itemLabel = (item: MeasurableItem) =>
+  `${item.oz ? `${item.oz} ` : ''}${item.shortText}${item.unit ? ` [${item.unit.symbol}]` : ''}`
+
+/** Room variables including those of the parent areas (same rule as on the server). */
+function roomVariables(locations: MeasurementLocation[], locationId: string | null) {
+  const byId = new Map(locations.map((l) => [l.id, l]))
+  const chain: MeasurementLocation[] = []
+  let current = locationId ? byId.get(locationId) : undefined
+  while (current && chain.length < 20) {
+    chain.unshift(current)
+    current = current.parentId ? byId.get(current.parentId) : undefined
+  }
+  return Object.assign({}, ...chain.map((l) => l.variables)) as Record<string, string>
+}
+
+const VARIABLE_ORDER = ['L', 'B', 'H']
+const rank = (name: string) => {
+  const i = VARIABLE_ORDER.indexOf(name)
+  return i === -1 ? VARIABLE_ORDER.length : i
+}
+
+/** „L 4,25 · B 3,1 · H 2,6“ – always in this order (jsonb does not keep the key order). */
+const formatVariables = (vars: Record<string, string>) =>
+  Object.entries(vars)
+    .sort(([a], [b]) => rank(a) - rank(b) || a.localeCompare(b))
+    .map(([k, v]) => `${k} ${formatQuantity(v)}`)
+    .join(' · ')
+
+/** Aufmaßblatt: rooms, formula lines, quantities per LV position, joint measurement. */
+export function MeasurementScreen({
+  me,
+  id,
+  navigate,
+}: {
+  me: Me
+  id: string
+  navigate: Navigate
+}) {
+  const [sheet, setSheet] = useState<Sheet | null>(null)
+  const [error, setError] = useState<string | null>(null)
+  const [items, setItems] = useState<MeasurableItem[]>([])
+  const [units, setUnits] = useState<UnitSummary[]>([])
+
+  const apply: Apply = useCallback(({ data }) => setSheet(data), [])
+  useEffect(() => {
+    apiWithEtag<Sheet>('GET', `/api/v1/measurement-sheets/${id}`)
+      .then(apply)
+      .catch((err: ApiError) => setError(err.message))
+    api<UnitSummary[]>('GET', '/api/v1/units')
+      .then(setUnits)
+      .catch(() => undefined)
+  }, [id, apply])
+  useEffect(() => {
+    if (!sheet) return
+    api<MeasurableItem[]>(
+      'GET',
+      `/api/v1/projects/${sheet.projectId}/measurable-items?kind=${sheet.kind}`,
+    )
+      .then(setItems)
+      .catch(() => undefined)
+  }, [sheet?.projectId, sheet?.kind, sheet])
+
+  if (error && !sheet) return <FormError>{error}</FormError>
+  if (!sheet) return <p className="muted">{t('common.loading')}</p>
+
+  const editable = sheet.status === 'draft' && me.permissions.includes('measurement.write')
+  const back = () => navigate({ view: 'project', id: sheet.project.id, section: 'measurements' })
+  const remove = async () => {
+    if (!window.confirm(t('m.deleteSheetConfirm'))) return
+    try {
+      await api('DELETE', `/api/v1/measurement-sheets/${sheet.id}`)
+      back()
+    } catch (err) {
+      setError((err as ApiError).message)
+    }
+  }
+
+  return (
+    <section className="site" aria-labelledby="measurement-title">
+      <a
+        className="back"
+        href={`/projekte/${sheet.project.id}/aufmass`}
+        onClick={(e) => {
+          e.preventDefault()
+          back()
+        }}
+      >
+        ← {sheet.project.number ? `${sheet.project.number} · ` : ''}
+        {sheet.project.name}
+      </a>
+      <div className="section-head">
+        <h1 id="measurement-title">{sheet.title}</h1>
+        <span className={`chip chip--${sheet.status === 'signed' ? 'accepted' : 'draft'}`}>
+          {t(`m.status.${sheet.status}` as TextKey)}
+        </span>
+      </div>
+      <p className="muted">
+        {t(`m.kind.${sheet.kind}` as TextKey)} · {formatDateTime(sheet.measuredOn, 'date')}
+      </p>
+      {sheet.status === 'signed' ? (
+        <p className="notice inline" role="status">
+          {t('m.signedBy')} {formatDateTime(sheet.signedAt)}: {sheet.signedByContractor} /{' '}
+          {sheet.signedByClient}
+        </p>
+      ) : null}
+      <FormError>{error}</FormError>
+
+      <Rooms sheet={sheet} editable={editable} apply={apply} />
+      <Lines sheet={sheet} editable={editable} items={items} units={units} apply={apply} />
+      <Quantities me={me} sheet={sheet} />
+      {editable ? <SignPanel sheet={sheet} me={me} apply={apply} /> : null}
+      {editable ? (
+        <button type="button" className="button ghost danger" onClick={remove}>
+          {t('m.deleteSheet')}
+        </button>
+      ) : null}
+    </section>
+  )
+}
+
+// ---- Rooms ------------------------------------------------------------------------------------
+
+function Rooms({ sheet, editable, apply }: { sheet: Sheet; editable: boolean; apply: Apply }) {
+  const [adding, setAdding] = useState(false)
+  const [editingId, setEditingId] = useState<string | null>(null)
+  const [error, setError] = useState<string | null>(null)
+  const remove = async (room: MeasurementLocation) => {
+    if (!window.confirm(t('m.deleteRoomConfirm'))) return
+    setError(null)
+    try {
+      apply(
+        await apiWithEtag<Sheet>(
+          'DELETE',
+          `/api/v1/measurement-sheets/${sheet.id}/locations/${room.id}`,
+        ),
+      )
+    } catch (err) {
+      setError((err as ApiError).message)
+    }
+  }
+  return (
+    <details className="panel" open={editable || sheet.locations.length > 0}>
+      <summary>
+        <h2 className="summary-title">{t('m.rooms')}</h2>
+      </summary>
+      <p className="hint">{t('m.roomsHint')}</p>
+      <FormError>{error}</FormError>
+      {!sheet.locations.length ? <p className="muted">{t('m.roomsEmpty')}</p> : null}
+      {sheet.locations.length ? (
+        <ul className="rooms">
+          {sheet.locations.map((room) => (
+            <li
+              key={room.id}
+              style={{ paddingInlineStart: `calc(${room.level} * var(--space-4))` }}
+            >
+              {editingId === room.id ? (
+                <RoomForm
+                  sheet={sheet}
+                  room={room}
+                  apply={apply}
+                  onDone={() => setEditingId(null)}
+                />
+              ) : (
+                <div className="room-row">
+                  <span>
+                    <strong>{room.name}</strong>
+                    {Object.keys(room.variables).length ? (
+                      <span className="muted block">{formatVariables(room.variables)}</span>
+                    ) : null}
+                  </span>
+                  {editable ? (
+                    <span className="actions">
+                      <button
+                        type="button"
+                        className="button ghost small"
+                        onClick={() => setEditingId(room.id)}
+                      >
+                        {t('common.edit')}
+                      </button>
+                      <button
+                        type="button"
+                        className="button ghost icon danger"
+                        aria-label={`${t('m.deleteRoom')}: ${room.name}`}
+                        onClick={() => remove(room)}
+                      >
+                        ✕
+                      </button>
+                    </span>
+                  ) : null}
+                </div>
+              )}
+            </li>
+          ))}
+        </ul>
+      ) : null}
+      {editable && adding ? (
+        <RoomForm sheet={sheet} apply={apply} onDone={() => setAdding(false)} />
+      ) : null}
+      {editable && !adding ? (
+        <button type="button" className="button ghost" onClick={() => setAdding(true)}>
+          + {t('m.addRoom')}
+        </button>
+      ) : null}
+    </details>
+  )
+}
+
+function RoomForm({
+  sheet,
+  room,
+  apply,
+  onDone,
+}: {
+  sheet: Sheet
+  room?: MeasurementLocation
+  apply: Apply
+  onDone: () => void
+}) {
+  const form = useForm(
+    async (data) => {
+      const variables: Record<string, string> = { ...(room?.variables ?? {}) }
+      for (const name of ['L', 'B', 'H']) {
+        const v = value(data, name)
+        if (v) variables[name] = v
+        else delete variables[name]
+      }
+      const body = { name: value(data, 'name'), variables }
+      return room
+        ? apiWithEtag<Sheet>(
+            'PATCH',
+            `/api/v1/measurement-sheets/${sheet.id}/locations/${room.id}`,
+            body,
+          )
+        : apiWithEtag<Sheet>('POST', `/api/v1/measurement-sheets/${sheet.id}/locations`, {
+            ...body,
+            parentId: optional(data, 'parentId') ?? null,
+          })
+    },
+    (result) => {
+      apply(result)
+      onDone()
+    },
+  )
+  const errorOf = (name: string) =>
+    form.fieldErrors[`variables.${name}`] ??
+    (form.fieldErrors.variables ? form.fieldErrors.variables : undefined)
+  return (
+    <form className="item-form" onSubmit={form.onSubmit} noValidate>
+      <FormError>{form.error}</FormError>
+      <Field
+        label={t('m.roomName')}
+        name="name"
+        required
+        defaultValue={room?.name}
+        error={form.fieldErrors.name}
+      />
+      {!room && sheet.locations.length ? (
+        <SelectField
+          label={t('m.parent')}
+          name="parentId"
+          defaultValue=""
+          options={[
+            { value: '', label: t('m.noParent') },
+            ...sheet.locations.map((l) => ({ value: l.id, label: l.path })),
+          ]}
+        />
+      ) : null}
+      <div className="row three">
+        {(
+          [
+            ['L', 'm.length'],
+            ['B', 'm.width'],
+            ['H', 'm.height'],
+          ] as const
+        ).map(([name, label]) => (
+          <Field
+            key={name}
+            label={t(label)}
+            name={name}
+            inputMode="decimal"
+            defaultValue={formatQuantity(room?.variables[name])}
+            error={errorOf(name)}
+          />
+        ))}
+      </div>
+      <div className="button-row">
+        <button type="submit" className="button primary auto" disabled={form.busy}>
+          {room ? t('common.save') : t('common.add')}
+        </button>
+        <button type="button" className="button ghost" onClick={onDone}>
+          {t('common.cancel')}
+        </button>
+      </div>
+    </form>
+  )
+}
+
+// ---- Lines ------------------------------------------------------------------------------------
+
+function Lines({
+  sheet,
+  editable,
+  items,
+  units,
+  apply,
+}: {
+  sheet: Sheet
+  editable: boolean
+  items: MeasurableItem[]
+  units: UnitSummary[]
+  apply: Apply
+}) {
+  const [adding, setAdding] = useState(false)
+  const [editingId, setEditingId] = useState<string | null>(null)
+  const [error, setError] = useState<string | null>(null)
+  const itemById = useMemo(() => new Map(items.map((i) => [i.id, i])), [items])
+  const groups = useMemo(() => {
+    const result: { key: string; title: string; lines: MeasurementLine[] }[] = []
+    for (const line of sheet.lines) {
+      const key = line.locationId ?? ''
+      let group = result.find((g) => g.key === key)
+      if (!group) {
+        const room = sheet.locations.find((l) => l.id === line.locationId)
+        group = { key, title: room?.path ?? t('m.noRoom'), lines: [] }
+        result.push(group)
+      }
+      group.lines.push(line)
+    }
+    return result
+  }, [sheet])
+
+  const remove = async (line: MeasurementLine) => {
+    if (!window.confirm(t('m.deleteLineConfirm'))) return
+    setError(null)
+    try {
+      apply(
+        await apiWithEtag<Sheet>(
+          'DELETE',
+          `/api/v1/measurement-sheets/${sheet.id}/lines/${line.id}`,
+        ),
+      )
+    } catch (err) {
+      setError((err as ApiError).message)
+    }
+  }
+
+  return (
+    <div className="panel">
+      <h2>{t('m.lines')}</h2>
+      <FormError>{error}</FormError>
+      {groups.map((group) => (
+        <div key={group.key} className="line-group">
+          <h3>{group.title}</h3>
+          <ul className="m-lines">
+            {group.lines.map((line) =>
+              editingId === line.id ? (
+                <li key={line.id}>
+                  <LineForm
+                    sheet={sheet}
+                    line={line}
+                    items={items}
+                    units={units}
+                    apply={apply}
+                    onDone={() => setEditingId(null)}
+                  />
+                </li>
+              ) : (
+                <li key={line.id} className="m-line">
+                  <div className="m-line-main">
+                    <span>
+                      {line.description ? (
+                        <strong className="block">{line.description}</strong>
+                      ) : null}
+                      <code className="formula">{line.formula.replace(/\./g, ',')}</code>
+                      {line.isDeduction ? (
+                        <span className="tag">{t('m.deductionShort')}</span>
+                      ) : null}
+                      <span className="muted block">
+                        {line.documentItemId
+                          ? itemById.get(line.documentItemId)
+                            ? itemLabel(itemById.get(line.documentItemId) as MeasurableItem)
+                            : t('m.item')
+                          : t('m.noItem')}
+                      </span>
+                    </span>
+                    <span className="amount result">
+                      {formatQuantity(line.resultQty)} {line.unit?.symbol}
+                    </span>
+                  </div>
+                  {editable && !line.locked ? (
+                    <span className="actions">
+                      <button
+                        type="button"
+                        className="button ghost icon"
+                        aria-label={`${t('m.editLine')}: ${line.description ?? line.formula}`}
+                        onClick={() => setEditingId(line.id)}
+                      >
+                        ✎
+                      </button>
+                      <button
+                        type="button"
+                        className="button ghost icon danger"
+                        aria-label={t('common.delete')}
+                        onClick={() => remove(line)}
+                      >
+                        ✕
+                      </button>
+                    </span>
+                  ) : null}
+                </li>
+              ),
+            )}
+          </ul>
+        </div>
+      ))}
+      {editable && adding ? (
+        <LineForm
+          sheet={sheet}
+          items={items}
+          units={units}
+          apply={apply}
+          onDone={() => setAdding(false)}
+        />
+      ) : null}
+      {editable && !adding ? (
+        <button type="button" className="button primary auto" onClick={() => setAdding(true)}>
+          + {t('m.addLine')}
+        </button>
+      ) : null}
+    </div>
+  )
+}
+
+function LineForm({
+  sheet,
+  line,
+  items,
+  units,
+  apply,
+  onDone,
+}: {
+  sheet: Sheet
+  line?: MeasurementLine
+  items: MeasurableItem[]
+  units: UnitSummary[]
+  apply: Apply
+  onDone: () => void
+}) {
+  // The last used room and position stay selected: on site many lines follow each other.
+  const last = sheet.lines.at(-1)
+  const [locationId, setLocationId] = useState(line?.locationId ?? last?.locationId ?? '')
+  const [itemId, setItemId] = useState(line?.documentItemId ?? last?.documentItemId ?? '')
+  const [formula, setFormula] = useState(line?.formula.replace(/\./g, ',') ?? '')
+  const [isDeduction, setIsDeduction] = useState(line?.isDeduction ?? false)
+  const [busy, setBusy] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+  const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({})
+
+  const variables = roomVariables(sheet.locations, locationId || null)
+  const preview = formula.trim()
+    ? tryEvaluateFormula(formula, { ...variables, ...line?.variables })
+    : null
+  const item = items.find((i) => i.id === itemId)
+  const documents = [...new Map(items.map((i) => [i.document.id, i.document])).values()]
+
+  const submit = async (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault()
+    const data = new FormData(event.currentTarget)
+    const body = {
+      locationId: locationId || null,
+      documentItemId: itemId || null,
+      description: optional(data, 'description') ?? null,
+      formula,
+      isDeduction,
+      ...(itemId ? {} : { unitId: value(data, 'unitId') || null }),
+    }
+    setBusy(true)
+    setError(null)
+    setFieldErrors({})
+    try {
+      apply(
+        line
+          ? await apiWithEtag<Sheet>(
+              'PATCH',
+              `/api/v1/measurement-sheets/${sheet.id}/lines/${line.id}`,
+              body,
+            )
+          : await apiWithEtag<Sheet>('POST', `/api/v1/measurement-sheets/${sheet.id}/lines`, body),
+      )
+      onDone()
+    } catch (err) {
+      if (err instanceof ApiError) {
+        setError(err.message)
+        setFieldErrors(err.fieldErrors)
+      } else setError(String(err))
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  const shown = preview?.ok
+    ? isDeduction
+      ? `−${formatQuantity(preview.quantity.replace(/^-/, ''))}`
+      : formatQuantity(preview.quantity)
+    : null
+
+  return (
+    <form className="item-form" onSubmit={submit} noValidate>
+      <h3>{line ? t('m.editLine') : t('m.addLine')}</h3>
+      <FormError>{error}</FormError>
+      <div className="row">
+        <SelectField
+          label={t('m.room')}
+          name="locationId"
+          value={locationId}
+          onChange={setLocationId}
+          options={[
+            { value: '', label: t('m.noRoom') },
+            ...sheet.locations.map((l) => ({ value: l.id, label: l.path })),
+          ]}
+          error={fieldErrors.locationId}
+        />
+        <div className="field">
+          <label htmlFor="m-item">{t('m.item')}</label>
+          <select
+            id="m-item"
+            className="select"
+            value={itemId}
+            onChange={(e) => setItemId(e.target.value)}
+          >
+            <option value="">{t('m.noItem')}</option>
+            {documents.map((doc) => (
+              <optgroup key={doc.id} label={refLabel(doc)}>
+                {items
+                  .filter((i) => i.document.id === doc.id)
+                  .map((i) => (
+                    <option key={i.id} value={i.id}>
+                      {itemLabel(i)}
+                    </option>
+                  ))}
+              </optgroup>
+            ))}
+          </select>
+          {fieldErrors.documentItemId ? (
+            <p className="field-error">{fieldErrors.documentItemId}</p>
+          ) : null}
+        </div>
+      </div>
+      <Field
+        label={t('m.description')}
+        name="description"
+        defaultValue={line?.description ?? ''}
+        error={fieldErrors.description}
+      />
+      <fieldset className="templates">
+        <legend>{t('m.templates')}</legend>
+        {MEASUREMENT_TEMPLATES.map((tpl) => (
+          <button
+            key={tpl.id}
+            type="button"
+            className="button ghost small"
+            onClick={() => {
+              setFormula(tpl.formula)
+              setIsDeduction(Boolean(tpl.isDeduction))
+            }}
+          >
+            {tpl.label}
+          </button>
+        ))}
+      </fieldset>
+      <div className="field">
+        <label htmlFor="m-formula">
+          {t('m.formula')}
+          <span aria-hidden="true"> *</span>
+        </label>
+        <input
+          id="m-formula"
+          className="formula-input"
+          name="formula"
+          autoComplete="off"
+          autoCapitalize="characters"
+          spellCheck={false}
+          value={formula}
+          onChange={(e) => setFormula(e.target.value)}
+          aria-invalid={fieldErrors.formula || (preview && !preview.ok) ? true : undefined}
+          aria-describedby="m-formula-hint m-formula-result"
+        />
+        <p id="m-formula-hint" className="hint">
+          {t('m.formulaHint')}
+          {Object.keys(variables).length ? ` ${t('m.room')}: ${formatVariables(variables)}` : ''}
+        </p>
+        <p
+          id="m-formula-result"
+          className={preview && !preview.ok ? 'field-error' : 'result-line'}
+          aria-live="polite"
+        >
+          {preview
+            ? preview.ok
+              ? `${t('m.result')}: ${shown} ${item?.unit?.symbol ?? ''}`
+              : preview.error.message
+            : ''}
+        </p>
+        {fieldErrors.formula ? <p className="field-error">{fieldErrors.formula}</p> : null}
+      </div>
+      <label className="check">
+        <input
+          type="checkbox"
+          checked={isDeduction}
+          onChange={(e) => setIsDeduction(e.target.checked)}
+        />
+        {t('m.deduction')}
+      </label>
+      {itemId ? (
+        <p className="hint">
+          {t('m.unitFromItem')}: {item?.unit?.symbol ?? '–'}
+        </p>
+      ) : (
+        <SelectField
+          label={t('m.unit')}
+          name="unitId"
+          defaultValue={line?.unit?.id ?? ''}
+          options={[
+            { value: '', label: '–' },
+            ...units.map((u) => ({ value: u.id, label: `${u.symbol} – ${u.name}` })),
+          ]}
+          error={fieldErrors.unitId}
+        />
+      )}
+      <div className="button-row">
+        <button type="submit" className="button primary auto" disabled={busy}>
+          {line ? t('common.save') : t('common.add')}
+        </button>
+        <button type="button" className="button ghost" onClick={onDone}>
+          {t('common.cancel')}
+        </button>
+      </div>
+    </form>
+  )
+}
+
+// ---- Quantities per LV position -----------------------------------------------------------------
+
+function Quantities({ me, sheet }: { me: Me; sheet: Sheet }) {
+  const [message, setMessage] = useState<string | null>(null)
+  const [error, setError] = useState<string | null>(null)
+  const drafts = [
+    ...new Map(
+      sheet.items
+        .filter((s) => s.item.document.status === 'draft')
+        .map((s) => [s.item.document.id, s.item.document]),
+    ).values(),
+  ]
+  const applyTo = async (doc: MeasurableDocumentRef) => {
+    setMessage(null)
+    setError(null)
+    try {
+      await api('POST', `/api/v1/documents/${doc.id}/apply-measurements`)
+      setMessage(`${t('m.applied')} (${refLabel(doc)})`)
+    } catch (err) {
+      setError((err as ApiError).message)
+    }
+  }
+  return (
+    <div className="panel">
+      <h2>{t('m.quantities')}</h2>
+      {!sheet.items.length ? <p className="muted">{t('m.quantitiesEmpty')}</p> : null}
+      {sheet.items.length ? (
+        <ul className="quantities">
+          {sheet.items.map(({ item, sheetQuantity, variance }) => (
+            <li key={item.id}>
+              <strong>{itemLabel(item)}</strong>
+              <span className="muted block">{refLabel(item.document)}</span>
+              <dl className="q-facts">
+                <div>
+                  <dt>{t('m.thisSheet')}</dt>
+                  <dd>{formatQuantity(sheetQuantity)}</dd>
+                </div>
+                <div>
+                  <dt>{t('m.measuredTotal')}</dt>
+                  <dd>{formatQuantity(item.measuredQuantity)}</dd>
+                </div>
+                <div>
+                  <dt>{t('m.lvQuantity')}</dt>
+                  <dd>{formatQuantity(item.quantity)}</dd>
+                </div>
+              </dl>
+              {variance.direction !== 'equal' ? (
+                <p className={variance.exceedsThreshold ? 'warning' : 'muted'}>
+                  {variance.direction === 'more' ? t('m.more') : t('m.less')}{' '}
+                  {formatQuantity(variance.difference.replace(/^-/, ''))} {item.unit?.symbol}
+                  {variance.percent ? ` (${formatQuantity(variance.percent)} %)` : ''}
+                  {variance.exceedsThreshold ? ` – ${t('m.vobHint')}` : ''}
+                </p>
+              ) : null}
+            </li>
+          ))}
+        </ul>
+      ) : null}
+      {sheet.unassigned.length ? (
+        <p className="muted">
+          {t('m.unassigned')}:{' '}
+          {sheet.unassigned
+            .map((u) => `${formatQuantity(u.quantity)} ${u.unit ?? ''} (${u.count})`)
+            .join(' · ')}
+        </p>
+      ) : null}
+      {me.permissions.includes('document.write') && drafts.length ? (
+        <div className="stack">
+          <p className="hint">{t('m.applyHint')}</p>
+          {drafts.map((doc) => (
+            <button
+              key={doc.id}
+              type="button"
+              className="button ghost"
+              onClick={() => applyTo(doc)}
+            >
+              {t('m.apply')} {refLabel(doc)}
+            </button>
+          ))}
+        </div>
+      ) : null}
+      {message ? (
+        <p className="success" role="status">
+          {message}
+        </p>
+      ) : null}
+      <FormError>{error}</FormError>
+    </div>
+  )
+}
+
+// ---- Joint measurement ------------------------------------------------------------------------
+
+function SignPanel({ sheet, me, apply }: { sheet: Sheet; me: Me; apply: Apply }) {
+  const form = useForm(async (data) => {
+    if (!window.confirm(t('m.signConfirm'))) throw new ApiError(0, '')
+    return apiWithEtag<Sheet>('POST', `/api/v1/measurement-sheets/${sheet.id}/sign`, {
+      contractorName: value(data, 'contractorName'),
+      clientName: value(data, 'clientName'),
+    })
+  }, apply)
+  return (
+    <details className="panel">
+      <summary>
+        <h2 className="summary-title">{t('m.sign')}</h2>
+      </summary>
+      <form onSubmit={form.onSubmit} noValidate>
+        <p className="hint">{t('m.signHint')}</p>
+        <FormError>{form.error || null}</FormError>
+        <div className="row">
+          <Field
+            label={t('m.contractor')}
+            name="contractorName"
+            required
+            defaultValue={me.user.displayName}
+            error={form.fieldErrors.contractorName}
+          />
+          <Field
+            label={t('m.client')}
+            name="clientName"
+            required
+            error={form.fieldErrors.clientName}
+          />
+        </div>
+        <button
+          type="submit"
+          className="button primary auto"
+          disabled={form.busy || !sheet.lines.length}
+        >
+          {t('m.sign')}
+        </button>
+      </form>
+    </details>
+  )
+}

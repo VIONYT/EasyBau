@@ -89,6 +89,9 @@ importers:
 
   apps/web:
     dependencies:
+      '@opc/domain':
+        specifier: workspace:*
+        version: link:../../packages/domain
       '@opc/schemas':
         specifier: workspace:*
         version: link:../../packages/schemas

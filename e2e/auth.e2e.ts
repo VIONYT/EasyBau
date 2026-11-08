@@ -201,7 +201,77 @@ test('project with quote and filing (Ablage)', async () => {
   // Direct link to the filing works after a reload (real URLs).
   await page.reload()
   await expect(page.getByText('Fassade Süd.png', { exact: true })).toBeVisible()
+})
 
+test('measurement sheet (Aufmaß) with rooms, formulas and quantity takeover', async () => {
+  test.skip(!SETUP_TOKEN, 'SETUP_TOKEN must be set for a fresh stack')
+  test.setTimeout(90_000)
+
+  await page.getByRole('button', { name: 'Aufmaß' }).click()
+  await page.getByRole('button', { name: 'Neues Aufmaßblatt' }).click()
+  await expect(page.getByRole('radio', { name: /Angebotsaufmaß/ })).toBeChecked()
+  await page.getByRole('button', { name: 'Aufmaßblatt anlegen' }).click()
+  await expect(page.getByRole('heading', { name: 'Angebotsaufmaß 1' })).toBeVisible()
+  await expect(page).toHaveURL(/\/aufmass\/[0-9a-f-]{36}$/)
+
+  // Raum mit Maßen
+  await page.getByRole('button', { name: '+ Raum hinzufügen' }).click()
+  await page.getByRole('textbox', { name: 'Name', exact: true }).fill('Bad')
+  await page.getByLabel('Länge L (m)').fill('4,25')
+  await page.getByLabel('Breite B (m)').fill('3,1')
+  await page.getByLabel('Höhe H (m)').fill('2,6')
+  await page.getByRole('button', { name: 'Hinzufügen', exact: true }).click()
+  await expect(page.getByText('L 4,25 · B 3,1 · H 2,6')).toBeVisible()
+
+  // Zeile aus Vorlage, live gerechnet, der LV-Position zugeordnet
+  await page.getByRole('button', { name: '+ Zeile erfassen' }).click()
+  await page.getByLabel('Raum', { exact: true }).selectOption({ label: 'Bad' })
+  await page.getByLabel('LV-Position').selectOption({ label: '1.1 Wandfläche streichen [m²]' })
+  await page.getByLabel('Beschreibung').fill('Wände')
+  await page.getByRole('button', { name: 'Wandfläche (Raumumfang × Höhe)' }).click()
+  await expect(page.getByLabel(/Formel oder Zahl/)).toHaveValue('2*(L+B)*H')
+  await expect(page.getByText('Ergebnis: 38,22 m²')).toBeVisible()
+  await page.getByRole('button', { name: 'Hinzufügen', exact: true }).click()
+  await expect(page.locator('.m-line .result').first()).toHaveText('38,22 m²')
+
+  // Abzug Tür (Raum und Position bleiben vom letzten Eintrag ausgewählt)
+  await page.getByRole('button', { name: '+ Zeile erfassen' }).click()
+  await page.getByLabel('Beschreibung').fill('Tür')
+  await page.getByLabel(/Formel oder Zahl/).fill('0,885*2,01')
+  await page.getByLabel('Abzug (z. B. Tür, Fenster)').check()
+  await expect(page.getByText('Ergebnis: −1,7789 m²')).toBeVisible()
+  await page.getByLabel(/Formel oder Zahl/).fill('0,885*')
+  await expect(page.getByText(/Ergebnis:/)).toHaveCount(0)
+  await page.getByLabel(/Formel oder Zahl/).fill('0,885*2,01')
+  await page.getByRole('button', { name: 'Hinzufügen', exact: true }).click()
+  await expect(page.locator('.m-line .result').nth(1)).toHaveText('-1,7789 m²')
+
+  // Mengen je Position mit Hinweis auf Mehrmenge, Übernahme ins Angebot
+  await expect(page.locator('.q-facts').first()).toContainText('36,4411')
+  await expect(page.getByText(/Mehrmenge .* Preisanpassung prüfen/)).toBeVisible()
+  await expectNoHorizontalScroll(page)
+  if (SCREENSHOTS) await page.screenshot({ path: `${SCREENSHOTS}/aufmass.png`, fullPage: true })
+  await page.getByRole('button', { name: /Mengen übernehmen in Angebot/ }).click()
+  await expect(page.getByText(/Mengen übernommen/)).toBeVisible()
+
+  // Gemeinsames Aufmaß: danach gesperrt
+  await page.getByText('Gemeinsames Aufmaß abschließen', { exact: true }).first().click()
+  await page.getByLabel('Für den Auftraggeber').fill('Frau Müller')
+  page.once('dialog', (dialog) => dialog.accept())
+  await page.getByRole('button', { name: 'Gemeinsames Aufmaß abschließen' }).click()
+  await expect(page.getByText(/Abgeschlossen am .*Frau Müller/)).toBeVisible()
+  await expect(page.getByRole('button', { name: '+ Zeile erfassen' })).toHaveCount(0)
+
+  // The quote now shows the measured quantity.
+  await page.getByRole('link', { name: /Sanierung Lindenweg/ }).click()
+  await page.getByRole('button', { name: 'Dokumente' }).click()
+  await page.getByRole('link', { name: /Angebot/ }).click()
+  await expect(page.getByText('aus Aufmaß', { exact: true })).toBeVisible()
+  await expect(page.locator('.position--item .calc')).toContainText('36,4411 m²')
+})
+
+test('second factor fails without the security key', async () => {
+  test.skip(!SETUP_TOKEN, 'SETUP_TOKEN must be set for a fresh stack')
   // Without the key the second step of the login fails with a readable message.
   await key.cdp.send('WebAuthn.removeVirtualAuthenticator', {
     authenticatorId: key.authenticatorId,

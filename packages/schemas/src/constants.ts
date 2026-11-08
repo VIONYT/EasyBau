@@ -78,3 +78,6 @@ export const PRICED_POSITION_TYPES: readonly EditablePositionType[] = [
   'optional',
   'lump_sum',
 ]
+
+/** Angebotsaufmaß (before the quote) and Leistungsaufmaß (work done, basis for invoices). */
+export const MEASUREMENT_KINDS = ['survey', 'performance'] as const

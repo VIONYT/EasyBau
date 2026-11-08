@@ -14,6 +14,7 @@ import { authHook, mfaEnforcementHook, registerAuthRoutes } from './routes/auth.
 import { registerContactRoutes } from './routes/contacts.js'
 import { registerDocumentRoutes } from './routes/documents.js'
 import { registerFileRoutes } from './routes/files.js'
+import { registerMeasurementRoutes } from './routes/measurements.js'
 import { registerProjectRoutes } from './routes/projects.js'
 import { registerUserRoutes } from './routes/users.js'
 import { registerWebauthnRoutes } from './routes/webauthn.js'
@@ -164,6 +165,7 @@ export function buildApi({
   registerProjectRoutes(app, services)
   registerFileRoutes(app, services)
   registerDocumentRoutes(app, services)
+  registerMeasurementRoutes(app, services)
   registerUserRoutes(app, services)
   registerWebauthnRoutes(app, services)
   return app

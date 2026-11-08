@@ -365,6 +365,17 @@ function Positions({
         />
       ) : null}
       {editable && !adding ? (
+        <button
+          type="button"
+          className="button ghost small apply-measurements"
+          onClick={() =>
+            run(() => apiWithEtag<Doc>('POST', `/api/v1/documents/${doc.id}/apply-measurements`))
+          }
+        >
+          {t('doc.applyMeasurements')}
+        </button>
+      ) : null}
+      {editable && !adding ? (
         <fieldset className="add-bar">
           <legend className="muted">{t('doc.addPosition')}</legend>
           {(['title', 'item', 'lump_sum', 'optional', 'alternative', 'text'] as const).map(
@@ -410,6 +421,7 @@ function PositionView({ item, subtotal }: { item: DocumentItem; subtotal: number
             {notCounted ? ` · ${t('doc.notCounted')}` : ''}
           </span>
         ) : null}
+        {item.fromMeasurement ? <span className="tag ok">{t('doc.fromMeasurement')}</span> : null}
         {item.longText ? <span className="hint pre block">{item.longText}</span> : null}
         <span className="muted block calc">
           {formatQuantity(item.quantity)} {item.unit?.symbol} × {formatCents(item.unitPriceCents)}

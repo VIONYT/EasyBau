@@ -6,14 +6,17 @@ export type Route =
   | { view: 'contacts' }
   | { view: 'users' }
   | { view: 'security' }
-  | { view: 'project'; id: string; section: 'overview' | 'documents' | 'files' }
+  | { view: 'project'; id: string; section: ProjectSection }
   | { view: 'document'; id: string }
+  | { view: 'measurement'; id: string }
+
+export type ProjectSection = 'overview' | 'documents' | 'measurements' | 'files'
 
 const UUID = '[0-9a-f-]{36}'
-const SECTIONS = { dokumente: 'documents', ablage: 'files' } as const
+const SECTIONS = { dokumente: 'documents', aufmass: 'measurements', ablage: 'files' } as const
 
 export function parseRoute(path: string): Route {
-  const project = new RegExp(`^/projekte/(${UUID})(?:/(dokumente|ablage))?/?$`).exec(path)
+  const project = new RegExp(`^/projekte/(${UUID})(?:/(dokumente|aufmass|ablage))?/?$`).exec(path)
   if (project) {
     const section = project[2] as keyof typeof SECTIONS | undefined
     return {
@@ -24,6 +27,8 @@ export function parseRoute(path: string): Route {
   }
   const document = new RegExp(`^/dokumente/(${UUID})/?$`).exec(path)
   if (document) return { view: 'document', id: document[1] as string }
+  const measurement = new RegExp(`^/aufmass/(${UUID})/?$`).exec(path)
+  if (measurement) return { view: 'measurement', id: measurement[1] as string }
   if (path.startsWith('/kontakte')) return { view: 'contacts' }
   if (path.startsWith('/benutzer')) return { view: 'users' }
   if (path.startsWith('/sicherheit')) return { view: 'security' }
@@ -40,12 +45,19 @@ export function pathOf(route: Route): string {
       return '/benutzer'
     case 'security':
       return '/sicherheit'
-    case 'project':
-      return `/projekte/${route.id}${
-        route.section === 'documents' ? '/dokumente' : route.section === 'files' ? '/ablage' : ''
-      }`
+    case 'project': {
+      const segment = {
+        overview: '',
+        documents: '/dokumente',
+        measurements: '/aufmass',
+        files: '/ablage',
+      }
+      return `/projekte/${route.id}${segment[route.section]}`
+    }
     case 'document':
       return `/dokumente/${route.id}`
+    case 'measurement':
+      return `/aufmass/${route.id}`
   }
 }
 

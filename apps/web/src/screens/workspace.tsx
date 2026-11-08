@@ -5,6 +5,7 @@ import { Field, FormError, optional, useForm } from '../forms'
 import { t } from '../i18n'
 import { type Route, useRoute } from '../router'
 import { DocumentScreen } from './document'
+import { MeasurementScreen } from './measurement'
 import { ProjectScreen } from './project'
 import { Projects } from './projects'
 import { Security } from './security'
@@ -33,7 +34,9 @@ export function Workspace({
   }, [locked, route.view, navigate])
   const current: Route = locked ? { view: 'security' } : route
   const activeTab: Tab =
-    current.view === 'project' || current.view === 'document' ? 'projects' : current.view
+    current.view === 'project' || current.view === 'document' || current.view === 'measurement'
+      ? 'projects'
+      : current.view
   const tabs: { key: Tab; label: string; visible: boolean }[] = [
     { key: 'projects', label: t('nav.projects'), visible: !locked },
     {
@@ -61,8 +64,8 @@ export function Workspace({
   const routeKey =
     current.view === 'project'
       ? `project-${current.id}`
-      : current.view === 'document'
-        ? `document-${current.id}`
+      : current.view === 'document' || current.view === 'measurement'
+        ? `${current.view}-${current.id}`
         : current.view
   return (
     <div className="workspace">
@@ -97,6 +100,9 @@ export function Workspace({
         ) : null}
         {current.view === 'document' ? (
           <DocumentScreen me={me} id={current.id} navigate={navigate} />
+        ) : null}
+        {current.view === 'measurement' ? (
+          <MeasurementScreen me={me} id={current.id} navigate={navigate} />
         ) : null}
         {current.view === 'contacts' ? <Contacts me={me} /> : null}
         {current.view === 'users' ? <Users /> : null}

@@ -5,6 +5,11 @@ Alle wesentlichen Änderungen, vor allem solche, die Betreiber betreffen (neue V
 ## Unveröffentlicht
 
 ### Neu
+- Aufmaß im Projekt: Aufmaßblätter als Angebotsaufmaß oder Leistungsaufmaß, Bereiche und Räume (z. B. Haus A › EG › Bad) mit Maßen L/B/H als Variablen, Zeilen mit Formeln (deutsches Zahlenformat, Vorlagen wie Wandfläche, Rechteck, Abzug Öffnung), Ergebnis live beim Tippen und maßgeblich auf dem Server gerechnet, Abzüge, Zuordnung zu LV-Positionen aus Angebot, Auftrag und Nachträgen.
+- Mengen je LV-Position mit Mehr-/Mindermengen und Hinweis ab 10 % Abweichung (VOB/B § 2 Abs. 3); „Mengen übernehmen“ setzt die Mengen in Entwürfen (Kennzeichen „aus Aufmaß“).
+- Gemeinsames Aufmaß: Abschluss mit Namen beider Seiten und Zeitstempel; danach ist das Blatt gesperrt.
+- Aufmaß, Bautagebuch-Berichte und Dokumente sind fest an ihr Projekt gebunden: Räume, LV-Positionen, Fotos und Korrekturzeilen müssen aus demselben Projekt stammen (Datenbank-Trigger), ein Verschieben in ein anderes Projekt ist ausgeschlossen.
+- Datenbank-Migration `0009_measurement_integrity`.
 - Projektanlage in der Oberfläche: Name, Kunde, Baustelle (mit „Adresse des Kunden übernehmen“), Zeitraum, Status, Projektnummer, Beschreibung. Projektseite mit Übersicht, Status direkt änderbar, Bearbeiten, Kartenlink zur Baustelle.
 - Dokumente im Projekt: „Neues Dokument“ mit den im Projektstand sinnvollen Arten (Angebot, Kostenvoranschlag, Auftragsbestätigung, Nachtragsangebot nur mit Auftrag, Lieferschein, Rechnung, Teil-, Abschlags- (fortlaufend nummeriert) und Schlussrechnung, Gutschrift), leer oder aus einem bestehenden Dokument (Positionen, Texte, Empfänger und Leistungsort werden übernommen).
 - Dokument-Entwürfe bearbeiten: Kopfdaten, Anfangs- und Schlusstext, Leistungsverzeichnis mit Titeln (zwei Ebenen), Positionen, Pauschalen, Bedarfs- und Alternativpositionen, Texten; Ordnungszahlen automatisch; Summen, Rabatt und Umsatzsteuer je Steuersatz rechnet der Server. Festgeschriebene Dokumente bleiben unveränderlich.
