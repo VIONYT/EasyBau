@@ -5,33 +5,39 @@ OpenPlancraft ist eine **Open-Source**-Betriebssoftware (ERP) für Bau- und Hand
 **Lies vor jeder größeren Änderung [`DESIGN.md`](DESIGN.md)** (Architektur, Datenmodell, UX). Hintergrund: [`docs/RESEARCH.md`](docs/RESEARCH.md). Dieses Projekt ist ein eigenständiges Produkt: übernimm keine Texte, Logos, Markennamen oder Screens von Plancraft oder anderen Anbietern.
 
 ## Projektstatus
-Planungsphase. Es gibt noch keinen Code. Implementiert wird in der Reihenfolge der MVP-Module in DESIGN.md §2.
+Grundgerüst steht: Monorepo, Services (`server` = API + Worker per `APP_ROLE`), Web-Platzhalter, Docker-Stack (proxy, app, db; Profil `standard` mit separatem `worker`), Test-Stack und CI. Noch nicht im Stack: storage (S3/Object Lock), kosit, backup. Fachmodule folgen in der Reihenfolge der MVP-Module in DESIGN.md §2.
 
 ## Stack (Kurzfassung)
 TypeScript strict · pnpm + Turborepo · Fastify · Zod · PostgreSQL 17 + Drizzle · pg-boss (Queue in PostgreSQL) · Typst (PDF/A-3) · S3 via MinIO (Object Lock) · Caddy · Docker Compose · React 19 + Vite + TanStack Router/Query · Tailwind 4 + Radix/shadcn · vite-plugin-pwa + Dexie · Vitest, Testcontainers, Playwright.
 
 ## Struktur
 ```
-apps/api  apps/worker  apps/web
-packages/domain  packages/schemas  packages/db  packages/einvoice
-packages/exports  packages/pdf-templates  packages/ui
-infra/  docs/
+apps/server   Composition Root: startet API und/oder Worker je nach APP_ROLE (all|api|worker)
+apps/api      Fastify-App (buildApi), ohne eigenen Prozessstart → mit inject() testbar
+apps/worker   pg-boss-Jobs (startWorker)
+apps/web      React/Vite-PWA
+packages/config  Env-Schema (zod) – einzige Stelle für Konfiguration
+packages/db      Postgres-Pool, Readiness
+geplant: packages/domain  packages/schemas  packages/einvoice  packages/exports  packages/pdf-templates  packages/ui
+docker/ (Dockerfiles)  infra/ (Caddyfile, smoke-test.sh)  docs/
 ```
+- Pakete exportieren über die Condition `source` direkt TypeScript (Entwicklung, Tests); gebaut wird nach `dist/`. Imports innerhalb eines Pakets mit `.js`-Endung (NodeNext).
 - `packages/domain` enthält **reine** Logik (Kalkulation, Steuern, Summen) ohne I/O. Dort gilt 100 % Testabdeckung.
 - `packages/schemas` ist die einzige Quelle für API-Verträge. Frontend und Backend importieren von dort.
 
-## Befehle (Soll, sobald das Scaffolding steht)
+## Befehle
 ```bash
-docker compose -f compose.yaml -f compose.dev.yaml up        # Entwicklung (Hot Reload, Mailpit)
-docker compose -f compose.test.yaml run --rm test             # komplette Testpipeline wie in CI
 pnpm install
-pnpm test           # vitest (unit)
-pnpm test:int       # integration gegen Container (postgres, minio, kosit)
-pnpm test:e2e       # playwright gegen den laufenden Stack, mobile + desktop
-pnpm lint && pnpm typecheck
-pnpm db:generate    # drizzle Migration erzeugen
-pnpm db:migrate
+docker compose -f compose.yaml -f compose.dev.yaml up -d db   # nur DB in Docker (Port 5432 lokal)
+DATABASE_URL=postgres://openplancraft:<pw>@localhost:5432/openplancraft pnpm dev   # API+Worker :3000, Web :5173
+pnpm lint           # Biome (Lint + Format-Prüfung); pnpm format schreibt Formatierung
+pnpm typecheck
+pnpm test           # Vitest; *.integration.test.ts laufen nur, wenn DATABASE_URL gesetzt ist
+pnpm build
+docker compose -f compose.test.yaml run --rm --build test     # komplette Testpipeline in Docker (wie CI)
+docker compose up -d --build && BASE_URL=https://localhost sh infra/smoke-test.sh   # Stack + Smoke-Test
 ```
+Geplant: `pnpm test:e2e` (Playwright), Datenbank-Migrationen (`pnpm db:generate` / `db:migrate`).
 Vor jedem Commit: `pnpm lint && pnpm typecheck && pnpm test`. Vor einem Pull Request: die Docker-Testpipeline.
 
 ## Open Source & Self-Hosting

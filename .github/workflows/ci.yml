@@ -1,0 +1,83 @@
+name: CI
+
+on:
+  push:
+  pull_request:
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  checks:
+    name: Lint, Typecheck, Tests
+    runs-on: ubuntu-latest
+    services:
+      db:
+        image: postgres:17-alpine
+        env:
+          POSTGRES_DB: test
+          POSTGRES_USER: test
+          POSTGRES_PASSWORD: test
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd "pg_isready -U test -d test"
+          --health-interval 2s --health-timeout 2s --health-retries 30
+    env:
+      DATABASE_URL: postgres://test:test@localhost:5432/test
+    steps:
+      - uses: actions/checkout@v5
+      - run: corepack enable
+      - uses: actions/setup-node@v5
+        with:
+          node-version-file: .nvmrc
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm lint
+      - run: pnpm typecheck
+      - run: pnpm test
+      - run: pnpm build
+
+  docker:
+    name: Docker test pipeline and stack (compact + standard)
+    runs-on: ubuntu-latest
+    needs: checks
+    env:
+      COMPOSE_BAKE: "false"
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: Test pipeline in Docker (same as `docker compose -f compose.test.yaml run test`)
+        run: docker compose -f compose.test.yaml run --rm --build test
+
+      - name: Build images
+        run: |
+          printf 'POSTGRES_PASSWORD=ci-%s\nHTTP_PORT=8080\nHTTPS_PORT=8443\n' "$GITHUB_RUN_ID" > .env
+          docker compose build
+
+      - name: Start compact profile
+        run: docker compose up -d --no-build --wait --wait-timeout 120
+
+      - name: Smoke test (compact)
+        run: BASE_URL=https://localhost:8443 sh infra/smoke-test.sh
+
+      - name: Memory usage (compact)
+        run: docker stats --no-stream --format '{{.Name}} {{.MemUsage}}'
+
+      - name: Switch to standard profile
+        run: |
+          COMPOSE_PROFILES=standard APP_ROLE=api PROFILE=standard \
+            docker compose up -d --no-build --wait --wait-timeout 120
+          BASE_URL=https://localhost:8443 sh infra/smoke-test.sh
+          docker stats --no-stream --format '{{.Name}} {{.MemUsage}}'
+
+      - name: Logs on failure
+        if: failure()
+        run: COMPOSE_PROFILES=standard docker compose logs --no-color
+
+      - name: Tear down
+        if: always()
+        run: COMPOSE_PROFILES=standard docker compose down -v

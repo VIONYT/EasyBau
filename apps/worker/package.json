@@ -1,0 +1,22 @@
+{
+  "name": "@opc/worker",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": {
+      "source": "./src/index.ts",
+      "types": "./src/index.ts",
+      "default": "./dist/index.js"
+    }
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.build.json",
+    "typecheck": "tsc -p tsconfig.json --noEmit"
+  },
+  "dependencies": {
+    "@opc/config": "workspace:*",
+    "pg-boss": "12.2.0",
+    "pino": "10.4.0"
+  }
+}

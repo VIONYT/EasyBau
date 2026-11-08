@@ -1,0 +1,101 @@
+# Production stack for self-hosting. Usage:
+#   cp .env.example .env   # adjust values
+#   docker compose up -d
+#
+# Profile "compact" (default): proxy, app (API + worker), db.
+# Profile "standard": additionally a separate worker -> COMPOSE_PROFILES=standard and APP_ROLE=api.
+# Planned services (see DESIGN.md §3.5): storage (S3 + Object Lock), kosit, backup.
+
+name: openplancraft
+
+x-app: &app
+  image: ${IMAGE_PREFIX:-ghcr.io/vionyt/openplancraft}-app:${APP_VERSION:-latest}
+  build:
+    context: .
+    dockerfile: docker/app.Dockerfile
+    target: runtime
+    secrets: [extra_ca]
+  restart: unless-stopped
+  read_only: true
+  tmpfs: [/tmp]
+  depends_on:
+    db:
+      condition: service_healthy
+
+x-app-env: &app-env
+  APP_NAME: ${APP_NAME:-OpenPlancraft}
+  APP_VERSION: ${APP_VERSION:-0.0.0-dev}
+  PROFILE: ${PROFILE:-compact}
+  LOG_LEVEL: ${LOG_LEVEL:-info}
+  DATABASE_URL: postgres://${POSTGRES_USER:-openplancraft}:${POSTGRES_PASSWORD:?POSTGRES_PASSWORD fehlt in .env}@db:5432/${POSTGRES_DB:-openplancraft}
+  DATABASE_POOL_MAX: ${DATABASE_POOL_MAX:-5}
+
+services:
+  proxy:
+    image: ${IMAGE_PREFIX:-ghcr.io/vionyt/openplancraft}-web:${APP_VERSION:-latest}
+    build:
+      context: .
+      dockerfile: docker/web.Dockerfile
+      target: runtime
+      secrets: [extra_ca]
+    restart: unless-stopped
+    environment:
+      APP_DOMAIN: ${APP_DOMAIN:-localhost}
+    ports:
+      - "${HTTP_PORT:-80}:80"
+      - "${HTTPS_PORT:-443}:443"
+      - "${HTTPS_PORT:-443}:443/udp"
+    volumes:
+      - caddy-data:/data
+      - caddy-config:/config
+    depends_on:
+      app:
+        condition: service_healthy
+
+  app:
+    <<: *app
+    environment:
+      <<: *app-env
+      APP_ROLE: ${APP_ROLE:-all}
+
+  worker:
+    <<: *app
+    profiles: [standard]
+    environment:
+      <<: *app-env
+      APP_ROLE: worker
+
+  db:
+    image: postgres:17-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-openplancraft}
+      POSTGRES_USER: ${POSTGRES_USER:-openplancraft}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?POSTGRES_PASSWORD fehlt in .env}
+      POSTGRES_INITDB_ARGS: --data-checksums
+    # Tuned for the compact profile (ADR 0002); raise for "standard".
+    command:
+      - postgres
+      - -c
+      - shared_buffers=${PG_SHARED_BUFFERS:-128MB}
+      - -c
+      - work_mem=4MB
+      - -c
+      - max_connections=${PG_MAX_CONNECTIONS:-30}
+    volumes:
+      - db-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+
+volumes:
+  db-data:
+  caddy-data:
+  caddy-config:
+
+secrets:
+  # Optional CA certificate for TLS-inspecting proxies during image builds (see .env.example).
+  extra_ca:
+    file: ${EXTRA_CA_CERT:-/dev/null}

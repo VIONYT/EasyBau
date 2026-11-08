@@ -1,0 +1,22 @@
+{
+  "name": "@opc/api",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": {
+      "source": "./src/index.ts",
+      "types": "./src/index.ts",
+      "default": "./dist/index.js"
+    }
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.build.json",
+    "typecheck": "tsc -p tsconfig.json --noEmit"
+  },
+  "dependencies": {
+    "@opc/config": "workspace:*",
+    "@opc/db": "workspace:*",
+    "fastify": "5.12.8"
+  }
+}

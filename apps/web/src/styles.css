@@ -1,0 +1,107 @@
+/* Design tokens (DESIGN.md §7.2). Colors and spacing only via tokens. */
+:root {
+  --color-primary: #0f4c5c;
+  --color-accent: #f28c28;
+  --color-bg: #f8fafc;
+  --color-surface: #ffffff;
+  --color-text: #0f172a;
+  --color-muted: #475569;
+  --color-border: #e2e8f0;
+  --color-success: #15803d;
+  --color-warning: #b45309;
+  --color-error: #b91c1c;
+  --space-1: 4px;
+  --space-2: 8px;
+  --space-4: 16px;
+  --space-6: 24px;
+  --radius: 12px;
+  --font: Inter, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  color-scheme: light dark;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --color-primary: #5fb3c6;
+    --color-bg: #0b1220;
+    --color-surface: #111a2e;
+    --color-text: #e2e8f0;
+    --color-muted: #94a3b8;
+    --color-border: #1e293b;
+    --color-success: #4ade80;
+    --color-warning: #fbbf24;
+    --color-error: #f87171;
+  }
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  font-family: var(--font);
+  font-size: 16px;
+  background: var(--color-bg);
+  color: var(--color-text);
+}
+
+.page {
+  min-height: 100dvh;
+  display: grid;
+  place-items: center;
+  padding: var(--space-4);
+}
+
+.card {
+  width: 100%;
+  max-width: 480px;
+  padding: var(--space-6);
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius);
+}
+
+h1 {
+  margin: 0 0 var(--space-2);
+  color: var(--color-primary);
+  font-size: 1.5rem;
+}
+
+.lead {
+  margin: 0 0 var(--space-4);
+  color: var(--color-muted);
+}
+
+.badge {
+  display: inline-block;
+  margin: 0 0 var(--space-4);
+  padding: var(--space-1) var(--space-2);
+  border-radius: 999px;
+  font-weight: 600;
+}
+
+.badge--loading {
+  color: var(--color-muted);
+}
+.badge--ready {
+  color: var(--color-success);
+}
+.badge--unavailable {
+  color: var(--color-error);
+}
+
+.facts {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: var(--space-2) var(--space-4);
+  margin: 0;
+  font-variant-numeric: tabular-nums;
+}
+
+.facts dt {
+  color: var(--color-muted);
+}
+
+.facts dd {
+  margin: 0;
+}

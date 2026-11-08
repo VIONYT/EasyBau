@@ -1,0 +1,35 @@
+# Complete test pipeline in Docker, identical to CI:
+#   docker compose -f compose.test.yaml run --rm --build test
+name: openplancraft-test
+
+services:
+  test:
+    build:
+      context: .
+      dockerfile: docker/app.Dockerfile
+      target: test
+      secrets: [extra_ca]
+    environment:
+      NODE_ENV: test
+      DATABASE_URL: postgres://test:test@db:5432/test
+    depends_on:
+      db:
+        condition: service_healthy
+
+  db:
+    image: postgres:17-alpine
+    environment:
+      POSTGRES_DB: test
+      POSTGRES_USER: test
+      POSTGRES_PASSWORD: test
+    tmpfs: [/var/lib/postgresql/data]
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U test -d test"]
+      interval: 2s
+      timeout: 2s
+      retries: 30
+
+secrets:
+  # Optional CA certificate for TLS-inspecting proxies during image builds (see .env.example).
+  extra_ca:
+    file: ${EXTRA_CA_CERT:-/dev/null}
