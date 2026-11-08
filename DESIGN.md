@@ -17,6 +17,12 @@ Grundlage: [`docs/RESEARCH.md`](docs/RESEARCH.md). Arbeitsregeln für Agenten un
 4. **Baustellentauglich.** Große Touch-Ziele, funktioniert offline, bedienbar mit Arbeitshandschuhen und bei Sonnenlicht.
 5. **Handwerkersprache.** „Rechnung korrigieren“ statt „Stornobeleg generieren“; Fachbegriffe nur wo üblich (Aufmaß, LV, Abschlag).
 
+### Betriebsmodell: Open Source & Self-Hosting
+- Das System ist **Open Source** (Lizenzvorschlag: AGPL-3.0, siehe [ADR 0001](docs/adr/0001-open-source-self-hosting.md)). Firmen betreiben es **auf ihrer eigenen Infrastruktur**: eigener Server, Rechenzentrum, Hoster ihrer Wahl, auch im Büro.
+- Auslieferung ausschließlich als **Docker-Images** plus `docker compose`-Stack. Eine Installation besteht aus `.env` anpassen und `docker compose up -d`.
+- **Keine Pflicht-Abhängigkeit von externen SaaS-Diensten.** Alles Nötige läuft im Stack. Externe Dienste (Wetter, KI, Fehler-Tracking, DATEV-Online) sind optional und abschaltbar.
+- Keine Telemetrie ohne ausdrückliche Zustimmung (Opt-in).
+
 ### Nicht-Ziele (vorerst)
 Vollwertige Finanzbuchhaltung (bleibt beim Steuerberater via DATEV), Lohnabrechnung, BIM/CAD, native Apps im Store (PWA zuerst, später Capacitor-Wrapper).
 
@@ -74,7 +80,9 @@ KI-Angebotsentwurf aus Freitext, Sprach-Bautagebuch (Diktat → strukturierter E
 │  PDF, E-Rechnung, │ RLS je Mandant   │ (EU), Object Lock │
 │  Mails, Exporte   │ Append-only-Log  │ für Archiv (WORM) │
 └───────────────────┴──────────────────┴───────────────────┘
-          Redis (Queue, Rate-Limit) · SMTP · KoSIT-Validator
+          Valkey (Queue, Rate-Limit) · SMTP · KoSIT-Validator
+
+Alle Kästen laufen als Container im selben `docker compose`-Stack beim Betreiber (siehe §3.5).
 ```
 
 **Modularer Monolith**: ein deploybares API-Artefakt plus ein Worker-Prozess aus derselben Codebasis. Microservices bringen bei dieser Teamgröße nichts.
@@ -89,18 +97,18 @@ KI-Angebotsentwurf aus Freitext, Sprach-Bautagebuch (Diktat → strukturierter E
 | Validierung | **Zod** (geteilt) | Gleiche Validierung im Client und auf dem Server |
 | DB | **PostgreSQL 17** | Transaktionen, RLS, Trigger für Unveränderbarkeit, JSONB |
 | ORM / Migrationen | **Drizzle ORM** + drizzle-kit | Typsicher, SQL-nah, gut für Trigger/RLS |
-| Jobs | **BullMQ** + Redis | PDF-Erzeugung, E-Mail, Exporte, Wetterabruf |
+| Jobs | **BullMQ** + **Valkey** (Redis-kompatibel, BSD-Lizenz) | PDF-Erzeugung, E-Mail, Exporte, Wetterabruf |
 | PDF | HTML-Templates → **Playwright/Chromium** → PDF; Umwandlung in **PDF/A-3** und XML-Einbettung | Pixelgenaue Briefpapiere, ZUGFeRD-fähig |
 | E-Rechnung | **`@e-invoice-eu/core`** (Factur-X/ZUGFeRD, XRechnung UBL/CII); Validierung mit **KoSIT-Validator** (Docker-Sidecar, CI) | Bewährte Bibliothek + offizieller Prüfer |
-| Dateien | **S3-kompatibel** (z. B. Hetzner Object Storage / IONOS, Region DE), **Object Lock (Compliance-Modus)** für Archivbuckets | WORM-Speicherung für GoBD |
+| Dateien | **S3-kompatibel**: standardmäßig **MinIO** im Stack, alternativ jeder externe S3-Speicher des Betreibers; **Object Lock (Compliance-Modus)** für Archivbuckets | WORM-Speicherung für GoBD ohne Cloud-Zwang |
 | Frontend | **React 19 + Vite**, **TanStack Router + Query**, **Tailwind CSS 4**, **Radix UI / shadcn-Komponenten** | Schnell, zugänglich, eigenes Designsystem möglich |
 | Formulare | React Hook Form + Zod | Gleiche Schemas wie API |
 | Offline | **vite-plugin-pwa** (Workbox) + **Dexie** (IndexedDB) + Outbox-Sync | Bautagebuch und Fotos ohne Netz |
 | Geld | Ganzzahlige **Cent-Beträge** (`bigint`) + `decimal.js` für Kalkulationen mit Mengen | Keine Float-Rundungsfehler |
 | Auth | Eigene Session-Auth: **argon2id**, httpOnly-Secure-SameSite-Cookies, **TOTP-2FA**, später **Passkeys (WebAuthn)** | Keine Tokens in localStorage |
 | Tests | **Vitest** (Unit), **Testcontainers** (DB-Integration), **Playwright** (E2E inkl. Mobile-Viewports) | |
-| Betrieb | Docker Compose (dev), Container auf EU-Hoster (prod), **Caddy** (TLS), Backups mit **pgBackRest** + WAL-Archivierung | |
-| Observability | Pino-Logs (ohne PII), OpenTelemetry, Sentry (self-hosted / EU) | |
+| Betrieb | **Docker Compose** für Entwicklung, Test und Produktion; **Caddy** als Reverse Proxy mit automatischem TLS (Let's Encrypt oder eigenes Zertifikat); Backups mit **pgBackRest** + WAL-Archivierung als eigener Container | Self-Hosting ohne Spezialwissen |
+| Observability | Pino-Logs (JSON, ohne PII) auf stdout, `/healthz` und `/readyz`, optionaler OpenTelemetry-Export und optionaler Sentry-DSN (beides standardmäßig aus) | Betreiber nutzen ihr eigenes Monitoring |
 
 ### 3.3 Repository-Struktur
 
@@ -118,18 +126,49 @@ openplancraft/
 │  ├─ exports/        # DATEV-EXTF, GoBD-Z3 (index.xml), Gesamtexport
 │  ├─ pdf-templates/  # HTML/CSS-Vorlagen für Dokumente und Bautagebuch
 │  └─ ui/             # Designsystem-Komponenten
-├─ infra/             # docker-compose, Caddyfile, Backup-Skripte
+├─ docker/            # Dockerfiles (api, worker, web, backup), Entrypoints
+├─ compose.yaml       # Produktions-Stack (Self-Hosting)
+├─ compose.dev.yaml   # Overlay für Entwicklung (Hot Reload, Mailpit)
+├─ compose.test.yaml  # Test-Stack für CI und lokale Testläufe
+├─ .env.example       # alle Einstellungen dokumentiert
+├─ infra/             # Caddyfile, Backup-/Restore-Skripte, MinIO-Init (Object Lock)
 ├─ docs/              # Recherche, ADRs, Verfahrensdokumentation
 ├─ CLAUDE.md
 └─ DESIGN.md
 ```
 
 ### 3.4 Mandantenfähigkeit
+Standardfall beim Self-Hosting ist **eine Firma pro Installation**. Die Mandantentrennung bleibt trotzdem vollständig erhalten: Sie erlaubt mehrere Firmen pro Installation (z. B. Firmenverbund, Dienstleister, der für mehrere Betriebe hostet) und ist eine zusätzliche Schutzschicht.
 - Ein Mandant = eine Firma (`tenant`). Jede fachliche Tabelle hat `tenant_id NOT NULL`.
 - **Postgres Row Level Security**: Policy `tenant_id = current_setting('app.tenant_id')::uuid`. Die API setzt `SET LOCAL app.tenant_id` pro Transaktion. Der App-DB-User ist **nicht** Owner der Tabellen und hat kein `BYPASSRLS`.
 - Zusätzliche Prüfung im Repository-Layer („Defense in Depth“). Integrationstests prüfen ausdrücklich, dass Mandanten sich nicht gegenseitig sehen.
 
 ---
+
+### 3.5 Docker-Stack & Self-Hosting
+
+**Container (Produktion, `compose.yaml`)**
+| Dienst | Image | Aufgabe |
+|---|---|---|
+| `proxy` | Caddy | TLS, HTTP/2/3, Security-Header, liefert das Web-Frontend aus |
+| `api` | `ghcr.io/<org>/openplancraft-api` | REST-API, führt beim Start Datenbank-Migrationen aus (mit Lock, idempotent) |
+| `worker` | `ghcr.io/<org>/openplancraft-worker` | PDF (Chromium), E-Rechnung, E-Mail, Exporte, geplante Jobs |
+| `db` | PostgreSQL 17 | Daten (Volume) |
+| `queue` | Valkey | Jobs, Rate-Limits |
+| `storage` | MinIO | Dateien und WORM-Archiv (Object Lock wird beim ersten Start eingerichtet) |
+| `kosit` | KoSIT-Validator (Java) | Prüfung jeder E-Rechnung, nur intern erreichbar |
+| `backup` | pgBackRest + Cron | WAL-Archiv, tägliche Sicherung, optional Kopie auf externes Ziel (S3/SFTP) |
+
+**Grundsätze**
+- Images für `linux/amd64` und `linux/arm64`, signiert (cosign), mit SBOM; Versionen nach SemVer, `latest` nur für stabile Releases.
+- Container laufen ohne Root, mit Read-only-Dateisystem wo möglich und Healthchecks. Nur `proxy` ist nach außen offen.
+- Konfiguration ausschließlich über Umgebungsvariablen (`.env`), dokumentiert in `.env.example`. Geheimnisse auch als Docker-Secrets-Dateien (`*_FILE`). Beim ersten Start werden fehlende Schlüssel erzeugt und der Betreiber wird aufgefordert, sie sicher zu verwahren.
+- **Mindestanforderungen** (Richtwert für 1–20 Nutzer): 2 vCPU, 4 GB RAM, 40 GB SSD. Läuft auf jedem Linux-Server mit Docker ≥ 24.
+- **Updates**: `docker compose pull && docker compose up -d`. Migrationen laufen automatisch und sind vorwärtskompatibel. Vor jeder Migration wird automatisch ein Datenbank-Snapshot gezogen. Ein Downgrade über Migrationsgrenzen hinweg ist nicht vorgesehen; ein dokumentierter Restore-Pfad schon.
+- **Ersteinrichtung**: Assistent im Browser (erste:r Admin, Firmendaten, Test-E-Mail, Prüfung von Backup und Object Lock).
+- **Betriebs-Check** in den Einstellungen: zeigt, ob Backups laufen und wann der letzte Restore-Test lief, ob Object Lock aktiv ist, ob TLS gültig und SMTP erreichbar ist, die Version und verfügbare Updates. Ohne funktionierende Sicherung erscheint eine dauerhafte Warnung, denn **beim Self-Hosting trägt der Betreiber die Verantwortung für GoBD-konforme Aufbewahrung**.
+- **Optionale Integrationen** über `.env` an- und abschaltbar: Wetter (Open-Meteo, auch selbst hostbar), KI-Funktionen (austauschbarer Anbieter, auch lokal), externes S3, externer SMTP, OIDC-Login (z. B. Keycloak, Microsoft Entra), Fehler-Tracking.
+- **Dokumentation für Betreiber** in `docs/self-hosting/`: Installation, Updates, Backup & Restore, Umzug, Härtung, Verfahrensdokumentation-Vorlage, Troubleshooting.
 
 ## 4. Datenmodell (Kern)
 
@@ -384,9 +423,9 @@ invoice ─┬─ payment (date, amount_cents, method, reference)
 ## 5. Datenhaltung, Sicherheit und Compliance
 
 ### 5.1 Sichere Speicherung
-- **Hosting ausschließlich EU/Deutschland**, Anbieter mit ISO 27001 und AVV.
+- **Hosting** liegt beim Betreiber (Self-Hosting). Die Doku empfiehlt Standorte in EU/Deutschland und einen Hoster mit ISO 27001 und AVV. Für Betreiber, die für andere Firmen hosten, gibt es eine AVV-Vorlage.
 - **Verschlüsselung**: TLS 1.2+ (HSTS), Verschlüsselung at rest (Volume + S3 SSE). Besonders sensible Felder (IBAN, API-Schlüssel) zusätzlich anwendungsseitig verschlüsselt (AES-256-GCM, Schlüssel im Secret-Store, rotierbar).
-- **Backups**: pgBackRest, kontinuierliche WAL-Archivierung (Point-in-Time-Recovery), tägliche Vollsicherung, verschlüsselt, in zweiter Region/zweitem Anbieter, 35 Tage Retention; **monatlicher Restore-Test** (automatisiert).
+- **Backups**: pgBackRest, kontinuierliche WAL-Archivierung (Point-in-Time-Recovery), tägliche Vollsicherung, verschlüsselt, auf ein zweites, vom Betreiber konfiguriertes Ziel (externes S3, SFTP oder NAS), 35 Tage Retention (einstellbar); **automatischer monatlicher Restore-Test** im `backup`-Container in eine Wegwerf-Datenbank, Ergebnis im Betriebs-Check.
 - **Archiv**: festgeschriebene Belege als Originaldatei im Bucket mit **Object Lock Compliance-Modus**, Sperrfrist = Aufbewahrungsfrist (Standard 10 Jahre ab Ende des Kalenderjahres). Hash zusätzlich in der DB.
 
 ### 5.2 Anwendungssicherheit
@@ -536,16 +575,27 @@ Suchen · Benachrichtigungen · Übersicht · Projekte · Angebote · Ausgangsre
 ## 8. Qualität, Tests, Betrieb
 
 - **Tests**: Domain-Logik (Kalkulation, Aufmaß-Formelparser inkl. Fuzzing und Fehlerfällen, Mengenfortschreibung, Nachtragssummen, Steuern, Rundung, Abschlagsanrechnung) mit Referenzbeispielen; DB-Tests für RLS, Trigger, Nummernkreise unter Parallelität; E-Rechnungen durch den KoSIT-Validator in CI; E2E-Kernflüsse (Aufmaß → Angebot → AB → Nachtrag → Abschlag aus Leistungsaufmaß → Schlussrechnung → Export, Aufmaß/Bautagebuch offline → Sync) auf Mobil und Desktop.
-- **CI** (GitHub Actions): lint, typecheck, unit, integration (Testcontainers), e2e, build, Security-Scans.
-- **Umgebungen**: dev (Docker Compose), staging, production; Migrationen vorwärtskompatibel (expand/contract).
+- **Alle Tests laufen in Docker.** Für Mitwirkende genügt Docker: `docker compose -f compose.test.yaml run --rm test` führt dieselbe Pipeline aus wie die CI.
+- **CI-Pipeline** (GitHub Actions, bei jedem Push und Pull Request):
+  1. Lint, Formatierung, Typecheck
+  2. Unit-Tests (`packages/domain` mit 100 % Abdeckung als Pflicht)
+  3. Integrationstests gegen echte Container (PostgreSQL, Valkey, MinIO, KoSIT): RLS, Trigger, Nummernkreise unter Parallelität, Object Lock
+  4. E-Rechnungs-Validierung aller Beispieldokumente mit KoSIT
+  5. Docker-Images bauen (amd64 + arm64)
+  6. **Stack-Test**: kompletter `compose.yaml`-Stack starten → Healthchecks → E2E-Tests mit Playwright (Desktop, Tablet, Smartphone) gegen die gebauten Images
+  7. **Upgrade-Test**: letzte veröffentlichte Version starten, Testdaten anlegen, auf neue Images aktualisieren, Daten und Hash-Ketten prüfen
+  8. **Backup/Restore-Test**: Sicherung erzeugen, in frischen Stack zurückspielen, Daten vergleichen
+  9. Sicherheits-Scans: Abhängigkeiten (`pnpm audit`, Renovate), Images (Trivy), Code (CodeQL), Secret-Scan
+- **Release**: Git-Tag → Images mit Signatur und SBOM nach GHCR, Changelog, Upgrade-Hinweise.
+- **Umgebungen**: dev (`compose.dev.yaml`), CI (`compose.test.yaml`), Produktion beim Betreiber (`compose.yaml`); Migrationen vorwärtskompatibel (expand/contract).
 - **Monitoring**: Uptime, Fehlerquote, Job-Queue-Länge, nächtliche Audit-Kettenprüfung, Backup-Restore-Test.
 - **ADRs** in `docs/adr/` für jede größere Entscheidung.
 
 ---
 
 ## 9. Offene Fragen
-1. Hosting-Anbieter (Hetzner vs. IONOS vs. STACKIT) und ob Selbst-Hosting durch Kunden angeboten werden soll.
-2. Preis- und Tarifmodell (bestimmt Feature-Flags je Plan).
+1. ~~Hosting-Anbieter~~ → entschieden: Open Source, Self-Hosting per Docker (§1, §3.5). Offen: **Lizenz** (Vorschlag AGPL-3.0) und **Projektname** (siehe ADR 0001).
+2. ~~Preismodell~~ → entfällt als Lizenzthema. Optional später: bezahlter Support oder Hosting-Angebot durch Dritte.
 3. Österreich bereits im MVP oder erst in Phase 2?
 4. Formale GoBD-Testierung (IDW PS 880) anstreben?
 5. Die Anforderung „…für die Finanzverwaltung so gespeichert, dass man Daten …“ war im Auftrag abgeschnitten. Angenommen wurde: **jederzeit vollständig und maschinell auswertbar exportieren kann** (Z3/DATEV, siehe 5.3). Bitte bestätigen oder ergänzen.

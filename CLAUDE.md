@@ -1,6 +1,6 @@
 # CLAUDE.md – Arbeitsanweisungen für OpenPlancraft
 
-OpenPlancraft ist eine webbasierte Betriebssoftware (ERP) für Bau- und Handwerksbetriebe: Kunden, Projekte, Angebotskalkulation, Rechnungen (GoBD, E-Rechnung), Bautagebuch, Steuerberater- und Finanzamtsexport.
+OpenPlancraft ist eine **Open-Source**-Betriebssoftware (ERP) für Bau- und Handwerksbetriebe, die Firmen **selbst per Docker** auf eigener Infrastruktur betreiben: Kunden, Projekte, Angebotskalkulation, Rechnungen (GoBD, E-Rechnung), Bautagebuch, Steuerberater- und Finanzamtsexport.
 
 **Lies vor jeder größeren Änderung [`DESIGN.md`](DESIGN.md)** (Architektur, Datenmodell, UX). Hintergrund: [`docs/RESEARCH.md`](docs/RESEARCH.md). Dieses Projekt ist ein eigenständiges Produkt: übernimm keine Texte, Logos, Markennamen oder Screens von Plancraft oder anderen Anbietern.
 
@@ -8,7 +8,7 @@ OpenPlancraft ist eine webbasierte Betriebssoftware (ERP) für Bau- und Handwerk
 Planungsphase. Es gibt noch keinen Code. Implementiert wird in der Reihenfolge der MVP-Module in DESIGN.md §2.
 
 ## Stack (Kurzfassung)
-TypeScript strict · pnpm + Turborepo · Fastify · Zod · PostgreSQL 17 + Drizzle · BullMQ/Redis · S3 (EU, Object Lock) · React 19 + Vite + TanStack Router/Query · Tailwind 4 + Radix/shadcn · vite-plugin-pwa + Dexie · Vitest, Testcontainers, Playwright.
+TypeScript strict · pnpm + Turborepo · Fastify · Zod · PostgreSQL 17 + Drizzle · BullMQ/Valkey · S3 via MinIO (Object Lock) · Caddy · Docker Compose · React 19 + Vite + TanStack Router/Query · Tailwind 4 + Radix/shadcn · vite-plugin-pwa + Dexie · Vitest, Testcontainers, Playwright.
 
 ## Struktur
 ```
@@ -22,16 +22,25 @@ infra/  docs/
 
 ## Befehle (Soll, sobald das Scaffolding steht)
 ```bash
+docker compose -f compose.yaml -f compose.dev.yaml up        # Entwicklung (Hot Reload, Mailpit)
+docker compose -f compose.test.yaml run --rm test             # komplette Testpipeline wie in CI
 pnpm install
-pnpm dev            # docker compose (postgres, redis, minio, kosit) + api + worker + web
 pnpm test           # vitest (unit)
-pnpm test:int       # integration mit Testcontainers
-pnpm test:e2e       # playwright, mobile + desktop
+pnpm test:int       # integration gegen Container (postgres, valkey, minio, kosit)
+pnpm test:e2e       # playwright gegen den laufenden Stack, mobile + desktop
 pnpm lint && pnpm typecheck
 pnpm db:generate    # drizzle Migration erzeugen
 pnpm db:migrate
 ```
-Vor jedem Commit: `pnpm lint && pnpm typecheck && pnpm test`.
+Vor jedem Commit: `pnpm lint && pnpm typecheck && pnpm test`. Vor einem Pull Request: die Docker-Testpipeline.
+
+## Open Source & Self-Hosting
+- Alles muss **im eigenen `docker compose`-Stack** lauffähig sein. Keine Pflicht-Abhängigkeit von externen SaaS-Diensten. Externe Dienste sind optional, über `.env` schaltbar und standardmäßig aus.
+- Jede neue Einstellung wird in `.env.example` dokumentiert und hat einen sicheren Standardwert. Geheimnisse sind auch als `*_FILE` möglich.
+- Keine Telemetrie ohne Opt-in. Keine Lizenzschlüssel oder Feature-Sperren im Code.
+- Abhängigkeiten nur mit OSI-kompatibler Lizenz, die zur Projektlizenz passt (AGPL-kompatibel; keine SSPL/BSL).
+- Migrationen müssen automatisch, idempotent und vorwärtskompatibel laufen (Upgrade-Test in CI). Betreiber führen keine manuellen SQL-Schritte aus.
+- Änderungen am Betrieb (neuer Container, neues Volume, neue Variable) brauchen ein Update in `docs/self-hosting/` und einen Changelog-Eintrag.
 
 ## Unverletzliche Regeln (Compliance & Sicherheit)
 1. **Geld nie als Float.** Beträge sind `bigint` Cent (`*_cents`), Mengen `numeric(18,4)`, Rechnen mit `decimal.js`. Rundung kaufmännisch auf Cent, USt pro Steuersatz auf Summenebene.
