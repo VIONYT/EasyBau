@@ -35,8 +35,9 @@ Vollwertige Finanzbuchhaltung (bleibt beim Steuerberater via DATEV), Lohnabrechn
 | **Aufmaß** ⭐ | Aufmaßblätter je Projekt, gegliedert nach Gebäude/Geschoss/Raum; Zeilen mit **Formeln** (z. B. `4,25*2,60 - 0,885*2,01`), Variablen, Abzügen (Öffnungen), Formelvorlagen (Rechteck, Wandfläche aus Raumumfang × Höhe, Dreieck, Kreis, Volumen, Stück); Zuordnung jeder Zeile zu einer LV-Position; Skizze/Foto je Zeile; zwei Arten: **Angebotsaufmaß** (Mengen → Angebot) und **Leistungsaufmaß** (ausgeführte Mengen → Abschlags-/Schlussrechnung); gemeinsames Aufmaß mit Unterschrift des Auftraggebers; Mehr-/Mindermengen gegenüber LV mit Hinweis ab ±10 % (VOB/B § 2 Abs. 3); PDF-Aufmaßblatt als Rechnungsanlage; **offline auf dem Tablet** |
 | **Auftragsbestätigung** | 1-Klick aus Angebot; begründet den **Hauptauftrag** (Vertragssumme) |
 | **Nachträge** ⭐ | Nachtragsangebote zum Hauptauftrag (N01, N02 …) mit eigenem LV (OZ `N01.0010`), Grund und Rechtsgrundlage (geänderte Leistung VOB/B § 2 Abs. 5, zusätzliche Leistung § 2 Abs. 6, BGB § 650b/c), Verknüpfung zu Bautagebuch-Einträgen, Fotos und Aufmaß als Nachweis; Status Entwurf → angeboten → beauftragt / teilbeauftragt / abgelehnt; Anlegen direkt aus Bautagebuch („Zusatzleistung erkannt“) oder aus Aufmaß-Mehrmengen; beauftragte Nachträge erhöhen die Vertragssumme und sind in Abschlags-/Schlussrechnungen abrechenbar; Übersicht offene/beauftragte Nachträge je Projekt |
-| **Rechnungen** | Abschlags-, Teil-, Schluss- und Einzelrechnung, **Mengen aus dem Leistungsaufmaß** (kumuliert, bereits abgerechnete Mengen werden abgezogen), Positionen aus Hauptauftrag **und** beauftragten Nachträgen, Anrechnung vorheriger Abschläge (Abschläge **kumulativ** – Gesamtleistungsstand abzüglich bisheriger Abschläge – oder **einzeln**; Standard in den Einstellungen wählbar), Sicherheitseinbehalt, Skonto, § 13b-Text, Storno mit Pflicht-Grund und Option „neu ausstellen“ (Kopie als Entwurf), **ZUGFeRD 2.x (EN 16931) als PDF/A-3 + XRechnung (UBL)**, E-Mail-Versand |
+| **Rechnungen** | Abschlags-, Teil-, Schluss- und Einzelrechnung, **Mengen aus dem Leistungsaufmaß** (kumuliert, bereits abgerechnete Mengen werden abgezogen), Positionen aus Hauptauftrag **und** beauftragten Nachträgen, Anrechnung vorheriger Abschläge (Abschläge **kumulativ** – Gesamtleistungsstand abzüglich bisheriger Abschläge – oder **einzeln**; Standard in den Einstellungen wählbar), Sicherheitseinbehalt und **Bauumlage** (prozentuale Abzüge im Dokument-Fuß, z. B. 5 % Einbehalt, 0,5 % Bauumlage), Skonto (Prozent + Tage) und Zahlungsziel (Tage → Datum im Text), § 13b-Text, Storno mit Pflicht-Grund und Option „neu ausstellen“ (Kopie als Entwurf), **ZUGFeRD 2.x (EN 16931) als PDF/A-3 + XRechnung (UBL)**, E-Mail-Versand |
 | **Rechnungsliste** | Filter Zeitraum, Status (Entwurf, offen, teilbezahlt, bezahlt, überfällig, angemahnt, storniert), Art (Rechnung, Abschlag, Schluss, Gutschrift, Storno), Projekt, „mit Sicherheitseinbehalt“; Umschalter netto/brutto; Spalten Nr., Titel + Art, Empfänger, Status, Fälligkeit, Betrag, offen; Summenzeile (Betrag, offen, bezahlt); Zeilenmenü PDF ansehen/herunterladen, E-Rechnung herunterladen, Projekt öffnen, Kürzen, Stornieren; CSV-Export |
+| **Zusammenhängend erstellen** | Aus jedem Dokument heraus Folgedokumente anlegen: aus Angebot → AB, Nachtrag, Abschlag, Rechnung; aus Abschlag → nächster Abschlag, Schlussrechnung, Lieferschein, Zahlungserinnerung. Positionsauswahl mit „Alle auswählen“, Optionen „Mengen übernehmen“ (oder aus Leistungsaufmaß) und „Anfangs-/Schlusstexte inkl. Bilder übernehmen“ |
 | **Zahlungen & Forderungen** | Rechnungsdetail mit Status und **offener Forderung** (= brutto − Zahlungen − Abzüge − Kürzungen); Zahlungen erfassen (Datum, Betrag, Weg; Teilzahlungen); **Abzüge** (gezogenes Skonto, Sicherheitseinbehalt, Bankgebühr, sonstiger Abzug mit Grund); **Kürzung** durch den Auftraggeber (Betrag + Begründung, bleibt streitig markierbar; ändert die Rechnung nicht, sondern die Forderung); Notizen; Liste „zusammenhängende Dokumente“; **Bezahlcode (EPC-QR / GiroCode)** mit Firmenname, IBAN, Betrag (ohne Skonto) und Rechnungsnummer als Verwendungszweck |
 | **Mahnwesen** | Aus der Rechnung „zusammenhängend erstellen“: Zahlungserinnerung → 1. Mahnung → 2. Mahnung (letzte), Stufen nur nacheinander; je Stufe Frist (Tage), Verzugszinsen %, Mahngebühr € (Vorgaben in den Einstellungen); Schreiben mit Bezug auf Rechnung und Leistungsort, Aufstellung der fälligen Beträge und Zahlungsfrist; Versand per E-Mail oder PDF; Status „angemahnt“; Hinweise: Verzugszinsen automatisch tagesgenau (Basiszinssatz + 5 bzw. 9 Prozentpunkte nach § 288 BGB, Basiszinssatz als gepflegte Tabelle), Verzugspauschale 40 € bei Geschäftskunden optional, Mahngebühren und Zinsen ohne USt |
 | **Bautagebuch & Berichte** | Berichte aus **Vorlagen** (siehe §4.5): Bautagesbericht, Regiebericht, Abnahmeprotokoll, Bedenkenanzeige (VOB/B § 4 Abs. 3), Behinderungsanzeige (VOB/B § 6 Abs. 1), Baustellenbegehung, Besprechungsprotokoll, Checkliste, Einsatzbericht; **abrechenbare** Berichte (Regie, Einsatz) übernehmen Stunden/Material in Rechnungen. Bautagesbericht: Tageseintrag je Projekt: Datum, Wetter (automatisch vorbefüllt), Temperatur, Anwesende (Personen/Kolonnen, Stunden), ausgeführte Arbeiten, Material/Geräte, Besonderheiten/Behinderungen/Mängel, Fotos mit Bildunterschrift, Unterschrift Bauleiter/Auftraggeber, PDF-Export; **offline erfassbar** |
@@ -232,7 +233,7 @@ GP         = round(Menge × EP)
 - **Kostenzeilen je Position**: Art (Lohn, Material, Gerät, Fremdleistung, Sonstiges), Menge, Einheit (z. B. `min`, `Std`, `psch`, `kg`), Beschreibung, EK je Einheit, EK gesamt. Lohnzeilen beziehen den Satz aus einer **Lohngruppe** (z. B. Meister, Geselle, Helfer, Auszubildender 2. Lehrjahr: Kosten/Std + Zuschlag → Verrechnungssatz); bei Eingabe in Minuten wird der Satz pro Minute umgerechnet.
 - **Modus Einheitspreis**: Kostenzeilen gelten pro 1 Einheit der Position (EP = Σ Kosten × Zuschläge; GP = Menge × EP). **Modus Gesamtpreis**: Kostenzeilen gelten für die ganze Positionsmenge (GP = Σ Kosten × Zuschläge; EP = GP / Menge, gerundet).
 - **Zuschläge** (Einstellungen › Kalkulation): getrennt nach Kostenart (z. B. Material 20 %, Lohn über Lohngruppe, Gerät, Fremdleistung) plus optional Allgemeine Geschäftskosten / Wagnis & Gewinn; je Position überschreibbar. Angezeigt werden Kosten, Zuschlag % und VK.
-- **Zielpreis („Preis anpassen“)**: Der Nutzer gibt eine gewünschte Netto-Summe ein. Die Differenz wird proportional auf die Zuschläge der kalkulierten Positionen verteilt (Kosten bleiben unverändert); Positionen ohne Kalkulation und Pauschalen bleiben fix, sofern nicht anders gewählt. Vorher/Nachher-Vorschau mit resultierender Marge; Warnung, wenn ein Zuschlag negativ würde (Verkauf unter Kosten). Rundungsdifferenzen landen in der größten Position, sodass die Summe exakt stimmt.
+- **Zielpreis („Preis anpassen“)**: Dialog mit Gesamtkosten, Gesamtzuschlag (% und €), editierbarer Netto- **oder** Bruttosumme, Schalter „auf alle Positionen umverteilen“ (sonst als eigene Ausgleichs-/Rabattzeile) und Anzeige der Differenz. Der Nutzer gibt eine gewünschte Summe ein. Die Differenz wird proportional auf die Zuschläge der kalkulierten Positionen verteilt (Kosten bleiben unverändert); Positionen ohne Kalkulation und Pauschalen bleiben fix, sofern nicht anders gewählt. Vorher/Nachher-Vorschau mit resultierender Marge; Warnung, wenn ein Zuschlag negativ würde (Verkauf unter Kosten). Rundungsdifferenzen landen in der größten Position, sodass die Summe exakt stimmt.
 - **Zuschlags-Vorgaben** (Einstellungen › Zuschläge): je Kostenart Lohn, Material, Geräte, Fremdleistungen, Sonstiges. Sie gelten als Voreinstellung für neue Stammdaten und neue Preiskalkulationen; Änderungen wirken **nicht rückwirkend**. Verbesserung: optionale Sammelaktion „Zuschläge in Stammdaten aktualisieren“ mit Vorschau der Preisänderungen.
 - Positionen ohne Kalkulation (nur VK) sind erlaubt; sie werden in Soll-Werten (Stunden, Kosten) gesondert ausgewiesen.
 - **Soll-Stunden** eines Projekts = Σ Lohnzeit aller kalkulierten Positionen der ausgewählten Dokumente (Grundlage für Nachkalkulation und Plantafel).
@@ -385,17 +386,27 @@ invoice ─┬─ payment (date, amount_cents, method, reference)
 - Passwörter: argon2id; Login-Rate-Limit; Sperre nach Fehlversuchen; Benachrichtigung bei neuem Gerät.
 - 2FA (TOTP) für Rolle Inhaber verpflichtend, für alle anderen empfohlen.
 - Sessions: serverseitig gespeichert, Cookie `HttpOnly; Secure; SameSite=Lax`, CSRF-Token bei zustandsändernden Requests, Session-Liste mit „überall abmelden“.
-- **Rollen & Rechte (RBAC)**:
+- **Rollen & Rechte (RBAC)**: Zugriff = **Zugangsart** × **Rolle**.
+  - Zugangsart *Büro* (Web + Mobil) oder *Baustelle* (nur Mobil/PWA im Baustellenmodus). Das ist auch die Grundlage für ein späteres Preismodell.
+  - Systemrollen (kopierbar und anpassbar, je Mandant eigene Rollen möglich): **Inhaber/Admin**, **Büroleitung**, **Projektleitung**, **Teamleitung (Baustelle)**, **Teammitglied (Baustelle)**, dazu **Steuerberater/Prüfer** (nur lesen, befristet).
+  - Rechte sind feingranulare Schlüssel (`project.read_all`, `project.write`, `project.archive`, `document.read`, `document.write`, `document.finalize`, `price.view`, `report.write`, `files.read_all`, `files.share`, `chat.delete_others`, `contacts.read`, `incoming_invoice.read`, `time.own`, `time.others`, `settings.read`, `settings.write`, `subscription.manage`, `export.run`, `audit.read` …). Die Rollen-Seite zeigt eine Matrix *Funktion × Web/Mobil* mit den Zuständen „erlaubt“, „nicht erlaubt“ und „auf diesem Gerät nicht verfügbar“ und darunter die Mitarbeitenden je Rolle.
+  - Projektbezogene Rollen sehen nur Projekte, denen sie zugeordnet sind (`project_member`).
 
-| Recht | Inhaber | Büro | Bauleiter | Monteur |
-|---|:-:|:-:|:-:|:-:|
-| Firma, Nutzer, Abrechnung | ✔ | – | – | – |
-| Kunden | ✔ | ✔ | lesen | – |
-| Angebote/Rechnungen | ✔ | ✔ | lesen (eigene Projekte) | – |
-| Preise/Kalkulation sehen | ✔ | ✔ | optional | – |
-| Projekte | ✔ | ✔ | ✔ (zugewiesen) | lesen (zugewiesen) |
-| Bautagebuch | ✔ | ✔ | ✔ | erfassen (zugewiesen) |
-| Exporte (DATEV/GoBD) | ✔ | ✔ | – | – |
+| Recht (Auszug) | Admin | Büroleitung | Projektleitung | Teamleitung | Teammitglied |
+|---|:-:|:-:|:-:|:-:|:-:|
+| Firma, Nutzer, Rollen, Abo | ✔ | – | – | – | – |
+| Einstellungen ansehen / bearbeiten | ✔ / ✔ | ✔ / ✔ | ✔ / – | – | – |
+| Alle Projekte sehen | ✔ | ✔ | zugewiesene | zugewiesene | zugewiesene |
+| Projekte anlegen / bearbeiten / archivieren | ✔ | ✔ | ✔ / ✔ / – | – | – |
+| Kontakte | ✔ | ✔ | ✔ | lesen | lesen (Projektkunde) |
+| Angebote, Nachträge bearbeiten | ✔ | ✔ | ✔ | – | – |
+| Rechnungen festschreiben / stornieren | ✔ | ✔ | – | – | – |
+| Preise & Kalkulation sehen | ✔ | ✔ | ✔ | optional | – |
+| Aufmaß erfassen | ✔ | ✔ | ✔ | ✔ | ✔ |
+| Berichte erfassen / unterschreiben | ✔ | ✔ | ✔ | ✔ / ✔ | ✔ / – |
+| Zeiten eigene / andere | ✔ / ✔ | ✔ / ✔ | ✔ / ✔ | ✔ / Team | ✔ / – |
+| Eingangsrechnungen | ✔ | ✔ | lesen (Projekt) | – | – |
+| Exporte (DATEV/GoBD), Audit-Log | ✔ | ✔ | – | – | – |
 
 - Eingaben mit Zod validiert, SQL nur parametrisiert (Drizzle), Ausgabe-Escaping in React und PDF-Templates, strikte **CSP**, Upload-Prüfung (MIME-Sniffing, Größenlimit, keine aktiven Inhalte), signierte, kurzlebige S3-URLs.
 - Abhängigkeiten: Renovate, `pnpm audit`, CodeQL in CI; Secrets nie im Repo.
