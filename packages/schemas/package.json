@@ -1,0 +1,24 @@
+{
+  "name": "@opc/schemas",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "description": "API contracts (zod) shared by server and web app.",
+  "exports": {
+    ".": {
+      "source": "./src/index.ts",
+      "types": "./src/index.ts",
+      "default": "./dist/index.js"
+    }
+  },
+  "files": [
+    "dist"
+  ],
+  "scripts": {
+    "build": "tsc -p tsconfig.build.json",
+    "typecheck": "tsc -p tsconfig.json --noEmit"
+  },
+  "dependencies": {
+    "zod": "4.6.7"
+  }
+}

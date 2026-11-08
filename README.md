@@ -11,11 +11,12 @@ Webbasierte Betriebssoftware für Bau- und Handwerksbetriebe: Kundenmanagement, 
 ## Schnellstart (Self-Hosting)
 
 ```bash
-cp .env.example .env        # mindestens POSTGRES_PASSWORD setzen, für einen Server APP_DOMAIN
+cp .env.example .env        # POSTGRES_PASSWORD und APP_SECRET setzen, für einen Server APP_DOMAIN
 docker compose up -d --build
+docker compose logs app | grep Einrichtungscode
 ```
 
-Danach ist die Anwendung unter `https://localhost` bzw. Ihrer Domain erreichbar. Caddy holt das Zertifikat automatisch. Profil *kompakt* (Standard) braucht einen Server mit 2 GB RAM.
+Danach ist die Anwendung unter `https://localhost` bzw. Ihrer Domain erreichbar; die Ersteinrichtung fragt nach dem Einrichtungscode. Details: [docs/self-hosting](docs/self-hosting/README.md). Caddy holt das Zertifikat automatisch. Profil *kompakt* (Standard) braucht einen Server mit 2 GB RAM.
 
 ## Entwicklung
 

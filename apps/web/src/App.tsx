@@ -1,55 +1,58 @@
+import type { Me, SetupStatus } from '@opc/schemas'
 import { useEffect, useState } from 'react'
+import { ApiError, api } from './api'
+import { t } from './i18n'
+import { LoginScreen, SetupScreen } from './screens/auth'
+import { Workspace } from './screens/workspace'
 
-interface Meta {
-  name: string
-  version: string
-  profile: 'compact' | 'standard'
-  role: string
-}
+type State =
+  | { screen: 'loading' }
+  | { screen: 'error'; message: string }
+  | { screen: 'setup' }
+  | { screen: 'login' }
+  | { screen: 'workspace'; me: Me }
 
-type Status = 'loading' | 'ready' | 'unavailable'
-
-/** Placeholder start page: proves web → proxy → API → database works end to end. */
+/** Start: setup required? → Ersteinrichtung; session valid? → workspace; otherwise login. */
 export function App() {
-  const [meta, setMeta] = useState<Meta | null>(null)
-  const [status, setStatus] = useState<Status>('loading')
+  const [state, setState] = useState<State>({ screen: 'loading' })
+  const [appName, setAppName] = useState('OpenPlancraft')
 
   useEffect(() => {
-    fetch('/api/v1/meta')
-      .then((res) => (res.ok ? (res.json() as Promise<Meta>) : null))
-      .then((data) => {
-        if (data) {
-          setMeta(data)
-          document.title = data.name
-        }
+    api<{ name: string }>('GET', '/api/v1/meta')
+      .then((meta) => {
+        setAppName(meta.name)
+        document.title = meta.name
       })
-      .catch(() => setMeta(null))
-    fetch('/readyz')
-      .then((res) => setStatus(res.ok ? 'ready' : 'unavailable'))
-      .catch(() => setStatus('unavailable'))
+      .catch(() => undefined)
+    ;(async () => {
+      try {
+        const status = await api<SetupStatus>('GET', '/api/v1/setup/status')
+        if (status.setupRequired) return setState({ screen: 'setup' })
+        const me = await api<Me>('GET', '/api/v1/auth/me')
+        setState({ screen: 'workspace', me })
+      } catch (error) {
+        if (error instanceof ApiError && error.status === 401) setState({ screen: 'login' })
+        else setState({ screen: 'error', message: (error as Error).message })
+      }
+    })()
   }, [])
 
-  const statusText: Record<Status, string> = {
-    loading: 'Verbindung wird geprüft …',
-    ready: 'System bereit',
-    unavailable: 'Datenbank nicht erreichbar',
+  switch (state.screen) {
+    case 'loading':
+      return <p className="page muted">{t('common.loading')}</p>
+    case 'error':
+      return (
+        <p className="page form-error" role="alert">
+          {state.message}
+        </p>
+      )
+    case 'setup':
+      return <SetupScreen onDone={(me) => setState({ screen: 'workspace', me })} />
+    case 'login':
+      return (
+        <LoginScreen appName={appName} onDone={(me) => setState({ screen: 'workspace', me })} />
+      )
+    case 'workspace':
+      return <Workspace me={state.me} onLogout={() => setState({ screen: 'login' })} />
   }
-
-  return (
-    <main className="page">
-      <section className="card" aria-live="polite">
-        <h1>{meta?.name ?? 'OpenPlancraft'}</h1>
-        <p className="lead">Betriebssoftware für Bau- und Handwerksbetriebe</p>
-        <p className={`badge badge--${status}`}>{statusText[status]}</p>
-        {meta && (
-          <dl className="facts">
-            <dt>Version</dt>
-            <dd>{meta.version}</dd>
-            <dt>Betriebsprofil</dt>
-            <dd>{meta.profile === 'compact' ? 'Kompakt' : 'Standard'}</dd>
-          </dl>
-        )}
-      </section>
-    </main>
-  )
 }

@@ -55,7 +55,7 @@ jobs:
 
       - name: Build images
         run: |
-          printf 'POSTGRES_PASSWORD=ci-%s\nHTTP_PORT=8080\nHTTPS_PORT=8443\n' "$GITHUB_RUN_ID" > .env
+          printf 'POSTGRES_PASSWORD=ci-%s\nAPP_SECRET=%s\nHTTP_PORT=8080\nHTTPS_PORT=8443\n' "$GITHUB_RUN_ID" "$(openssl rand -hex 32)" > .env
           docker compose build
 
       - name: Start compact profile

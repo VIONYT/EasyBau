@@ -1,3 +1,4 @@
+import { readFileSync } from 'node:fs'
 import { z } from 'zod'
 
 /**
@@ -23,6 +24,25 @@ const envSchema = z.object({
     .default('true')
     .transform((v) => v === 'true'),
   LOG_LEVEL: z.enum(['fatal', 'error', 'warn', 'info', 'debug', 'trace']).default('info'),
+  /** Master secret for field encryption (IBAN, TOTP secrets). At least 32 characters. */
+  APP_SECRET: z
+    .string()
+    .min(32, 'APP_SECRET muss mindestens 32 Zeichen lang sein (z. B. openssl rand -hex 32).'),
+  /** Optional fixed setup code; otherwise a random code is printed to the log on first start. */
+  SETUP_TOKEN: z.string().min(8).optional(),
+  /** Session lifetime in days (absolute) and idle timeout in hours. */
+  SESSION_TTL_DAYS: z.coerce.number().int().min(1).max(90).default(30),
+  SESSION_IDLE_HOURS: z.coerce
+    .number()
+    .int()
+    .min(1)
+    .max(24 * 30)
+    .default(24 * 7),
+  /** Secure cookies (HTTPS only). Disable only for local development without TLS. */
+  COOKIE_SECURE: z
+    .enum(['true', 'false'])
+    .default('true')
+    .transform((v) => v === 'true'),
 })
 
 export type Config = z.infer<typeof envSchema>
@@ -33,7 +53,7 @@ export class ConfigError extends Error {
 
 /** Parses and validates the environment. Throws a readable error listing every invalid variable. */
 export function loadConfig(env: Record<string, string | undefined> = process.env): Config {
-  const parsed = envSchema.safeParse(env)
+  const parsed = envSchema.safeParse(resolveFileSecrets(env))
   if (!parsed.success) {
     const details = parsed.error.issues
       .map((issue) => `  - ${issue.path.join('.')}: ${issue.message}`)
@@ -41,6 +61,31 @@ export function loadConfig(env: Record<string, string | undefined> = process.env
     throw new ConfigError(`Invalid configuration:\n${details}`)
   }
   return parsed.data
+}
+
+/**
+ * Docker secrets: `NAME_FILE=/run/secrets/x` provides the value of NAME from a file.
+ * An explicitly set NAME wins over NAME_FILE.
+ */
+export function resolveFileSecrets(
+  env: Record<string, string | undefined>,
+  readFile: (path: string) => string = (path) => readFileSync(path, 'utf8'),
+): Record<string, string | undefined> {
+  // Empty values (e.g. `SETUP_TOKEN=` from compose defaults) count as "not set".
+  const resolved = Object.fromEntries(Object.entries(env).filter(([, value]) => value !== ''))
+  for (const [key, path] of Object.entries(env)) {
+    if (!key.endsWith('_FILE') || !path) continue
+    const name = key.slice(0, -'_FILE'.length)
+    if (resolved[name] !== undefined) continue
+    try {
+      resolved[name] = readFile(path).trim()
+    } catch {
+      throw new ConfigError(
+        `Invalid configuration:\n  - ${key}: Datei ${path} kann nicht gelesen werden`,
+      )
+    }
+  }
+  return resolved
 }
 
 /** True if the process should serve the HTTP API. */

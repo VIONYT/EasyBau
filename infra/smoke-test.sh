@@ -27,6 +27,7 @@ check "liveness"        /healthz      '"status":"ok"'
 check "readiness (db)"  /readyz       '"status":"ready"'
 check "api metadata"    /api/v1/meta  '"name"'
 check "web app"         /             '<div id="root">'
+check "setup endpoint"  /api/v1/setup/status '"setupRequired"'
 
 headers=$($CURL -I "$BASE_URL/")
 echo "$headers" | grep -qi '^strict-transport-security:' || { echo "FAIL security headers: HSTS missing"; exit 1; }

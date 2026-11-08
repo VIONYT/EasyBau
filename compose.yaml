@@ -30,6 +30,11 @@ x-app-env: &app-env
   DATABASE_URL: postgres://${POSTGRES_USER:-openplancraft}:${POSTGRES_PASSWORD:?POSTGRES_PASSWORD fehlt in .env}@db:5432/${POSTGRES_DB:-openplancraft}
   DATABASE_POOL_MAX: ${DATABASE_POOL_MAX:-5}
   MIGRATE_ON_START: ${MIGRATE_ON_START:-true}
+  APP_SECRET: ${APP_SECRET:?APP_SECRET fehlt in .env (openssl rand -hex 32)}
+  SETUP_TOKEN: ${SETUP_TOKEN:-}
+  SESSION_TTL_DAYS: ${SESSION_TTL_DAYS:-30}
+  SESSION_IDLE_HOURS: ${SESSION_IDLE_HOURS:-168}
+  COOKIE_SECURE: ${COOKIE_SECURE:-true}
 
 services:
   proxy:

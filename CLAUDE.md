@@ -5,7 +5,7 @@ OpenPlancraft ist eine **Open-Source**-Betriebssoftware (ERP) für Bau- und Hand
 **Lies vor jeder größeren Änderung [`DESIGN.md`](DESIGN.md)** (Architektur, Datenmodell, UX). Hintergrund: [`docs/RESEARCH.md`](docs/RESEARCH.md). Dieses Projekt ist ein eigenständiges Produkt: übernimm keine Texte, Logos, Markennamen oder Screens von Plancraft oder anderen Anbietern.
 
 ## Projektstatus
-Grundgerüst steht, Datenbankschema für das MVP ist angelegt (Migrationen 0001–0005). Monorepo, Services (`server` = API + Worker per `APP_ROLE`), Web-Platzhalter, Docker-Stack (proxy, app, db; Profil `standard` mit separatem `worker`), Test-Stack und CI. Noch nicht im Stack: storage (S3/Object Lock), kosit, backup. Fachmodule folgen in der Reihenfolge der MVP-Module in DESIGN.md §2.
+Grundgerüst steht, Datenbankschema für das MVP ist angelegt (Migrationen 0001–0006). Rechenlogik (`packages/domain`), Ersteinrichtung, Anmeldung (Sitzung, TOTP, Rate-Limit), API für Kontakte und Projekte sowie eine erste Weboberfläche sind fertig. Monorepo, Services (`server` = API + Worker per `APP_ROLE`), Web-Platzhalter, Docker-Stack (proxy, app, db; Profil `standard` mit separatem `worker`), Test-Stack und CI. Noch nicht im Stack: storage (S3/Object Lock), kosit, backup. Fachmodule folgen in der Reihenfolge der MVP-Module in DESIGN.md §2.
 
 ## Stack (Kurzfassung)
 TypeScript strict · pnpm + Turborepo · Fastify · Zod · PostgreSQL 17 (SQL-Migrationen, ADR 0003) · pg-boss (Queue in PostgreSQL) · Typst (PDF/A-3) · S3 via MinIO (Object Lock) · Caddy · Docker Compose · React 19 + Vite + TanStack Router/Query · Tailwind 4 + Radix/shadcn · vite-plugin-pwa + Dexie · Vitest, Testcontainers, Playwright.
@@ -13,13 +13,16 @@ TypeScript strict · pnpm + Turborepo · Fastify · Zod · PostgreSQL 17 (SQL-Mi
 ## Struktur
 ```
 apps/server   Composition Root: startet API und/oder Worker je nach APP_ROLE (all|api|worker)
-apps/api      Fastify-App (buildApi), ohne eigenen Prozessstart → mit inject() testbar
+apps/api      Fastify-App (buildApi), ohne eigenen Prozessstart → mit inject() testbar.
+              routes/ (auth, contacts, projects), security/ (crypto, passwords, sessions), context.ts
+              (requireAuth, requirePermission, inTenant), http.ts (HttpError, parse, Cursor, ETag), idempotency.ts
 apps/worker   pg-boss-Jobs (startWorker)
 apps/web      React/Vite-PWA
 packages/config  Env-Schema (zod) – einzige Stelle für Konfiguration
 packages/db      SQL-Migrationen (migrations/), Runner, createSql (runtime/admin), withTenant(), Readiness
 packages/domain  Reine Rechenlogik: Aufmaß-Formeln, Aufmaßzeilen/Mengen, Kalkulation (Position, Dokument, Zielpreis, Gebinde), Einheiten
-geplant: packages/schemas  packages/einvoice  packages/exports  packages/pdf-templates  packages/ui
+packages/schemas Zod-Schemas und DTO-Typen der API (Server + Web)
+geplant: packages/einvoice  packages/exports  packages/pdf-templates  packages/ui
 docker/ (Dockerfiles)  infra/ (Caddyfile, smoke-test.sh)  docs/
 ```
 - Pakete exportieren über die Condition `source` direkt TypeScript (Entwicklung, Tests); gebaut wird nach `dist/`. Imports innerhalb eines Pakets mit `.js`-Endung (NodeNext).
@@ -49,6 +52,14 @@ Vor jedem Commit: `pnpm lint && pnpm typecheck && pnpm test`. Vor einem Pull Req
 - Anwendungscode greift nur über `createSql(config)` (Rolle `opc_app`) und `withTenant(sql, { tenantId, userId }, tx => …)` zu. Der Admin-Modus ist nur für Migrationen und pg-boss.
 - Nummern nur über `next_number(kind)` in der Festschreibe-Transaktion.
 - Integrationstests: `*.integration.test.ts` mit Helfern aus `packages/db/src/test-support.ts`. Erwartete DB-Fehler innerhalb einer Transaktion immer in `tx.savepoint(...)` kapseln.
+
+## API-Konventionen (umgesetzt)
+- Jede Route: Eingaben mit `parse(schema, …)` aus `@opc/schemas`, Rechte mit `requirePermission(request, '…')`, Datenzugriff nur in `inTenant(services, auth, tx => …)`.
+- Fehler: `throw new HttpError(status, 'deutscher Text', { feld: 'Meldung' })` → RFC 9457.
+- Listen: Keyset-Cursor (`encodeCursor`/`decodeCursor`), `limit` ≤ 100. Einzelressourcen liefern `ETag`; `PATCH` prüft `If-Match`.
+- POST mit `Idempotency-Key` wird automatisch dedupliziert (`idempotency.ts`).
+- Mutierende Anfragen von fremden Origins werden abgewiesen (CSRF); Sitzung nur im HttpOnly-Cookie.
+- API-Integrationstests (`apps/api/src/*.integration.test.ts`) legen je Lauf eine eigene Datenbank an.
 
 ## Open Source & Self-Hosting
 - **Ressourcen sparsam**: Ziel ist das Profil *kompakt* (ca. 1 GB RAM, Server mit 2 GB). Keine neuen Container ohne ADR. Was PostgreSQL kann (Queue, Sessions, Rate-Limit, Volltextsuche), läuft in PostgreSQL – kein Redis/Valkey, kein Elasticsearch, kein Chromium. PDFs nur mit Typst. Der Code muss in beiden Profilen funktionieren (API und Worker im selben Prozess oder getrennt).

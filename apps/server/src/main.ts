@@ -1,8 +1,9 @@
+import { randomInt } from 'node:crypto'
 import { buildApi } from '@opc/api'
 import { ConfigError, loadConfig, runsApi, runsWorker } from '@opc/config'
-import { createSql, migrate, pingDatabase } from '@opc/db'
+import { createSql, migrate, pingDatabase, type Sql } from '@opc/db'
 import { startWorker, type Worker } from '@opc/worker'
-import { pino } from 'pino'
+import { type Logger, pino } from 'pino'
 
 /**
  * Composition root. One image, three roles (ADR 0002):
@@ -32,9 +33,13 @@ async function main(): Promise<void> {
   // Application queries use the restricted runtime role, so row level security always applies.
   const sql = createSql(config)
 
+  const setupToken = runsApi(config.APP_ROLE)
+    ? await resolveSetupToken(sql, config.SETUP_TOKEN, logger)
+    : undefined
   const app = buildApi({
     config,
     isReady: () => pingDatabase(sql),
+    ...(runsApi(config.APP_ROLE) && setupToken ? { sql, setupToken } : {}),
     logger: {
       level: config.LOG_LEVEL,
       // No PII in logs (CLAUDE.md rule 9): log method and path only, never IPs or query strings.
@@ -66,6 +71,32 @@ async function main(): Promise<void> {
   }
   process.once('SIGTERM', () => void shutdown('SIGTERM'))
   process.once('SIGINT', () => void shutdown('SIGINT'))
+}
+
+/**
+ * Ersteinrichtung is protected by a one-time code, so nobody else can claim a freshly deployed
+ * public instance. Fixed via SETUP_TOKEN, otherwise random and printed to the log while setup is open.
+ */
+async function resolveSetupToken(
+  sql: Sql,
+  configured: string | undefined,
+  logger: Logger,
+): Promise<string> {
+  const alphabet = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789'
+  const token =
+    configured ??
+    Array.from({ length: 3 }, () =>
+      Array.from({ length: 4 }, () => alphabet[randomInt(alphabet.length)]).join(''),
+    ).join('-')
+  const [row] = await sql<{ done: boolean }[]>`select instance_has_tenant() as done`
+  if (!row?.done) {
+    logger.warn(
+      configured
+        ? 'Ersteinrichtung offen: im Browser mit dem Einrichtungscode aus SETUP_TOKEN abschließen.'
+        : `Ersteinrichtung offen. Einrichtungscode: ${token}`,
+    )
+  }
+  return token
 }
 
 main().catch((err: unknown) => {

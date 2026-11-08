@@ -1,7 +1,10 @@
 import { describe, expect, it } from 'vitest'
-import { ConfigError, loadConfig, runsApi, runsWorker } from './index.js'
+import { ConfigError, loadConfig, resolveFileSecrets, runsApi, runsWorker } from './index.js'
 
-const base = { DATABASE_URL: 'postgres://u:p@db:5432/app' }
+const base = {
+  DATABASE_URL: 'postgres://u:p@db:5432/app',
+  APP_SECRET: 'x'.repeat(32),
+}
 
 describe('loadConfig', () => {
   it('applies safe defaults for the compact profile', () => {
@@ -23,7 +26,7 @@ describe('loadConfig', () => {
   })
 
   it('rejects a missing or non-postgres database url', () => {
-    expect(() => loadConfig({})).toThrow(ConfigError)
+    expect(() => loadConfig({ APP_SECRET: base.APP_SECRET })).toThrow(ConfigError)
     expect(() => loadConfig({ DATABASE_URL: 'mysql://x@y/z' })).toThrow(/DATABASE_URL/)
   })
 
@@ -37,5 +40,39 @@ describe('roles', () => {
     expect([runsApi('all'), runsWorker('all')]).toEqual([true, true])
     expect([runsApi('api'), runsWorker('api')]).toEqual([true, false])
     expect([runsApi('worker'), runsWorker('worker')]).toEqual([false, true])
+  })
+})
+
+describe('secrets', () => {
+  it('requires a long APP_SECRET', () => {
+    expect(() => loadConfig({ ...base, APP_SECRET: 'short' })).toThrow(/APP_SECRET/)
+  })
+
+  it('reads NAME_FILE secrets, explicit values win', () => {
+    const read = (path: string) => `secret-from-${path}\n`
+    expect(resolveFileSecrets({ APP_SECRET_FILE: '/run/a' }, read).APP_SECRET).toBe(
+      'secret-from-/run/a',
+    )
+    expect(
+      resolveFileSecrets({ APP_SECRET: 'x', APP_SECRET_FILE: '/run/a' }, read).APP_SECRET,
+    ).toBe('x')
+    expect(resolveFileSecrets({ EMPTY_FILE: '' }, read).EMPTY).toBeUndefined()
+    expect(resolveFileSecrets({ SETUP_TOKEN: '' }, read).SETUP_TOKEN).toBeUndefined()
+  })
+
+  it('reports unreadable secret files', () => {
+    expect(() =>
+      loadConfig({ ...base, APP_SECRET: undefined, APP_SECRET_FILE: '/nonexistent/secret' }),
+    ).toThrow(/APP_SECRET_FILE/)
+  })
+
+  it('applies security defaults', () => {
+    const config = loadConfig(base)
+    expect([config.COOKIE_SECURE, config.SESSION_TTL_DAYS, config.SESSION_IDLE_HOURS]).toEqual([
+      true,
+      30,
+      168,
+    ])
+    expect(config.SETUP_TOKEN).toBeUndefined()
   })
 })
