@@ -7,9 +7,9 @@
 Das System soll Open Source sein. Interessierte Firmen betreiben es auf ihrer eigenen Infrastruktur. Betrieb und Tests laufen über Docker.
 
 ## Entscheidung
-1. Auslieferung als Docker-Images (amd64/arm64, signiert, mit SBOM) plus `compose.yaml`. Alle Pflichtkomponenten laufen im Stack: PostgreSQL, Valkey, MinIO (Object Lock), KoSIT-Validator, Caddy und der Backup-Container.
+1. Auslieferung als Docker-Images (amd64/arm64, signiert, mit SBOM) plus `compose.yaml`. Alle Pflichtkomponenten laufen im Stack: PostgreSQL, MinIO (Object Lock), KoSIT-Validator, Caddy und der Backup-Container (Valkey entfallen, siehe ADR 0002).
 2. Es gibt keine Pflicht-Abhängigkeit von externen SaaS-Diensten. Optionale Integrationen werden über Umgebungsvariablen geschaltet und sind standardmäßig aus.
-3. Valkey statt Redis, weil Redis seit 7.4 nicht mehr unter einer OSI-Lizenz steht.
+3. ~~Valkey statt Redis~~ → ersetzt durch ADR 0002: kein separater Queue-/Cache-Dienst, Warteschlange in PostgreSQL.
 4. Alle automatischen Tests sind über `compose.test.yaml` reproduzierbar. Die CI testet zusätzlich den kompletten Stack, Upgrades und Backup/Restore.
 5. Die Mandantentrennung bleibt erhalten, Standard ist aber eine Firma pro Installation.
 

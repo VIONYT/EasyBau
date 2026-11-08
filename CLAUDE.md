@@ -8,7 +8,7 @@ OpenPlancraft ist eine **Open-Source**-Betriebssoftware (ERP) für Bau- und Hand
 Planungsphase. Es gibt noch keinen Code. Implementiert wird in der Reihenfolge der MVP-Module in DESIGN.md §2.
 
 ## Stack (Kurzfassung)
-TypeScript strict · pnpm + Turborepo · Fastify · Zod · PostgreSQL 17 + Drizzle · BullMQ/Valkey · S3 via MinIO (Object Lock) · Caddy · Docker Compose · React 19 + Vite + TanStack Router/Query · Tailwind 4 + Radix/shadcn · vite-plugin-pwa + Dexie · Vitest, Testcontainers, Playwright.
+TypeScript strict · pnpm + Turborepo · Fastify · Zod · PostgreSQL 17 + Drizzle · pg-boss (Queue in PostgreSQL) · Typst (PDF/A-3) · S3 via MinIO (Object Lock) · Caddy · Docker Compose · React 19 + Vite + TanStack Router/Query · Tailwind 4 + Radix/shadcn · vite-plugin-pwa + Dexie · Vitest, Testcontainers, Playwright.
 
 ## Struktur
 ```
@@ -26,7 +26,7 @@ docker compose -f compose.yaml -f compose.dev.yaml up        # Entwicklung (Hot 
 docker compose -f compose.test.yaml run --rm test             # komplette Testpipeline wie in CI
 pnpm install
 pnpm test           # vitest (unit)
-pnpm test:int       # integration gegen Container (postgres, valkey, minio, kosit)
+pnpm test:int       # integration gegen Container (postgres, minio, kosit)
 pnpm test:e2e       # playwright gegen den laufenden Stack, mobile + desktop
 pnpm lint && pnpm typecheck
 pnpm db:generate    # drizzle Migration erzeugen
@@ -35,6 +35,8 @@ pnpm db:migrate
 Vor jedem Commit: `pnpm lint && pnpm typecheck && pnpm test`. Vor einem Pull Request: die Docker-Testpipeline.
 
 ## Open Source & Self-Hosting
+- **Ressourcen sparsam**: Ziel ist das Profil *kompakt* (ca. 1 GB RAM, Server mit 2 GB). Keine neuen Container ohne ADR. Was PostgreSQL kann (Queue, Sessions, Rate-Limit, Volltextsuche), läuft in PostgreSQL – kein Redis/Valkey, kein Elasticsearch, kein Chromium. PDFs nur mit Typst. Der Code muss in beiden Profilen funktionieren (API und Worker im selben Prozess oder getrennt).
+- Hintergrundjobs werden mit pg-boss **in derselben Transaktion** wie die auslösende Änderung angelegt. Jobs müssen idempotent sein.
 - Alles muss **im eigenen `docker compose`-Stack** lauffähig sein. Keine Pflicht-Abhängigkeit von externen SaaS-Diensten. Externe Dienste sind optional, über `.env` schaltbar und standardmäßig aus.
 - Jede neue Einstellung wird in `.env.example` dokumentiert und hat einen sicheren Standardwert. Geheimnisse sind auch als `*_FILE` möglich.
 - Lizenz **AGPL-3.0-or-later** (`LICENSE`). „OpenPlancraft“ ist nur Arbeitstitel: Produktname, Image- und Paketnamen nie verstreut hart codieren, sondern zentral konfigurieren, damit die Umbenennung vor dem Release einfach bleibt.

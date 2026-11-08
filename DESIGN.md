@@ -76,11 +76,14 @@ KI-Angebotsentwurf aus Freitext, Sprach-Bautagebuch (Diktat → strukturierter E
 │          invoicing · payments · diary · files · exports   │
 │          audit                                            │
 ├───────────────────┬──────────────────┬───────────────────┤
-│  Worker (BullMQ)  │ PostgreSQL 17    │ S3 Object Storage │
-│  PDF, E-Rechnung, │ RLS je Mandant   │ (EU), Object Lock │
-│  Mails, Exporte   │ Append-only-Log  │ für Archiv (WORM) │
+│  Worker (pg-boss) │ PostgreSQL 17    │ S3 Object Storage │
+│  PDF (Typst),     │ RLS je Mandant   │ MinIO, Object Lock│
+│  E-Rechnung,      │ Append-only-Log  │ für Archiv (WORM) │
+│  Mails, Exporte   │ Job-Queue        │                   │
 └───────────────────┴──────────────────┴───────────────────┘
-          Valkey (Queue, Rate-Limit) · SMTP · KoSIT-Validator
+          SMTP · KoSIT-Validator (Speicher begrenzt)
+
+Im Profil **kompakt** laufen API und Worker in **einem** Prozess (siehe §3.6).
 
 Alle Kästen laufen als Container im selben `docker compose`-Stack beim Betreiber (siehe §3.5).
 ```
@@ -97,8 +100,8 @@ Alle Kästen laufen als Container im selben `docker compose`-Stack beim Betreibe
 | Validierung | **Zod** (geteilt) | Gleiche Validierung im Client und auf dem Server |
 | DB | **PostgreSQL 17** | Transaktionen, RLS, Trigger für Unveränderbarkeit, JSONB |
 | ORM / Migrationen | **Drizzle ORM** + drizzle-kit | Typsicher, SQL-nah, gut für Trigger/RLS |
-| Jobs | **BullMQ** + **Valkey** (Redis-kompatibel, BSD-Lizenz) | PDF-Erzeugung, E-Mail, Exporte, Wetterabruf |
-| PDF | HTML-Templates → **Playwright/Chromium** → PDF; Umwandlung in **PDF/A-3** und XML-Einbettung | Pixelgenaue Briefpapiere, ZUGFeRD-fähig |
+| Jobs | **pg-boss** (Warteschlange in PostgreSQL) | Kein eigener Queue-Container. Jobs werden **in derselben Transaktion** wie die fachliche Änderung angelegt (z. B. Festschreiben → „PDF/E-Rechnung erzeugen“) und können nicht verloren gehen. Wiederholungen, Zeitpläne (Cron) und Singleton-Jobs sind eingebaut |
+| PDF | **Typst**: Vorlagen in `packages/pdf-templates` (Typst-Markup + JSON-Daten), Erzeugung über die Typst-CLI im Worker-Image; Ausgabe **PDF/A-3b** mit eingebetteter E-Rechnungs-XML (`pdf.embed`); Schriften im Image gebündelt | Ein PDF dauert typischerweise Millisekunden statt Sekunden, und der Speicherbedarf liegt bei wenigen MB statt 300–500 MB für Chromium. Dieselben Vorlagen können per WebAssembly auch für die Live-Vorschau im Browser genutzt werden. Fallback: Nachbearbeitung mit der E-Rechnungs-Bibliothek, falls eine PDF/A-Prüfung (veraPDF in CI) fehlschlägt |
 | E-Rechnung | **`@e-invoice-eu/core`** (Factur-X/ZUGFeRD, XRechnung UBL/CII); Validierung mit **KoSIT-Validator** (Docker-Sidecar, CI) | Bewährte Bibliothek + offizieller Prüfer |
 | Dateien | **S3-kompatibel**: standardmäßig **MinIO** im Stack, alternativ jeder externe S3-Speicher des Betreibers; **Object Lock (Compliance-Modus)** für Archivbuckets | WORM-Speicherung für GoBD ohne Cloud-Zwang |
 | Frontend | **React 19 + Vite**, **TanStack Router + Query**, **Tailwind CSS 4**, **Radix UI / shadcn-Komponenten** | Schnell, zugänglich, eigenes Designsystem möglich |
@@ -116,7 +119,7 @@ Alle Kästen laufen als Container im selben `docker compose`-Stack beim Betreibe
 openplancraft/
 ├─ apps/
 │  ├─ api/            # Fastify-Server (HTTP)
-│  ├─ worker/         # BullMQ-Worker (PDF, E-Rechnung, Mail, Export)
+│  ├─ worker/         # Job-Worker auf pg-boss (PDF via Typst, E-Rechnung, Mail, Export); im Profil „kompakt“ im API-Prozess
 │  └─ web/            # React-PWA
 ├─ packages/
 │  ├─ domain/         # Reine Geschäftslogik: Kalkulation, Aufmaß-Formelparser, Mengenfortschreibung, Steuern, Summen, Nummern-Formate (keine I/O)
@@ -124,7 +127,7 @@ openplancraft/
 │  ├─ db/             # Drizzle-Schema, Migrationen, RLS/Trigger-SQL, Seeds
 │  ├─ einvoice/       # Mapping Dokument → EN16931, ZUGFeRD/XRechnung, Validierung
 │  ├─ exports/        # DATEV-EXTF, GoBD-Z3 (index.xml), Gesamtexport
-│  ├─ pdf-templates/  # HTML/CSS-Vorlagen für Dokumente und Bautagebuch
+│  ├─ pdf-templates/  # Typst-Vorlagen für Dokumente, Berichte, Mahnungen, Aufmaßblätter
 │  └─ ui/             # Designsystem-Komponenten
 ├─ docker/            # Dockerfiles (api, worker, web, backup), Entrypoints
 ├─ compose.yaml       # Produktions-Stack (Self-Hosting)
@@ -152,23 +155,41 @@ Standardfall beim Self-Hosting ist **eine Firma pro Installation**. Die Mandante
 |---|---|---|
 | `proxy` | Caddy | TLS, HTTP/2/3, Security-Header, liefert das Web-Frontend aus |
 | `api` | `ghcr.io/<org>/openplancraft-api` | REST-API, führt beim Start Datenbank-Migrationen aus (mit Lock, idempotent) |
-| `worker` | `ghcr.io/<org>/openplancraft-worker` | PDF (Chromium), E-Rechnung, E-Mail, Exporte, geplante Jobs |
+| `worker` | `ghcr.io/<org>/openplancraft-worker` | PDF (Typst), E-Rechnung, E-Mail, Exporte, geplante Jobs; **entfällt im Profil kompakt** (läuft dann im `api`-Container) |
 | `db` | PostgreSQL 17 | Daten (Volume) |
-| `queue` | Valkey | Jobs, Rate-Limits |
 | `storage` | MinIO | Dateien und WORM-Archiv (Object Lock wird beim ersten Start eingerichtet) |
-| `kosit` | KoSIT-Validator (Java) | Prüfung jeder E-Rechnung, nur intern erreichbar |
+| `kosit` | KoSIT-Validator (Java) | Prüfung jeder E-Rechnung, nur intern erreichbar. Läuft mit begrenztem Heap (`-Xmx256m`, Serial GC). Im Profil kompakt wird er **bei Bedarf** gestartet und nach Leerlauf wieder beendet |
 | `backup` | pgBackRest + Cron | WAL-Archiv, tägliche Sicherung, optional Kopie auf externes Ziel (S3/SFTP) |
 
 **Grundsätze**
 - Images für `linux/amd64` und `linux/arm64`, signiert (cosign), mit SBOM; Versionen nach SemVer, `latest` nur für stabile Releases.
 - Container laufen ohne Root, mit Read-only-Dateisystem wo möglich und Healthchecks. Nur `proxy` ist nach außen offen.
 - Konfiguration ausschließlich über Umgebungsvariablen (`.env`), dokumentiert in `.env.example`. Geheimnisse auch als Docker-Secrets-Dateien (`*_FILE`). Beim ersten Start werden fehlende Schlüssel erzeugt und der Betreiber wird aufgefordert, sie sicher zu verwahren.
-- **Mindestanforderungen** (Richtwert für 1–20 Nutzer): 2 vCPU, 4 GB RAM, 40 GB SSD. Läuft auf jedem Linux-Server mit Docker ≥ 24.
+- **Mindestanforderungen**: siehe Betriebsprofile §3.6. Läuft auf jedem Linux-Server mit Docker ≥ 24 (amd64 oder arm64).
 - **Updates**: `docker compose pull && docker compose up -d`. Migrationen laufen automatisch und sind vorwärtskompatibel. Vor jeder Migration wird automatisch ein Datenbank-Snapshot gezogen. Ein Downgrade über Migrationsgrenzen hinweg ist nicht vorgesehen; ein dokumentierter Restore-Pfad schon.
 - **Ersteinrichtung**: Assistent im Browser (erste:r Admin, Firmendaten, Test-E-Mail, Prüfung von Backup und Object Lock).
 - **Betriebs-Check** in den Einstellungen: zeigt, ob Backups laufen und wann der letzte Restore-Test lief, ob Object Lock aktiv ist, ob TLS gültig und SMTP erreichbar ist, die Version und verfügbare Updates. Ohne funktionierende Sicherung erscheint eine dauerhafte Warnung, denn **beim Self-Hosting trägt der Betreiber die Verantwortung für GoBD-konforme Aufbewahrung**.
+- **Ohne Redis/Valkey**: Sessions, Rate-Limits (Tabelle mit Sliding Window bzw. In-Memory im kompakten Profil), Job-Queue und Volltextsuche (`tsvector`, deutsches Wörterbuch) laufen in PostgreSQL. Ein Cache-Container kann später optional ergänzt werden, falls ein Großbetrieb ihn braucht.
 - **Optionale Integrationen** über `.env` an- und abschaltbar: Wetter (Open-Meteo, auch selbst hostbar), KI-Funktionen (austauschbarer Anbieter, auch lokal), externes S3, externer SMTP, OIDC-Login (z. B. Keycloak, Microsoft Entra), Fehler-Tracking.
 - **Dokumentation für Betreiber** in `docs/self-hosting/`: Installation, Updates, Backup & Restore, Umzug, Härtung, Verfahrensdokumentation-Vorlage, Troubleshooting.
+
+### 3.6 Betriebsprofile & Ressourcen
+
+Ziel: **wenig Ressourcen, trotzdem schnell.** Gewählt über `PROFILE=compact|standard` in `.env`.
+
+| | **Kompakt** (1–10 Nutzer) | **Standard** (10–50 Nutzer) |
+|---|---|---|
+| Container | `proxy`, `app` (API + Worker in einem Prozess), `db`, `storage`, `kosit` (bei Bedarf), `backup` | `proxy`, `api`, `worker`, `db`, `storage`, `kosit`, `backup` |
+| RAM im Betrieb (Richtwert) | **ca. 1 GB** | ca. 1,5 GB |
+| Empfohlener Server | 1–2 vCPU, **2 GB RAM**, 20–40 GB SSD | 2–4 vCPU, 4 GB RAM, 40+ GB SSD |
+| PostgreSQL-Tuning | `shared_buffers=128MB`, `work_mem=4MB`, `max_connections=30` | `shared_buffers=512MB`, `max_connections=60` |
+| KoSIT | bei Bedarf gestartet, `-Xmx256m` | dauerhaft, `-Xmx256m` |
+
+Ungefähre Speicheraufteilung (kompakt): Caddy 30 MB · App (Node) 150–200 MB · PostgreSQL 150–250 MB · MinIO 150 MB · KoSIT 0 bzw. 300 MB beim Prüfen · Backup 10 MB. Typst benötigt nur während der PDF-Erzeugung wenige MB.
+
+**Warum PostgreSQL trotzdem die richtige Wahl ist**: Ein Betrieb mit 20 Mitarbeitenden erzeugt grob ein paar tausend Dokumente und einige hunderttausend Positionen pro Jahr. Das sind auch nach zehn Jahren meist unter 5 GB, denn Fotos und PDFs liegen im Objektspeicher. PostgreSQL ersetzt zusätzlich Queue, Cache und Suchserver und bietet als einzige Option RLS, Trigger für die Unveränderbarkeit und Point-in-Time-Recovery (siehe [ADR 0002](docs/adr/0002-schlanker-stack.md)). SQLite und MariaDB wurden geprüft und verworfen.
+
+**Leistungsziele** (gemessen in CI auf dem kompakten Profil mit 2 GB RAM): API p95 < 200 ms bei 10 parallelen Nutzern; PDF einer Rechnung mit 100 Positionen < 1 s; Suche über 100 000 Positionen < 300 ms. Ein Lasttest-Job in der Pipeline schlägt Alarm, wenn Grenzen überschritten werden.
 
 ## 4. Datenmodell (Kern)
 
@@ -579,10 +600,11 @@ Suchen · Benachrichtigungen · Übersicht · Projekte · Angebote · Ausgangsre
 - **CI-Pipeline** (GitHub Actions, bei jedem Push und Pull Request):
   1. Lint, Formatierung, Typecheck
   2. Unit-Tests (`packages/domain` mit 100 % Abdeckung als Pflicht)
-  3. Integrationstests gegen echte Container (PostgreSQL, Valkey, MinIO, KoSIT): RLS, Trigger, Nummernkreise unter Parallelität, Object Lock
+  3. Integrationstests gegen echte Container (PostgreSQL, MinIO, KoSIT): RLS, Trigger, Nummernkreise unter Parallelität, Job-Queue (Job entsteht nur bei Commit), Object Lock
+  3a. PDF-Prüfung: alle Beispiel-PDFs mit **veraPDF** auf PDF/A-3b, eingebettete XML mit KoSIT
   4. E-Rechnungs-Validierung aller Beispieldokumente mit KoSIT
   5. Docker-Images bauen (amd64 + arm64)
-  6. **Stack-Test**: kompletter `compose.yaml`-Stack starten → Healthchecks → E2E-Tests mit Playwright (Desktop, Tablet, Smartphone) gegen die gebauten Images
+  6. **Stack-Test** in **beiden Profilen** (kompakt mit auf 2 GB begrenztem Speicher, standard): kompletten `compose.yaml`-Stack starten → Healthchecks → E2E-Tests mit Playwright (Desktop, Tablet, Smartphone) gegen die gebauten Images
   7. **Upgrade-Test**: letzte veröffentlichte Version starten, Testdaten anlegen, auf neue Images aktualisieren, Daten und Hash-Ketten prüfen
   8. **Backup/Restore-Test**: Sicherung erzeugen, in frischen Stack zurückspielen, Daten vergleichen
   9. Sicherheits-Scans: Abhängigkeiten (`pnpm audit`, Renovate), Images (Trivy), Code (CodeQL), Secret-Scan

@@ -12,3 +12,4 @@ Webbasierte Betriebssoftware für Bau- und Handwerksbetriebe: Kundenmanagement, 
 - [CLAUDE.md](CLAUDE.md) – Arbeitsregeln und Konventionen für die Entwicklung
 - [docs/RESEARCH.md](docs/RESEARCH.md) – Markt- und Rechtsrecherche
 - [docs/adr/0001-open-source-self-hosting.md](docs/adr/0001-open-source-self-hosting.md) – Entscheidung zu Open Source, Docker und Lizenz
+- [docs/adr/0002-schlanker-stack.md](docs/adr/0002-schlanker-stack.md) – Schlanker Stack: PostgreSQL, Typst, Betriebsprofile (ab 2 GB RAM)
