@@ -48,14 +48,16 @@ Priorität nach Nutzen × Häufigkeit × Pflicht:
 
 1. **Kundenverwaltung** (Kontakte, Adressen, Ansprechpartner, Privat/Gewerbe, § 13b-Kennzeichen)
 2. **Projekte** als Klammer (Baustelle, Status, Dokumente, Fotos)
-3. **Angebotserstellung mit Kalkulation** (Titel/Positionen, Lohn/Material/Gerät/Fremdleistung, Zuschläge, Vorlagen, Artikel- und Leistungsstamm, professionelles PDF)
-4. **Auftragsbestätigung und Rechnungen** (Abschlag, Schluss mit Anrechnung, Storno/Korrektur) **GoBD-konform** mit **ZUGFeRD/XRechnung**
-5. **Zahlungsstatus** (offen / teilbezahlt / bezahlt / überfällig) und einfache Zahlungserinnerung
-6. **Bautagebuch** mobil + offline (Wetter, Personal, Tätigkeiten, Fotos, Behinderungen, Unterschrift, PDF)
-7. **Steuerberater- und Finanzamtsexport**: DATEV-Buchungsstapel, GoBD-Datenträgerüberlassung (Z3), revisionssicheres Archiv
-8. **Sicherheit**: 2FA, Rollen (Inhaber, Büro, Bauleiter, Monteur), Audit-Log, Backups
+3. **Aufmaß** (Angebots- und Leistungsaufmaß mit Formeln, Räumen, Abzügen; offline auf dem Tablet). Im Baugewerbe ist das Aufmaß die Mengengrundlage für Angebot, Kalkulation und Abrechnung. Bei Einheitspreisverträgen wird nach Aufmaß abgerechnet.
+4. **Angebotserstellung mit Kalkulation** (Titel/Positionen, Lohn/Material/Gerät/Fremdleistung, Zuschläge, Vorlagen, Artikel- und Leistungsstamm, professionelles PDF, Mengen aus dem Aufmaß)
+5. **Auftragsbestätigung und Nachträge** (Nachtragsangebote zum Hauptauftrag nach VOB/B § 2 Abs. 5/6 bzw. BGB § 650b, Nachweise aus Bautagebuch/Fotos/Aufmaß, Beauftragungsstatus). Nicht oder zu spät gestellte Nachträge sind eine der häufigsten Ursachen für Verluste am Bau.
+6. **Rechnungen** (Abschlag aus Leistungsaufmaß, Schluss mit Anrechnung, Storno/Korrektur) **GoBD-konform** mit **ZUGFeRD/XRechnung**
+7. **Zahlungsstatus** (offen / teilbezahlt / bezahlt / überfällig) und einfache Zahlungserinnerung
+8. **Bautagebuch** mobil + offline (Wetter, Personal, Tätigkeiten, Fotos, Behinderungen, Unterschrift, PDF), direkt verknüpft mit Nachträgen
+9. **Steuerberater- und Finanzamtsexport**: DATEV-Buchungsstapel, GoBD-Datenträgerüberlassung (Z3), revisionssicheres Archiv
+10. **Sicherheit**: 2FA, Rollen (Inhaber, Büro, Bauleiter, Monteur), Audit-Log, Backups
 
-Bewusst **nach** dem MVP: Zeiterfassung, Aufmaß, DATANORM, GAEB, Plantafel, Eingangsrechnungen/OCR, Nachkalkulation, Mahnstufen, Kundenportal mit Online-Annahme, KI-Funktionen, Bankanbindung.
+Bewusst **nach** dem MVP: Zeiterfassung, Aufmaß-Austausch (REB/GAEB X31), DATANORM, GAEB, Plantafel, Eingangsrechnungen/OCR, Nachkalkulation, Mahnstufen, Kundenportal mit Online-Annahme, KI-Funktionen, Bankanbindung.
 
 ## Quellen
 - [SoftGuide – plancraft](https://www.softguide.de/programm/plancraft)

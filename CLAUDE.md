@@ -44,6 +44,8 @@ Vor jedem Commit: `pnpm lint && pnpm typecheck && pnpm test`.
 8. **E-Rechnungen** (ZUGFeRD EN 16931 / XRechnung) müssen den KoSIT-Validator bestehen, bevor sie versendet oder archiviert werden. Das Original (PDF/A-3 bzw. XML) wird unverändert mit SHA-256 im WORM-Bucket abgelegt.
 9. **Sicherheit**: Keine Secrets im Repo. Keine Tokens in `localStorage`. Nur parametrisierte Queries. Alle Eingaben mit Zod validieren. Keine PII in Logs. Uploads prüfen (MIME, Größe). Berechtigungen serverseitig prüfen (RBAC laut DESIGN.md §5.2), nie nur im UI verstecken.
 10. **Idempotenz**: Alle POST-Endpunkte akzeptieren `Idempotency-Key` (Offline-Sync, Doppelklick beim Festschreiben).
+11. **Aufmaß-Formeln** werden ausschließlich mit dem eigenen Parser in `packages/domain` ausgewertet – niemals `eval`, `new Function` o. Ä. Der Server berechnet `result_qty` immer selbst neu; Client-Ergebnisse sind nur Vorschau.
+12. **Abrechnungsgrundlagen sind gesperrt**: Aufmaßzeilen, die in einer festgeschriebenen Rechnung verwendet wurden, und unterschriebene Aufmaßblätter sind unveränderlich (Korrektur nur per Korrekturzeile/neuem Blatt). Rechnungen enthalten nur Positionen aus Hauptauftrag und **beauftragten** Nachträgen (freie Positionen nur mit Warnung).
 
 Wenn eine Anforderung einer dieser Regeln widerspricht: nicht umsetzen, sondern nachfragen.
 
@@ -60,6 +62,8 @@ Wenn eine Anforderung einer dieser Regeln widerspricht: nicht umsetzen, sondern 
 
 ## Tests – was immer getestet werden muss
 - Kalkulations- und Steuerformeln mit Referenzbeispielen (inkl. § 13b, Abschlagsanrechnung, Alternativpositionen, Rundung).
+- Aufmaß-Formelparser (deutsches Zahlenformat, Klammern, Abzüge, Variablen, Fehlerfälle, Fuzzing) und Mengenfortschreibung (kumuliert − bereits abgerechnet).
+- Vertragssumme = Hauptauftrag + beauftragte Nachträge; nicht beauftragte Nachträge sind nicht abrechenbar.
 - Nummernkreise unter Parallelität (keine Lücken, keine Duplikate).
 - Trigger: Änderung an finalisierten Dokumenten schlägt fehl.
 - RLS-Isolation pro neuer Tabelle.
@@ -88,9 +92,14 @@ Wenn eine Anforderung einer dieser Regeln widerspricht: nicht umsetzen, sondern 
 | Aufschlag | `markup_percent` |
 | Lohn / Material / Gerät / Fremdleistung | `labor` / `material` / `equipment` / `subcontract` |
 | Festschreiben | `finalize` |
+| Hauptauftrag / Vertragssumme | `contract` / `contract_total_cents` |
+| Nachtrag (Nachtragsangebot) | `change_order` (`change_order_meta.basis`: `changed_work`, `additional_work`, `quantity_variance`, `bgb_650b`, `other`) |
 | Leistungs- und Artikelstamm | `catalog_item` |
 | Bautagebuch / Eintrag | `diary_entry` |
-| Aufmaß | `measurement` |
+| Aufmaß / Aufmaßblatt | `measurement` / `measurement_sheet` (`kind`: `survey` = Angebotsaufmaß, `performance` = Leistungsaufmaß) |
+| Aufmaßzeile / Raum | `measurement_line` / `measurement_location` |
+| Gemeinsames Aufmaß | `measurement_sheet.status = signed` |
+| Mehr-/Mindermenge | `quantity_variance` |
 | Zahlung / Zahlungseingang | `payment` |
 | Sicherheitseinbehalt | `retention` |
 | Steuerschuldnerschaft des Leistungsempfängers (§ 13b UStG) | `tax_mode = reverse_charge_13b` |

@@ -12,7 +12,7 @@ Grundlage: [`docs/RESEARCH.md`](docs/RESEARCH.md). Arbeitsregeln für Agenten un
 
 ### Leitprinzipien
 1. **Das Projekt ist der Mittelpunkt.** Alles (Kunde, Dokumente, Fotos, Bautagebuch, Zahlungen) hängt am Projekt.
-2. **Nichts doppelt tippen.** Angebot → AB → Abschlag → Schlussrechnung werden abgeleitet.
+2. **Nichts doppelt tippen.** Aufmaß → Angebot → AB → Nachträge → Abschlag → Schlussrechnung werden abgeleitet. Mengen kommen aus dem Aufmaß, nicht aus dem Kopf.
 3. **Compliance by default.** Festschreiben, Nummernkreise, Archiv, Audit-Log und Exporte passieren automatisch. Der Nutzer kann nichts GoBD-Widriges tun.
 4. **Baustellentauglich.** Große Touch-Ziele, funktioniert offline, bedienbar mit Arbeitshandschuhen und bei Sonnenlicht.
 5. **Handwerkersprache.** „Rechnung korrigieren“ statt „Stornobeleg generieren“; Fachbegriffe nur wo üblich (Aufmaß, LV, Abschlag).
@@ -32,18 +32,20 @@ Vollwertige Finanzbuchhaltung (bleibt beim Steuerberater via DATEV), Lohnabrechn
 | **Projekte** | Baustellenadresse, Status (Anfrage → Angebot → Auftrag → In Ausführung → Abgerechnet → Abgeschlossen), Dokumente, Fotos, Bautagebuch, Umsatzübersicht |
 | **Leistungs- & Artikelstamm** | Leistungen (Lohn/Material/Gerät/Fremdleistung als Komponenten), Artikel mit EK/VK, Einheiten, Kategorien, CSV-Import |
 | **Angebot / Kalkulation** | Hierarchisches LV (Titel/Untertitel/Positionen, OZ automatisch), Positionstypen (Normal, Alternativ, Bedarf/Eventual, Pauschal, Text, Zwischensumme), Kalkulation je Position (Zeit × Stundenverrechnungssatz + Material EK × Aufschlag + Gerät + Fremdleistung), globale Zuschläge, Rabatt, Lohnanteil-Ausweis § 35a, Vorlagen, PDF-Vorschau live, Versand per E-Mail, Versionen |
-| **Auftragsbestätigung** | 1-Klick aus Angebot |
-| **Rechnungen** | Abschlags-, Teil-, Schluss- und Einzelrechnung, Anrechnung vorheriger Abschläge, Sicherheitseinbehalt, Skonto, § 13b-Text, Storno und Korrektur, **ZUGFeRD 2.x (EN 16931) als PDF/A-3 + XRechnung (UBL)**, E-Mail-Versand |
+| **Aufmaß** ⭐ | Aufmaßblätter je Projekt, gegliedert nach Gebäude/Geschoss/Raum; Zeilen mit **Formeln** (z. B. `4,25*2,60 - 0,885*2,01`), Variablen, Abzügen (Öffnungen), Formelvorlagen (Rechteck, Wandfläche aus Raumumfang × Höhe, Dreieck, Kreis, Volumen, Stück); Zuordnung jeder Zeile zu einer LV-Position; Skizze/Foto je Zeile; zwei Arten: **Angebotsaufmaß** (Mengen → Angebot) und **Leistungsaufmaß** (ausgeführte Mengen → Abschlags-/Schlussrechnung); gemeinsames Aufmaß mit Unterschrift des Auftraggebers; Mehr-/Mindermengen gegenüber LV mit Hinweis ab ±10 % (VOB/B § 2 Abs. 3); PDF-Aufmaßblatt als Rechnungsanlage; **offline auf dem Tablet** |
+| **Auftragsbestätigung** | 1-Klick aus Angebot; begründet den **Hauptauftrag** (Vertragssumme) |
+| **Nachträge** ⭐ | Nachtragsangebote zum Hauptauftrag (N01, N02 …) mit eigenem LV (OZ `N01.0010`), Grund und Rechtsgrundlage (geänderte Leistung VOB/B § 2 Abs. 5, zusätzliche Leistung § 2 Abs. 6, BGB § 650b/c), Verknüpfung zu Bautagebuch-Einträgen, Fotos und Aufmaß als Nachweis; Status Entwurf → angeboten → beauftragt / teilbeauftragt / abgelehnt; Anlegen direkt aus Bautagebuch („Zusatzleistung erkannt“) oder aus Aufmaß-Mehrmengen; beauftragte Nachträge erhöhen die Vertragssumme und sind in Abschlags-/Schlussrechnungen abrechenbar; Übersicht offene/beauftragte Nachträge je Projekt |
+| **Rechnungen** | Abschlags-, Teil-, Schluss- und Einzelrechnung, **Mengen aus dem Leistungsaufmaß** (kumuliert, bereits abgerechnete Mengen werden abgezogen), Positionen aus Hauptauftrag **und** beauftragten Nachträgen, Anrechnung vorheriger Abschläge, Sicherheitseinbehalt, Skonto, § 13b-Text, Storno und Korrektur, **ZUGFeRD 2.x (EN 16931) als PDF/A-3 + XRechnung (UBL)**, E-Mail-Versand |
 | **Zahlungen** | Manuelle Zahlungserfassung (Teilzahlung), Status offen/teilbezahlt/bezahlt/überfällig, 1 Zahlungserinnerung |
 | **Bautagebuch** | Tageseintrag je Projekt: Datum, Wetter (automatisch vorbefüllt), Temperatur, Anwesende (Personen/Kolonnen, Stunden), ausgeführte Arbeiten, Material/Geräte, Besonderheiten/Behinderungen/Mängel, Fotos mit Bildunterschrift, Unterschrift Bauleiter/Auftraggeber, PDF-Export; **offline erfassbar** |
 | **Export & Archiv** | DATEV-Buchungsstapel (EXTF CSV) + Belege, GoBD-Datenträgerüberlassung (Z3, CSV + `index.xml`), vollständiger Datenexport (ZIP), revisionssicheres Belegarchiv |
 | **Dashboard** | Offene Angebote, offene/überfällige Rechnungen, Umsatz Monat/Jahr, heutige Baustellen |
 
 ### Phase 2 – Wachstum
-Zeiterfassung (Stempeluhr mobil, je Projekt) · Aufmaß (Formeln, REB-ähnliche Mengenermittlung, Übernahme in Rechnung) · Mahnwesen mit Stufen · DATANORM 4/5-Import · GAEB DA XML (X83 Import, X84 Export) · Eingangsrechnungen (E-Rechnung-Empfang, PDF-Upload, Projektzuordnung) · Nachkalkulation (Soll/Ist) · Plantafel (Mitarbeiter ↔ Baustellen) · Kundenportal mit Online-Annahme und Signatur · Lieferscheine, Gutschriften · Österreich (USt-Sätze, ebInterface).
+Zeiterfassung (Stempeluhr mobil, je Projekt) · Aufmaß-Austausch (REB 23.003 / GAEB X31, Import aus Laser-Messgeräten/Apps) · Nachtragskalkulation auf Basis der Urkalkulation (Preisfortschreibung) · Mahnwesen mit Stufen · DATANORM 4/5-Import · GAEB DA XML (X83 Import, X84 Export) · Eingangsrechnungen (E-Rechnung-Empfang, PDF-Upload, Projektzuordnung) · Nachkalkulation (Soll/Ist) · Plantafel (Mitarbeiter ↔ Baustellen) · Kundenportal mit Online-Annahme und Signatur · Lieferscheine, Gutschriften · Österreich (USt-Sätze, ebInterface).
 
 ### Phase 3 – Komfort & KI
-KI-Angebotsentwurf aus Freitext, Sprach-Bautagebuch (Diktat → strukturierter Eintrag), Sprach-Aufmaß, Belegerkennung, Fotomarkierung, Bankanbindung (FinTS/PSD2) mit Zahlungsabgleich, native App-Hüllen (Capacitor), Wetterhistorie, Mängelmanagement.
+KI-Angebotsentwurf aus Freitext, Sprach-Bautagebuch (Diktat → strukturierter Eintrag), Sprach-Aufmaß („Wand 4,25 mal 2,60 minus Tür“ → Formelzeile), Aufmaß aus Plan-PDF, Belegerkennung, Fotomarkierung, Bankanbindung (FinTS/PSD2) mit Zahlungsabgleich, native App-Hüllen (Capacitor), Wetterhistorie, Mängelmanagement.
 
 ---
 
@@ -60,8 +62,9 @@ KI-Angebotsentwurf aus Freitext, Sprach-Bautagebuch (Diktat → strukturierter E
 ┌──────────────▼───────────────────────────────────────────┐
 │  API (Node 22, Fastify, TypeScript)                       │
 │  Module: auth · tenants · customers · projects · catalog  │
-│          documents · invoicing · payments · diary · files │
-│          exports · audit                                  │
+│          measurements · documents · change-orders         │
+│          invoicing · payments · diary · files · exports   │
+│          audit                                            │
 ├───────────────────┬──────────────────┬───────────────────┤
 │  Worker (BullMQ)  │ PostgreSQL 17    │ S3 Object Storage │
 │  PDF, E-Rechnung, │ RLS je Mandant   │ (EU), Object Lock │
@@ -104,7 +107,7 @@ openplancraft/
 │  ├─ worker/         # BullMQ-Worker (PDF, E-Rechnung, Mail, Export)
 │  └─ web/            # React-PWA
 ├─ packages/
-│  ├─ domain/         # Reine Geschäftslogik: Kalkulation, Steuern, Summen, Nummern-Formate (keine I/O)
+│  ├─ domain/         # Reine Geschäftslogik: Kalkulation, Aufmaß-Formelparser, Mengenfortschreibung, Steuern, Summen, Nummern-Formate (keine I/O)
 │  ├─ schemas/        # Zod-Schemas + Typen (API-Verträge)
 │  ├─ db/             # Drizzle-Schema, Migrationen, RLS/Trigger-SQL, Seeds
 │  ├─ einvoice/       # Mapping Dokument → EN16931, ZUGFeRD/XRechnung, Validierung
@@ -133,11 +136,18 @@ tenant ─┬─ user (membership: role)
         ├─ number_sequence (type, year, prefix, next_value)
         ├─ customer ─┬─ customer_address
         │            └─ contact_person
-        ├─ project ──┬─ document (quote | order_confirmation | invoice | credit_note | delivery_note)
+        ├─ project ──┬─ document (quote | order_confirmation | change_order | invoice | credit_note | delivery_note)
         │            │    ├─ document_item (tree: parent_id, position_type, oz)
-        │            │    │     └─ item_calc_component (labor | material | equipment | subcontract)
+        │            │    │     ├─ item_calc_component (labor | material | equipment | subcontract)
+        │            │    │     └─ invoice_item_quantity (cumulative_qty, previously_billed_qty) [nur Rechnungen]
         │            │    ├─ document_tax_line
         │            │    └─ document_artifact (pdf | zugferd_pdf | xrechnung_xml, sha256, s3_key, locked_until)
+        │            ├─ measurement_sheet (kind: survey | performance, status, signed_by)
+        │            │    ├─ measurement_location (tree: building / floor / room)
+        │            │    └─ measurement_line (formula, variables, result_qty, unit,
+        │            │                         document_item_id, location_id, photo, locked_by_invoice_id)
+        │            ├─ change_order_meta (document_id, contract_document_id, number, basis, reason,
+        │            │                     evidence → diary_entry / file / measurement_line)
         │            ├─ payment (invoice_id, amount_cents, date, method)
         │            ├─ diary_entry ─┬─ diary_attendance
         │            │               ├─ diary_photo → file
@@ -187,13 +197,53 @@ GP         = round(Menge × EP)
 - Rundung: kaufmännisch (half-up) auf Cent je Position; USt je Steuersatz auf der Summe (EN16931-konform).
 - Alle Formeln sind reine Funktionen mit 100 % Testabdeckung und Referenzfällen.
 
-### 4.3 Bautagebuch
+### 4.3 Aufmaß
+
+**Zweck**: Das Aufmaß ist die Mengengrundlage für Angebot (Angebotsaufmaß), Abrechnung (Leistungsaufmaß) und Nachträge (Mehrmengen, Zusatzleistungen). Es ist abrechnungsrelevant und damit Teil der Nachweiskette einer Rechnung.
+
+**Struktur**
+- `measurement_sheet`: gehört zu einem Projekt, Art `survey` (vor Angebot) oder `performance` (ausgeführte Leistung), Status `draft` → `signed` (gemeinsames Aufmaß, Unterschrift beider Seiten mit Zeitstempel) .
+- `measurement_location`: frei verschachtelbar (Haus A › EG › Bad), Räume mit optionalen Grunddaten (Länge, Breite, Höhe) als **Variablen** (`L`, `B`, `H`), die in Zeilen verwendet werden können.
+- `measurement_line`: `formula` (Text, wie eingegeben), `variables` (jsonb), `result_qty numeric(18,4)` (serverseitig neu berechnet und gespeichert), `unit`, `is_deduction`, `document_item_id` (LV-Position aus Angebot/Auftrag/Nachtrag; darf vorübergehend leer sein = „nicht zugeordnet“), `note`, `photo_file_id`.
+
+**Formelsprache** (`packages/domain/measurement`)
+- Deutsches Zahlenformat (`4,25`), Operatoren `+ - * / ( )`, Potenz `^`, Funktionen `pi`, `sqrt`, `round`, Variablen aus dem Raum, Zeilenverweise optional später.
+- **Eigener Parser (Tokenizer + Pratt-Parser), niemals `eval`/`Function`.** Gleiche Implementierung im Browser (offline, Live-Ergebnis) und auf dem Server (maßgebliche Berechnung).
+- Vorlagen erzeugen Formeln: Rechteck `L*B`, Wandfläche `2*(L+B)*H`, Dreieck `g*h/2`, Kreis `pi*r^2`, Volumen `L*B*H`, Laufmeter, Stück.
+- Abzugsregeln (z. B. Öffnungen < 2,5 m² nach VOB/C nicht abziehen) als **optionale, gewerkspezifische Hinweise**, nicht als harte Automatik – der Nutzer entscheidet.
+
+**Mengenfluss**
+```
+Angebotsaufmaß ──Σ je Position──▶ Menge im Angebot ──▶ AB (Hauptauftrag)
+Leistungsaufmaß ─Σ je Position──▶ kumulierte Ist-Menge
+       Abschlags-/Schlussrechnung: abzurechnen = kumulierte Ist-Menge − bereits abgerechnete Menge
+       Ist-Menge > LV-Menge  ──▶ Hinweis Mehrmenge (ab +10 %: Preisanpassung prüfen)
+                              ──▶ 1 Klick „Nachtrag anlegen“ für Positionen ohne LV-Grundlage
+```
+- Beim Festschreiben einer Rechnung werden die verwendeten Aufmaßzeilen mit `locked_by_invoice_id` **gesperrt** und als PDF-Anlage (Aufmaßblatt) mit archiviert. Korrekturen danach nur über neue Zeilen (Korrekturzeile mit Verweis) bzw. Storno der Rechnung – gleiche Logik wie GoBD bei Belegen.
+- Unterschriebene Aufmaßblätter sind gesperrt; Nachträge am Aufmaß erfolgen als neues Blatt mit Verweis.
+
+### 4.4 Nachträge
+
+- Ein Nachtrag ist ein `document` vom Typ `change_order` plus `change_order_meta`:
+  - `contract_document_id` → Auftragsbestätigung des Hauptauftrags
+  - `number` (je Projekt fortlaufend: N01, N02 …), OZ-Präfix im LV (`N01.0010`)
+  - `basis`: `changed_work` (VOB/B § 2 Abs. 5), `additional_work` (§ 2 Abs. 6), `quantity_variance` (§ 2 Abs. 3), `bgb_650b` (Anordnung nach BGB), `other`
+  - `reason` (Freitext), `evidence` (Verweise auf Bautagebuch-Einträge, Fotos, Aufmaßzeilen, Behinderungsanzeigen)
+  - Status: `draft` → `offered` → `accepted` | `partially_accepted` | `rejected`; Beauftragung mit Datum, Name, optional Unterschrift/Dokument des Auftraggebers
+- **Vertragssumme** eines Projekts = Hauptauftrag + Σ beauftragte Nachtragspositionen. Dashboard und Projektübersicht zeigen: Auftragssumme, Nachträge offen/beauftragt/abgelehnt, abgerechnet, noch abzurechnen.
+- Rechnungen dürfen nur Positionen aus Hauptauftrag und **beauftragten** Nachträgen enthalten (plus freie Positionen mit Warnhinweis). Die Schlussrechnung gliedert nach Hauptauftrag und Nachträgen.
+- Kalkulation von Nachträgen wie beim Angebot; Positionen aus dem Hauptauftrag können als Basis kopiert werden (Phase 2: Preisfortschreibung aus Urkalkulation).
+- Angebotene Nachträge werden wie Angebote beim Versand versioniert und bleiben unveränderlich.
+
+### 4.5 Bautagebuch
 - `diary_entry` (project_id, date, weather jsonb, temperature, work_description, incidents, materials, equipment, status: draft|signed).
 - Nach der Unterschrift ist der Eintrag gesperrt (Nachträge als verknüpfter Zusatzeintrag), weil das Bautagebuch Beweisfunktion hat (Behinderungsanzeigen, VOB/B § 6).
 - Fotos: Original unverändert gespeichert (EXIF/GPS optional behalten, Hinweis Datenschutz), plus Thumbnails. Clientseitige Komprimierung optional abschaltbar.
 - Wetter: Vorbefüllung über eine Wetter-API anhand der Baustellenkoordinaten (z. B. Open-Meteo/DWD), manuell überschreibbar.
+- Aus einem Eintrag heraus: „Zusatzleistung / Behinderung erkannt“ → Nachtragsentwurf mit verknüpftem Eintrag und Fotos als Nachweis.
 
-### 4.4 Audit-Log
+### 4.6 Audit-Log
 `audit_event(id, tenant_id, actor_user_id, action, entity, entity_id, before jsonb, after jsonb, ip, user_agent, created_at, prev_hash, hash)`.
 - **Append-only**: Der App-User hat auf dieser Tabelle nur `INSERT`/`SELECT`; Trigger blockiert `UPDATE`/`DELETE`.
 - **Hash-Kette** je Mandant (`hash = sha256(prev_hash || canonical(event))`) macht Manipulation erkennbar. Ein nächtlicher Job prüft die Kette.
@@ -231,7 +281,7 @@ GP         = round(Menge × EP)
 ### 5.3 Finanzverwaltung und Steuerberater
 | Anforderung | Umsetzung |
 |---|---|
-| Unveränderbarkeit | Festschreiben + DB-Trigger + WORM-Archiv + Hash |
+| Unveränderbarkeit | Festschreiben + DB-Trigger + WORM-Archiv + Hash; abrechnungsrelevante Aufmaßzeilen werden mit der Rechnung gesperrt und als Anlage archiviert |
 | Nachvollziehbarkeit | Audit-Log mit Hash-Kette, Storno statt Löschen, Snapshots |
 | Vollständigkeit | Lückenlose Nummernkreise; Lücken technisch unmöglich (Nummer erst beim Festschreiben) |
 | Zeitgerechte Erfassung | `finalized_at`, Server-Zeitstempel |
@@ -247,15 +297,16 @@ GP         = round(Menge × EP)
 ## 6. API-Design
 
 - REST unter `/api/v1`, JSON, OpenAPI 3.1 aus Zod generiert; der Frontend-Client wird daraus typisiert.
-- Ressourcen: `/customers`, `/projects`, `/projects/:id/documents`, `/documents/:id/items`, `/documents/:id/finalize`, `/documents/:id/cancel`, `/documents/:id/derive?type=invoice`, `/documents/:id/send`, `/invoices/:id/payments`, `/projects/:id/diary`, `/files` (Upload via vorsignierte URL), `/exports/datev`, `/exports/gobd`, `/exports/full`, `/catalog`, `/settings/*`, `/audit`.
+- Ressourcen: `/customers`, `/projects`, `/projects/:id/measurement-sheets`, `/measurement-sheets/:id/lines`, `/measurement-sheets/:id/sign`, `/projects/:id/change-orders`, `/change-orders/:id/accept`, `/projects/:id/contract` (Vertragssumme, Soll/Ist je Position), `/projects/:id/documents`, `/documents/:id/items`, `/documents/:id/finalize`, `/documents/:id/cancel`, `/documents/:id/derive?type=invoice`, `/documents/:id/send`, `/invoices/:id/payments`, `/projects/:id/diary`, `/files` (Upload via vorsignierte URL), `/exports/datev`, `/exports/gobd`, `/exports/full`, `/catalog`, `/settings/*`, `/audit`.
 - Paginierung per Cursor; Filter über Query-Parameter; `ETag`/`If-Match` für Optimistic Locking bei Entwürfen.
 - **Idempotency-Key**-Header für alle POSTs (wichtig für Offline-Sync und Doppelklicks beim Festschreiben).
 - Fehlerformat RFC 9457 (`application/problem+json`) mit nutzerfreundlichem deutschem `detail`.
 
 ### Offline-Sync (Baustellenmodule)
-- Umfang offline: zugewiesene Projekte (lesen), Bautagebuch (schreiben), Fotos (aufnehmen), später Zeiterfassung und Aufmaß.
+- Umfang offline: zugewiesene Projekte inkl. LV-Positionen (lesen), **Aufmaß (schreiben)**, Bautagebuch (schreiben), Fotos (aufnehmen), später Zeiterfassung.
 - Client-Outbox in IndexedDB: Operationen mit clientseitig erzeugter UUIDv7 + Idempotency-Key; Background Sync bzw. Retry beim Online-Werden.
-- Konflikte: Bautagebuch-Einträge gehören einem Autor und Tag; bei Konflikt „last writer wins“ pro Feld mit Hinweis. Festgeschriebene Finanzdokumente sind nie offline editierbar.
+- Konflikte Aufmaß: Zeilen sind eigenständige Datensätze mit Client-UUID, daher praktisch konfliktfrei (paralleles Erfassen durch mehrere Personen möglich); gesperrte Blätter/Zeilen werden beim Sync abgewiesen und als Korrekturzeile angeboten.
+- Konflikte Bautagebuch: Einträge gehören einem Autor und Tag; bei Konflikt „last writer wins“ pro Feld mit Hinweis. Festgeschriebene Finanzdokumente sind nie offline editierbar.
 
 ---
 
@@ -291,9 +342,11 @@ GP         = round(Menge × EP)
 2. **Dashboard**: „Heute“ (Baustellen, fällige Rechnungen), Kennzahlen, Schnellaktionen.
 3. **Projekt-Detail**: Kopf (Kunde, Adresse mit Kartenlink, Status), Tabs: Übersicht · Dokumente · Bautagebuch · Fotos · Dateien · Zahlungen.
 4. **Angebots-Editor**: links LV-Baum (Drag & Drop), Mitte Positionen mit Inline-Bearbeitung, Suche im Leistungsstamm (`/`-Shortcut), rechts Kalkulationsdetails bzw. Live-Vorschau; Summen-Leiste fixiert unten; Autosave.
-5. **Rechnung aus Auftrag**: Assistent „Abschlag / Schluss“ mit Vorschau der Anrechnungen.
-6. **Bautagebuch mobil**: Ein Bildschirm, ein Daumen: Datum (heute), Wetter vorbefüllt, Chips für Anwesende, Textfeld mit Diktierfunktion des Geräts, Foto-Button groß, „Speichern“ funktioniert offline (Sync-Indikator).
-7. **Export-Center**: Zeitraum wählen → DATEV / Betriebsprüfung (Z3) / Komplett-Export, mit Erklärungstext.
+5. **Aufmaß (Tablet/Phone)**: oben Raum-Navigation (Haus › Geschoss › Raum), darunter Zeilenliste; Eingabe über eigene **Zahlen-/Formel-Tastatur** (große Tasten, `×`, `−`, Klammern, Komma) mit Live-Ergebnis; Positions-Auswahl per Suche oder „zuletzt verwendet“; Vorlagen-Chips (Rechteck, Wand, Abzug Tür/Fenster); Summe je Position und Abweichung zur LV-Menge farbig; Foto/Skizze je Zeile; Unterschrift für gemeinsames Aufmaß.
+6. **Nachträge**: Liste je Projekt mit Status-Badges und Summen; Editor wie Angebot, zusätzlich Grund, Rechtsgrundlage und Nachweis-Picker (Tagebuch, Fotos, Aufmaß); Leiste „Vertragssumme: Hauptauftrag + Nachträge“.
+7. **Rechnung aus Auftrag**: Assistent „Abschlag / Schluss“: Mengen aus Leistungsaufmaß übernehmen, Positionen aus Hauptauftrag und beauftragten Nachträgen, Vorschau der Anrechnungen und Mehr-/Mindermengen.
+8. **Bautagebuch mobil**: Ein Bildschirm, ein Daumen: Datum (heute), Wetter vorbefüllt, Chips für Anwesende, Textfeld mit Diktierfunktion des Geräts, Foto-Button groß, „Speichern“ funktioniert offline (Sync-Indikator), Aktion „Nachtrag anlegen“.
+9. **Export-Center**: Zeitraum wählen → DATEV / Betriebsprüfung (Z3) / Komplett-Export, mit Erklärungstext.
 
 ### 7.4 UX-Regeln für Compliance
 - Vor dem Festschreiben: Bestätigungsdialog „Nach dem Festschreiben kann die Rechnung nicht mehr geändert werden. Korrekturen erfolgen über eine Stornorechnung.“
@@ -304,7 +357,7 @@ GP         = round(Menge × EP)
 
 ## 8. Qualität, Tests, Betrieb
 
-- **Tests**: Domain-Logik (Kalkulation, Steuern, Rundung, Abschlagsanrechnung) mit Referenzbeispielen; DB-Tests für RLS, Trigger, Nummernkreise unter Parallelität; E-Rechnungen durch den KoSIT-Validator in CI; E2E-Kernflüsse (Angebot → Rechnung → Export, Bautagebuch offline → Sync) auf Mobil und Desktop.
+- **Tests**: Domain-Logik (Kalkulation, Aufmaß-Formelparser inkl. Fuzzing und Fehlerfällen, Mengenfortschreibung, Nachtragssummen, Steuern, Rundung, Abschlagsanrechnung) mit Referenzbeispielen; DB-Tests für RLS, Trigger, Nummernkreise unter Parallelität; E-Rechnungen durch den KoSIT-Validator in CI; E2E-Kernflüsse (Aufmaß → Angebot → AB → Nachtrag → Abschlag aus Leistungsaufmaß → Schlussrechnung → Export, Aufmaß/Bautagebuch offline → Sync) auf Mobil und Desktop.
 - **CI** (GitHub Actions): lint, typecheck, unit, integration (Testcontainers), e2e, build, Security-Scans.
 - **Umgebungen**: dev (Docker Compose), staging, production; Migrationen vorwärtskompatibel (expand/contract).
 - **Monitoring**: Uptime, Fehlerquote, Job-Queue-Länge, nächtliche Audit-Kettenprüfung, Backup-Restore-Test.
