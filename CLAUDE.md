@@ -115,6 +115,10 @@ Wenn eine Anforderung einer dieser Regeln widerspricht: nicht umsetzen, sondern 
 | Gemeinsames Aufmaß | `measurement_sheet.status = signed` |
 | Mehr-/Mindermenge | `quantity_variance` |
 | Zahlung / Zahlungseingang | `payment` |
+| Abzug / Kürzung (Forderung) | `receivable_adjustment` (`kind`: `cash_discount`, `retention`, `bank_fee`, `short_payment`, `other`) |
+| Offene Forderung | `open_amount_cents` |
+| Zahlungserinnerung / Mahnung | `dunning_notice` (`level`: `reminder`, `first`, `final`) |
+| Kumulative Abschläge | `progress_billing_mode`: `cumulative`, `individual` |
 | Sicherheitseinbehalt | `retention` |
 | Steuerschuldnerschaft des Leistungsempfängers (§ 13b UStG) | `tax_mode = reverse_charge_13b` |
 | Leitweg-ID | `buyer_reference` |
