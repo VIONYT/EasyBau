@@ -27,22 +27,23 @@ Vollwertige Finanzbuchhaltung (bleibt beim Steuerberater via DATEV), Lohnabrechn
 ### Phase 1 – MVP
 | Modul | Inhalt |
 |---|---|
-| **Konto & Firma** | Registrierung, Firmendaten (Steuernr., USt-IdNr., Bank, Logo, Briefpapier), Nummernkreise, Steuersätze, Zahlungsbedingungen, Textvorlagen, Nutzer & Rollen, 2FA |
-| **Kunden (CRM)** | Privat- und Geschäftskunden, mehrere Adressen und Ansprechpartner, Notizen, § 13b-Kennzeichen (Kunde ist Bauleistender), Leitweg-ID (öffentliche Auftraggeber), Kundenhistorie |
-| **Projekte** | Baustellenadresse, Status (Anfrage → Angebot → Auftrag → In Ausführung → Abgerechnet → Abgeschlossen), Dokumente, Fotos, Bautagebuch, Umsatzübersicht |
-| **Leistungs- & Artikelstamm** | Leistungen (Lohn/Material/Gerät/Fremdleistung als Komponenten), Artikel mit EK/VK, Einheiten, Kategorien, CSV-Import |
-| **Angebot / Kalkulation** | Hierarchisches LV (Titel/Untertitel/Positionen, OZ automatisch), Positionstypen (Normal, Alternativ, Bedarf/Eventual, Pauschal, Text, Zwischensumme), Kalkulation je Position (Zeit × Stundenverrechnungssatz + Material EK × Aufschlag + Gerät + Fremdleistung), globale Zuschläge, Rabatt, Lohnanteil-Ausweis § 35a, Vorlagen, PDF-Vorschau live, Versand per E-Mail, Versionen |
+| **Konto & Firma** | Registrierung mit E-Mail-Bestätigung, Firmendaten (Name mit Rechtsform, Anschrift, **Gewerk**, Kontakt, Logo), Rechtliches (verantwortliche Person + Funktion, USt-IdNr., Steuernummer, Amtsgericht, Handelsregisternummer), Bankverbindung, Arbeitszeiten, Feiertage nach Bundesland, Nummernkreise, Steuersätze, Zahlungsziel & Skonto, Lohnkostenanteil-Ausweis, Bezahlcode, Abschlagsregeln, Briefpapier, Anfangs-/Schlusstexte, automatische Anhänge, Dateinamen-Muster, E-Mail-Versand, Lohngruppen, Zuschläge, Einheiten, Nutzer & Rollen, 2FA (Struktur siehe §7.4) |
+| **Kontakte (CRM)** | Typ Person oder Organisation; Personen lassen sich mit Organisationen verknüpfen (Ansprechpartner); Kundennummer (K-…); mehrere E-Mails/Telefonnummern mit Label (Arbeit, Mobil, Privat); Website; Farbmarkierung; Beschreibung; Adresse mit Kartenlink; **abweichender Rechnungsempfänger** (Empfängerblock); kundenspezifisch: Zahlungsziel & Skonto, Steuerfall/Steuersatz (inkl. § 13b-Kennzeichen), **XRechnung-Daten** (Leitweg-ID, E-Mail für E-Rechnungen, bevorzugtes Format); Projekte des Kontakts; Liste mit Suche, Filter (Typ, Farbe), CSV-Import/-Export |
+| **Projekte** | Projektnummer (P-…), Kunde, Baustellenadresse, **Zeitraum** (Start/Ende, Grundlage für spätere Plantafel), zugeordnete Mitarbeitende, Status als Pipeline inkl. Vertrieb (Erstkontakt → Besichtigung/Aufmaß → Angebot → Auftrag → In Ausführung → Abgerechnet → Abgeschlossen; Status direkt in Liste und Kopf änderbar; je Mandant anpassbar), Archivieren; Bereiche Dokumente · Berichte · Aufmaß · Ablage (Dateien/Fotos) · Zahlungen; Kennzahlen Soll-Stunden aus Kalkulation, Auftragssumme, abgerechnet, offen; Projektliste mit Suche, Filter (aktiv/archiviert, Zeitraum, Status, Mitarbeitende) |
+| **Stammdaten (Leistungen & Materialien)** | Zwei Listen: **Leistungen** (Kurz- und Langtext, Einheit, Kosten aus Kalkulation, Zuschlag %, VK; Bestandteile Lohn/Material/Gerät/Fremdleistung/Sonstiges) und **Materialien** (Artikelnummer, Hersteller, Kurz-/Langtext, Einheit, EK, Zuschlag %, VK, Gebindeinhalt); Ordner/Kategorien, Suche, Mehrfachauswahl, CSV/Excel-Import und -Export; Gewerks-Startkatalog beim Onboarding; Positionen aus einem Angebot „in Stammdaten speichern“ |
+| **Angebot / Kostenvoranschlag / Kalkulation** | Dokumenttypen Angebot und **Kostenvoranschlag** (unverbindlich, § 649 BGB, eigener Nummernkreis KV-…); Kopf mit Empfänger, Ansprechperson, Datum, Betreff, **Leistungsort**; Anfangs- und Schlusstext aus Vorlagen; Hierarchisches LV (Titel/Untertitel/Positionen, OZ automatisch), Positionstypen (Normal, Alternativ, Bedarf/Eventual, Pauschal, Text, Zwischensumme), Kalkulation je Position (Zeit × Stundenverrechnungssatz + Material EK × Aufschlag + Gerät + Fremdleistung) im Modus Einheitspreis oder Gesamtpreis, **Aufmaß direkt in der Position**, Kurz- und Langtext (Langtext ein-/ausblendbar), Bilder als Positionstyp, globale Zuschläge, Rabatt je Position und gesamt, Lohnanteil-Ausweis § 35a, Vorlagen, PDF-Vorschau live, Versand per E-Mail, Versionen |
 | **Aufmaß** ⭐ | Aufmaßblätter je Projekt, gegliedert nach Gebäude/Geschoss/Raum; Zeilen mit **Formeln** (z. B. `4,25*2,60 - 0,885*2,01`), Variablen, Abzügen (Öffnungen), Formelvorlagen (Rechteck, Wandfläche aus Raumumfang × Höhe, Dreieck, Kreis, Volumen, Stück); Zuordnung jeder Zeile zu einer LV-Position; Skizze/Foto je Zeile; zwei Arten: **Angebotsaufmaß** (Mengen → Angebot) und **Leistungsaufmaß** (ausgeführte Mengen → Abschlags-/Schlussrechnung); gemeinsames Aufmaß mit Unterschrift des Auftraggebers; Mehr-/Mindermengen gegenüber LV mit Hinweis ab ±10 % (VOB/B § 2 Abs. 3); PDF-Aufmaßblatt als Rechnungsanlage; **offline auf dem Tablet** |
 | **Auftragsbestätigung** | 1-Klick aus Angebot; begründet den **Hauptauftrag** (Vertragssumme) |
 | **Nachträge** ⭐ | Nachtragsangebote zum Hauptauftrag (N01, N02 …) mit eigenem LV (OZ `N01.0010`), Grund und Rechtsgrundlage (geänderte Leistung VOB/B § 2 Abs. 5, zusätzliche Leistung § 2 Abs. 6, BGB § 650b/c), Verknüpfung zu Bautagebuch-Einträgen, Fotos und Aufmaß als Nachweis; Status Entwurf → angeboten → beauftragt / teilbeauftragt / abgelehnt; Anlegen direkt aus Bautagebuch („Zusatzleistung erkannt“) oder aus Aufmaß-Mehrmengen; beauftragte Nachträge erhöhen die Vertragssumme und sind in Abschlags-/Schlussrechnungen abrechenbar; Übersicht offene/beauftragte Nachträge je Projekt |
 | **Rechnungen** | Abschlags-, Teil-, Schluss- und Einzelrechnung, **Mengen aus dem Leistungsaufmaß** (kumuliert, bereits abgerechnete Mengen werden abgezogen), Positionen aus Hauptauftrag **und** beauftragten Nachträgen, Anrechnung vorheriger Abschläge, Sicherheitseinbehalt, Skonto, § 13b-Text, Storno und Korrektur, **ZUGFeRD 2.x (EN 16931) als PDF/A-3 + XRechnung (UBL)**, E-Mail-Versand |
-| **Zahlungen** | Manuelle Zahlungserfassung (Teilzahlung), Status offen/teilbezahlt/bezahlt/überfällig, 1 Zahlungserinnerung |
-| **Bautagebuch** | Tageseintrag je Projekt: Datum, Wetter (automatisch vorbefüllt), Temperatur, Anwesende (Personen/Kolonnen, Stunden), ausgeführte Arbeiten, Material/Geräte, Besonderheiten/Behinderungen/Mängel, Fotos mit Bildunterschrift, Unterschrift Bauleiter/Auftraggeber, PDF-Export; **offline erfassbar** |
+| **Zahlungen** | Manuelle Zahlungserfassung (Teilzahlung), Status offen/teilbezahlt/bezahlt/überfällig/angemahnt, 1 Zahlungserinnerung, **Bezahlcode (EPC-QR / GiroCode)** auf Rechnungen |
+| **Bautagebuch & Berichte** | Berichte aus **Vorlagen** (siehe §4.5): Bautagesbericht, Regiebericht, Abnahmeprotokoll, Bedenkenanzeige (VOB/B § 4 Abs. 3), Behinderungsanzeige (VOB/B § 6 Abs. 1), Baustellenbegehung, Besprechungsprotokoll, Checkliste, Einsatzbericht; **abrechenbare** Berichte (Regie, Einsatz) übernehmen Stunden/Material in Rechnungen. Bautagesbericht: Tageseintrag je Projekt: Datum, Wetter (automatisch vorbefüllt), Temperatur, Anwesende (Personen/Kolonnen, Stunden), ausgeführte Arbeiten, Material/Geräte, Besonderheiten/Behinderungen/Mängel, Fotos mit Bildunterschrift, Unterschrift Bauleiter/Auftraggeber, PDF-Export; **offline erfassbar** |
 | **Export & Archiv** | DATEV-Buchungsstapel (EXTF CSV) + Belege, GoBD-Datenträgerüberlassung (Z3, CSV + `index.xml`), vollständiger Datenexport (ZIP), revisionssicheres Belegarchiv |
-| **Dashboard** | Offene Angebote, offene/überfällige Rechnungen, Umsatz Monat/Jahr, heutige Baustellen |
+| **Dashboard** | Offene Forderungen (Summe brutto, aufgeteilt in offen/überfällig/angemahnt mit Anzahl, Beträge per Klick ausblendbar), zuletzt bearbeitete Projekte mit Status, offene Angebote und Nachträge, heutige Baustellen, Wetter am Firmen- bzw. Baustellenort (Stundenvorschau) |
+| **Suche & Benachrichtigungen** | Globale Suche über Kontakte, Projekte, Dokumente, Stammdaten; Benachrichtigungen (z. B. Rechnung überfällig, Nachtrag beauftragt, Bericht unterschrieben) |
 
 ### Phase 2 – Wachstum
-Zeiterfassung (Stempeluhr mobil, je Projekt) · Aufmaß-Austausch (REB 23.003 / GAEB X31, Import aus Laser-Messgeräten/Apps) · Nachtragskalkulation auf Basis der Urkalkulation (Preisfortschreibung) · Mahnwesen mit Stufen · DATANORM 4/5-Import · GAEB DA XML (X83 Import, X84 Export) · Eingangsrechnungen (E-Rechnung-Empfang, PDF-Upload, Projektzuordnung) · Nachkalkulation (Soll/Ist) · Plantafel (Mitarbeiter ↔ Baustellen) · Kundenportal mit Online-Annahme und Signatur · Lieferscheine, Gutschriften · Österreich (USt-Sätze, ebInterface).
+Zeiterfassung (Stempeluhr mobil, je Projekt) · Aufmaß-Austausch (REB 23.003 / GAEB X31, Import aus Laser-Messgeräten/Apps) · Nachtragskalkulation auf Basis der Urkalkulation (Preisfortschreibung) · Mahnwesen mit Stufen · DATANORM 4/5-Import · GAEB DA XML (X83 Import, X84 Export) · **Eingangsrechnungen** (Upload per Drag & Drop: PDF, XML, JPG, PNG; E-Rechnungen lesbar darstellen; Liste mit Lieferant, Nr., Datum, Netto, Kostenzuweisung, Zahlstatus; Bereich „Zu prüfen“; Filter Zeitraum/Zuweisung/Zahlstatus; Zuweisung auf Projekt und Kostenart; GoBD-Archiv) · **Nachkalkulation** (Soll aus der Kalkulation ausgewählter Dokumente vs. Ist aus Zeiten, Eingangsrechnungen und manuell erfassten Kosten; je Kostenart; Positionen ohne Kalkulation werden mit VK angesetzt und gekennzeichnet) · **Plantafel** (Zeitleiste nach Kalenderwochen mit Projekten und Mitarbeitenden, Wochenenden/Feiertage markiert, Zoom, Projekt-Zeitraum per Ziehen ändern) · **Projekt-Chat** (Nachrichten, @-Erwähnungen, Fotogalerie je Projekt) · Kundenportal mit Online-Annahme und Signatur · Lieferscheine, Gutschriften · Österreich (USt-Sätze, ebInterface).
 
 ### Phase 3 – Komfort & KI
 KI-Angebotsentwurf aus Freitext, Sprach-Bautagebuch (Diktat → strukturierter Eintrag), Sprach-Aufmaß („Wand 4,25 mal 2,60 minus Tür“ → Formelzeile), Aufmaß aus Plan-PDF, Belegerkennung, Fotomarkierung, Bankanbindung (FinTS/PSD2) mit Zahlungsabgleich, native App-Hüllen (Capacitor), Wetterhistorie, Mängelmanagement.
@@ -133,10 +134,13 @@ IDs: UUIDv7. Zeitstempel: `timestamptz` (UTC); Belegdatum ist ein `date`. Beträ
 
 ```
 tenant ─┬─ user (membership: role)
-        ├─ number_sequence (type, year, prefix, next_value)
-        ├─ customer ─┬─ customer_address
-        │            └─ contact_person
-        ├─ project ──┬─ document (quote | order_confirmation | change_order | invoice | credit_note | delivery_note)
+        ├─ number_sequence (type, prefix, start_value, min_length, next_value, reset_yearly)
+        ├─ contact (kind: person | organization, number, color, description)
+        │    ├─ contact_channel (email | phone | website, label)
+        │    ├─ contact_address (kind: main | billing, recipient_block)
+        │    ├─ contact_link (person ↔ organization, role)
+        │    └─ contact_billing_settings (payment_term, tax_mode, buyer_reference, einvoice_email, einvoice_format)
+        ├─ project ──┬─ document (quote | cost_estimate | order_confirmation | change_order | invoice | credit_note | delivery_note)
         │            │    ├─ document_item (tree: parent_id, position_type, oz)
         │            │    │     ├─ item_calc_component (labor | material | equipment | subcontract)
         │            │    │     └─ invoice_item_quantity (cumulative_qty, previously_billed_qty) [nur Rechnungen]
@@ -149,12 +153,17 @@ tenant ─┬─ user (membership: role)
         │            ├─ change_order_meta (document_id, contract_document_id, number, basis, reason,
         │            │                     evidence → diary_entry / file / measurement_line)
         │            ├─ payment (invoice_id, amount_cents, date, method)
-        │            ├─ diary_entry ─┬─ diary_attendance
-        │            │               ├─ diary_photo → file
-        │            │               └─ diary_signature
-        │            └─ file
-        ├─ catalog_item (service | article) ─ catalog_component
-        ├─ text_template, document_template, tax_rate, payment_term
+        │            ├─ report (template_id, date, status, billable) ─┬─ report_field_value
+        │            │                                                 ├─ report_attendance / report_billable_line
+        │            │                                                 ├─ report_photo → file
+        │            │                                                 └─ report_signature
+        │            ├─ project_member (user_id)
+        │            └─ file (folder from filing template)
+        ├─ catalog_item (service | material) ─ catalog_component · catalog_folder
+        ├─ unit, wage_group, surcharge, tax_rate, payment_term
+        ├─ report_template (fields schema, billable, active), text_template, letterhead,
+        │  filing_template (Ablage-Ordner), auto_attachment, filename_pattern, email_template
+        ├─ working_hours, holiday_calendar (federal_state)
         ├─ export_job
         └─ audit_event (append-only, hash chain)
 ```
@@ -193,6 +202,11 @@ Fremdleist.= Σ (EK × (1 + Fremdleistungsaufschlag))
 EP         = (Lohn + Material + Gerät + Fremdleistung) × (1 + Wagnis/Gewinn), gerundet auf Cent
 GP         = round(Menge × EP)
 ```
+- **Kostenzeilen je Position**: Art (Lohn, Material, Gerät, Fremdleistung, Sonstiges), Menge, Einheit (z. B. `min`, `Std`, `psch`, `kg`), Beschreibung, EK je Einheit, EK gesamt. Lohnzeilen beziehen den Satz aus einer **Lohngruppe** (z. B. Meister, Geselle, Helfer, Auszubildender 2. Lehrjahr: Kosten/Std + Zuschlag → Verrechnungssatz); bei Eingabe in Minuten wird der Satz pro Minute umgerechnet.
+- **Modus Einheitspreis**: Kostenzeilen gelten pro 1 Einheit der Position (EP = Σ Kosten × Zuschläge; GP = Menge × EP). **Modus Gesamtpreis**: Kostenzeilen gelten für die ganze Positionsmenge (GP = Σ Kosten × Zuschläge; EP = GP / Menge, gerundet).
+- **Zuschläge** (Einstellungen › Kalkulation): getrennt nach Kostenart (z. B. Material 20 %, Lohn über Lohngruppe, Gerät, Fremdleistung) plus optional Allgemeine Geschäftskosten / Wagnis & Gewinn; je Position überschreibbar. Angezeigt werden Kosten, Zuschlag % und VK.
+- Positionen ohne Kalkulation (nur VK) sind erlaubt; sie werden in Soll-Werten (Stunden, Kosten) gesondert ausgewiesen.
+- **Soll-Stunden** eines Projekts = Σ Lohnzeit aller kalkulierten Positionen der ausgewählten Dokumente (Grundlage für Nachkalkulation und Plantafel).
 - Alternativ- und Bedarfspositionen erscheinen im PDF, zählen aber nicht zur Summe.
 - Rundung: kaufmännisch (half-up) auf Cent je Position; USt je Steuersatz auf der Summe (EN16931-konform).
 - Alle Formeln sind reine Funktionen mit 100 % Testabdeckung und Referenzfällen.
@@ -242,6 +256,11 @@ Einheiten werden einheitlich in Kalkulation, Aufmaß, Angeboten, Nachträgen und
 - `measurement_location`: frei verschachtelbar (Haus A › EG › Bad), Räume mit optionalen Grunddaten (Länge, Breite, Höhe) als **Variablen** (`L`, `B`, `H`), die in Zeilen verwendet werden können.
 - `measurement_line`: `formula` (Text, wie eingegeben), `variables` (jsonb), `result_qty numeric(18,4)` (serverseitig neu berechnet und gespeichert), `unit`, `is_deduction`, `document_item_id` (LV-Position aus Angebot/Auftrag/Nachtrag; darf vorübergehend leer sein = „nicht zugeordnet“), `note`, `photo_file_id`.
 
+**Zwei Einstiege, ein Datenmodell**
+- **Schnell-Aufmaß in der Position** (Angebots-/Rechnungseditor): Schalter „Aufmaß“ in der Position öffnet Zeilen *Beschreibung · Formel · Ergebnis*; die Menge der Position wird dann berechnet und gesperrt angezeigt („aus Aufmaß“). Technisch sind das `measurement_line`s auf einem automatisch angelegten Blatt des Projekts.
+- **Aufmaßblatt** (Baustelle/Tablet): räumlich gegliederte Erfassung für viele Positionen; Zeilen werden Positionen zugeordnet.
+- Beide Sichten zeigen dieselben Zeilen; eine Zeile, die im Blatt erfasst wurde, erscheint auch in der Position und umgekehrt.
+
 **Formelsprache** (`packages/domain/measurement`)
 - Deutsches Zahlenformat (`4,25`), Operatoren `+ - * / ( )`, Potenz `^`, Funktionen `pi`, `sqrt`, `round`, Variablen aus dem Raum, Zeilenverweise optional später.
 - **Eigener Parser (Tokenizer + Pratt-Parser), niemals `eval`/`Function`.** Gleiche Implementierung im Browser (offline, Live-Ergebnis) und auf dem Server (maßgebliche Berechnung).
@@ -272,7 +291,31 @@ Leistungsaufmaß ─Σ je Position──▶ kumulierte Ist-Menge
 - Kalkulation von Nachträgen wie beim Angebot; Positionen aus dem Hauptauftrag können als Basis kopiert werden (Phase 2: Preisfortschreibung aus Urkalkulation).
 - Angebotene Nachträge werden wie Angebote beim Versand versioniert und bleiben unveränderlich.
 
-### 4.5 Bautagebuch
+### 4.5 Bautagebuch & Berichte
+
+Bautagebuch und weitere Baustellendokumente werden einheitlich als **Berichte aus Vorlagen** abgebildet.
+
+- `report_template`: Name, Feldschema (Textblöcke, Checklisten, Ja/Nein, Zahl mit Einheit, Datum/Uhrzeit, Personen/Stunden, Material, Fotos, Unterschriften, Wetter), **abrechenbar** ja/nein, aktiv/inaktiv, eigenes Briefpapier (Einstellungen › Briefpapier › Berichte).
+- Mitgelieferte Systemvorlagen (anpassbar, nicht löschbar, deaktivierbar):
+
+| Vorlage | Zweck | Abrechenbar |
+|---|---|:-:|
+| Bautagesbericht | Bautagebuch: Wetter, Personal, Leistungen, Vorkommnisse | ✔ |
+| Regiebericht | Stundenlohnarbeiten (VOB/B § 15), Bestätigung durch Auftraggeber | ✔ |
+| Einsatzbericht | Service-/Kundendiensteinsatz | ✔ |
+| Abnahmeprotokoll | Abnahme mit Mängelliste, Vorbehalten, Unterschriften | ✔ |
+| Aufmaß (Bericht) | Druckbares Aufmaßblatt zum gemeinsamen Aufmaß | – |
+| Bedenkenanzeige | VOB/B § 4 Abs. 3, mit Frist und Nachweis des Zugangs | – |
+| Behinderungsanzeige | VOB/B § 6 Abs. 1, Grundlage für Nachträge/Fristverlängerung | – |
+| Baustellenbegehung | Begehung mit Fotos, Feststellungen, Aufgaben | – |
+| Besprechungsprotokoll | Teilnehmer, Themen, Vereinbarungen, Fristen | – |
+| Checkliste | Freie Prüfpunkte (z. B. Sicherheit, Übergabe) | – |
+| Berichtsheft | Ausbildungsnachweis für Auszubildende | – |
+
+- **Abrechenbare Berichte**: Stunden (je Lohngruppe), Material und Geräte aus dem Bericht können per Klick in eine Rechnung übernommen werden; übernommene Zeilen werden mit der Rechnung gesperrt (wie Aufmaßzeilen).
+- Bedenken- und Behinderungsanzeigen haben einen Versandnachweis (Datum, Weg, Empfänger) und können direkt einen Nachtrag auslösen.
+
+**Bautagesbericht (Bautagebuch) im Detail**
 - `diary_entry` (project_id, date, weather jsonb, temperature, work_description, incidents, materials, equipment, status: draft|signed).
 - Nach der Unterschrift ist der Eintrag gesperrt (Nachträge als verknüpfter Zusatzeintrag), weil das Bautagebuch Beweisfunktion hat (Behinderungsanzeigen, VOB/B § 6).
 - Fotos: Original unverändert gespeichert (EXIF/GPS optional behalten, Hinweis Datenschutz), plus Thumbnails. Clientseitige Komprimierung optional abschaltbar.
@@ -375,16 +418,54 @@ Leistungsaufmaß ─Σ je Position──▶ kumulierte Ist-Menge
 
 ### 7.3 Zentrale Screens
 1. **Onboarding (≤ 10 min)**: Firmendaten → Logo/Briefpapier → Steuerdaten → Nummernkreise (sinnvolle Vorgaben) → Gewerk wählen → Beispiel-Leistungskatalog laden → erstes Angebot.
-2. **Dashboard**: „Heute“ (Baustellen, fällige Rechnungen), Kennzahlen, Schnellaktionen.
-3. **Projekt-Detail**: Kopf (Kunde, Adresse mit Kartenlink, Status), Tabs: Übersicht · Dokumente · Bautagebuch · Fotos · Dateien · Zahlungen.
-4. **Angebots-Editor**: links LV-Baum (Drag & Drop), Mitte Positionen mit Inline-Bearbeitung, Suche im Leistungsstamm (`/`-Shortcut), rechts Kalkulationsdetails bzw. Live-Vorschau; Summen-Leiste fixiert unten; Autosave.
+2. **Dashboard**: Kacheln „Offene Forderungen“ (offen/überfällig/angemahnt, Beträge ausblendbar für die Nutzung vor Kunden), „Zuletzt bearbeitete Projekte“ (Status direkt änderbar), „Offene Angebote & Nachträge“, „Heute auf der Baustelle“, „Wetter“; Schnellaktionen (Neues Projekt, Neues Angebot, Bericht erfassen).
+3. **Projekt-Detail**: Kopf (Projektname, Status-Auswahl, Mitarbeitende, Bearbeiten); Kacheln Kunde (mit Telefon zum Antippen), Baustelle (Kartenlink), Zeitraum, Stunden Ist/Soll, Auftragssumme/abgerechnet; Bereiche Dokumente (gruppiert nach Typ mit Status) · Aufmaß · Nachträge · Berichte · Ablage · Zahlungen; Aktionen „Neues Dokument“, „Bericht erfassen“, „Aufmaß“.
+4. **Angebots-Editor**: links Gliederung (Kopf, LV-Titel als Sprungmarken, Nettosumme) mit Drag & Drop; Mitte das Dokument *so wie es gedruckt wird* (Kopfdaten, Anfangstext, LV-Tabelle Pos · Menge · Einheit · Beschreibung · EP · GP, Schlusstext); Einfügen von Text, Titel, Position, Bild an jeder Stelle (Einfügeleiste + Tastenkürzel); Suche in Stammdaten inkl. Katalogen (`/`); Position aufklappbar mit Kurz-/Langtext, Rabatt, **Aufmaß-Zeilen** und **Kostenzeilen** (siehe §4.2), Badges „aus Aufmaß“ / „kalkuliert“; Langtexte global ein-/ausblendbar; Autosave mit Statusanzeige; „Weiter zur Vorschau“ zeigt das PDF; Anhänge.
+   *Unser Unterschied*: Kalkulationsübersicht je Titel (Lohn/Material/Gerät, Stunden, Marge) jederzeit einblendbar; auf dem Tablet einspaltig mit Bottom Sheet für Kalkulation/Aufmaß.
 5. **Aufmaß (Tablet/Phone)**: oben Raum-Navigation (Haus › Geschoss › Raum), darunter Zeilenliste; Eingabe über eigene **Zahlen-/Formel-Tastatur** (große Tasten, `×`, `−`, Klammern, Komma) mit Live-Ergebnis; Positions-Auswahl per Suche oder „zuletzt verwendet“; Vorlagen-Chips (Rechteck, Wand, Abzug Tür/Fenster); Summe je Position und Abweichung zur LV-Menge farbig; Foto/Skizze je Zeile; Unterschrift für gemeinsames Aufmaß.
 6. **Nachträge**: Liste je Projekt mit Status-Badges und Summen; Editor wie Angebot, zusätzlich Grund, Rechtsgrundlage und Nachweis-Picker (Tagebuch, Fotos, Aufmaß); Leiste „Vertragssumme: Hauptauftrag + Nachträge“.
 7. **Rechnung aus Auftrag**: Assistent „Abschlag / Schluss“: Mengen aus Leistungsaufmaß übernehmen, Positionen aus Hauptauftrag und beauftragten Nachträgen, Vorschau der Anrechnungen und Mehr-/Mindermengen.
 8. **Bautagebuch mobil**: Ein Bildschirm, ein Daumen: Datum (heute), Wetter vorbefüllt, Chips für Anwesende, Textfeld mit Diktierfunktion des Geräts, Foto-Button groß, „Speichern“ funktioniert offline (Sync-Indikator), Aktion „Nachtrag anlegen“.
 9. **Export-Center**: Zeitraum wählen → DATEV / Betriebsprüfung (Z3) / Komplett-Export, mit Erklärungstext.
 
-### 7.4 UX-Regeln für Compliance
+### 7.4 Navigation & Einstellungen (Informationsarchitektur)
+
+**Hauptnavigation** (Desktop-Seitenleiste; mobil: 4 Hauptpunkte + „Mehr“):
+Suchen · Benachrichtigungen · Übersicht · Projekte · Angebote · Ausgangsrechnungen · Kontakte · Stammdaten · *(Phase 2: Plantafel · Zeiten · Eingangsrechnungen)* · unten Hilfe, Neuigkeiten, Profil, Firmenwechsel (ein Nutzer kann mehreren Firmen angehören).
+
+**Einstellungen**, gruppiert:
+| Gruppe | Punkte |
+|---|---|
+| Unternehmen | Mitarbeitende · Unternehmen (Stammdaten, Kontakt, Logo, Rechtliches, Bank) · Vertrag/Abo · Arbeitszeiten · Feiertage (Bundesland, automatisch berechnet, ergänzbar) · Rollen & Zugriffsrechte · Schnittstellen (DATEV, später weitere) |
+| Layout & Texte | Briefpapier (Dokumente / Berichte) · Anfangs- & Schlusstexte je Dokumenttyp · Berichtsvorlagen · Ablage-Ordnerstruktur für Projekte · Automatische Anhänge (z. B. AGB an jedes Angebot) · Dateinamen-Muster (z. B. `{Typ}_{Nummer}_{Kunde}`) · E-Mail-Versand (Absender, Vorlagen, BCC) |
+| Buchhaltung & Rechnungswesen | Nummernkreise · Zahlungsziel & Skonto · Lohnkostenanteil ausweisen (§ 35a) · Bezahlcode · Mahnungen · Abschlagsrechnungen · DATEV-Konten |
+| Kalkulation | Lohngruppen · Zuschläge · Einheiten |
+
+**Nummernkreise** (Vorgaben, alle änderbar bis zur ersten Verwendung): Kunden `K-` ab 10001, Projekte `P-`, Angebote `A-`, Kostenvoranschläge `KV-`, Auftragsbestätigungen `AB-`, Nachträge je Projekt `N01…`, Lieferscheine `LS-`, Rechnungen `R-`, Gutschriften `G-` (je ab 101, Mindestlänge 5 mit führenden Nullen). Zusätzlich optional Jahresbestandteil (`R-2026-00001`) mit jährlichem Neubeginn. Rechnungs- und Gutschriftenkreise dürfen nach der ersten Festschreibung nur noch erhöht, nie verringert werden (Lückenlosigkeit).
+
+**Einstellungsseiten** folgen einem Muster: Karten mit Lesesicht und Schaltfläche „Bearbeiten“; Info-Symbol mit kurzer Erklärung *warum* eine Angabe nötig ist (z. B. „Pflichtangabe auf Rechnungen nach § 14 UStG“).
+
+**Hinweise im Kopfbereich**: Fehlende Pflichtangaben (z. B. Steuernummer leer, E-Mail nicht bestätigt) erscheinen als gelbe Leiste mit Direktlink, *bevor* sie beim Festschreiben stören.
+
+### 7.5 Briefpapier & Dokumentlayout
+
+- **Automatisches Layout** aus den Firmendaten (Logo, Anschrift, Kontakt, Bank, Rechtliches in der Fußzeile) als Standard; alternativ **eigener Hintergrund** (PDF oder Bild in A4) mit getrenntem Hintergrund ab Seite 2 und einstellbaren Rändern oben/unten.
+- Getrennte Einstellungen für **Dokumente** und **Berichte**.
+- Aufbau nach **DIN 5008** (Anschriftfeld für Fensterumschlag, Absenderzeile über der Anschrift, Infoblock rechts mit Nummer, Datum, Kundennummer, Ansprechpartner).
+- Entwürfe tragen sichtbar „Entwurf“ im Titel; festgeschriebene Dokumente zeigen Nummer und Datum.
+- Live-Vorschau neben den Einstellungen; „Briefpapier prüfen“ meldet fehlende Pflichtangaben.
+- LV-Druck: Pos · Menge · Einheit · Beschreibung (Kurztext fett, Langtext normal) · EP · GP; Titelsummen; Alternativ-/Bedarfspositionen gekennzeichnet; optionale Anlagen: Aufmaßblatt, Berichte, Fotos.
+
+### 7.6 Verbesserungen gegenüber dem Marktstandard (bewusst anders)
+
+1. **Aufmaß im Kern**: neben dem Schnell-Aufmaß in der Position ein echtes Aufmaßblatt mit Räumen, Variablen, Abzügen, offline – und Mengenfortschreibung bis in die Schlussrechnung.
+2. **Nachträge als eigener Prozess** mit Rechtsgrundlage, Nachweisen aus Berichten und Vertragssumme.
+3. **Rechnungskorrektur ohne Frust**: „Korrigieren“ erledigt Storno + neue Rechnung in einem Schritt und erklärt es.
+4. **Kalkulation transparent**: Marge, Stunden und Kostenarten je Titel live sichtbar.
+5. **Mobil gleichwertig**: Berichte, Aufmaß und Fotos sind auf dem Handy erste Klasse, nicht nur Lesesicht.
+6. **Sprach-/Fotonotizen** an Berichten und Positionen (häufig gewünscht), Fotomarkierung in Phase 3.
+
+### 7.7 UX-Regeln für Compliance
 - Vor dem Festschreiben: Bestätigungsdialog „Nach dem Festschreiben kann die Rechnung nicht mehr geändert werden. Korrekturen erfolgen über eine Stornorechnung.“
 - Button „Rechnung korrigieren“ erzeugt in einem Schritt Storno + neuen Entwurf und erklärt das.
 - Pflichtangaben-Check (§ 14 Abs. 4 UStG) vor dem Festschreiben mit konkreten Hinweisen (z. B. „Leistungsdatum fehlt“).
@@ -407,3 +488,5 @@ Leistungsaufmaß ─Σ je Position──▶ kumulierte Ist-Menge
 3. Österreich bereits im MVP oder erst in Phase 2?
 4. Formale GoBD-Testierung (IDW PS 880) anstreben?
 5. Die Anforderung „…für die Finanzverwaltung so gespeichert, dass man Daten …“ war im Auftrag abgeschnitten. Angenommen wurde: **jederzeit vollständig und maschinell auswertbar exportieren kann** (Z3/DATEV, siehe 5.3). Bitte bestätigen oder ergänzen.
+6. **Eingangsrechnungen** schon ins MVP? Seit 2025 müssen alle Betriebe E-Rechnungen empfangen können; eine einfache Ablage mit lesbarer Darstellung, Projektzuordnung und Archiv wäre ein starkes Argument. Vorschlag: Basisversion ans Ende des MVP.
+7. **Projekt-Chat** im MVP oder Phase 2? (Vorschlag: Phase 2; im MVP Kommentare an Dokumenten und Berichten.)

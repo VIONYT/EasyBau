@@ -75,10 +75,13 @@ Wenn eine Anforderung einer dieser Regeln widerspricht: nicht umsetzen, sondern 
 | Fachbegriff | Code |
 |---|---|
 | Mandant / Firma | `tenant` |
-| Kunde | `customer` |
-| Ansprechpartner | `contact_person` |
+| Kontakt (Person/Organisation) / Kunde | `contact` (`kind`: `person`, `organization`); Kunde = Kontakt mit Kundennummer |
+| Ansprechpartner | `contact_link` (Person ↔ Organisation) |
+| Abweichender Rechnungsempfänger | `contact_address.kind = billing` (`recipient_block`) |
 | Projekt / Baustelle | `project` (`site_address`) |
 | Angebot | `quote` |
+| Kostenvoranschlag | `cost_estimate` |
+| Leistungsort | `place_of_performance` |
 | Auftragsbestätigung | `order_confirmation` |
 | Rechnung | `invoice` (`invoice_kind`: `standard`, `partial`, `progress`, `final`) |
 | Abschlagsrechnung | `invoice` mit `invoice_kind = progress` |
@@ -96,8 +99,17 @@ Wenn eine Anforderung einer dieser Regeln widerspricht: nicht umsetzen, sondern 
 | Einheit / Gebinde / Gebindeinhalt | `unit` / `dimension = container` / `pack_size` |
 | Hauptauftrag / Vertragssumme | `contract` / `contract_total_cents` |
 | Nachtrag (Nachtragsangebot) | `change_order` (`change_order_meta.basis`: `changed_work`, `additional_work`, `quantity_variance`, `bgb_650b`, `other`) |
-| Leistungs- und Artikelstamm | `catalog_item` |
-| Bautagebuch / Eintrag | `diary_entry` |
+| Stammdaten: Leistung / Material | `catalog_item` (`kind`: `service`, `material`) |
+| Lohngruppe | `wage_group` |
+| Zuschlag (Einstellung) | `surcharge` |
+| Kalkulationsmodus Einheitspreis / Gesamtpreis | `calc_mode`: `unit_price`, `total_price` |
+| Bericht / Berichtsvorlage | `report` / `report_template` (`billable`) |
+| Bautagebuch (Bautagesbericht) | `report` mit Systemvorlage `daily_site_report` |
+| Regiebericht | `report` mit Systemvorlage `daywork_report` |
+| Bedenken- / Behinderungsanzeige | Systemvorlagen `concern_notice` / `obstruction_notice` |
+| Ablage | `file` / `filing_template` |
+| Bezahlcode (GiroCode) | `payment_qr` |
+| Feiertage / Arbeitszeiten | `holiday_calendar` / `working_hours` |
 | Aufmaß / Aufmaßblatt | `measurement` / `measurement_sheet` (`kind`: `survey` = Angebotsaufmaß, `performance` = Leistungsaufmaß) |
 | Aufmaßzeile / Raum | `measurement_line` / `measurement_location` |
 | Gemeinsames Aufmaß | `measurement_sheet.status = signed` |

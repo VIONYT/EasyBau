@@ -59,6 +59,22 @@ Priorität nach Nutzen × Häufigkeit × Pflicht:
 
 Bewusst **nach** dem MVP: Zeiterfassung, Aufmaß-Austausch (REB/GAEB X31), DATANORM, GAEB, Plantafel, Eingangsrechnungen/OCR, Nachkalkulation, Mahnstufen, Kundenportal mit Online-Annahme, KI-Funktionen, Bankanbindung.
 
+## 6. Erkenntnisse aus Produkt-Screenshots (Nov. 2026)
+
+Der Auftraggeber hat Screenshots einer Testinstanz bereitgestellt. Ausgewertet wurden nur Abläufe, Funktionen und Informationsarchitektur; Optik und Texte werden nicht übernommen, die Bilder liegen nicht im Repository. Die Ergebnisse sind in DESIGN.md eingearbeitet (§2, §4.2, §4.3, §4.5, §7.3–§7.6).
+
+- **Navigation**: Suche, Benachrichtigungen, Übersicht, Anrufe (KI-Telefon), Projekte, Plantafel, Angebote, Ausgangs-/Eingangsrechnungen, Zeiten, Stammdaten, Kontakte; Firmenwechsel oben.
+- **Einstellungen** in vier Gruppen: Unternehmen · Layout & Textvorlagen · Buchhaltung & Rechnungswesen · Kalkulation (Lohngruppen, Zuschläge, Einheiten).
+- **Berichtsvorlagen** statt starrem Bautagebuch; einige Vorlagen sind „abrechenbar“ (Bautagesbericht, Regiebericht, Einsatzbericht, Abnahmeprotokoll).
+- **Nummernkreise** mit Kürzel, Startwert, Mindestlänge für Kunden, Projekte, Angebote, Kostenvoranschläge, AB, Lieferscheine, Rechnungen, Gutschriften. Ein Jahresbestandteil wurde nicht beobachtet. Bei uns ist er optional.
+- **Kontakte**: Person/Organisation, verknüpfte Kontakte, Farbe, Labels an Kanälen, abweichender Empfänger, je Kontakt Zahlungsziel, Steuersatz und XRechnung-Daten.
+- **Projekt**: Status-Pipeline ab „Erstkontakt“, Zeitraum, Mitarbeitende, Stunden Ist/Soll aus der Kalkulation, Nachkalkulation, Dokumente/Berichte/Ablage, Projekt-Chat mit Galerie.
+- **Angebotseditor**: Dokumentansicht mit Gliederung links, Einfügen von Text/Titel/Position/Bild, Kopf mit Leistungsort. Je Position gibt es ein Inline-Aufmaß (Beschreibung/Formel/Ergebnis) und Kostenzeilen (Art, Menge, Einheit, EK) im Modus Einheits- oder Gesamtpreis.
+- **Stammdaten**: Leistungen (Kosten, Zuschlag, VK), Materialien (Art.-Nr., EK, Zuschlag, VK), DATANORM-Kataloge, die optional in die Materialsuche einbezogen werden.
+- **Eingangsrechnungen**: Upload von PDF/XML/Bild, Bereich „Zu prüfen“, Kostenzuweisung, Zahlstatus.
+- **Dashboard**: offene Forderungen (offen/überfällig/angemahnt, ausblendbar), zuletzt bearbeitete Projekte, Wetter.
+- **Beobachtete Lücken / Chancen**: Aufmaß nur als Zeilen in der Position (keine Räume, keine Variablen, keine Mengenfortschreibung sichtbar); kein eigener Nachtragsprozess sichtbar; keine Jahres-Nummernkreise.
+
 ## Quellen
 - [SoftGuide – plancraft](https://www.softguide.de/programm/plancraft)
 - [Handwerksblatt – plancraft will Software für das Handwerk möglichst einfach halten](https://www.handwerksblatt.de/betriebsfuehrung/plancraft-will-software-fuer-das-handwerk-moeglichst-einfach-halten)
