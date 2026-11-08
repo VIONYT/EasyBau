@@ -214,8 +214,8 @@ Einheiten werden einheitlich in Kalkulation, Aufmaß, Angeboten, Nachträgen und
 | `min` | Minute | Zeit | `MIN` | 0 | Kalkulationszeiten je Einheit |
 | `Std` | Stunde | Zeit | `HUR` | 2 | Lohn, Regiearbeiten, Geräte |
 | `Wo.` | Woche | Zeit | `WEE` | 1 | Gerüst-/Gerätevorhaltung, Container |
+| `pa` | per annum (pro Jahr) | Zeit | `ANN` | 2 | Wartungsverträge, Miet-/Vorhaltekosten, Lizenzen |
 | `Stk.` | Stück | Anzahl | `H87` | 0 | Standard-Zähleinheit |
-| `pa` | *offen, siehe unten* | Anzahl | `PR` (Paar) | 0 | Bedeutung zu klären |
 | `Pkg` | Packung | Gebinde | `XPK` | 0 | |
 | `Eimer` | Eimer | Gebinde | `XBJ` | 0 | |
 | `Sack` | Sack | Gebinde | `XSA` | 0 | |
@@ -228,11 +228,10 @@ Einheiten werden einheitlich in Kalkulation, Aufmaß, Angeboten, Nachträgen und
 - Tabelle `unit` je Mandant, mit den oben genannten **Systemeinheiten** vorbelegt (nicht löschbar, Bezeichnung änderbar). Eigene Einheiten sind möglich, müssen aber einen UN/ECE-Code bekommen. Ohne Zuordnung wird `C62` („Einheit“) verwendet, mit Warnung vor dem Festschreiben.
 - Felder: `symbol`, `name`, `dimension` (`length`, `area`, `volume`, `mass`, `time`, `count`, `container`, `lump_sum`, `power`), `unece_code`, `decimals`, `aliases[]` (Eingabe-Synonyme wie `m2`, `qm`), `is_system`.
 - Festgeschriebene Dokumente speichern Kürzel **und** Code als Snapshot in jeder Position.
-- **Umrechnungen** nur innerhalb einer Dimension: `min ↔ Std`, `kg ↔ t`, `m ↔ km`, `l ↔ m³`. `Lfm` und `m` sind gleichwertig umrechenbar.
+- **Umrechnungen** nur innerhalb einer Dimension: `min ↔ Std ↔ Wo. ↔ pa` (nur für Kalkulationshilfen, 1 pa = 52 Wo.), `kg ↔ t`, `m ↔ km`, `l ↔ m³`. `Lfm` und `m` sind gleichwertig umrechenbar.
 - **Aufmaß**: Die Einheit der LV-Position bestimmt die passenden Vorlagen (m² → Fläche, m³ → Volumen, m/Lfm → Länge, Stk. → Zählen). Wenn die Formel-Dimension nicht zur Positionseinheit passt (z. B. Volumenformel bei m²-Position), erscheint ein Hinweis, aber keine Blockade.
 - **Gebinde in der Kalkulation** (`Eimer`, `Sack`, `Rolle`, `Tube`, `Pkg`): Artikel haben einen Gebindeinhalt (z. B. Sack = 25 kg, Eimer = 12,5 l, Rolle = 10 m²). Mit einem Verbrauch je Leistungseinheit (z. B. 4 kg/m²) rechnet die Kalkulation den Materialbedarf in Gebinde um und **rundet auf ganze Gebinde auf** (optional pro Position abschaltbar).
 - **Zeitwerte**: Kalkulationszeiten werden in `min` je Einheit erfasst (z. B. 18 min/m²) und für den Lohn in `Std` umgerechnet.
-- **Offene Frage**: Was bedeutet „pa“? Vorläufig als **Paar** (`PR`) angelegt. Möglich wären auch „per annum“ (`ANN`) oder Packung (dann Dopplung mit `Pkg`).
 
 ### 4.3 Aufmaß
 
