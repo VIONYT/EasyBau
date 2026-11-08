@@ -5,6 +5,12 @@ Alle wesentlichen Änderungen, vor allem solche, die Betreiber betreffen (neue V
 ## Unveröffentlicht
 
 ### Neu
+- Projektanlage in der Oberfläche: Name, Kunde, Baustelle (mit „Adresse des Kunden übernehmen“), Zeitraum, Status, Projektnummer, Beschreibung. Projektseite mit Übersicht, Status direkt änderbar, Bearbeiten, Kartenlink zur Baustelle.
+- Dokumente im Projekt: „Neues Dokument“ mit den im Projektstand sinnvollen Arten (Angebot, Kostenvoranschlag, Auftragsbestätigung, Nachtragsangebot nur mit Auftrag, Lieferschein, Rechnung, Teil-, Abschlags- (fortlaufend nummeriert) und Schlussrechnung, Gutschrift), leer oder aus einem bestehenden Dokument (Positionen, Texte, Empfänger und Leistungsort werden übernommen).
+- Dokument-Entwürfe bearbeiten: Kopfdaten, Anfangs- und Schlusstext, Leistungsverzeichnis mit Titeln (zwei Ebenen), Positionen, Pauschalen, Bedarfs- und Alternativpositionen, Texten; Ordnungszahlen automatisch; Summen, Rabatt und Umsatzsteuer je Steuersatz rechnet der Server. Festgeschriebene Dokumente bleiben unveränderlich.
+- Projektablage: Ordner je Projekt aus einer Firmenvorlage (Pläne, Fotos, Verträge & Angebote, Schriftverkehr, Genehmigungen & Nachweise, Sonstiges), Dateien hochladen (auch direkt mit der Handykamera und per Drag & Drop), Vorschau für Bilder, PDF und Videos, umbenennen, verschieben, löschen. Baustellen-Rollen sehen nur ihre Projekte und dürfen nur eigene Dateien löschen.
+- Echte Adressen in der Oberfläche (`/projekte/…`, `/dokumente/…`), die Zurück-Taste des Handys funktioniert.
+- Datenbank-Migration `0008_project_filing`.
 - Ersteinrichtung im Browser, geschützt durch einen Einrichtungscode aus dem Server-Log (oder `SETUP_TOKEN`).
 - Anmeldung mit Sitzungs-Cookie, Schutz vor Durchprobieren, Zwei-Faktor-Anmeldung (TOTP) per API, Passwort ändern, Firmenwechsel.
 - API für Kontakte (inkl. Kanäle, Adressen, Verknüpfungen, Archiv) und Projekte (inkl. Status, Baustelle, Mitarbeitende, Archiv).
@@ -27,3 +33,5 @@ Alle wesentlichen Änderungen, vor allem solche, die Betreiber betreffen (neue V
 - Alle Geheimnisse auch als Datei: `NAME_FILE=/pfad`.
 - Neue Variable `PUBLIC_URL` (Standard: `https://<APP_DOMAIN>`): öffentliche Adresse inkl. Port. Sicherheitsschlüssel sind an diese Domain gebunden, Einladungslinks verwenden sie.
 - Neue Variable `REQUIRE_ADMIN_MFA` (Standard `true`): Admins müssen einen zweiten Faktor einrichten.
+- **Neues Volume `files`** für die Projektablage (in `app` und `worker` unter `/data/files`). Es muss mitgesichert werden.
+- Neue Variable `UPLOAD_MAX_MB` (Standard `50`): größte erlaubte Datei beim Hochladen.

@@ -18,6 +18,7 @@ COPY packages/config/package.json packages/config/
 COPY packages/db/package.json packages/db/
 COPY packages/domain/package.json packages/domain/
 COPY packages/schemas/package.json packages/schemas/
+COPY packages/storage/package.json packages/storage/
 RUN --mount=type=secret,id=extra_ca --mount=type=cache,id=pnpm,target=/pnpm/store \
     pnpm install --frozen-lockfile
 
@@ -37,6 +38,8 @@ FROM node:22-alpine AS runtime
 ENV NODE_ENV=production PORT=3000
 WORKDIR /app
 COPY --from=build --chown=node:node /out ./
+# Mount point of the "files" volume; a new named volume takes over this owner.
+RUN mkdir -p /data/files && chown node:node /data/files
 USER node
 EXPOSE 3000
 HEALTHCHECK --interval=15s --timeout=3s --start-period=20s --retries=3 \

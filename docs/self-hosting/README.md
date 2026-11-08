@@ -45,7 +45,15 @@ Danach `https://<APP_DOMAIN>` öffnen, den Code eingeben, die Firma und das erst
 - Hat eine Person ihren Schlüssel und ihr Handy verloren, kann ein Admin unter „Benutzer“ den zweiten Faktor zurücksetzen. Der letzte Admin einer Firma kann nicht entfernt werden.
 - Nur für lokale Tests ohne HTTPS: `COOKIE_SECURE=false`.
 
-## 4. Updates
+## 4. Dateien (Projektablage)
+
+- Hochgeladene Dateien liegen im Docker-Volume `files` (im Container `/data/files`), die Datenbank kennt Name, Größe und Prüfsumme (SHA-256). Siehe [ADR 0004](../adr/0004-dateiablage.md).
+- **Das Volume `files` gehört zur Sicherung**, zusammen mit der Datenbank. Eine Sicherung nur der Datenbank enthält keine Fotos und Pläne. Beispiel für eine einfache Kopie:
+  `docker run --rm -v openplancraft_files:/data -v "$PWD":/backup alpine tar czf /backup/files.tgz -C /data .`
+- Größte erlaubte Datei: `UPLOAD_MAX_MB` (Standard 50). Erlaubt sind PDF, Bilder (JPG, PNG, GIF, WebP, HEIC), Videos (MP4, MOV), Office-Dateien, ZIP, Pläne (DWG, DXF), Text/CSV/XML und GAEB (X31, X81–X86). Der Inhalt muss zur Dateiendung passen.
+- Für jede neue Firma wird eine Ordnerstruktur angelegt; jedes neue Projekt bekommt diese Ordner.
+
+## 5. Updates
 
 ```bash
 git pull && docker compose up -d --build
@@ -53,10 +61,10 @@ git pull && docker compose up -d --build
 
 Datenbank-Migrationen laufen beim Start automatisch (`MIGRATE_ON_START=true`). Eine bereits angewendete Migration wird nie verändert; der Start bricht ab, falls doch.
 
-## 5. Prüfen
+## 6. Prüfen
 
 ```bash
 BASE_URL=https://<APP_DOMAIN> sh infra/smoke-test.sh
 ```
 
-Noch nicht im Stack und in Arbeit: Dateispeicher mit Archivschutz (Object Lock), KoSIT-Prüfer, automatisches Backup.
+Noch nicht im Stack und in Arbeit: Archivspeicher mit Object Lock für festgeschriebene Belege, KoSIT-Prüfer, automatisches Backup.

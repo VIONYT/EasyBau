@@ -1,6 +1,7 @@
 import cookie from '@fastify/cookie'
 import type { Config } from '@opc/config'
 import type { Sql } from '@opc/db'
+import { FsObjectStore, type ObjectStore } from '@opc/storage'
 import Fastify, {
   type FastifyError,
   type FastifyInstance,
@@ -11,6 +12,8 @@ import { HttpError, problem, sendProblem } from './http.js'
 import { idempotencyHooks } from './idempotency.js'
 import { authHook, mfaEnforcementHook, registerAuthRoutes } from './routes/auth.js'
 import { registerContactRoutes } from './routes/contacts.js'
+import { registerDocumentRoutes } from './routes/documents.js'
+import { registerFileRoutes } from './routes/files.js'
 import { registerProjectRoutes } from './routes/projects.js'
 import { registerUserRoutes } from './routes/users.js'
 import { registerWebauthnRoutes } from './routes/webauthn.js'
@@ -30,6 +33,8 @@ export interface ApiDeps {
         | 'COOKIE_SECURE'
         | 'PUBLIC_URL'
         | 'REQUIRE_ADMIN_MFA'
+        | 'STORAGE_DIR'
+        | 'UPLOAD_MAX_MB'
       >
     >
   /** Returns true when all hard dependencies (database) are reachable. */
@@ -39,6 +44,8 @@ export interface ApiDeps {
   sql?: Sql
   /** One-time setup code (Ersteinrichtung). Required together with `sql`. */
   setupToken?: string
+  /** Object store for uploads; defaults to the file system at STORAGE_DIR. */
+  storage?: ObjectStore
   /** Clock for TOTP; injectable for tests. */
   now?: () => number
 }
@@ -51,6 +58,7 @@ export function buildApi({
   logger = false,
   sql,
   setupToken,
+  storage,
   now = Date.now,
 }: ApiDeps): FastifyInstance {
   const app = Fastify({ logger, trustProxy: true, bodyLimit: 1024 * 1024 })
@@ -115,7 +123,9 @@ export function buildApi({
       COOKIE_SECURE: config.COOKIE_SECURE ?? true,
       PUBLIC_URL: config.PUBLIC_URL,
       REQUIRE_ADMIN_MFA: config.REQUIRE_ADMIN_MFA ?? true,
+      UPLOAD_MAX_MB: config.UPLOAD_MAX_MB ?? 50,
     },
+    storage: storage ?? new FsObjectStore(config.STORAGE_DIR ?? '/data/files'),
     setupToken,
     now,
   }
@@ -152,6 +162,8 @@ export function buildApi({
   registerAuthRoutes(app, services)
   registerContactRoutes(app, services)
   registerProjectRoutes(app, services)
+  registerFileRoutes(app, services)
+  registerDocumentRoutes(app, services)
   registerUserRoutes(app, services)
   registerWebauthnRoutes(app, services)
   return app

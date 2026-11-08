@@ -18,6 +18,9 @@ x-app: &app
   restart: unless-stopped
   read_only: true
   tmpfs: [/tmp]
+  # Ablage (uploaded files, ADR 0004). Must be included in backups together with the database.
+  volumes:
+    - files:/data/files
   depends_on:
     db:
       condition: service_healthy
@@ -37,6 +40,8 @@ x-app-env: &app-env
   COOKIE_SECURE: ${COOKIE_SECURE:-true}
   PUBLIC_URL: ${PUBLIC_URL:-https://${APP_DOMAIN:-localhost}}
   REQUIRE_ADMIN_MFA: ${REQUIRE_ADMIN_MFA:-true}
+  STORAGE_DIR: /data/files
+  UPLOAD_MAX_MB: ${UPLOAD_MAX_MB:-50}
 
 services:
   proxy:
@@ -100,6 +105,7 @@ services:
 
 volumes:
   db-data:
+  files:
   caddy-data:
   caddy-config:
 

@@ -1,15 +1,12 @@
-import type {
-  ContactDetail,
-  ContactSummary,
-  Me,
-  Page,
-  ProjectDetail,
-  ProjectSummary,
-} from '@opc/schemas'
+import type { ContactDetail, ContactSummary, Me, Page } from '@opc/schemas'
 import { useCallback, useEffect, useState } from 'react'
 import { api } from '../api'
-import { Field, FormError, optional, useForm, value } from '../forms'
+import { Field, FormError, optional, useForm } from '../forms'
 import { t } from '../i18n'
+import { type Route, useRoute } from '../router'
+import { DocumentScreen } from './document'
+import { ProjectScreen } from './project'
+import { Projects } from './projects'
 import { Security } from './security'
 import { Users } from './users'
 
@@ -26,10 +23,17 @@ export function Workspace({
   onMeChanged: (me: Me) => void
 }) {
   const locked = me.twoFactorSetupRequired
-  const [tab, setTab] = useState<Tab>(locked ? 'security' : 'projects')
+  const [route, navigate] = useRoute()
   // Clicking a tab (again) re-mounts it, so its data is fresh.
   const [visit, setVisit] = useState(0)
-  const current: Tab = locked ? 'security' : tab
+  // While the second factor is missing, stay on (and show the URL of) the security settings,
+  // so the person continues there after enrolling a key.
+  useEffect(() => {
+    if (locked && route.view !== 'security') navigate({ view: 'security' })
+  }, [locked, route.view, navigate])
+  const current: Route = locked ? { view: 'security' } : route
+  const activeTab: Tab =
+    current.view === 'project' || current.view === 'document' ? 'projects' : current.view
   const tabs: { key: Tab; label: string; visible: boolean }[] = [
     { key: 'projects', label: t('nav.projects'), visible: !locked },
     {
@@ -46,6 +50,7 @@ export function Workspace({
   ]
   const logout = async () => {
     await api('POST', '/api/v1/auth/logout').catch(() => undefined)
+    window.history.replaceState(null, '', '/')
     onLogout()
   }
   const refreshMe = () => {
@@ -53,6 +58,12 @@ export function Workspace({
       .then(onMeChanged)
       .catch(() => undefined)
   }
+  const routeKey =
+    current.view === 'project'
+      ? `project-${current.id}`
+      : current.view === 'document'
+        ? `document-${current.id}`
+        : current.view
   return (
     <div className="workspace">
       <header className="topbar">
@@ -69,9 +80,9 @@ export function Workspace({
             <button
               key={item.key}
               type="button"
-              aria-current={current === item.key ? 'page' : undefined}
+              aria-current={activeTab === item.key ? 'page' : undefined}
               onClick={() => {
-                setTab(item.key)
+                navigate({ view: item.key })
                 setVisit((v) => v + 1)
               }}
             >
@@ -79,11 +90,17 @@ export function Workspace({
             </button>
           ))}
       </nav>
-      <main className="content" key={`${current}-${visit}`}>
-        {current === 'projects' ? <Projects me={me} /> : null}
-        {current === 'contacts' ? <Contacts me={me} /> : null}
-        {current === 'users' ? <Users /> : null}
-        {current === 'security' ? <Security me={me} onChanged={refreshMe} /> : null}
+      <main className="content" key={`${routeKey}-${visit}`}>
+        {current.view === 'projects' ? <Projects me={me} navigate={navigate} /> : null}
+        {current.view === 'project' ? (
+          <ProjectScreen me={me} id={current.id} section={current.section} navigate={navigate} />
+        ) : null}
+        {current.view === 'document' ? (
+          <DocumentScreen me={me} id={current.id} navigate={navigate} />
+        ) : null}
+        {current.view === 'contacts' ? <Contacts me={me} /> : null}
+        {current.view === 'users' ? <Users /> : null}
+        {current.view === 'security' ? <Security me={me} onChanged={refreshMe} /> : null}
       </main>
     </div>
   )
@@ -179,49 +196,6 @@ function Contacts({ me }: { me: Me }) {
             <strong>{c.displayName}</strong>
             <span className="muted">
               {[c.number, c.city, c.primaryEmail].filter(Boolean).join(' · ')}
-            </span>
-          </>
-        )}
-      />
-    </section>
-  )
-}
-
-function Projects({ me }: { me: Me }) {
-  const list = useList<ProjectSummary>('/api/v1/projects')
-  const form = useForm(
-    (data) =>
-      api<ProjectDetail>('POST', '/api/v1/projects', {
-        name: value(data, 'name'),
-        site: { city: optional(data, 'city') },
-      }),
-    () => list.reload(),
-  )
-  return (
-    <section aria-labelledby="projects-title">
-      <h1 id="projects-title">{t('nav.projects')}</h1>
-      {me.permissions.includes('project.write') ? (
-        <form className="inline-form" onSubmit={form.onSubmit} noValidate>
-          <h2>{t('projects.new')}</h2>
-          <FormError>{form.error}</FormError>
-          <Field label={t('projects.name')} name="name" required error={form.fieldErrors.name} />
-          <Field label={t('projects.city')} name="city" error={form.fieldErrors['site.city']} />
-          <button type="submit" className="button primary" disabled={form.busy}>
-            {t('common.save')}
-          </button>
-        </form>
-      ) : null}
-      <List
-        items={list.items}
-        error={list.error}
-        render={(p) => (
-          <>
-            <strong>
-              {p.number ? `${p.number} · ` : ''}
-              {p.name}
-            </strong>
-            <span className="muted">
-              {[p.status?.label, p.customer?.displayName, p.siteCity].filter(Boolean).join(' · ')}
             </span>
           </>
         )}

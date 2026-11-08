@@ -11,7 +11,13 @@ import {
 } from '@opc/schemas'
 import type { FastifyInstance } from 'fastify'
 import { z } from 'zod'
-import { type AuthContext, inTenant, requirePermission, type Services } from '../context.js'
+import {
+  type AuthContext,
+  inTenant,
+  projectVisibility,
+  requirePermission,
+  type Services,
+} from '../context.js'
 import {
   checkIfMatch,
   decodeCursor,
@@ -35,12 +41,7 @@ const SUMMARY_COLUMNS = (tx: Tx) => tx`
             from project_member pm join app_user u on u.id = pm.user_id
             where pm.project_id = p.id), '[]'::json) as members`
 
-/** Users without `project.read_all` only see projects they are a member of (DESIGN.md §5.2). */
-function visibility(tx: Tx, auth: AuthContext) {
-  return auth.permissions.has('project.read_all')
-    ? tx`true`
-    : tx`exists (select 1 from project_member pm where pm.project_id = p.id and pm.user_id = ${auth.userId})`
-}
+const visibility = (tx: Tx, auth: AuthContext) => projectVisibility(tx, auth)
 
 async function loadProject(
   tx: Tx,
@@ -203,6 +204,9 @@ export function registerProjectRoutes(app: FastifyInstance, services: Services) 
       const id = (row as { id: string }).id
       // The creator is always a member, so the project stays visible for project leads.
       await replaceMembers(tx, auth.tenantId, id, [...(input.memberIds ?? []), auth.userId])
+      // Ablage: folder structure from the company template (Einstellungen › Ablage).
+      await tx`insert into project_folder (tenant_id, project_id, name, sort, created_by)
+               select tenant_id, ${id}, name, sort, ${auth.userId} from filing_template`
       return loadProject(tx, auth, id)
     })
     const { etag, ...body } = project as ProjectDetail & { etag: string }

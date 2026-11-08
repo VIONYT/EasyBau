@@ -81,4 +81,11 @@ describe('secrets', () => {
     )
     expect(() => loadConfig({ ...base, PUBLIC_URL: 'ftp://x' })).toThrow(/PUBLIC_URL/)
   })
+
+  it('has storage defaults and limits uploads', () => {
+    const config = loadConfig(base)
+    expect([config.STORAGE_DIR, config.UPLOAD_MAX_MB]).toEqual(['/data/files', 50])
+    expect(loadConfig({ ...base, UPLOAD_MAX_MB: '200' }).UPLOAD_MAX_MB).toBe(200)
+    expect(() => loadConfig({ ...base, UPLOAD_MAX_MB: '0' })).toThrow(/UPLOAD_MAX_MB/)
+  })
 })

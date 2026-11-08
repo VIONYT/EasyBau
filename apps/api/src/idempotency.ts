@@ -19,9 +19,11 @@ export function idempotencyHooks(services: Services) {
       throw new HttpError(400, 'Der Idempotency-Key muss 8 bis 200 Zeichen lang sein.')
     }
     const { tenantId, userId } = request.auth
-    const requestHash = sha256(
-      `${request.method} ${request.url}\n${JSON.stringify(request.body ?? null)}`,
-    )
+    // Uploads are streamed (not buffered); their URL and length identify the request.
+    const body = isStream(request.body)
+      ? `stream:${request.headers['content-length'] ?? ''}`
+      : JSON.stringify(request.body ?? null)
+    const requestHash = sha256(`${request.method} ${request.url}\n${body}`)
     const result = await withTenant(services.sql, { tenantId, userId }, async (tx) => {
       const inserted = await tx`
         insert into idempotency_key (tenant_id, key, request_hash) values (${tenantId}, ${key}, ${requestHash})
@@ -72,4 +74,8 @@ export function idempotencyHooks(services: Services) {
   }
 
   return { preHandler, onSend }
+}
+
+function isStream(value: unknown): boolean {
+  return typeof (value as { pipe?: unknown } | null)?.pipe === 'function'
 }

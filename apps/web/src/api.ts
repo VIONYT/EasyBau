@@ -21,21 +21,54 @@ export async function api<T>(
   path: string,
   body?: unknown,
 ): Promise<T> {
+  return (await apiWithEtag<T>(method, path, body)).data
+}
+
+/**
+ * Like api(), additionally returns the ETag of single resources and sends If-Match,
+ * so concurrent edits are detected (412) instead of silently overwritten.
+ */
+export async function apiWithEtag<T>(
+  method: 'GET' | 'POST' | 'PATCH' | 'DELETE',
+  path: string,
+  body?: unknown,
+  ifMatch?: string | null,
+): Promise<{ data: T; etag: string | null }> {
   const headers: Record<string, string> = { accept: 'application/json' }
   if (body !== undefined) headers['content-type'] = 'application/json'
   if (method === 'POST') headers['idempotency-key'] = crypto.randomUUID()
+  if (ifMatch) headers['if-match'] = ifMatch
+  return send<T>(path, {
+    method,
+    headers,
+    ...(body === undefined ? {} : { body: JSON.stringify(body) }),
+  })
+}
+
+/** Uploads a file as raw bytes (streamed on the server, no form encoding). */
+export async function uploadFile<T>(path: string, file: Blob): Promise<T> {
+  return (
+    await send<T>(path, {
+      method: 'POST',
+      headers: {
+        accept: 'application/json',
+        'content-type': 'application/octet-stream',
+        'idempotency-key': crypto.randomUUID(),
+      },
+      body: file,
+    })
+  ).data
+}
+
+async function send<T>(path: string, init: RequestInit): Promise<{ data: T; etag: string | null }> {
   let response: Response
   try {
-    response = await fetch(path, {
-      method,
-      headers,
-      credentials: 'same-origin',
-      ...(body === undefined ? {} : { body: JSON.stringify(body) }),
-    })
+    response = await fetch(path, { ...init, credentials: 'same-origin' })
   } catch {
     throw new ApiError(0, t('common.networkError'))
   }
-  if (response.status === 204) return undefined as T
+  const etag = response.headers.get('etag')
+  if (response.status === 204) return { data: undefined as T, etag }
   const data = await response.json().catch(() => null)
   if (!response.ok) {
     const problem = data as Problem | null
@@ -45,5 +78,5 @@ export async function api<T>(
       problem?.errors ?? {},
     )
   }
-  return data as T
+  return { data: data as T, etag }
 }

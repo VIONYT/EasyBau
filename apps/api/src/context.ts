@@ -1,6 +1,7 @@
 import type { Config } from '@opc/config'
 import type { Sql, Tx } from '@opc/db'
 import { withTenant } from '@opc/db'
+import type { ObjectStore } from '@opc/storage'
 import type { FastifyReply, FastifyRequest } from 'fastify'
 import { forbidden, HttpError } from './http.js'
 import type { FieldCipher } from './security/crypto.js'
@@ -33,10 +34,17 @@ export interface Services {
   cipher: FieldCipher
   config: Pick<
     Config,
-    'APP_NAME' | 'SESSION_TTL_DAYS' | 'SESSION_IDLE_HOURS' | 'COOKIE_SECURE' | 'REQUIRE_ADMIN_MFA'
+    | 'APP_NAME'
+    | 'SESSION_TTL_DAYS'
+    | 'SESSION_IDLE_HOURS'
+    | 'COOKIE_SECURE'
+    | 'REQUIRE_ADMIN_MFA'
+    | 'UPLOAD_MAX_MB'
   > & {
     PUBLIC_URL?: string | undefined
   }
+  /** Uploaded files (project filing, ADR 0004). */
+  storage: ObjectStore
   /** One-time code required for the initial setup. */
   setupToken: string
   now: () => number
@@ -94,3 +102,23 @@ export function inTenant<T>(
 }
 
 export type Handler = (request: FastifyRequest, reply: FastifyReply) => Promise<unknown>
+
+/** Users without `project.read_all` only see projects they are a member of (DESIGN.md §5.2). */
+export function projectVisibility(tx: Tx, auth: AuthContext, alias = 'p') {
+  return auth.permissions.has('project.read_all')
+    ? tx`true`
+    : tx`exists (select 1 from project_member pm where pm.project_id = ${tx(alias)}.id and pm.user_id = ${auth.userId})`
+}
+
+/** Loads a project the user may see (404 otherwise, also for other tenants thanks to RLS). */
+export async function requireVisibleProject(
+  tx: Tx,
+  auth: AuthContext,
+  projectId: string,
+): Promise<{ id: string; archived: boolean }> {
+  const [row] = await tx<{ id: string; archived: boolean }[]>`
+    select p.id, (p.archived_at is not null) as archived from project p
+    where p.id = ${projectId} and ${projectVisibility(tx, auth)}`
+  if (!row) throw new HttpError(404, 'Das Projekt wurde nicht gefunden.')
+  return row
+}

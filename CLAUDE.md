@@ -5,7 +5,7 @@ OpenPlancraft ist eine **Open-Source**-Betriebssoftware (ERP) für Bau- und Hand
 **Lies vor jeder größeren Änderung [`DESIGN.md`](DESIGN.md)** (Architektur, Datenmodell, UX). Hintergrund: [`docs/RESEARCH.md`](docs/RESEARCH.md). Dieses Projekt ist ein eigenständiges Produkt: übernimm keine Texte, Logos, Markennamen oder Screens von Plancraft oder anderen Anbietern.
 
 ## Projektstatus
-Grundgerüst steht, Datenbankschema für das MVP ist angelegt (Migrationen 0001–0007). Rechenlogik (`packages/domain`), Ersteinrichtung, Anmeldung (Sitzung, TOTP, WebAuthn/Sicherheitsschlüssel als zweiter Faktor und Passkey, Rate-Limit, erzwungene Admin-2FA), Benutzerverwaltung mit Einladungen, API für Kontakte und Projekte sowie eine erste Weboberfläche (inkl. Sicherheit und Benutzer) sind fertig. Monorepo, Services (`server` = API + Worker per `APP_ROLE`), Web-Platzhalter, Docker-Stack (proxy, app, db; Profil `standard` mit separatem `worker`), Test-Stack und CI. Noch nicht im Stack: storage (S3/Object Lock), kosit, backup. Fachmodule folgen in der Reihenfolge der MVP-Module in DESIGN.md §2.
+Grundgerüst steht, Datenbankschema für das MVP ist angelegt (Migrationen 0001–0008). Rechenlogik (`packages/domain`), Ersteinrichtung, Anmeldung (Sitzung, TOTP, WebAuthn/Sicherheitsschlüssel als zweiter Faktor und Passkey, Rate-Limit, erzwungene Admin-2FA), Benutzerverwaltung mit Einladungen, API für Kontakte und Projekte, Projektanlage, Projektablage (Ordner, Upload, ADR 0004) und Dokument-Entwürfe mit Leistungsverzeichnis (ohne Festschreiben/PDF) sowie die Weboberfläche dazu sind fertig. Monorepo, Services (`server` = API + Worker per `APP_ROLE`), Web-Platzhalter, Docker-Stack (proxy, app, db, Volume `files`; Profil `standard` mit separatem `worker`), Test-Stack und CI. Noch nicht im Stack: Archiv-Objektspeicher (S3/Object Lock), kosit, backup. Fachmodule folgen in der Reihenfolge der MVP-Module in DESIGN.md §2.
 
 ## Stack (Kurzfassung)
 TypeScript strict · pnpm + Turborepo · Fastify · Zod · PostgreSQL 17 (SQL-Migrationen, ADR 0003) · pg-boss (Queue in PostgreSQL) · Typst (PDF/A-3) · S3 via MinIO (Object Lock) · Caddy · Docker Compose · React 19 + Vite + TanStack Router/Query · Tailwind 4 + Radix/shadcn · vite-plugin-pwa + Dexie · Vitest, Testcontainers, Playwright.
@@ -14,16 +14,17 @@ TypeScript strict · pnpm + Turborepo · Fastify · Zod · PostgreSQL 17 (SQL-Mi
 ```
 apps/server   Composition Root: startet API und/oder Worker je nach APP_ROLE (all|api|worker)
 apps/api      Fastify-App (buildApi), ohne eigenen Prozessstart → mit inject() testbar.
-              routes/ (auth, auth-common, webauthn, users, contacts, projects), security/ (crypto, passwords, sessions),
+              routes/ (auth, auth-common, webauthn, users, contacts, projects, documents, files), security/ (crypto, passwords, sessions),
               testing/ (Test-Harness, Software-Authenticator für WebAuthn), context.ts
               (requireAuth, requirePermission, inTenant), http.ts (HttpError, parse, Cursor, ETag), idempotency.ts
 apps/worker   pg-boss-Jobs (startWorker)
-apps/web      React/Vite-PWA (screens/, webauthn.ts, i18n.ts)
+apps/web      React/Vite-PWA (screens/, router.ts, webauthn.ts, i18n.ts)
 e2e/          Playwright-Tests gegen einen laufenden Stack (virtueller FIDO2-Schlüssel per CDP)
 packages/config  Env-Schema (zod) – einzige Stelle für Konfiguration
 packages/db      SQL-Migrationen (migrations/), Runner, createSql (runtime/admin), withTenant(), Readiness
 packages/domain  Reine Rechenlogik: Aufmaß-Formeln, Aufmaßzeilen/Mengen, Kalkulation (Position, Dokument, Zielpreis, Gebinde), Einheiten
-packages/schemas Zod-Schemas und DTO-Typen der API (Server + Web)
+packages/schemas Zod-Schemas und DTO-Typen der API (Server + Web); `@opc/schemas/constants` ohne zod für Werte im Web
+packages/storage Dateiablage: ObjectStore (Dateisystem), Upload-Typprüfung, Dateinamen (ADR 0004)
 geplant: packages/einvoice  packages/exports  packages/pdf-templates  packages/ui
 docker/ (Dockerfiles)  infra/ (Caddyfile, smoke-test.sh)  docs/
 ```
@@ -56,6 +57,7 @@ Vor jedem Commit: `pnpm lint && pnpm typecheck && pnpm test`. Vor einem Pull Req
 - Neue Fachtabelle: `tenant_id uuid not null references tenant(id)` + `select enable_tenant_rls('tabelle')`; steuerrelevant zusätzlich `add_audit_trigger`, mit `updated_at` → `add_updated_at_trigger`, Kind eines Belegs → `document_id` + `add_document_child_guard`.
 - Anwendungscode greift nur über `createSql(config)` (Rolle `opc_app`) und `withTenant(sql, { tenantId, userId }, tx => …)` zu. Der Admin-Modus ist nur für Migrationen und pg-boss.
 - Nummern nur über `next_number(kind)` in der Festschreibe-Transaktion.
+- Dateien nur über `services.storage` (`ObjectStore`); Uploads gestreamt, Typ per Endung + Inhalt geprüft (`detectFileType`). Projekt-Sichtbarkeit immer über `requireVisibleProject`/`projectVisibility` aus `context.ts`.
 - Integrationstests: `*.integration.test.ts` mit Helfern aus `packages/db/src/test-support.ts`. Erwartete DB-Fehler innerhalb einer Transaktion immer in `tx.savepoint(...)` kapseln.
 
 ## API-Konventionen (umgesetzt)

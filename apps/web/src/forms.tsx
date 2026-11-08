@@ -4,13 +4,13 @@ import { ApiError } from './api'
 interface FieldProps {
   label: string
   name: string
-  type?: 'text' | 'email' | 'password'
+  type?: 'text' | 'email' | 'password' | 'date'
   autoComplete?: string
   hint?: string | undefined
   required?: boolean
   error?: string | undefined
-  inputMode?: 'text' | 'numeric'
-  defaultValue?: string
+  inputMode?: 'text' | 'numeric' | 'decimal'
+  defaultValue?: string | undefined
 }
 
 /** Labelled input with hint and error, accessible (WCAG 2.2 AA) and large enough for touch. */
@@ -101,3 +101,79 @@ export function FormError({ children }: { children: ReactNode }) {
 export const value = (data: FormData, name: string): string => String(data.get(name) ?? '').trim()
 export const optional = (data: FormData, name: string): string | undefined =>
   value(data, name) || undefined
+
+/** Multi-line text field with label, same look as Field. */
+export function TextArea({
+  label,
+  name,
+  defaultValue,
+  rows = 3,
+  error,
+}: {
+  label: string
+  name: string
+  defaultValue?: string | null | undefined
+  rows?: number
+  error?: string | undefined
+}) {
+  const id = useId()
+  return (
+    <div className="field">
+      <label htmlFor={id}>{label}</label>
+      <textarea
+        id={id}
+        name={name}
+        rows={rows}
+        defaultValue={defaultValue ?? ''}
+        aria-invalid={error ? true : undefined}
+        aria-describedby={error ? `${id}-error` : undefined}
+      />
+      {error ? (
+        <p id={`${id}-error`} className="field-error">
+          {error}
+        </p>
+      ) : null}
+    </div>
+  )
+}
+
+/** Labelled select. */
+export function SelectField({
+  label,
+  name,
+  options,
+  defaultValue,
+  value: current,
+  onChange,
+  error,
+}: {
+  label: string
+  name: string
+  options: { value: string; label: string }[]
+  defaultValue?: string | undefined
+  value?: string | undefined
+  onChange?: (value: string) => void
+  error?: string | undefined
+}) {
+  const id = useId()
+  return (
+    <div className="field">
+      <label htmlFor={id}>{label}</label>
+      <select
+        id={id}
+        name={name}
+        className="select"
+        {...(current === undefined ? { defaultValue } : { value: current })}
+        onChange={onChange ? (e) => onChange(e.target.value) : undefined}
+        aria-invalid={error ? true : undefined}
+      >
+        {options.map((o) => (
+          <option key={o.value} value={o.value}>
+            {o.label}
+          </option>
+        ))}
+      </select>
+      {error ? <p className="field-error">{error}</p> : null}
+    </div>
+  )
+}

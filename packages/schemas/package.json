@@ -9,6 +9,11 @@
       "source": "./src/index.ts",
       "types": "./src/index.ts",
       "default": "./dist/index.js"
+    },
+    "./constants": {
+      "source": "./src/constants.ts",
+      "types": "./src/constants.ts",
+      "default": "./dist/constants.js"
     }
   },
   "files": [

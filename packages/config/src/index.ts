@@ -56,6 +56,10 @@ const envSchema = z.object({
     .enum(['true', 'false'])
     .default('true')
     .transform((v) => v === 'true'),
+  /** Directory for uploaded files (project filing). In Docker a named volume (ADR 0004). */
+  STORAGE_DIR: z.string().min(1).default('/data/files'),
+  /** Maximum size of one uploaded file in megabytes. */
+  UPLOAD_MAX_MB: z.coerce.number().int().min(1).max(2048).default(50),
 })
 
 export type Config = z.infer<typeof envSchema>

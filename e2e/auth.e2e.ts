@@ -1,9 +1,10 @@
 import { type BrowserContext, expect, type Page, test } from '@playwright/test'
 
 /**
- * Core flow on a phone-sized screen against a fresh stack:
- * setup → forced 2FA → register a security key (virtual YubiKey) → work → invite a person
- * → accept the invitation → passwordless login with the key.
+ * Core flows on a phone-sized screen against a fresh stack:
+ * 1. setup → forced 2FA → register a security key (virtual YubiKey) → invite a person
+ *    → accept the invitation → passwordless login with the key.
+ * 2. create a project → quote with positions → upload into the project filing (Ablage).
  */
 
 const SETUP_TOKEN = process.env.SETUP_TOKEN ?? ''
@@ -39,11 +40,21 @@ async function expectNoHorizontalScroll(page: Page) {
 
 test.describe.configure({ mode: 'serial' })
 
+// Shared between the serial tests: the logged-in admin with the virtual key.
+let context: BrowserContext
+let page: Page
+let key: Awaited<ReturnType<typeof attachVirtualYubikey>>
+const SCREENSHOTS = process.env.SCREENSHOT_DIR
+
+test.afterAll(async () => {
+  await context?.close()
+})
+
 test('setup, security key, user management and passwordless login', async ({ browser }) => {
   test.skip(!SETUP_TOKEN, 'SETUP_TOKEN must be set for a fresh stack')
-  const context = await browser.newContext()
-  const page = await context.newPage()
-  const key = await attachVirtualYubikey(context, page)
+  context = await browser.newContext()
+  page = await context.newPage()
+  key = await attachVirtualYubikey(context, page)
 
   // Ersteinrichtung
   await page.goto('/')
@@ -111,8 +122,87 @@ test('setup, security key, user management and passwordless login', async ({ bro
   await expect(page.getByRole('heading', { name: 'Zweiter Schritt' })).toBeVisible()
   await page.getByRole('button', { name: 'Mit Sicherheitsschlüssel bestätigen' }).click()
   await expect(page.getByRole('heading', { name: 'Projekte' })).toBeVisible()
+})
 
-  // Without the key the second step fails with a readable message.
+const PNG = Buffer.from(
+  'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNkYPhfDwAChwGA60e6kgAAAABJRU5ErkJggg==',
+  'base64',
+)
+
+test('project with quote and filing (Ablage)', async () => {
+  test.skip(!SETUP_TOKEN, 'SETUP_TOKEN must be set for a fresh stack')
+  test.setTimeout(90_000)
+
+  // Projekt anlegen
+  await page.getByRole('button', { name: 'Projekte' }).click()
+  await page.getByRole('button', { name: 'Neues Projekt' }).click()
+  await page.getByLabel('Projektname').fill('Sanierung Lindenweg')
+  await page.getByLabel('Straße und Hausnummer').fill('Lindenweg 4')
+  await page.getByLabel('PLZ').fill('30159')
+  await page.getByLabel('Ort', { exact: true }).fill('Hannover')
+  await page.getByLabel('Beginn').fill('2026-11-02')
+  await expectNoHorizontalScroll(page)
+  await page.getByRole('button', { name: 'Projekt anlegen' }).click()
+  await expect(page.getByRole('heading', { name: /Sanierung Lindenweg/ })).toBeVisible()
+  await expect(page.getByText('Lindenweg 4, 30159 Hannover')).toBeVisible()
+  await expect(page).toHaveURL(/\/projekte\/[0-9a-f-]{36}$/)
+
+  // Angebot mit Titel und Position
+  await page.getByRole('button', { name: 'Dokumente' }).click()
+  await page.getByRole('button', { name: 'Neues Dokument' }).click()
+  await expect(page.getByRole('radio', { name: 'Angebot', exact: true })).toBeChecked()
+  await expect(page.getByRole('radio', { name: /Nachtragsangebot/ })).toBeDisabled()
+  await page.getByRole('button', { name: 'Dokument erstellen' }).click()
+  await expect(page.getByRole('heading', { name: 'Angebot', exact: true })).toBeVisible()
+  await expect(page.getByText('Entwurf (noch ohne Nummer)')).toBeVisible()
+
+  await page.getByRole('button', { name: '+ Titel' }).click()
+  await page.getByRole('textbox', { name: 'Titel', exact: true }).fill('Malerarbeiten')
+  await page.getByRole('button', { name: 'Hinzufügen', exact: true }).click()
+  await expect(page.getByText('1 Malerarbeiten')).toBeVisible()
+
+  await page.getByRole('button', { name: '+ Position' }).click()
+  await page.getByLabel('Kurztext').fill('Wandfläche streichen')
+  await page.getByLabel('Menge').fill('12,5')
+  await page.getByLabel('Einheit', { exact: true }).selectOption({ label: 'm² – Quadratmeter' })
+  await page.getByLabel('Einheitspreis netto (€)').fill('45,00')
+  await page.getByRole('button', { name: 'Hinzufügen', exact: true }).click()
+  await expect(page.getByText('Wandfläche streichen')).toBeVisible()
+  await expect(page.locator('.position--item .amount')).toHaveText('562,50\u00a0€')
+  await expect(page.locator('.totals .grand dd')).toHaveText('669,38\u00a0€')
+  await expectNoHorizontalScroll(page)
+  if (SCREENSHOTS) await page.screenshot({ path: `${SCREENSHOTS}/angebot.png`, fullPage: true })
+
+  // Back to the project: the quote is listed.
+  await page.getByRole('link', { name: /Sanierung Lindenweg/ }).click()
+  await expect(page.getByRole('heading', { name: 'Angebote' })).toBeVisible()
+  await expect(page.getByText('562,50\u00a0€')).toBeVisible()
+
+  // Ablage: upload a photo into "Fotos"; disguised files are rejected.
+  await page.getByRole('button', { name: 'Ablage' }).click()
+  await page.getByRole('button', { name: /^Fotos/ }).click()
+  await page
+    .locator('input[type=file][multiple]')
+    .setInputFiles({ name: 'Fassade Süd.png', mimeType: 'image/png', buffer: PNG })
+  await expect(page.getByText('Fassade Süd.png', { exact: true })).toBeVisible()
+  await expect(page.getByRole('img', { name: 'Fassade Süd.png' })).toBeVisible()
+  await expect(page.getByRole('button', { name: /^Fotos/ })).toContainText('1')
+  await page.locator('input[type=file][multiple]').setInputFiles({
+    name: 'rechnung.pdf',
+    mimeType: 'application/pdf',
+    buffer: Buffer.from('<html>'),
+  })
+  await expect(
+    page.getByText(/rechnung\.pdf: Nicht hochgeladen – Dieser Dateityp ist nicht erlaubt/),
+  ).toBeVisible()
+  await expectNoHorizontalScroll(page)
+  if (SCREENSHOTS) await page.screenshot({ path: `${SCREENSHOTS}/ablage.png`, fullPage: true })
+
+  // Direct link to the filing works after a reload (real URLs).
+  await page.reload()
+  await expect(page.getByText('Fassade Süd.png', { exact: true })).toBeVisible()
+
+  // Without the key the second step of the login fails with a readable message.
   await key.cdp.send('WebAuthn.removeVirtualAuthenticator', {
     authenticatorId: key.authenticatorId,
   })
@@ -121,5 +211,4 @@ test('setup, security key, user management and passwordless login', async ({ bro
   await page.locator('input[name=password]').fill(ADMIN.password)
   await page.getByRole('button', { name: 'Anmelden', exact: true }).click()
   await expect(page.getByRole('heading', { name: 'Zweiter Schritt' })).toBeVisible()
-  await context.close()
 })

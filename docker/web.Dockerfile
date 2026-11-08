@@ -12,6 +12,7 @@ COPY packages/schemas/package.json packages/schemas/
 RUN --mount=type=secret,id=extra_ca --mount=type=cache,id=pnpm,target=/pnpm/store \
     pnpm install --frozen-lockfile --filter=@opc/web
 COPY apps/web apps/web
+COPY packages/schemas packages/schemas
 COPY tsconfig.base.json ./
 RUN --mount=type=secret,id=extra_ca pnpm --filter=@opc/web build
 

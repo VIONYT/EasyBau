@@ -157,7 +157,7 @@ Standardfall beim Self-Hosting ist **eine Firma pro Installation**. Die Mandante
 | `api` | `ghcr.io/<org>/openplancraft-api` | REST-API, führt beim Start Datenbank-Migrationen aus (mit Lock, idempotent) |
 | `worker` | `ghcr.io/<org>/openplancraft-worker` | PDF (Typst), E-Rechnung, E-Mail, Exporte, geplante Jobs; **entfällt im Profil kompakt** (läuft dann im `api`-Container) |
 | `db` | PostgreSQL 17 | Daten (Volume) |
-| `storage` | MinIO | Dateien und WORM-Archiv (Object Lock wird beim ersten Start eingerichtet) |
+| `storage` | MinIO | WORM-Archiv festgeschriebener Belege (Object Lock wird beim ersten Start eingerichtet). Die Projektablage liegt im Volume `files` ([ADR 0004](docs/adr/0004-dateiablage.md)) |
 | `kosit` | KoSIT-Validator (Java) | Prüfung jeder E-Rechnung, nur intern erreichbar. Läuft mit begrenztem Heap (`-Xmx256m`, Serial GC). Im Profil kompakt wird er **bei Bedarf** gestartet und nach Leerlauf wieder beendet |
 | `backup` | pgBackRest + Cron | WAL-Archiv, tägliche Sicherung, optional Kopie auf externes Ziel (S3/SFTP) |
 

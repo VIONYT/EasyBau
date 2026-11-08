@@ -47,9 +47,15 @@ importers:
       '@opc/db':
         specifier: workspace:*
         version: link:../../packages/db
+      '@opc/domain':
+        specifier: workspace:*
+        version: link:../../packages/domain
       '@opc/schemas':
         specifier: workspace:*
         version: link:../../packages/schemas
+      '@opc/storage':
+        specifier: workspace:*
+        version: link:../../packages/storage
       '@simplewebauthn/server':
         specifier: 14.1.0
         version: 14.1.0
@@ -154,6 +160,12 @@ importers:
       zod:
         specifier: 4.6.7
         version: 4.6.7
+
+  packages/storage:
+    devDependencies:
+      '@opc/schemas':
+        specifier: workspace:*
+        version: link:../schemas
 
 packages:
 
