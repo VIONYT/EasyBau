@@ -84,6 +84,7 @@ interface ItemRow {
   quantity: string | null
   unitId: string | null
   unitSymbol: string | null
+  unitDecimals: number | null
   unitPriceCents: string | null
   discountPercent: string | null
   totalCents: string | null
@@ -97,6 +98,7 @@ async function loadItems(tx: Tx, documentId: string): Promise<ItemRow[]> {
     select id, parent_id as "parentId", sort, position_type as "positionType", oz,
            short_text as "shortText", long_text as "longText",
            trim_scale(quantity)::text as quantity, unit_id as "unitId", unit_symbol as "unitSymbol",
+           (select u.decimals from unit u where u.id = unit_id)::int as "unitDecimals",
            unit_price_cents::text as "unitPriceCents", trim_scale(discount_percent)::text as "discountPercent",
            total_cents::text as "totalCents", trim_scale(tax_rate_percent)::text as "taxRatePercent",
            tax_category as "taxCategory", quantity_from_measurement as "fromMeasurement"
@@ -274,7 +276,9 @@ export async function loadDocument(
     shortText: r.shortText,
     longText: r.longText,
     quantity: r.quantity,
-    unit: r.unitId ? { id: r.unitId, symbol: r.unitSymbol ?? '' } : null,
+    unit: r.unitId
+      ? { id: r.unitId, symbol: r.unitSymbol ?? '', decimals: r.unitDecimals ?? 2 }
+      : null,
     unitPriceCents: r.unitPriceCents === null ? null : Number(r.unitPriceCents),
     discountPercent: r.discountPercent,
     totalCents: r.totalCents === null ? null : Number(r.totalCents),
@@ -527,14 +531,34 @@ async function copyItems(tx: Tx, fromId: string, toId: string) {
 // ---- Items ----------------------------------------------------------------------------------------
 
 async function unitSnapshot(tx: Tx, unitId: string) {
-  const [unit] = await tx<{ symbol: string; unece: string }[]>`
-    select symbol, unece_code as unece from unit where id = ${unitId} and is_active`
+  const [unit] = await tx<{ symbol: string; unece: string; decimals: number }[]>`
+    select symbol, unece_code as unece, decimals from unit where id = ${unitId} and is_active`
   if (!unit) {
     throw new HttpError(400, 'Die Eingaben sind unvollständig oder ungültig.', {
       unitId: 'Unbekannte Einheit.',
     })
   }
   return unit
+}
+
+/**
+ * Handwerksregel: a quantity has at most the decimals of its unit (m² 2, m³ and t 3, Stück 0),
+ * so Menge × EP on the document always equals the Gesamtpreis.
+ */
+export function checkQuantityDecimals(
+  quantity: string | null,
+  unit: { symbol: string; decimals: number } | null,
+) {
+  if (quantity === null || !unit) return
+  const fraction = (quantity.split('.')[1] ?? '').replace(/0+$/, '')
+  if (fraction.length > unit.decimals) {
+    throw new HttpError(400, 'Die Eingaben sind unvollständig oder ungültig.', {
+      quantity:
+        unit.decimals === 0
+          ? `Menge in ${unit.symbol} bitte ohne Nachkommastellen angeben.`
+          : `Menge in ${unit.symbol}: höchstens ${unit.decimals} Nachkommastellen.`,
+    })
+  }
 }
 
 async function levelOf(tx: Tx, itemId: string): Promise<number> {
@@ -555,7 +579,7 @@ export function registerDocumentRoutes(app: FastifyInstance, services: Services)
       services,
       auth,
       (tx) => tx<UnitSummary[]>`
-        select id, symbol, name, dimension from unit where is_active
+        select id, symbol, name, dimension, decimals from unit where is_active
         order by array_position(array['count','length','area','volume','mass','time','lump_sum','container','power'], dimension),
                  symbol`,
     )
@@ -723,6 +747,7 @@ export function registerDocumentRoutes(app: FastifyInstance, services: Services)
         }
       }
       const unit = priced && unitId ? await unitSnapshot(tx, unitId) : null
+      checkQuantityDecimals(priced ? quantity : null, unit)
       let taxRate = input.taxRatePercent ?? null
       if (priced && taxRate === null) {
         const [rate] = await tx<{ percent: string }[]>`
@@ -812,6 +837,12 @@ export function registerDocumentRoutes(app: FastifyInstance, services: Services)
       }
       if (Object.keys(columns).length) {
         await tx`update document_item set ${tx(columns)} where id = ${itemId}`
+      }
+      if (priced && (input.quantity !== undefined || input.unitId !== undefined)) {
+        const [after] = await tx<{ quantity: string | null; symbol: string; decimals: number }[]>`
+          select trim_scale(i.quantity)::text as quantity, u.symbol, u.decimals
+          from document_item i join unit u on u.id = i.unit_id where i.id = ${itemId}`
+        checkQuantityDecimals(after?.quantity ?? null, after ?? null)
       }
       await recalculate(tx, id)
       return loadDocument(tx, auth, id)

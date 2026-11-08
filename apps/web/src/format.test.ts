@@ -36,6 +36,8 @@ describe('money input and output', () => {
     expect(formatQuantity('-1.7789')).toBe('-1,78')
     expect(formatQuantity('2.345')).toBe('2,35')
     expect(formatQuantity('kein')).toBe('kein')
+    expect(formatQuantity('1.2345', 3)).toBe('1,235')
+    expect(formatQuantity('2.5', 0)).toBe('3')
     expect(formatInputNumber('0.885')).toBe('0,885')
     expect(formatInputNumber('4.2500')).toBe('4,25')
     expect(formatInputNumber(null)).toBe('')

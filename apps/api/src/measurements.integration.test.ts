@@ -268,7 +268,7 @@ describe.skipIf(!process.env.DATABASE_URL)('measurements / Aufmaß (integration)
       unitId: unit('Stk.'),
     })
     sheet = res.json()
-    expect(sheet.unassigned).toEqual([{ unit: 'Stk.', quantity: '3', count: 1 }])
+    expect(sheet.unassigned).toEqual([{ unit: 'Stk.', decimals: 0, quantity: '3', count: 1 }])
     const line = sheet.lines.find((l) => l.description === 'Steckdosen')?.id as string
     res = await admin.patch(`${sheetUrl()}/lines/${line}`, {
       formula: '2+2',
@@ -280,6 +280,15 @@ describe.skipIf(!process.env.DATABASE_URL)('measurements / Aufmaß (integration)
       unit: { symbol: 'm²' },
     })
     expect(sheet.unassigned).toEqual([])
+    // Rounded to the decimals of the unit: m³ three, Stück none.
+    const volume = (
+      await admin.post(`${sheetUrl()}/lines`, { formula: '1,2345', unitId: unit('m³') })
+    ).json()
+    const cubic = volume.lines.find((l: { formula: string }) => l.formula === '1,2345')
+    expect(cubic).toMatchObject({ resultQty: '1.235', unit: { symbol: 'm³', decimals: 3 } })
+    const asPieces = await admin.patch(`${sheetUrl()}/lines/${cubic.id}`, { unitId: unit('Stk.') })
+    expect(asPieces.json().lines.find((l: { id: string }) => l.id === cubic.id).resultQty).toBe('1')
+    await admin.delete(`${sheetUrl()}/lines/${cubic.id}`)
     res = await admin.patch(`${sheetUrl()}/lines/${line}`, { formula: '(' })
     expect(res.statusCode).toBe(400)
     res = await admin.delete(`${sheetUrl()}/lines/${line}`)

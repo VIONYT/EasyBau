@@ -37,6 +37,13 @@ describe('measurement lines', () => {
     expect(measurementLineQuantity({ formula: '0,004' })).toBe('0.00')
   })
 
+  it('rounds to the decimals of the unit (m³ and t: 3, Stück: 0)', () => {
+    expect(measurementLineQuantity({ formula: '1,2345*2', decimals: 3 })).toBe('2.469')
+    expect(measurementLineQuantity({ formula: '0,0005', decimals: 3 })).toBe('0.001')
+    expect(measurementLineQuantity({ formula: '2,5', decimals: 0 })).toBe('3')
+    expect(measurementLineQuantity({ formula: '2,5', isDeduction: true, decimals: 0 })).toBe('-3')
+  })
+
   it('sums an empty list to zero', () => {
     expect(sumQuantities([])).toBe('0.0000')
   })

@@ -108,8 +108,9 @@ export type UpdateDocumentRequest = z.infer<typeof updateDocumentRequest>
 const itemFields = {
   shortText: optionalText(500),
   longText: optionalText(20_000),
-  // Two decimals, like measurement results: the printed Menge × EP equals the Gesamtpreis.
-  quantity: decimalText('Menge', 14, 2).nullable(),
+  // At most the decimals of the unit (checked on the server: m² 2, m³/t 3, Stück 0), so the
+  // printed Menge × EP always equals the Gesamtpreis.
+  quantity: decimalText('Menge', 14, 3).nullable(),
   unitId: id.nullable(),
   unitPriceCents: cents.nullable(),
   discountPercent: percent('Rabatt').nullable(),
@@ -190,7 +191,7 @@ export interface DocumentItem {
   shortText: string | null
   longText: string | null
   quantity: string | null
-  unit: { id: string; symbol: string } | null
+  unit: UnitRef | null
   unitPriceCents: number | null
   discountPercent: string | null
   totalCents: number | null
@@ -234,9 +235,14 @@ export interface DocumentDetail extends DocumentSummary {
   totals: DocumentTotals
 }
 
-export interface UnitSummary {
+/** Unit with its decimal places (Handwerksregel: m/m² 2, m³ und t 3, Stück/Pauschal 0). */
+export interface UnitRef {
   id: string
   symbol: string
+  decimals: number
+}
+
+export interface UnitSummary extends UnitRef {
   name: string
   dimension: string
 }

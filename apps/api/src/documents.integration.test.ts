@@ -201,7 +201,38 @@ describe.skipIf(!process.env.DATABASE_URL)('project documents (integration)', ()
         quantity: '1,234',
         unitId: unit('m'),
       })
-      expect(bad.json().errors.quantity).toMatch(/höchstens 2 Nachkommastellen/)
+      expect(bad.json().errors.quantity).toBe('Menge in m: höchstens 2 Nachkommastellen.')
+      // Handwerksregel: decimals per unit (m 2, m³ 3, Stück 0).
+      const volume = await admin.post(url, {
+        positionType: 'item',
+        shortText: 'Beton',
+        quantity: '1,235',
+        unitId: unit('m³'),
+        unitPriceCents: 10000,
+      })
+      expect(volume.statusCode).toBe(201)
+      const concrete = volume
+        .json()
+        .items.find((i: { shortText: string }) => i.shortText === 'Beton')
+      expect(concrete).toMatchObject({
+        quantity: '1.235',
+        unit: { symbol: 'm³', decimals: 3 },
+        totalCents: 12_350,
+      })
+      const pieces = await admin.post(url, {
+        positionType: 'item',
+        shortText: 'Dübel',
+        quantity: '2,5',
+        unitId: unit('Stk.'),
+      })
+      expect(pieces.json().errors).toEqual({
+        quantity: 'Menge in Stk. bitte ohne Nachkommastellen angeben.',
+      })
+      const toPieces = await admin.patch(`${url}/${concrete.id}`, { unitId: unit('Stk.') })
+      expect(toPieces.json().errors).toEqual({
+        quantity: 'Menge in Stk. bitte ohne Nachkommastellen angeben.',
+      })
+      quote = (await admin.delete(`${url}/${concrete.id}`)).json()
       const unknownUnit = await admin.post(url, {
         positionType: 'item',
         shortText: 'x',

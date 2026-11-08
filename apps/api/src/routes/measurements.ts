@@ -140,6 +140,7 @@ function variablesOf(rows: LocationRow[], locationId: string | null): FormulaVar
 function quantityOf(
   input: { formula: string; variables: Record<string, string>; isDeduction: boolean },
   locationVariables: FormulaVariables,
+  decimals: number,
 ): string {
   try {
     return measurementLineQuantity({
@@ -147,6 +148,7 @@ function quantityOf(
       locationVariables,
       variables: input.variables,
       isDeduction: input.isDeduction,
+      decimals,
     })
   } catch (error) {
     if (error instanceof FormulaError) {
@@ -172,15 +174,16 @@ async function recalculateSheet(tx: Tx, sheetId: string) {
       isDeduction: boolean
       resultQty: string
       description: string | null
+      decimals: number
     }[]
   >`
-    select id, location_id as "locationId", formula, variables, is_deduction as "isDeduction",
-           result_qty::text as "resultQty", description
-    from measurement_line where sheet_id = ${sheetId}`
+    select l.id, l.location_id as "locationId", l.formula, l.variables, l.is_deduction as "isDeduction",
+           l.result_qty::text as "resultQty", l.description, coalesce(u.decimals, 2)::int as decimals
+    from measurement_line l left join unit u on u.id = l.unit_id where l.sheet_id = ${sheetId}`
   for (const line of lines) {
     let quantity: string
     try {
-      quantity = quantityOf(line, variablesOf(locations, line.locationId))
+      quantity = quantityOf(line, variablesOf(locations, line.locationId), line.decimals)
     } catch (error) {
       if (error instanceof HttpError) {
         throw new HttpError(
@@ -192,7 +195,7 @@ async function recalculateSheet(tx: Tx, sheetId: string) {
       }
       throw error
     }
-    if (quantity !== line.resultQty) {
+    if (Number(quantity) !== Number(line.resultQty)) {
       await tx`update measurement_line set result_qty = ${quantity} where id = ${line.id}`
     }
   }
@@ -208,7 +211,9 @@ async function measurableItems(
 ): Promise<MeasurableItem[]> {
   return tx<MeasurableItem[]>`
     select i.id, i.oz, i.short_text as "shortText", trim_scale(i.quantity)::text as quantity,
-           case when i.unit_id is null then null else json_build_object('id', i.unit_id, 'symbol', i.unit_symbol) end as unit,
+           case when i.unit_id is null then null
+                else json_build_object('id', i.unit_id, 'symbol', i.unit_symbol,
+                                       'decimals', (select u.decimals from unit u where u.id = i.unit_id)) end as unit,
            json_build_object('id', d.id, 'type', d.type, 'invoiceKind', d.invoice_kind, 'progressNo', d.progress_no,
                              'number', d.number, 'status', d.status, 'changeOrderNumber', co.number) as document,
            coalesce((select trim_scale(sum(l.result_qty)) from measurement_line l
@@ -233,8 +238,9 @@ async function measurableItems(
 
 async function checkItem(tx: Tx, projectId: string, itemId: string | null | undefined) {
   if (!itemId) return null
-  const [item] = await tx<{ unitId: string | null; type: string }[]>`
-    select i.unit_id as "unitId", i.position_type as type
+  const [item] = await tx<{ unitId: string | null; type: string; decimals: number | null }[]>`
+    select i.unit_id as "unitId", i.position_type as type,
+           (select u.decimals from unit u where u.id = i.unit_id)::int as decimals
     from document_item i join document d on d.id = i.document_id
     where i.id = ${itemId} and d.project_id = ${projectId}`
   if (!item || !['item', 'alternative', 'optional', 'lump_sum'].includes(item.type)) {
@@ -243,12 +249,17 @@ async function checkItem(tx: Tx, projectId: string, itemId: string | null | unde
   return item
 }
 
-async function checkUnit(tx: Tx, unitId: string | null | undefined) {
-  if (!unitId) return
-  if (!(await tx`select 1 from unit where id = ${unitId} and is_active`).length) {
-    throw invalid({ unitId: 'Unbekannte Einheit.' })
-  }
+async function checkUnit(tx: Tx, unitId: string | null | undefined): Promise<number | null> {
+  if (!unitId) return null
+  const [unit] = await tx<
+    { decimals: number }[]
+  >`select decimals from unit where id = ${unitId} and is_active`
+  if (!unit) throw invalid({ unitId: 'Unbekannte Einheit.' })
+  return unit.decimals
 }
+
+/** Lines without unit are rounded to two decimals. */
+const DEFAULT_DECIMALS = 2
 
 async function checkLocation(tx: Tx, sheetId: string, locationId: string | null | undefined) {
   if (!locationId) return
@@ -285,7 +296,8 @@ async function loadSheet(
     await tx<(MeasurementLine & { sort: number })[]>`
       select l.id, l.location_id as "locationId", l.document_item_id as "documentItemId", l.description,
              l.formula, l.variables, trim_scale(l.result_qty)::text as "resultQty", l.is_deduction as "isDeduction",
-             case when un.id is null then null else json_build_object('id', un.id, 'symbol', un.symbol) end as unit,
+             case when un.id is null then null
+                  else json_build_object('id', un.id, 'symbol', un.symbol, 'decimals', un.decimals) end as unit,
              (l.locked_by_invoice_id is not null or ${sheet.status === 'signed'}) as locked,
              ${ISO(tx, 'l.created_at')} as "createdAt", l.sort
       from measurement_line l left join unit un on un.id = l.unit_id
@@ -308,10 +320,17 @@ async function loadSheet(
       return { ...v, difference: trim(v.difference) }
     })(),
   }))
-  const unassignedByUnit = new Map<string, { unit: string | null; quantities: string[] }>()
+  const unassignedByUnit = new Map<
+    string,
+    { unit: string | null; decimals: number; quantities: string[] }
+  >()
   for (const line of lines.filter((l) => !l.documentItemId)) {
     const key = line.unit?.symbol ?? ''
-    const entry = unassignedByUnit.get(key) ?? { unit: line.unit?.symbol ?? null, quantities: [] }
+    const entry = unassignedByUnit.get(key) ?? {
+      unit: line.unit?.symbol ?? null,
+      decimals: line.unit?.decimals ?? DEFAULT_DECIMALS,
+      quantities: [],
+    }
     entry.quantities.push(line.resultQty)
     unassignedByUnit.set(key, entry)
   }
@@ -322,6 +341,7 @@ async function loadSheet(
     items: summaries,
     unassigned: [...unassignedByUnit.values()].map((e) => ({
       unit: e.unit,
+      decimals: e.decimals,
       quantity: trim(sumQuantities(e.quantities)),
       count: e.quantities.length,
     })),
@@ -551,7 +571,9 @@ export function registerMeasurementRoutes(app: FastifyInstance, services: Servic
       const current = await sheetOf(tx, auth, id, { forUpdate: true })
       await checkLocation(tx, id, input.locationId)
       const item = await checkItem(tx, current.projectId, input.documentItemId)
-      await checkUnit(tx, input.unitId)
+      const unitDecimals = await checkUnit(tx, input.unitId)
+      // The unit of an assigned LV position wins (quantities must add up in its unit).
+      const decimals = (item?.unitId ? item.decimals : unitDecimals) ?? DEFAULT_DECIMALS
       const locations = await loadLocations(tx, id)
       const resultQty = quantityOf(
         {
@@ -560,6 +582,7 @@ export function registerMeasurementRoutes(app: FastifyInstance, services: Servic
           isDeduction: input.isDeduction ?? false,
         },
         variablesOf(locations, input.locationId ?? null),
+        decimals,
       )
       const [{ sort } = { sort: 10 }] = await tx<{ sort: number }[]>`
         select (coalesce(max(sort), 0) + 10)::int as sort from measurement_line where sheet_id = ${id}`
@@ -625,25 +648,31 @@ export function registerMeasurementRoutes(app: FastifyInstance, services: Servic
         isDeduction: input.isDeduction ?? line.isDeduction,
         locationId: input.locationId === undefined ? line.locationId : input.locationId,
       }
-      const resultQty = quantityOf(next, variablesOf(await loadLocations(tx, id), next.locationId))
+      // Unit: an assigned LV position dictates it; otherwise the chosen unit.
+      const itemId = input.documentItemId === undefined ? line.documentItemId : input.documentItemId
+      const unitId = itemId
+        ? input.documentItemId === undefined
+          ? line.unitId
+          : (item?.unitId ?? null)
+        : input.unitId === undefined
+          ? line.unitId
+          : input.unitId
+      const decimals = (await checkUnit(tx, unitId)) ?? DEFAULT_DECIMALS
+      const resultQty = quantityOf(
+        next,
+        variablesOf(await loadLocations(tx, id), next.locationId),
+        decimals,
+      )
       const columns: Record<string, unknown> = {
         formula: next.formula,
         variables: tx.json(next.variables),
         is_deduction: next.isDeduction,
         location_id: next.locationId,
+        document_item_id: itemId,
+        unit_id: unitId,
         result_qty: resultQty,
       }
       if (input.description !== undefined) columns.description = input.description
-      if (input.documentItemId !== undefined) {
-        columns.document_item_id = input.documentItemId
-        if (item?.unitId) columns.unit_id = item.unitId
-      }
-      if (
-        input.unitId !== undefined &&
-        !(item?.unitId ?? (input.documentItemId === undefined && line.documentItemId))
-      ) {
-        columns.unit_id = input.unitId
-      }
       await tx`update measurement_line set ${tx(columns)} where id = ${lineId}`
       await touch(tx, id)
       return loadSheet(tx, auth, id)
@@ -680,8 +709,11 @@ export function registerMeasurementRoutes(app: FastifyInstance, services: Servic
     const doc = await inTenant(services, auth, async (tx) => {
       await lockDraft(tx, auth, id)
       const sums = await tx<{ itemId: string; quantity: string }[]>`
-        select l.document_item_id as "itemId", sum(l.result_qty)::text as quantity
-        from measurement_line l join document_item i on i.id = l.document_item_id
+        select l.document_item_id as "itemId",
+               trim_scale(round(sum(l.result_qty), coalesce(max(u.decimals), 2)))::text as quantity
+        from measurement_line l
+        join document_item i on i.id = l.document_item_id
+        left join unit u on u.id = i.unit_id
         where i.document_id = ${id} and i.position_type in ('item', 'alternative', 'optional', 'lump_sum')
         group by l.document_item_id`
       if (!sums.length) {

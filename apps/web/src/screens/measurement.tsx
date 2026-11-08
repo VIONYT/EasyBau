@@ -415,7 +415,7 @@ function Lines({
                       </span>
                     </span>
                     <span className="amount result">
-                      {formatQuantity(line.resultQty)} {line.unit?.symbol}
+                      {formatQuantity(line.resultQty, line.unit?.decimals)} {line.unit?.symbol}
                     </span>
                   </div>
                   {editable && !line.locked ? (
@@ -483,6 +483,7 @@ function LineForm({
   const [itemId, setItemId] = useState(line?.documentItemId ?? last?.documentItemId ?? '')
   const [formula, setFormula] = useState(line?.formula.replace(/\./g, ',') ?? '')
   const [isDeduction, setIsDeduction] = useState(line?.isDeduction ?? false)
+  const [unitId, setUnitId] = useState(line?.documentItemId ? '' : (line?.unit?.id ?? ''))
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({})
@@ -503,7 +504,7 @@ function LineForm({
       description: optional(data, 'description') ?? null,
       formula,
       isDeduction,
-      ...(itemId ? {} : { unitId: value(data, 'unitId') || null }),
+      ...(itemId ? {} : { unitId: unitId || null }),
     }
     setBusy(true)
     setError(null)
@@ -529,10 +530,12 @@ function LineForm({
     }
   }
 
+  // Rounded like on the server: to the decimals of the unit (m² 2, m³/t 3, Stück 0).
+  const decimals = itemId ? item?.unit?.decimals : units.find((u) => u.id === unitId)?.decimals
   const shown = preview?.ok
     ? isDeduction
-      ? `−${formatQuantity(preview.quantity.replace(/^-/, ''))}`
-      : formatQuantity(preview.quantity)
+      ? `−${formatQuantity(preview.quantity.replace(/^-/, ''), decimals)}`
+      : formatQuantity(preview.quantity, decimals)
     : null
 
   return (
@@ -627,7 +630,7 @@ function LineForm({
         >
           {preview
             ? preview.ok
-              ? `${t('m.result')}: ${shown} ${item?.unit?.symbol ?? ''}`
+              ? `${t('m.result')}: ${shown} ${(itemId ? item?.unit?.symbol : units.find((u) => u.id === unitId)?.symbol) ?? ''}`
               : preview.error.message
             : ''}
         </p>
@@ -649,7 +652,8 @@ function LineForm({
         <SelectField
           label={t('m.unit')}
           name="unitId"
-          defaultValue={line?.unit?.id ?? ''}
+          value={unitId}
+          onChange={setUnitId}
           options={[
             { value: '', label: '–' },
             ...units.map((u) => ({ value: u.id, label: `${u.symbol} – ${u.name}` })),
@@ -704,21 +708,22 @@ function Quantities({ me, sheet }: { me: Me; sheet: Sheet }) {
               <dl className="q-facts">
                 <div>
                   <dt>{t('m.thisSheet')}</dt>
-                  <dd>{formatQuantity(sheetQuantity)}</dd>
+                  <dd>{formatQuantity(sheetQuantity, item.unit?.decimals)}</dd>
                 </div>
                 <div>
                   <dt>{t('m.measuredTotal')}</dt>
-                  <dd>{formatQuantity(item.measuredQuantity)}</dd>
+                  <dd>{formatQuantity(item.measuredQuantity, item.unit?.decimals)}</dd>
                 </div>
                 <div>
                   <dt>{t('m.lvQuantity')}</dt>
-                  <dd>{formatQuantity(item.quantity)}</dd>
+                  <dd>{formatQuantity(item.quantity, item.unit?.decimals)}</dd>
                 </div>
               </dl>
               {variance.direction !== 'equal' ? (
                 <p className={variance.exceedsThreshold ? 'warning' : 'muted'}>
                   {variance.direction === 'more' ? t('m.more') : t('m.less')}{' '}
-                  {formatQuantity(variance.difference.replace(/^-/, ''))} {item.unit?.symbol}
+                  {formatQuantity(variance.difference.replace(/^-/, ''), item.unit?.decimals)}{' '}
+                  {item.unit?.symbol}
                   {variance.percent ? ` (${formatQuantity(variance.percent)} %)` : ''}
                   {variance.exceedsThreshold ? ` – ${t('m.vobHint')}` : ''}
                 </p>
@@ -731,7 +736,7 @@ function Quantities({ me, sheet }: { me: Me; sheet: Sheet }) {
         <p className="muted">
           {t('m.unassigned')}:{' '}
           {sheet.unassigned
-            .map((u) => `${formatQuantity(u.quantity)} ${u.unit ?? ''} (${u.count})`)
+            .map((u) => `${formatQuantity(u.quantity, u.decimals)} ${u.unit ?? ''} (${u.count})`)
             .join(' · ')}
         </p>
       ) : null}

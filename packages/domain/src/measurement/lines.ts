@@ -16,16 +16,21 @@ export interface MeasurementLineInput {
   variables?: FormulaVariables
   /** Deduction (e.g. door opening): the absolute value is subtracted. */
   isDeduction?: boolean
+  /**
+   * Decimal places of the unit (Handwerksregel: m/m² 2, m³/t 3, Stück/Pauschal 0).
+   * Defaults to RESULT_DECIMALS (2) for lines without unit.
+   */
+  decimals?: number
 }
 
 /**
- * Quantity of one line as stored in `measurement_line.result_qty`, rounded half up to two
- * decimals (RESULT_DECIMALS) – the inputs may be more precise (e.g. 0,885 m).
+ * Quantity of one line as stored in `measurement_line.result_qty`, rounded half up to the
+ * decimals of its unit (default two) – the inputs may be more precise (e.g. 0,885 m).
  * Deductions are negative, so a plain sum of the shown lines gives the shown total.
  */
 export function measurementLineQuantity(line: MeasurementLineInput): string {
   const value = evaluateFormulaExact(line.formula, { ...line.locationVariables, ...line.variables })
-  return roundTo(line.isDeduction ? value.abs().neg() : value, RESULT_DECIMALS)
+  return roundTo(line.isDeduction ? value.abs().neg() : value, line.decimals ?? RESULT_DECIMALS)
 }
 
 /** Sums already computed line quantities (strings from the database). */

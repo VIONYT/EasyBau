@@ -1,7 +1,7 @@
 import { z } from 'zod'
 import { id, isoDate, optionalText, text } from './common.js'
 import { MEASUREMENT_KINDS } from './constants.js'
-import { type DocumentType, decimalText, type InvoiceKind } from './documents.js'
+import { type DocumentType, decimalText, type InvoiceKind, type UnitRef } from './documents.js'
 
 export type MeasurementKind = (typeof MEASUREMENT_KINDS)[number]
 
@@ -102,7 +102,7 @@ export interface MeasurableItem {
   oz: string | null
   shortText: string
   quantity: string
-  unit: { id: string; symbol: string } | null
+  unit: UnitRef | null
   /** Sum of all lines of this kind (Angebots- or Leistungsaufmaß) in the project for this position. */
   measuredQuantity: string
 }
@@ -116,7 +116,7 @@ export interface MeasurementLine {
   variables: Record<string, string>
   resultQty: string
   isDeduction: boolean
-  unit: { id: string; symbol: string } | null
+  unit: UnitRef | null
   locked: boolean
   createdAt: string
 }
@@ -143,5 +143,5 @@ export interface MeasurementSheetDetail extends MeasurementSheetSummary {
   /** Per assigned LV position: quantity on this sheet, measured total and deviation (VOB/B § 2 Abs. 3). */
   items: ItemQuantitySummary[]
   /** Sum of lines without LV position, per unit. */
-  unassigned: { unit: string | null; quantity: string; count: number }[]
+  unassigned: { unit: string | null; decimals: number; quantity: string; count: number }[]
 }

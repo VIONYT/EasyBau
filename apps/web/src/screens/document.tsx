@@ -424,7 +424,8 @@ function PositionView({ item, subtotal }: { item: DocumentItem; subtotal: number
         {item.fromMeasurement ? <span className="tag ok">{t('doc.fromMeasurement')}</span> : null}
         {item.longText ? <span className="hint pre block">{item.longText}</span> : null}
         <span className="muted block calc">
-          {formatQuantity(item.quantity)} {item.unit?.symbol} × {formatCents(item.unitPriceCents)}
+          {formatQuantity(item.quantity, item.unit?.decimals)} {item.unit?.symbol} ×{' '}
+          {formatCents(item.unitPriceCents)}
           {item.discountPercent ? ` − ${formatQuantity(item.discountPercent)} %` : ''}
           {item.taxRatePercent ? ` · ${formatQuantity(item.taxRatePercent)} % USt` : ''}
         </span>

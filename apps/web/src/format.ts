@@ -46,14 +46,17 @@ export function parseEuro(input: string): number | null {
 }
 
 /**
- * Quantities, results and sums for display: rounded half up to two decimals („34.657“ → „34,66“),
- * trailing zeros dropped („12.50“ → „12,5“).
+ * Quantities, results and sums for display, rounded half up to the decimals of the unit
+ * (Handwerksregel: m² 2 → „34,66“, m³/t 3 → „1,235“, Stück 0), default two; trailing zeros dropped.
  */
-export function formatQuantity(quantity: string | null | undefined): string {
+export function formatQuantity(
+  quantity: string | null | undefined,
+  decimals: number = RESULT_DECIMALS,
+): string {
   if (!quantity) return ''
   let rounded: string
   try {
-    rounded = roundTo(quantity, RESULT_DECIMALS)
+    rounded = roundTo(quantity, decimals)
   } catch {
     return quantity
   }
