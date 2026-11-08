@@ -73,7 +73,14 @@ Der Auftraggeber hat Screenshots einer Testinstanz bereitgestellt. Ausgewertet w
 - **Stammdaten**: Leistungen (Kosten, Zuschlag, VK), Materialien (Art.-Nr., EK, Zuschlag, VK), DATANORM-Kataloge, die optional in die Materialsuche einbezogen werden.
 - **Eingangsrechnungen**: Upload von PDF/XML/Bild, Bereich „Zu prüfen“, Kostenzuweisung, Zahlstatus.
 - **Dashboard**: offene Forderungen (offen/überfällig/angemahnt, ausblendbar), zuletzt bearbeitete Projekte, Wetter.
-- **Beobachtete Lücken / Chancen**: Aufmaß nur als Zeilen in der Position (keine Räume, keine Variablen, keine Mengenfortschreibung sichtbar); kein eigener Nachtragsprozess sichtbar; keine Jahres-Nummernkreise.
+- **Dokumente**: Dialog „Neues Dokument“ mit Angebot, Kostenvoranschlag, Auftragsbestätigung, Lieferschein, Rechnung und fortlaufend gezählten Abschlagsrechnungen („1. Abschlagsrechnung“). **Nachtragsangebot** gibt es als eigenen Dokumenttyp mit demselben Editor.
+- **Dokument-Fuß**: Netto/USt/Brutto, „Preis anpassen“ (Zielpreis), Rabatt, Umsatzsteuer je Dokument (Land + Satz), Lohnkostenanteil-Schalter, Zahlungsziel/Skonto je Dokument.
+- **Neues Projekt**: Name (Pflicht), Beschreibung, Projektnummer manuell oder per Klick automatisch, Status (auch leer), Mitarbeitende, Kunde aus Kontakten, Baustellenadresse = Leistungsort.
+- **Neue Leistung**: Seitenpanel mit Pflicht-Ordner, Einheit, Kurztext, Kosten, Zuschlag → VK, optional Langtext, Bild, Preiskalkulation.
+- **Beobachtete Lücken / Chancen**:
+  - Das Aufmaß besteht nur aus Zeilen in der Position. Räume, Variablen und eine Mengenfortschreibung sind nicht sichtbar.
+  - Das Nachtragsangebot ist ein Dokumenttyp. Rechtsgrundlage, Nachweise, Beauftragungsstatus und Vertragssumme (Hauptauftrag + Nachträge) waren nicht sichtbar. Das ist unser Ansatzpunkt (DESIGN.md §4.4).
+  - Es gibt keine Jahres-Nummernkreise.
 
 ## Quellen
 - [SoftGuide – plancraft](https://www.softguide.de/programm/plancraft)
