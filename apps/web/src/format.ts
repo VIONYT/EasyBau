@@ -1,3 +1,4 @@
+import { RESULT_DECIMALS, roundTo } from '@opc/domain'
 /** Date formatting that never throws on unexpected input (a crash would blank the whole app). */
 export function formatDateTime(
   iso: string | null | undefined,
@@ -44,10 +45,25 @@ export function parseEuro(input: string): number | null {
   return match[1] ? -cents : cents
 }
 
-/** Quantity „12.5000“ from the API or the formula engine as „12,5“. */
+/**
+ * Quantities, results and sums for display: rounded half up to two decimals („34.657“ → „34,66“),
+ * trailing zeros dropped („12.50“ → „12,5“).
+ */
 export function formatQuantity(quantity: string | null | undefined): string {
   if (!quantity) return ''
-  const trimmed = quantity.includes('.') ? quantity.replace(/0+$/, '').replace(/\.$/, '') : quantity
+  let rounded: string
+  try {
+    rounded = roundTo(quantity, RESULT_DECIMALS)
+  } catch {
+    return quantity
+  }
+  return formatInputNumber(rounded)
+}
+
+/** Numbers as entered (room dimensions like 0,885, form values): no rounding, comma, no trailing zeros. */
+export function formatInputNumber(value: string | null | undefined): string {
+  if (!value) return ''
+  const trimmed = value.includes('.') ? value.replace(/0+$/, '').replace(/\.$/, '') : value
   return trimmed.replace('.', ',')
 }
 

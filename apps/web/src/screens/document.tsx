@@ -9,7 +9,7 @@ import type {
 import { PRICED_POSITION_TYPES, TAX_MODES } from '@opc/schemas/constants'
 import { type FormEvent, useCallback, useEffect, useState } from 'react'
 import { ApiError, api, apiWithEtag } from '../api'
-import { centsToInput, formatCents, formatQuantity, parseEuro } from '../format'
+import { centsToInput, formatCents, formatInputNumber, formatQuantity, parseEuro } from '../format'
 import { Field, FormError, optional, SelectField, TextArea, useForm, value } from '../forms'
 import { type TextKey, t } from '../i18n'
 import type { Navigate } from '../router'
@@ -555,7 +555,7 @@ function ItemForm({
                   name="quantity"
                   inputMode="decimal"
                   required
-                  defaultValue={formatQuantity(item?.quantity)}
+                  defaultValue={formatInputNumber(item?.quantity)}
                   error={fieldErrors.quantity}
                 />
                 <SelectField
@@ -580,7 +580,7 @@ function ItemForm({
               label={t('doc.itemDiscount')}
               name="discountPercent"
               inputMode="decimal"
-              defaultValue={formatQuantity(item?.discountPercent)}
+              defaultValue={formatInputNumber(item?.discountPercent)}
               error={fieldErrors.discountPercent}
             />
             {ratePercents.length ? (

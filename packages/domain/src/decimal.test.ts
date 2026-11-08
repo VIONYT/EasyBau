@@ -3,7 +3,9 @@ import {
   Decimal,
   formatCents,
   percentToFactor,
+  RESULT_DECIMALS,
   roundQuantity,
+  roundTo,
   toCents,
   toDecimal,
 } from './decimal.js'
@@ -83,5 +85,15 @@ describe('unit conversion', () => {
   it('knows the dimension of system units', () => {
     expect(dimensionOfUnit('m²')).toBe('area')
     expect(dimensionOfUnit('Stk.')).toBeUndefined()
+  })
+})
+
+describe('roundTo', () => {
+  it('rounds half up to the given decimals', () => {
+    expect(RESULT_DECIMALS).toBe(2)
+    expect(roundTo('34,657', 2)).toBe('34.66')
+    expect(roundTo('2.345', 2)).toBe('2.35')
+    expect(roundTo('-2.345', 2)).toBe('-2.35')
+    expect(roundTo(12, 2)).toBe('12.00')
   })
 })

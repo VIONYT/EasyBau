@@ -177,15 +177,15 @@ describe.skipIf(!process.env.DATABASE_URL)('measurements / Aufmaß (integration)
       sheet.lines.map((l) => [l.description, l.resultQty, l.unit?.symbol, l.isDeduction]),
     ).toEqual([
       ['Wände Bad', '38.22', 'm²', false],
-      ['Tür', '-1.7789', 'm²', true],
+      ['Tür', '-1.78', 'm²', true],
     ])
     expect(sheet.items).toEqual([
       expect.objectContaining({
-        sheetQuantity: '36.4411',
-        item: expect.objectContaining({ id: wall(), measuredQuantity: '36.4411' }),
+        sheetQuantity: '36.44',
+        item: expect.objectContaining({ id: wall(), measuredQuantity: '36.44' }),
         variance: {
-          difference: '26.4411',
-          percent: '264.41',
+          difference: '26.44',
+          percent: '264.40',
           direction: 'more',
           exceedsThreshold: true,
         },
@@ -252,7 +252,7 @@ describe.skipIf(!process.env.DATABASE_URL)('measurements / Aufmaß (integration)
     expect(res.statusCode).toBe(200)
     sheet = res.json()
     expect(sheet.lines[0]?.resultQty).toBe('36.75')
-    expect(sheet.items[0]?.sheetQuantity).toBe('34.9711')
+    expect(sheet.items[0]?.sheetQuantity).toBe('34.97')
     const missing = await admin.patch(`${sheetUrl()}/locations/${room('Bad')}`, {
       variables: { L: '4' },
     })
@@ -292,12 +292,12 @@ describe.skipIf(!process.env.DATABASE_URL)('measurements / Aufmaß (integration)
     expect(res.statusCode, res.body).toBe(200)
     quote = res.json()
     const item = quote.items.find((i) => i.id === wall())
-    expect(item).toMatchObject({ quantity: '34.9711', fromMeasurement: true, totalCents: 34_971 })
+    expect(item).toMatchObject({ quantity: '34.97', fromMeasurement: true, totalCents: 34_970 })
     expect(quote.items.find((i) => i.id === tiles())).toMatchObject({
       quantity: '5',
       fromMeasurement: false,
     })
-    expect(quote.totals.netCents).toBe(34_971 + 25_000)
+    expect(quote.totals.netCents).toBe(34_970 + 25_000)
     // Typing a quantity by hand ends the link to the measurement.
     const manual = await admin.patch(`/api/v1/documents/${quote.id}/items/${wall()}`, {
       quantity: '35',

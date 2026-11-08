@@ -1,4 +1,11 @@
-import { Decimal, type NumericInput, roundQuantity, toDecimal } from '../decimal.js'
+import {
+  Decimal,
+  type NumericInput,
+  RESULT_DECIMALS,
+  roundQuantity,
+  roundTo,
+  toDecimal,
+} from '../decimal.js'
 import { evaluateFormulaExact, type FormulaVariables } from './formula.js'
 
 /** One measurement line (Aufmaßzeile). Variables of the room are merged with line variables. */
@@ -12,12 +19,13 @@ export interface MeasurementLineInput {
 }
 
 /**
- * Quantity of one line as stored in `measurement_line.result_qty` (4 decimals).
- * Deductions are negative, so a plain sum gives the net quantity.
+ * Quantity of one line as stored in `measurement_line.result_qty`, rounded half up to two
+ * decimals (RESULT_DECIMALS) – the inputs may be more precise (e.g. 0,885 m).
+ * Deductions are negative, so a plain sum of the shown lines gives the shown total.
  */
 export function measurementLineQuantity(line: MeasurementLineInput): string {
   const value = evaluateFormulaExact(line.formula, { ...line.locationVariables, ...line.variables })
-  return roundQuantity(line.isDeduction ? value.abs().neg() : value)
+  return roundTo(line.isDeduction ? value.abs().neg() : value, RESULT_DECIMALS)
 }
 
 /** Sums already computed line quantities (strings from the database). */

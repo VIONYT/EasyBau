@@ -10,7 +10,7 @@ import type {
 } from '@opc/schemas'
 import { type FormEvent, useCallback, useEffect, useMemo, useState } from 'react'
 import { ApiError, api, apiWithEtag } from '../api'
-import { formatDateTime, formatQuantity } from '../format'
+import { formatDateTime, formatInputNumber, formatQuantity } from '../format'
 import { Field, FormError, optional, SelectField, useForm, value } from '../forms'
 import { type TextKey, t } from '../i18n'
 import type { Navigate } from '../router'
@@ -54,7 +54,7 @@ const rank = (name: string) => {
 const formatVariables = (vars: Record<string, string>) =>
   Object.entries(vars)
     .sort(([a], [b]) => rank(a) - rank(b) || a.localeCompare(b))
-    .map(([k, v]) => `${k} ${formatQuantity(v)}`)
+    .map(([k, v]) => `${k} ${formatInputNumber(v)}`)
     .join(' · ')
 
 /** Aufmaßblatt: rooms, formula lines, quantities per LV position, joint measurement. */
@@ -309,7 +309,7 @@ function RoomForm({
             label={t(label)}
             name={name}
             inputMode="decimal"
-            defaultValue={formatQuantity(room?.variables[name])}
+            defaultValue={formatInputNumber(room?.variables[name])}
             error={errorOf(name)}
           />
         ))}

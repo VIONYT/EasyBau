@@ -42,6 +42,17 @@ export function roundQuantity(value: Decimal): string {
   return value.toDecimalPlaces(QUANTITY_DECIMALS, Decimal.ROUND_HALF_UP).toFixed(QUANTITY_DECIMALS)
 }
 
+/**
+ * Measurement results and displayed quantities have two decimals (DESIGN.md §4.3): clearer for
+ * people, and the printed Menge × EP equals the printed Gesamtpreis.
+ */
+export const RESULT_DECIMALS = 2
+
+/** Rounds half up (kaufmännisch) to `decimals` places: roundTo("34,657", 2) → "34.66". */
+export function roundTo(value: NumericInput, decimals: number): string {
+  return toDecimal(value).toDecimalPlaces(decimals, Decimal.ROUND_HALF_UP).toFixed(decimals)
+}
+
 /** Percent (e.g. 19 or "7,5") as factor: 19 → 0.19. */
 export function percentToFactor(percent: NumericInput): Decimal {
   return toDecimal(percent).div(100)

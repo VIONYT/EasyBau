@@ -239,15 +239,15 @@ test('measurement sheet (Aufmaß) with rooms, formulas and quantity takeover', a
   await page.getByLabel('Beschreibung').fill('Tür')
   await page.getByLabel(/Formel oder Zahl/).fill('0,885*2,01')
   await page.getByLabel('Abzug (z. B. Tür, Fenster)').check()
-  await expect(page.getByText('Ergebnis: −1,7789 m²')).toBeVisible()
+  await expect(page.getByText('Ergebnis: −1,78 m²')).toBeVisible()
   await page.getByLabel(/Formel oder Zahl/).fill('0,885*')
   await expect(page.getByText(/Ergebnis:/)).toHaveCount(0)
   await page.getByLabel(/Formel oder Zahl/).fill('0,885*2,01')
   await page.getByRole('button', { name: 'Hinzufügen', exact: true }).click()
-  await expect(page.locator('.m-line .result').nth(1)).toHaveText('-1,7789 m²')
+  await expect(page.locator('.m-line .result').nth(1)).toHaveText('-1,78 m²')
 
   // Mengen je Position mit Hinweis auf Mehrmenge, Übernahme ins Angebot
-  await expect(page.locator('.q-facts').first()).toContainText('36,4411')
+  await expect(page.locator('.q-facts').first()).toContainText('36,44')
   await expect(page.getByText(/Mehrmenge .* Preisanpassung prüfen/)).toBeVisible()
   await expectNoHorizontalScroll(page)
   if (SCREENSHOTS) await page.screenshot({ path: `${SCREENSHOTS}/aufmass.png`, fullPage: true })
@@ -267,7 +267,7 @@ test('measurement sheet (Aufmaß) with rooms, formulas and quantity takeover', a
   await page.getByRole('button', { name: 'Dokumente' }).click()
   await page.getByRole('link', { name: /Angebot/ }).click()
   await expect(page.getByText('aus Aufmaß', { exact: true })).toBeVisible()
-  await expect(page.locator('.position--item .calc')).toContainText('36,4411 m²')
+  await expect(page.locator('.position--item .calc')).toContainText('36,44 m²')
 })
 
 test('second factor fails without the security key', async () => {

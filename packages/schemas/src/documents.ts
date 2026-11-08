@@ -27,8 +27,11 @@ export type DocumentStatus =
   | 'rejected'
   | 'cancelled'
 
-/** Decimal number as text, German or English notation („12,5“ / „12.5“), up to 4 decimals. */
-export const decimalText = (label: string, max = 14) =>
+/**
+ * Decimal number as text, German or English notation („12,5“ / „12.5“), with at most
+ * `decimals` places (default 4, e.g. room dimensions like 0,885 m).
+ */
+export const decimalText = (label: string, max = 14, decimals = 4) =>
   z
     .union([z.string(), z.number()])
     .transform((v) => String(v).trim().replace(',', '.'))
@@ -36,8 +39,8 @@ export const decimalText = (label: string, max = 14) =>
       z
         .string()
         .regex(
-          new RegExp(`^-?\\d{1,${max}}(\\.\\d{1,4})?$`),
-          `${label}: Zahl mit höchstens 4 Nachkommastellen erwartet.`,
+          new RegExp(`^-?\\d{1,${max}}(\\.\\d{1,${decimals}})?$`),
+          `${label}: Zahl mit höchstens ${decimals} Nachkommastellen erwartet.`,
         ),
     )
 const percent = (label: string) =>
@@ -105,7 +108,8 @@ export type UpdateDocumentRequest = z.infer<typeof updateDocumentRequest>
 const itemFields = {
   shortText: optionalText(500),
   longText: optionalText(20_000),
-  quantity: decimalText('Menge').nullable(),
+  // Two decimals, like measurement results: the printed Menge × EP equals the Gesamtpreis.
+  quantity: decimalText('Menge', 14, 2).nullable(),
   unitId: id.nullable(),
   unitPriceCents: cents.nullable(),
   discountPercent: percent('Rabatt').nullable(),

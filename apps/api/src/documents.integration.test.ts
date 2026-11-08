@@ -198,10 +198,10 @@ describe.skipIf(!process.env.DATABASE_URL)('project documents (integration)', ()
       const bad = await admin.post(url, {
         positionType: 'item',
         shortText: 'x',
-        quantity: '1,23456',
+        quantity: '1,234',
         unitId: unit('m'),
       })
-      expect(bad.json().errors.quantity).toMatch(/höchstens 4 Nachkommastellen/)
+      expect(bad.json().errors.quantity).toMatch(/höchstens 2 Nachkommastellen/)
       const unknownUnit = await admin.post(url, {
         positionType: 'item',
         shortText: 'x',

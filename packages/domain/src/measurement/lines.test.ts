@@ -14,19 +14,27 @@ describe('measurement lines', () => {
   it('computes a wall area of a room minus a door (reference example)', () => {
     const wall = measurementLineQuantity({ formula: '2*(L+B)*H', locationVariables: bathroom })
     const door = measurementLineQuantity({ formula: '0,885*2,01', isDeduction: true })
-    expect(wall).toBe('28.6000')
-    expect(door).toBe('-1.7789')
-    expect(sumQuantities([wall, door])).toBe('26.8211')
+    expect(wall).toBe('28.60')
+    // 0,885 × 2,01 = 1,77885 → rounded half up to two decimals
+    expect(door).toBe('-1.78')
+    expect(sumQuantities([wall, door])).toBe('26.8200')
   })
 
   it('treats deductions as negative even if entered negative', () => {
-    expect(measurementLineQuantity({ formula: '-2', isDeduction: true })).toBe('-2.0000')
+    expect(measurementLineQuantity({ formula: '-2', isDeduction: true })).toBe('-2.00')
   })
 
   it('lets line variables override room variables', () => {
     expect(
       measurementLineQuantity({ formula: 'L*B', locationVariables: bathroom, variables: { L: 1 } }),
-    ).toBe('2.4000')
+    ).toBe('2.40')
+  })
+
+  it('rounds results half up to two decimals (34,657 → 34,66; 0,005 → 0,01)', () => {
+    expect(measurementLineQuantity({ formula: '34,657' })).toBe('34.66')
+    expect(measurementLineQuantity({ formula: '0,005' })).toBe('0.01')
+    expect(measurementLineQuantity({ formula: '0,005', isDeduction: true })).toBe('-0.01')
+    expect(measurementLineQuantity({ formula: '0,004' })).toBe('0.00')
   })
 
   it('sums an empty list to zero', () => {
