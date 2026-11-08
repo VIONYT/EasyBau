@@ -4,6 +4,7 @@ import { api } from '../api'
 import { Field, FormError, optional, useForm } from '../forms'
 import { t } from '../i18n'
 import { type Route, useRoute } from '../router'
+import { Catalog } from './catalog'
 import { DocumentScreen } from './document'
 import { MeasurementScreen } from './measurement'
 import { PrintScreen } from './print'
@@ -13,7 +14,7 @@ import { ReportScreen } from './report'
 import { Security } from './security'
 import { Users } from './users'
 
-type Tab = 'projects' | 'contacts' | 'users' | 'security'
+type Tab = 'projects' | 'contacts' | 'catalog' | 'users' | 'security'
 
 /** Working area after login. Admins without second factor only see the security settings. */
 export function Workspace({
@@ -49,6 +50,11 @@ export function Workspace({
       key: 'contacts',
       label: t('nav.contacts'),
       visible: !locked && me.permissions.includes('contacts.read'),
+    },
+    {
+      key: 'catalog',
+      label: t('nav.catalog'),
+      visible: !locked && me.permissions.includes('catalog.read'),
     },
     {
       key: 'users',
@@ -117,6 +123,7 @@ export function Workspace({
         {current.view === 'report' ? (
           <ReportScreen me={me} id={current.id} navigate={navigate} />
         ) : null}
+        {current.view === 'catalog' ? <Catalog me={me} /> : null}
         {current.view === 'contacts' ? <Contacts me={me} /> : null}
         {current.view === 'users' ? <Users /> : null}
         {current.view === 'security' ? <Security me={me} onChanged={refreshMe} /> : null}

@@ -5,6 +5,10 @@ Alle wesentlichen Änderungen, vor allem solche, die Betreiber betreffen (neue V
 ## Unveröffentlicht
 
 ### Neu
+- Stammdaten: Leistungen (Kurz-/Langtext, Einheit, Bestandteile Lohn/Material/Gerät/Fremdleistung/Sonstiges → VK, Soll-Stunden) und Materialien (Artikelnummer, Hersteller, EK, Zuschlag → VK oder VK direkt), Ordner (Standard „Allgemein“), Suche.
+- Kataloge aus DATANORM 4/5: Import von Großhändler-Dateien (Zeichensatz DOS/CP850, Latin-1 oder UTF-8 wird erkannt; Artikel, EAN/Matchcode, Langtexte, Preisänderungen; Update-Dateien mit Neu/Ändern/Löschen), Rabatt auf Listenpreise je Katalog und je Rabattgruppe, Suche nach Text, Artikelnummer und EAN mit EK je Einheit, „In Stammdaten übernehmen“.
+- Angebotseditor: „+ Aus Stammdaten“ fügt Leistungen, Materialien oder Katalogartikel als Position samt Kalkulation ein.
+- Datenbank-Migration `0012_catalogs`.
 - Angebotserstellung: Kalkulation je Position mit Kostenzeilen (Lohn als Zeit × Stundensatz, Material, Gerät, Fremdleistung, Sonstiges), Zuschlägen je Kostenart (Vorgabe der Firma oder je Zeile) und Modus Einheits-/Gesamtpreis; der Server rechnet EP, GP, Kosten, Marge und Soll-Stunden. Interne Kalkulation (Kosten, Marge, Soll-Stunden) im Editor, nicht im Dokument. Die Kalkulation wird beim Übernehmen in Folgedokumente mitkopiert.
 - Empfänger, Bindefrist („gültig bis“) im Kopf; Fertigstellen vergibt die Nummer (A-…, KV-…, AB-…), friert Firma und Empfänger ein und sperrt das Dokument; danach Status versendet → beauftragt / abgelehnt.
 - Schalter „Nachtragsangebot“: ein Angebots-Entwurf wird mit einem Klick zum Nachtrag zum Hauptauftrag (Grund nach VOB/B/BGB, Begründung, Nummerierung N01.1 …) und zurück; fertiggestellte Nachträge erhalten die Nummer des Auftrags mit Zusatz (z. B. AB-00101/N01); beauftragt/abgelehnt wird am Nachtrag mitgeführt.

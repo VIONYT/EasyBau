@@ -414,6 +414,83 @@ test('Angebot: Kalkulation, Fertigstellen, Druckansicht und Nachtrag-Schalter', 
   await expect(page.locator('.position--item .oz')).toHaveText('1')
 })
 
+/** DATANORM sample in the DOS character set (CP850), as wholesalers deliver it. */
+function datanormFile(): Buffer {
+  const text = [
+    'V;050;01112026;Baustoff Nord GmbH;Testkatalog;;EUR',
+    'A;N;4711;00;Dispersionsfarbe weiß;12,5 l;1;0;Eim;4599;R10;MAL;T4711',
+    'B;N;4711;FARBE WEISS;;;;;4012345678901;;',
+    'T;N;T4711;1;0;Hochdeckende Innenfarbe;2;0;für Wand und Decke',
+    'A;N;0815;00;Spax Schraube 4x40;;2;2;Stck;1234;;;',
+    'A;N;9999;00;Kleber im Fass;;1;0;Fass;1000;;;',
+  ].join('\r\n')
+  const cp850: Record<string, number> = { ä: 0x84, ö: 0x94, ü: 0x81, ß: 0xe1 }
+  return Buffer.from([...text].map((ch) => cp850[ch] ?? ch.charCodeAt(0)))
+}
+
+test('Stammdaten, DATANORM-Katalog und Einfügen ins Angebot', async () => {
+  test.skip(!SETUP_TOKEN, 'SETUP_TOKEN must be set for a fresh stack')
+  test.setTimeout(120_000)
+
+  // Leistung mit Kalkulation
+  await page.getByRole('button', { name: 'Stammdaten', exact: true }).click()
+  await expect(page.getByRole('heading', { name: 'Leistungen' })).toBeVisible()
+  await page.getByRole('button', { name: 'Neue Leistung' }).click()
+  await page.getByLabel('Kurztext').fill('Fensterlaibung putzen')
+  await page.getByRole('button', { name: '+ Kostenzeile' }).click()
+  await page.getByLabel('Menge', { exact: true }).fill('20')
+  await page.getByLabel('Stundensatz (€/Std)').fill('54')
+  await page.getByRole('button', { name: 'Speichern' }).click()
+  await expect(page.getByText(/VK 18,00\s€ je m²/)).toBeVisible()
+
+  // DATANORM-Katalog importieren
+  await page.getByRole('button', { name: 'Kataloge' }).click()
+  await page.getByLabel('Name des Katalogs').fill('Baustoff Nord')
+  await page.locator('input[type=file]').setInputFiles({
+    name: 'NORD2027.001',
+    mimeType: 'application/octet-stream',
+    buffer: datanormFile(),
+  })
+  await expect(page.getByText(/Importiert: 3 Artikel/)).toBeVisible()
+  await expect(page.getByText(/Einheiten ohne Zuordnung.*Fass/)).toBeVisible()
+  await page.getByLabel('In Katalogen suchen (Text, Artikelnummer, EAN)').fill('Dispersionsfarbe')
+  await expect(page.getByText('Hochdeckende Innenfarbe')).toBeVisible()
+  await expectNoHorizontalScroll(page)
+  if (SCREENSHOTS) await page.screenshot({ path: `${SCREENSHOTS}/kataloge.png`, fullPage: true })
+  await page.getByRole('button', { name: 'In Stammdaten übernehmen' }).click()
+  await expect(page.getByText(/In die Materialien übernommen/)).toBeVisible()
+  await page.getByRole('button', { name: 'Materialien' }).click()
+  await expect(page.getByText('Dispersionsfarbe weiß 12,5 l')).toBeVisible()
+  await expect(page.getByText('aus Katalog')).toBeVisible()
+
+  // Ins Angebot einfügen: Leistung aus Stammdaten und Artikel direkt aus dem Katalog
+  await page.getByRole('button', { name: 'Projekte' }).click()
+  await page.getByRole('link', { name: /Sanierung Lindenweg/ }).click()
+  await page.getByRole('button', { name: 'Dokumente' }).click()
+  await page
+    .getByRole('link', { name: /^Angebot/ })
+    .last()
+    .click()
+  await page.getByRole('button', { name: '+ Aus Stammdaten' }).click()
+  await page.getByLabel('Leistung, Material oder Katalogartikel suchen').fill('Fensterlaibung')
+  await page.getByLabel('Menge', { exact: true }).fill('4')
+  await page.getByRole('button', { name: 'Einfügen: Fensterlaibung putzen' }).click()
+  await expect(
+    page
+      .locator('.position--item')
+      .filter({ hasText: 'Fensterlaibung putzen' })
+      .locator('.calc-tag'),
+  ).toBeVisible()
+  await page.getByRole('button', { name: '+ Aus Stammdaten' }).click()
+  await page.getByLabel('Leistung, Material oder Katalogartikel suchen').fill('Spax')
+  await page.getByLabel('Menge', { exact: true }).fill('100')
+  await page.getByRole('button', { name: 'Einfügen: Spax Schraube 4x40' }).click()
+  await expect(
+    page.locator('.position--item').filter({ hasText: 'Spax Schraube 4x40' }),
+  ).toContainText('100 Stk.')
+  await expectNoHorizontalScroll(page)
+})
+
 test('second factor fails without the security key', async () => {
   test.skip(!SETUP_TOKEN, 'SETUP_TOKEN must be set for a fresh stack')
   // Without the key the second step of the login fails with a readable message.

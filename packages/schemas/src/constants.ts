@@ -114,3 +114,6 @@ export const SIGNER_ROLES = ['contractor', 'client', 'other'] as const
 
 /** Kostenarten der Kalkulation: Lohn, Material, Gerät, Fremdleistung, Sonstiges. */
 export const COST_KINDS = ['labor', 'material', 'equipment', 'subcontract', 'other'] as const
+
+/** Stammdaten: Leistungen (service) and Materialien (material). */
+export const CATALOG_KINDS = ['service', 'material'] as const

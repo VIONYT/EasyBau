@@ -84,6 +84,7 @@ export function registerAuthRoutes(app: FastifyInstance, services: Services) {
                        ${c.email ?? null}, ${c.phone ?? null})`
       await tx`select seed_tenant_defaults()`
       await tx`select seed_filing_defaults()`
+      await tx`select seed_catalog_defaults()`
       await tx`insert into membership (tenant_id, user_id, role_id)
                select ${tenantId}, ${userId}, id from role where key = 'admin'`
       await tx`insert into audit_event (tenant_id, actor_user_id, action, entity, entity_id, hash)

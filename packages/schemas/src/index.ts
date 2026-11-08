@@ -1,5 +1,6 @@
 // API contracts shared by server and web app (CLAUDE.md: single source for API types).
 export * from './auth.js'
+export * from './catalog.js'
 export * from './common.js'
 export * from './constants.js'
 export * from './contacts.js'

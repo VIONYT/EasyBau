@@ -1531,3 +1531,16 @@ legend.h2 + * {
     break-inside: avoid;
   }
 }
+
+/* --- Stammdaten -------------------------------------------------------------- */
+.row.filters {
+  align-items: start;
+}
+
+.components {
+  margin: var(--space-2) 0 var(--space-4);
+}
+
+.picker .list {
+  margin-bottom: var(--space-2);
+}

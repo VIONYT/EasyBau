@@ -11,6 +11,7 @@ import type { Services } from './context.js'
 import { HttpError, problem, sendProblem } from './http.js'
 import { idempotencyHooks } from './idempotency.js'
 import { authHook, mfaEnforcementHook, registerAuthRoutes } from './routes/auth.js'
+import { registerCatalogRoutes } from './routes/catalog.js'
 import { registerContactRoutes } from './routes/contacts.js'
 import { registerDocumentRoutes } from './routes/documents.js'
 import { registerFileRoutes } from './routes/files.js'
@@ -168,6 +169,7 @@ export function buildApi({
   registerDocumentRoutes(app, services)
   registerMeasurementRoutes(app, services)
   registerReportRoutes(app, services)
+  registerCatalogRoutes(app, services)
   registerUserRoutes(app, services)
   registerWebauthnRoutes(app, services)
   return app

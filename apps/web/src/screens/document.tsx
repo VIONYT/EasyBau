@@ -1,10 +1,12 @@
 import type {
+  CatalogItem,
   ContactSummary,
   DocumentDetail,
   DocumentItem,
   EditablePositionType,
   Me,
   Page,
+  SupplierArticle,
   TaxRateSummary,
   UnitSummary,
 } from '@opc/schemas'
@@ -20,6 +22,7 @@ import { centsToInput, formatCents, formatInputNumber, formatQuantity, parseEuro
 import { Field, FormError, optional, SelectField, TextArea, useForm, value } from '../forms'
 import { type TextKey, t, tf } from '../i18n'
 import type { Navigate } from '../router'
+import { articlePrice } from './catalog'
 import { documentLabel, StatusChip } from './documents'
 
 type Doc = DocumentDetail
@@ -109,7 +112,14 @@ export function DocumentScreen({ me, id, navigate }: { me: Me; id: string; navig
       />
 
       <HeaderForm doc={doc} etag={etag} editable={editable} apply={apply} />
-      <Positions doc={doc} editable={editable} units={units} rates={rates} apply={apply} />
+      <Positions
+        doc={doc}
+        editable={editable}
+        units={units}
+        rates={rates}
+        apply={apply}
+        canUseCatalog={me.permissions.includes('catalog.read')}
+      />
       <Totals doc={doc} />
       {me.permissions.includes('price.view') ? <InternalCalculation doc={doc} /> : null}
 
@@ -294,16 +304,19 @@ function Positions({
   units,
   rates,
   apply,
+  canUseCatalog,
 }: {
   doc: Doc
   editable: boolean
   units: UnitSummary[]
   rates: TaxRateSummary[]
   apply: Apply
+  canUseCatalog: boolean
 }) {
   const [adding, setAdding] = useState<EditablePositionType | null>(null)
   const [editingId, setEditingId] = useState<string | null>(null)
   const [calcId, setCalcId] = useState<string | null>(null)
+  const [picking, setPicking] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
   const run = async (call: () => Promise<{ data: Doc; etag: string | null }>) => {
@@ -443,6 +456,14 @@ function Positions({
           }
         >
           {t('doc.applyMeasurements')}
+        </button>
+      ) : null}
+      {editable && picking ? (
+        <CatalogPicker doc={doc} titles={titles} apply={apply} onClose={() => setPicking(false)} />
+      ) : null}
+      {editable && !adding && !picking && canUseCatalog ? (
+        <button type="button" className="button ghost small" onClick={() => setPicking(true)}>
+          {t('c.insert')}
         </button>
       ) : null}
       {editable && !adding ? (
@@ -1213,6 +1234,161 @@ function CalculationForm({
           </button>
         ) : null}
         <button type="button" className="button ghost" onClick={onCancel}>
+          {t('common.cancel')}
+        </button>
+      </div>
+    </div>
+  )
+}
+
+// ---- Aus Stammdaten oder Katalog einfügen ---------------------------------------------------------
+
+type PickResult =
+  | { source: 'item'; id: string; title: string; detail: string; decimals: number }
+  | { source: 'article'; id: string; title: string; detail: string; decimals: number }
+
+function CatalogPicker({
+  doc,
+  titles,
+  apply,
+  onClose,
+}: {
+  doc: Doc
+  titles: DocumentItem[]
+  apply: Apply
+  onClose: () => void
+}) {
+  const [query, setQuery] = useState('')
+  const [results, setResults] = useState<PickResult[]>([])
+  const [quantity, setQuantity] = useState('1')
+  const [parentId, setParentId] = useState(titles.at(-1)?.id ?? '')
+  const [error, setError] = useState<string | null>(null)
+
+  useEffect(() => {
+    const q = query.trim()
+    if (q.length < 2) {
+      setResults([])
+      return
+    }
+    const timer = setTimeout(async () => {
+      try {
+        const [services, materials, articles] = await Promise.all([
+          api<CatalogItem[]>(
+            'GET',
+            `/api/v1/catalog/items?kind=service&limit=20&q=${encodeURIComponent(q)}`,
+          ),
+          api<CatalogItem[]>(
+            'GET',
+            `/api/v1/catalog/items?kind=material&limit=20&q=${encodeURIComponent(q)}`,
+          ),
+          api<SupplierArticle[]>(
+            'GET',
+            `/api/v1/supplier-articles?limit=20&q=${encodeURIComponent(q)}`,
+          ),
+        ])
+        setResults([
+          ...[...services, ...materials].map((i) => ({
+            source: 'item' as const,
+            id: i.id,
+            title: i.shortText,
+            detail: `${t('c.ownData')} · ${i.kind === 'service' ? t('c.services') : t('c.materials')} · ${formatCents(
+              i.priceCents,
+            )} / ${i.unit.symbol}`,
+            decimals: i.unit.decimals,
+          })),
+          ...articles.map((a) => ({
+            source: 'article' as const,
+            id: a.id,
+            title: a.shortText,
+            detail: `${a.catalogName} ${a.articleNo} · ${articlePrice(a)}`,
+            decimals: a.unit?.decimals ?? 2,
+          })),
+        ])
+      } catch (err) {
+        setError((err as ApiError).message)
+      }
+    }, 250)
+    return () => clearTimeout(timer)
+  }, [query])
+
+  const insert = async (result: PickResult) => {
+    setError(null)
+    try {
+      apply(
+        await apiWithEtag<Doc>('POST', `/api/v1/documents/${doc.id}/items/from-catalog`, {
+          ...(result.source === 'item'
+            ? { catalogItemId: result.id }
+            : { supplierArticleId: result.id }),
+          quantity: quantity.trim() || '1',
+          ...(parentId ? { parentId } : {}),
+        }),
+      )
+      onClose()
+    } catch (err) {
+      const e = err as ApiError
+      setError([e.message, ...Object.values(e.fieldErrors ?? {})].join(' '))
+    }
+  }
+
+  return (
+    <div className="item-form picker">
+      <h3>{t('c.insertTitle')}</h3>
+      <input
+        type="search"
+        className="search"
+        aria-label={t('c.insertSearch')}
+        placeholder={t('c.insertSearch')}
+        value={query}
+        onChange={(e) => setQuery(e.target.value)}
+      />
+      <div className="row">
+        <div className="field">
+          <label htmlFor="pick-quantity">{t('doc.quantity')}</label>
+          <input
+            id="pick-quantity"
+            inputMode="decimal"
+            value={quantity}
+            onChange={(e) => setQuantity(e.target.value)}
+          />
+        </div>
+        {titles.length ? (
+          <SelectField
+            label={t('doc.parent')}
+            name="parentId"
+            value={parentId}
+            onChange={setParentId}
+            options={[
+              { value: '', label: t('doc.topLevel') },
+              ...titles.map((ti) => ({ value: ti.id, label: `${ti.oz} ${ti.shortText ?? ''}` })),
+            ]}
+          />
+        ) : null}
+      </div>
+      <FormError>{error}</FormError>
+      {results.length ? (
+        <ul className="list">
+          {results.map((r) => (
+            <li key={`${r.source}-${r.id}`} className="list-row">
+              <span>
+                <strong>{r.title}</strong>
+                <span className="muted block">{r.detail}</span>
+              </span>
+              <span className="actions">
+                <button
+                  type="button"
+                  className="button ghost small"
+                  aria-label={`${t('c.insertAction')}: ${r.title}`}
+                  onClick={() => insert(r)}
+                >
+                  {t('c.insertAction')}
+                </button>
+              </span>
+            </li>
+          ))}
+        </ul>
+      ) : null}
+      <div className="button-row">
+        <button type="button" className="button ghost" onClick={onClose}>
           {t('common.cancel')}
         </button>
       </div>

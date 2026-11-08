@@ -780,7 +780,7 @@ async function copyItems(tx: Tx, fromId: string, toId: string) {
 
 // ---- Items ----------------------------------------------------------------------------------------
 
-async function unitSnapshot(tx: Tx, unitId: string) {
+export async function unitSnapshot(tx: Tx, unitId: string) {
   const [unit] = await tx<{ symbol: string; unece: string; decimals: number }[]>`
     select symbol, unece_code as unece, decimals from unit where id = ${unitId} and is_active`
   if (!unit) {
