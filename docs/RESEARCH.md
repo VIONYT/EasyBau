@@ -77,6 +77,10 @@ Der Auftraggeber hat Screenshots einer Testinstanz bereitgestellt. Ausgewertet w
 - **Dokument-Fuß**: Netto/USt/Brutto, „Preis anpassen“ (Zielpreis), Rabatt, Umsatzsteuer je Dokument (Land + Satz), Lohnkostenanteil-Schalter, Zahlungsziel/Skonto je Dokument.
 - **Neues Projekt**: Name (Pflicht), Beschreibung, Projektnummer manuell oder per Klick automatisch, Status (auch leer), Mitarbeitende, Kunde aus Kontakten, Baustellenadresse = Leistungsort.
 - **Neue Leistung**: Seitenpanel mit Pflicht-Ordner, Einheit, Kurztext, Kosten, Zuschlag → VK, optional Langtext, Bild, Preiskalkulation.
+- **Ausgangsrechnungen**: Liste mit Status-Mehrfachfilter (Entwurf, offen, bezahlt, überfällig, angemahnt, storniert), Art, Projekt, „mit Sicherheitseinbehalt“, netto/brutto. Zeilenmenü mit PDF, XRechnung, Kürzen, Stornieren. Storno-Dialog mit Grund und Option „neu ausstellen“.
+- **Rechnungsdetail**: offene Forderung, Zahlungen, Abzüge, Kürzen, Notiz, zusammenhängende Dokumente. Zahlungserinnerung, 1. und 2. Mahnung werden nacheinander erzeugt.
+- **Einstellungen**: Mahnstufen mit Frist, Verzugszinsen und Gebühr; Bezahlcode (Name, IBAN, Betrag ohne Skonto, Rechnungsnummer); Abschläge kumulativ als Standard; Zuschläge je Kostenart (nicht rückwirkend); Lohnkostenanteil-Matrix (Rechnungen/Angebote × Personen/Organisationen); Zahlungsziel 7 Tage, kein Skonto als Vorgabe.
+- **Eingangsrechnung**: Belegvorschau mit per KI ausgelesenen Daten (Lieferant, Nummer, Datum, Netto, Zahlstatus), Kostenzuweisung mit Restbetrag oder je Position, „Prüfung bestätigen“.
 - **Beobachtete Lücken / Chancen**:
   - Das Aufmaß besteht nur aus Zeilen in der Position. Räume, Variablen und eine Mengenfortschreibung sind nicht sichtbar.
   - Das Nachtragsangebot ist ein Dokumenttyp. Rechtsgrundlage, Nachweise, Beauftragungsstatus und Vertragssumme (Hauptauftrag + Nachträge) waren nicht sichtbar. Das ist unser Ansatzpunkt (DESIGN.md §4.4).
