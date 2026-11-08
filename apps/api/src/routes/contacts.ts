@@ -84,8 +84,8 @@ async function loadContact(tx: Tx, id: string): Promise<(ContactDetail & { etag:
            last_name as "lastName", website, description, payment_term_id as "paymentTermId",
            tax_mode as "taxMode", vat_id as "vatId", buyer_reference as "buyerReference",
            einvoice_email as "einvoiceEmail", einvoice_format as "einvoiceFormat",
-           updated_at as "updatedRaw", to_char(updated_at, 'YYYY-MM-DD"T"HH24:MI:SS.MSOF') as "updatedAt",
-           to_char(created_at, 'YYYY-MM-DD"T"HH24:MI:SS.MSOF') as "createdAt"
+           updated_at as "updatedRaw", to_char(updated_at at time zone 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS.MS"Z"') as "updatedAt",
+           to_char(created_at at time zone 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS.MS"Z"') as "createdAt"
     from contact where id = ${id}`
   if (!c) return null
   const channels = await tx<ContactDetail['channels']>`
@@ -102,7 +102,7 @@ async function loadContact(tx: Tx, id: string): Promise<(ContactDetail & { etag:
     where l.person_id = ${id} or l.organization_id = ${id}
     order by other.display_name`
   const projects = await tx<ContactDetail['projects']>`
-    select id, number, name, to_char(updated_at, 'YYYY-MM-DD"T"HH24:MI:SS.MSOF') as "updatedAt"
+    select id, number, name, to_char(updated_at at time zone 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS.MS"Z"') as "updatedAt"
     from project where customer_id = ${id} order by updated_at desc limit 50`
   const { updatedRaw, ...rest } = c
   return { ...rest, channels, addresses, links, projects, etag: etagOf(updatedRaw) }
@@ -120,7 +120,7 @@ export function registerContactRoutes(app: FastifyInstance, services: Services) 
       (tx) => tx<(ContactSummary & { sortKey: string })[]>`
       select c.id, c.kind, c.number, c.display_name as "displayName", c.color,
              (c.archived_at is not null) as archived, lower(c.display_name) as "sortKey",
-             to_char(c.updated_at, 'YYYY-MM-DD"T"HH24:MI:SS.MSOF') as "updatedAt",
+             to_char(c.updated_at at time zone 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS.MS"Z"') as "updatedAt",
              (select value from contact_channel ch where ch.contact_id = c.id and ch.kind = 'email'
               order by ch.is_primary desc limit 1) as "primaryEmail",
              (select value from contact_channel ch where ch.contact_id = c.id and ch.kind in ('phone', 'mobile')

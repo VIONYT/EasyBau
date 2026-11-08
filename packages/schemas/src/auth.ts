@@ -70,16 +70,55 @@ export interface Membership {
 }
 
 export interface Me {
-  user: { id: string; email: string; displayName: string; totpEnabled: boolean }
+  user: {
+    id: string
+    email: string
+    displayName: string
+    totpEnabled: boolean
+    webauthnCount: number
+  }
   tenant: { id: string; name: string }
   role: { key: string; name: string; access: Membership['access'] }
   permissions: string[]
   memberships: Membership[]
-  /** Admins must enrol a second factor (DESIGN.md §5.2); the UI forces the setup. */
+  /** Admins must enrol a second factor (DESIGN.md §5.2); until then only security settings are reachable. */
   twoFactorSetupRequired: boolean
 }
 
-export type LoginResponse = { status: 'ok'; me: Me } | { status: 'totp_required' }
+export type MfaMethod = 'totp' | 'webauthn'
+
+/**
+ * `mfa_required`: password was correct; a short-lived HttpOnly cookie marks the pending login and
+ * the client completes it with /auth/login/totp or /auth/login/webauthn/*.
+ */
+export type LoginResponse =
+  | { status: 'ok'; me: Me }
+  | { status: 'mfa_required'; methods: MfaMethod[] }
+
+export const loginTotpRequest = z.object({ code: totpCode })
+
+/** WebAuthn ceremony payloads are validated by the WebAuthn library; here only the envelope. */
+export const webauthnResponse = z.object({ response: z.record(z.string(), z.unknown()) })
+export const webauthnRegisterRequest = webauthnResponse.extend({
+  name: z.string().trim().min(1, 'Bitte einen Namen vergeben, z. B. „YubiKey Büro“.').max(100),
+})
+export const renameCredentialRequest = z.object({ name: z.string().trim().min(1).max(100) })
+
+export interface WebauthnCredentialSummary {
+  id: string
+  name: string
+  deviceType: 'singleDevice' | 'multiDevice'
+  backedUp: boolean
+  createdAt: string
+  lastUsedAt: string | null
+}
+
+export interface SecurityOverview {
+  totpEnabled: boolean
+  credentials: WebauthnCredentialSummary[]
+  /** Admins need at least one second factor (TOTP or security key). */
+  mfaRequired: boolean
+}
 
 export interface TotpSetupResponse {
   /** Base32 secret for manual entry. */

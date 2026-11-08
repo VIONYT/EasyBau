@@ -17,7 +17,8 @@
     "format": "biome format --write .",
     "check": "pnpm lint && pnpm typecheck && pnpm test",
     "db:migrate": "pnpm --filter @opc/db migrate",
-    "test:coverage": "vitest run --coverage"
+    "test:coverage": "vitest run --coverage",
+    "test:e2e": "playwright test -c e2e/playwright.config.ts"
   },
   "devDependencies": {
     "@biomejs/biome": "2.6.6",
@@ -26,6 +27,7 @@
     "turbo": "2.11.10",
     "typescript": "5.9.3",
     "vitest": "4.1.0",
-    "@vitest/coverage-v8": "4.1.0"
+    "@vitest/coverage-v8": "4.1.0",
+    "@playwright/test": "1.63.0"
   }
 }

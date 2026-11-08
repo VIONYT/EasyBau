@@ -5,7 +5,7 @@ OpenPlancraft ist eine **Open-Source**-Betriebssoftware (ERP) für Bau- und Hand
 **Lies vor jeder größeren Änderung [`DESIGN.md`](DESIGN.md)** (Architektur, Datenmodell, UX). Hintergrund: [`docs/RESEARCH.md`](docs/RESEARCH.md). Dieses Projekt ist ein eigenständiges Produkt: übernimm keine Texte, Logos, Markennamen oder Screens von Plancraft oder anderen Anbietern.
 
 ## Projektstatus
-Grundgerüst steht, Datenbankschema für das MVP ist angelegt (Migrationen 0001–0006). Rechenlogik (`packages/domain`), Ersteinrichtung, Anmeldung (Sitzung, TOTP, Rate-Limit), API für Kontakte und Projekte sowie eine erste Weboberfläche sind fertig. Monorepo, Services (`server` = API + Worker per `APP_ROLE`), Web-Platzhalter, Docker-Stack (proxy, app, db; Profil `standard` mit separatem `worker`), Test-Stack und CI. Noch nicht im Stack: storage (S3/Object Lock), kosit, backup. Fachmodule folgen in der Reihenfolge der MVP-Module in DESIGN.md §2.
+Grundgerüst steht, Datenbankschema für das MVP ist angelegt (Migrationen 0001–0007). Rechenlogik (`packages/domain`), Ersteinrichtung, Anmeldung (Sitzung, TOTP, WebAuthn/Sicherheitsschlüssel als zweiter Faktor und Passkey, Rate-Limit, erzwungene Admin-2FA), Benutzerverwaltung mit Einladungen, API für Kontakte und Projekte sowie eine erste Weboberfläche (inkl. Sicherheit und Benutzer) sind fertig. Monorepo, Services (`server` = API + Worker per `APP_ROLE`), Web-Platzhalter, Docker-Stack (proxy, app, db; Profil `standard` mit separatem `worker`), Test-Stack und CI. Noch nicht im Stack: storage (S3/Object Lock), kosit, backup. Fachmodule folgen in der Reihenfolge der MVP-Module in DESIGN.md §2.
 
 ## Stack (Kurzfassung)
 TypeScript strict · pnpm + Turborepo · Fastify · Zod · PostgreSQL 17 (SQL-Migrationen, ADR 0003) · pg-boss (Queue in PostgreSQL) · Typst (PDF/A-3) · S3 via MinIO (Object Lock) · Caddy · Docker Compose · React 19 + Vite + TanStack Router/Query · Tailwind 4 + Radix/shadcn · vite-plugin-pwa + Dexie · Vitest, Testcontainers, Playwright.
@@ -14,10 +14,12 @@ TypeScript strict · pnpm + Turborepo · Fastify · Zod · PostgreSQL 17 (SQL-Mi
 ```
 apps/server   Composition Root: startet API und/oder Worker je nach APP_ROLE (all|api|worker)
 apps/api      Fastify-App (buildApi), ohne eigenen Prozessstart → mit inject() testbar.
-              routes/ (auth, contacts, projects), security/ (crypto, passwords, sessions), context.ts
+              routes/ (auth, auth-common, webauthn, users, contacts, projects), security/ (crypto, passwords, sessions),
+              testing/ (Test-Harness, Software-Authenticator für WebAuthn), context.ts
               (requireAuth, requirePermission, inTenant), http.ts (HttpError, parse, Cursor, ETag), idempotency.ts
 apps/worker   pg-boss-Jobs (startWorker)
-apps/web      React/Vite-PWA
+apps/web      React/Vite-PWA (screens/, webauthn.ts, i18n.ts)
+e2e/          Playwright-Tests gegen einen laufenden Stack (virtueller FIDO2-Schlüssel per CDP)
 packages/config  Env-Schema (zod) – einzige Stelle für Konfiguration
 packages/db      SQL-Migrationen (migrations/), Runner, createSql (runtime/admin), withTenant(), Readiness
 packages/domain  Reine Rechenlogik: Aufmaß-Formeln, Aufmaßzeilen/Mengen, Kalkulation (Position, Dokument, Zielpreis, Gebinde), Einheiten
@@ -43,7 +45,10 @@ docker compose -f compose.test.yaml run --rm --build test     # komplette Testpi
 docker compose up -d --build && BASE_URL=https://localhost sh infra/smoke-test.sh   # Stack + Smoke-Test
 pnpm db:migrate     # Migrationen anwenden (läuft sonst automatisch beim API-Start)
 ```
-Geplant: `pnpm test:e2e` (Playwright).
+```bash
+# E2E gegen laufenden Stack (frischer Stack mit SETUP_TOKEN; PUBLIC_URL muss zur BASE_URL passen)
+BASE_URL=https://localhost:8443 SETUP_TOKEN=<token> pnpm test:e2e
+```
 Vor jedem Commit: `pnpm lint && pnpm typecheck && pnpm test`. Vor einem Pull Request: die Docker-Testpipeline.
 
 ## Datenbank (ADR 0003)

@@ -35,6 +35,8 @@ x-app-env: &app-env
   SESSION_TTL_DAYS: ${SESSION_TTL_DAYS:-30}
   SESSION_IDLE_HOURS: ${SESSION_IDLE_HOURS:-168}
   COOKIE_SECURE: ${COOKIE_SECURE:-true}
+  PUBLIC_URL: ${PUBLIC_URL:-https://${APP_DOMAIN:-localhost}}
+  REQUIRE_ADMIN_MFA: ${REQUIRE_ADMIN_MFA:-true}
 
 services:
   proxy:

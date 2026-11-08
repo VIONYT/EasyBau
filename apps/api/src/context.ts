@@ -11,6 +11,7 @@ export interface AuthContext {
   email: string
   displayName: string
   totpEnabled: boolean
+  webauthnCount: number
   tenantId: string
   tenantName: string
   roleKey: string
@@ -30,7 +31,12 @@ declare module 'fastify' {
 export interface Services {
   sql: Sql
   cipher: FieldCipher
-  config: Pick<Config, 'APP_NAME' | 'SESSION_TTL_DAYS' | 'SESSION_IDLE_HOURS' | 'COOKIE_SECURE'>
+  config: Pick<
+    Config,
+    'APP_NAME' | 'SESSION_TTL_DAYS' | 'SESSION_IDLE_HOURS' | 'COOKIE_SECURE' | 'REQUIRE_ADMIN_MFA'
+  > & {
+    PUBLIC_URL?: string | undefined
+  }
   /** One-time code required for the initial setup. */
   setupToken: string
   now: () => number
@@ -41,6 +47,29 @@ export const SESSION_COOKIE_PLAIN = 'sid'
 
 export function sessionCookieName(secure: boolean): string {
   return secure ? SESSION_COOKIE_SECURE : SESSION_COOKIE_PLAIN
+}
+
+/** Short-lived cookie for a login that still needs its second factor or a passkey challenge. */
+export function challengeCookieName(secure: boolean): string {
+  return secure ? '__Host-challenge' : 'challenge'
+}
+
+/** Does this admin still have to set up a second factor (DESIGN.md §5.2)? */
+export function mfaSetupRequired(
+  services: Services,
+  auth: Pick<AuthContext, 'roleKey' | 'totpEnabled' | 'webauthnCount'>,
+): boolean {
+  return (
+    services.config.REQUIRE_ADMIN_MFA &&
+    auth.roleKey === 'admin' &&
+    !auth.totpEnabled &&
+    auth.webauthnCount === 0
+  )
+}
+
+/** Public origin of the instance: PUBLIC_URL, otherwise derived from the request (behind the proxy). */
+export function publicOrigin(services: Services, request: FastifyRequest): string {
+  return services.config.PUBLIC_URL ?? `${request.protocol}://${request.host}`
 }
 
 export function requireAuth(request: FastifyRequest): AuthContext {

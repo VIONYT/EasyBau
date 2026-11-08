@@ -43,6 +43,19 @@ const envSchema = z.object({
     .enum(['true', 'false'])
     .default('true')
     .transform((v) => v === 'true'),
+  /**
+   * Public address, e.g. https://erp.meine-firma.de. Used for invitation links and as the
+   * WebAuthn origin/RP-ID (security keys are bound to it). Falls back to the request host.
+   */
+  PUBLIC_URL: z
+    .url({ protocol: /^https?$/ })
+    .transform((v) => v.replace(/\/+$/, ''))
+    .optional(),
+  /** Admins must use a second factor (TOTP or security key) before they can work. */
+  REQUIRE_ADMIN_MFA: z
+    .enum(['true', 'false'])
+    .default('true')
+    .transform((v) => v === 'true'),
 })
 
 export type Config = z.infer<typeof envSchema>

@@ -49,13 +49,18 @@ jobs:
       COMPOSE_BAKE: "false"
     steps:
       - uses: actions/checkout@v5
+      - run: corepack enable
+      - uses: actions/setup-node@v5
+        with:
+          node-version-file: .nvmrc
+          cache: pnpm
 
       - name: Test pipeline in Docker (same as `docker compose -f compose.test.yaml run test`)
         run: docker compose -f compose.test.yaml run --rm --build test
 
       - name: Build images
         run: |
-          printf 'POSTGRES_PASSWORD=ci-%s\nAPP_SECRET=%s\nHTTP_PORT=8080\nHTTPS_PORT=8443\n' "$GITHUB_RUN_ID" "$(openssl rand -hex 32)" > .env
+          printf 'POSTGRES_PASSWORD=ci-%s\nAPP_SECRET=%s\nHTTP_PORT=8080\nHTTPS_PORT=8443\nPUBLIC_URL=https://localhost:8443\nSETUP_TOKEN=ci-e2e-%s\n' "$GITHUB_RUN_ID" "$(openssl rand -hex 32)" "$GITHUB_RUN_ID" > .env
           docker compose build
 
       - name: Start compact profile
@@ -63,6 +68,12 @@ jobs:
 
       - name: Smoke test (compact)
         run: BASE_URL=https://localhost:8443 sh infra/smoke-test.sh
+
+      - name: End-to-end tests (Playwright, mobile viewport)
+        run: |
+          pnpm install --frozen-lockfile
+          pnpm exec playwright install --with-deps chromium
+          BASE_URL=https://localhost:8443 SETUP_TOKEN="ci-e2e-$GITHUB_RUN_ID" pnpm test:e2e
 
       - name: Memory usage (compact)
         run: docker stats --no-stream --format '{{.Name}} {{.MemUsage}}'

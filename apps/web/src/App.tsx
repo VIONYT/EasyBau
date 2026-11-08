@@ -3,6 +3,7 @@ import { useEffect, useState } from 'react'
 import { ApiError, api } from './api'
 import { t } from './i18n'
 import { LoginScreen, SetupScreen } from './screens/auth'
+import { InvitationScreen } from './screens/invitation'
 import { Workspace } from './screens/workspace'
 
 type State =
@@ -11,6 +12,7 @@ type State =
   | { screen: 'setup' }
   | { screen: 'login' }
   | { screen: 'workspace'; me: Me }
+  | { screen: 'invitation' }
 
 /** Start: setup required? → Ersteinrichtung; session valid? → workspace; otherwise login. */
 export function App() {
@@ -24,6 +26,10 @@ export function App() {
         document.title = meta.name
       })
       .catch(() => undefined)
+    if (window.location.pathname === '/einladung') {
+      setState({ screen: 'invitation' })
+      return
+    }
     ;(async () => {
       try {
         const status = await api<SetupStatus>('GET', '/api/v1/setup/status')
@@ -53,6 +59,19 @@ export function App() {
         <LoginScreen appName={appName} onDone={(me) => setState({ screen: 'workspace', me })} />
       )
     case 'workspace':
-      return <Workspace me={state.me} onLogout={() => setState({ screen: 'login' })} />
+      return (
+        <Workspace
+          me={state.me}
+          onLogout={() => setState({ screen: 'login' })}
+          onMeChanged={(me) => setState({ screen: 'workspace', me })}
+        />
+      )
+    case 'invitation':
+      return (
+        <InvitationScreen
+          onDone={(me) => setState({ screen: 'workspace', me })}
+          onLogin={() => setState({ screen: 'login' })}
+        />
+      )
   }
 }

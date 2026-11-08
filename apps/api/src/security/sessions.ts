@@ -10,6 +10,7 @@ export interface SessionRow {
   email: string
   displayName: string
   totpEnabled: boolean
+  webauthnCount: number
 }
 
 export interface TenantContext {
@@ -49,6 +50,7 @@ export async function loadSession(
   const [row] = await sql<(SessionRow & { lastSeenStale: boolean })[]>`
     select s.id, s.user_id as "userId", s.active_tenant_id as "tenantId", s.mfa_verified as "mfaVerified",
            u.email, u.display_name as "displayName", (u.totp_enabled_at is not null) as "totpEnabled",
+           (select count(*)::int from webauthn_credential w where w.user_id = u.id) as "webauthnCount",
            (s.last_seen_at < now() - interval '5 minutes') as "lastSeenStale"
     from user_session s
     join app_user u on u.id = s.user_id

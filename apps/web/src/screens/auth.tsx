@@ -1,8 +1,9 @@
-import type { LoginResponse, Me } from '@opc/schemas'
+import type { LoginResponse, Me, MfaMethod } from '@opc/schemas'
 import { useState } from 'react'
 import { api } from '../api'
 import { Field, FormError, optional, useForm, value } from '../forms'
 import { t } from '../i18n'
+import { loginWithKeyAsSecondFactor, loginWithPasskey, webauthnSupported } from '../webauthn'
 
 export function SetupScreen({ onDone }: { onDone: (me: Me) => void }) {
   const form = useForm(
@@ -106,66 +107,125 @@ export function SetupScreen({ onDone }: { onDone: (me: Me) => void }) {
 }
 
 export function LoginScreen({ appName, onDone }: { appName: string; onDone: (me: Me) => void }) {
-  // Credentials are kept only for the second step (TOTP); a failed first step uses fresh input.
-  const [credentials, setCredentials] = useState<{ email: string; password: string } | null>(null)
-  const form = useForm(
-    async (data) => {
-      const login = credentials ?? {
+  // After a correct password the server keeps a pending login (HttpOnly cookie) for the 2nd step.
+  const [methods, setMethods] = useState<MfaMethod[] | null>(null)
+  const [keyError, setKeyError] = useState<string | null>(null)
+  const [keyBusy, setKeyBusy] = useState(false)
+
+  const handle = (result: LoginResponse) => {
+    if (result.status === 'ok') onDone(result.me)
+    else setMethods(result.methods)
+  }
+  const password = useForm(
+    (data) =>
+      api<LoginResponse>('POST', '/api/v1/auth/login', {
         email: value(data, 'email'),
         password: String(data.get('password') ?? ''),
-      }
-      const result = await api<LoginResponse>('POST', '/api/v1/auth/login', {
-        ...login,
-        ...(credentials ? { totp: value(data, 'totp') } : {}),
-      })
-      if (result.status === 'totp_required') setCredentials(login)
-      return result
-    },
-    (result) => {
-      if (result.status === 'ok') onDone(result.me)
-    },
+      }),
+    handle,
   )
-  const needsTotp = credentials !== null
+  const totp = useForm(
+    (data) => api<LoginResponse>('POST', '/api/v1/auth/login/totp', { code: value(data, 'code') }),
+    handle,
+  )
+  const withKey = async (run: () => Promise<LoginResponse>) => {
+    setKeyBusy(true)
+    setKeyError(null)
+    try {
+      handle(await run())
+    } catch (err) {
+      setKeyError((err as Error).message)
+    } finally {
+      setKeyBusy(false)
+    }
+  }
+
   return (
     <main className="page">
-      <form className="card" onSubmit={form.onSubmit} noValidate>
+      <div className="card">
         <h1>{appName}</h1>
         <p className="lead">{t('app.tagline')}</p>
-        <h2>{t('auth.title')}</h2>
-        <FormError>{form.error}</FormError>
-        {needsTotp ? (
-          <Field
-            label={t('auth.totp')}
-            name="totp"
-            autoComplete="one-time-code"
-            inputMode="numeric"
-            required
-            error={form.fieldErrors.totp}
-          />
+        {methods ? (
+          <>
+            <h2>{t('auth.secondFactor')}</h2>
+            <p>{t('auth.secondFactorIntro')}</p>
+            <FormError>{keyError}</FormError>
+            {methods.includes('webauthn') ? (
+              <div className="stack">
+                <button
+                  type="button"
+                  className="button primary"
+                  disabled={keyBusy}
+                  onClick={() => withKey(loginWithKeyAsSecondFactor)}
+                >
+                  {t('auth.useKey')}
+                </button>
+                <p className="hint">{t('auth.keyHint')}</p>
+              </div>
+            ) : null}
+            {methods.includes('totp') ? (
+              <form onSubmit={totp.onSubmit} noValidate>
+                {methods.includes('webauthn') ? <p className="divider">{t('auth.or')}</p> : null}
+                <FormError>{totp.error}</FormError>
+                <Field
+                  label={t('auth.totp')}
+                  name="code"
+                  autoComplete="one-time-code"
+                  inputMode="numeric"
+                  required
+                  error={totp.fieldErrors.code}
+                />
+                <button type="submit" className="button primary" disabled={totp.busy}>
+                  {t('auth.submit')}
+                </button>
+              </form>
+            ) : null}
+            <button type="button" className="button ghost full" onClick={() => setMethods(null)}>
+              {t('auth.back')}
+            </button>
+          </>
         ) : (
           <>
-            <Field
-              label={t('auth.email')}
-              name="email"
-              type="email"
-              autoComplete="username"
-              required
-              error={form.fieldErrors.email}
-            />
-            <Field
-              label={t('auth.password')}
-              name="password"
-              type="password"
-              autoComplete="current-password"
-              required
-              error={form.fieldErrors.password}
-            />
+            <h2>{t('auth.title')}</h2>
+            <form onSubmit={password.onSubmit} noValidate>
+              <FormError>{password.error}</FormError>
+              <Field
+                label={t('auth.email')}
+                name="email"
+                type="email"
+                autoComplete="username webauthn"
+                required
+                error={password.fieldErrors.email}
+              />
+              <Field
+                label={t('auth.password')}
+                name="password"
+                type="password"
+                autoComplete="current-password"
+                required
+                error={password.fieldErrors.password}
+              />
+              <button type="submit" className="button primary" disabled={password.busy}>
+                {t('auth.submit')}
+              </button>
+            </form>
+            {webauthnSupported() ? (
+              <div className="stack">
+                <p className="divider">{t('auth.or')}</p>
+                <FormError>{keyError}</FormError>
+                <button
+                  type="button"
+                  className="button ghost full"
+                  disabled={keyBusy}
+                  onClick={() => withKey(loginWithPasskey)}
+                >
+                  {t('auth.passkey')}
+                </button>
+              </div>
+            ) : null}
           </>
         )}
-        <button type="submit" className="button primary" disabled={form.busy}>
-          {t('auth.submit')}
-        </button>
-      </form>
+      </div>
     </main>
   )
 }

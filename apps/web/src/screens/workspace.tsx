@@ -10,16 +10,48 @@ import { useCallback, useEffect, useState } from 'react'
 import { api } from '../api'
 import { Field, FormError, optional, useForm, value } from '../forms'
 import { t } from '../i18n'
+import { Security } from './security'
+import { Users } from './users'
 
-type Tab = 'projects' | 'contacts'
+type Tab = 'projects' | 'contacts' | 'users' | 'security'
 
-/** First working area after login: projects and contacts. Detail views follow with the router. */
-export function Workspace({ me, onLogout }: { me: Me; onLogout: () => void }) {
-  const [tab, setTab] = useState<Tab>('projects')
-  const canContacts = me.permissions.includes('contacts.read')
+/** Working area after login. Admins without second factor only see the security settings. */
+export function Workspace({
+  me,
+  onLogout,
+  onMeChanged,
+}: {
+  me: Me
+  onLogout: () => void
+  onMeChanged: (me: Me) => void
+}) {
+  const locked = me.twoFactorSetupRequired
+  const [tab, setTab] = useState<Tab>(locked ? 'security' : 'projects')
+  // Clicking a tab (again) re-mounts it, so its data is fresh.
+  const [visit, setVisit] = useState(0)
+  const current: Tab = locked ? 'security' : tab
+  const tabs: { key: Tab; label: string; visible: boolean }[] = [
+    { key: 'projects', label: t('nav.projects'), visible: !locked },
+    {
+      key: 'contacts',
+      label: t('nav.contacts'),
+      visible: !locked && me.permissions.includes('contacts.read'),
+    },
+    {
+      key: 'users',
+      label: t('nav.users'),
+      visible: !locked && me.permissions.includes('users.manage'),
+    },
+    { key: 'security', label: t('nav.security'), visible: true },
+  ]
   const logout = async () => {
     await api('POST', '/api/v1/auth/logout').catch(() => undefined)
     onLogout()
+  }
+  const refreshMe = () => {
+    api<Me>('GET', '/api/v1/auth/me')
+      .then(onMeChanged)
+      .catch(() => undefined)
   }
   return (
     <div className="workspace">
@@ -30,31 +62,28 @@ export function Workspace({ me, onLogout }: { me: Me; onLogout: () => void }) {
           {t('auth.logout')}
         </button>
       </header>
-      {me.twoFactorSetupRequired ? (
-        <p className="notice" role="status">
-          {t('auth.twoFactorRequired')}
-        </p>
-      ) : null}
       <nav className="tabs" aria-label="Bereiche">
-        <button
-          type="button"
-          aria-current={tab === 'projects' ? 'page' : undefined}
-          onClick={() => setTab('projects')}
-        >
-          {t('nav.projects')}
-        </button>
-        {canContacts ? (
-          <button
-            type="button"
-            aria-current={tab === 'contacts' ? 'page' : undefined}
-            onClick={() => setTab('contacts')}
-          >
-            {t('nav.contacts')}
-          </button>
-        ) : null}
+        {tabs
+          .filter((item) => item.visible)
+          .map((item) => (
+            <button
+              key={item.key}
+              type="button"
+              aria-current={current === item.key ? 'page' : undefined}
+              onClick={() => {
+                setTab(item.key)
+                setVisit((v) => v + 1)
+              }}
+            >
+              {item.label}
+            </button>
+          ))}
       </nav>
-      <main className="content">
-        {tab === 'projects' ? <Projects me={me} /> : <Contacts me={me} />}
+      <main className="content" key={`${current}-${visit}`}>
+        {current === 'projects' ? <Projects me={me} /> : null}
+        {current === 'contacts' ? <Contacts me={me} /> : null}
+        {current === 'users' ? <Users /> : null}
+        {current === 'security' ? <Security me={me} onChanged={refreshMe} /> : null}
       </main>
     </div>
   )

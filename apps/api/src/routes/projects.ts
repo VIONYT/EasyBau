@@ -28,7 +28,7 @@ const SUMMARY_COLUMNS = (tx: Tx) => tx`
   p.id, p.number, p.name, p.site_city as "siteCity",
   to_char(p.start_date, 'YYYY-MM-DD') as "startDate", to_char(p.end_date, 'YYYY-MM-DD') as "endDate",
   (p.archived_at is not null) as archived,
-  to_char(p.updated_at, 'YYYY-MM-DD"T"HH24:MI:SS.MSOF') as "updatedAt",
+  to_char(p.updated_at at time zone 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS.MS"Z"') as "updatedAt",
   case when s.id is null then null else json_build_object('id', s.id, 'label', s.label, 'color', s.color) end as status,
   case when c.id is null then null else json_build_object('id', c.id, 'displayName', c.display_name) end as customer,
   coalesce((select json_agg(json_build_object('id', u.id, 'displayName', u.display_name) order by u.display_name)
@@ -49,7 +49,7 @@ async function loadProject(
 ): Promise<(ProjectDetail & { etag: string }) | null> {
   const [row] = await tx<(ProjectDetail & { updatedRaw: Date })[]>`
     select ${SUMMARY_COLUMNS(tx)}, p.description, p.updated_at as "updatedRaw",
-           to_char(p.created_at, 'YYYY-MM-DD"T"HH24:MI:SS.MSOF') as "createdAt",
+           to_char(p.created_at at time zone 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS.MS"Z"') as "createdAt",
            json_build_object('street', p.site_street, 'streetExtra', p.site_street_extra,
                              'postalCode', p.site_postal_code, 'city', p.site_city,
                              'countryCode', p.site_country_code) as site

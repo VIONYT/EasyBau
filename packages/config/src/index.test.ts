@@ -74,5 +74,11 @@ describe('secrets', () => {
       168,
     ])
     expect(config.SETUP_TOKEN).toBeUndefined()
+    expect(config.REQUIRE_ADMIN_MFA).toBe(true)
+    expect(config.PUBLIC_URL).toBeUndefined()
+    expect(loadConfig({ ...base, PUBLIC_URL: 'https://erp.example.de/' }).PUBLIC_URL).toBe(
+      'https://erp.example.de',
+    )
+    expect(() => loadConfig({ ...base, PUBLIC_URL: 'ftp://x' })).toThrow(/PUBLIC_URL/)
   })
 })

@@ -9,9 +9,11 @@ import Fastify, {
 import type { Services } from './context.js'
 import { HttpError, problem, sendProblem } from './http.js'
 import { idempotencyHooks } from './idempotency.js'
-import { authHook, registerAuthRoutes } from './routes/auth.js'
+import { authHook, mfaEnforcementHook, registerAuthRoutes } from './routes/auth.js'
 import { registerContactRoutes } from './routes/contacts.js'
 import { registerProjectRoutes } from './routes/projects.js'
+import { registerUserRoutes } from './routes/users.js'
+import { registerWebauthnRoutes } from './routes/webauthn.js'
 import { FieldCipher } from './security/crypto.js'
 
 export { HttpError } from './http.js'
@@ -20,7 +22,15 @@ export { hashPassword } from './security/passwords.js'
 export interface ApiDeps {
   config: Pick<Config, 'APP_NAME' | 'APP_VERSION' | 'APP_ROLE' | 'PROFILE'> &
     Partial<
-      Pick<Config, 'APP_SECRET' | 'SESSION_TTL_DAYS' | 'SESSION_IDLE_HOURS' | 'COOKIE_SECURE'>
+      Pick<
+        Config,
+        | 'APP_SECRET'
+        | 'SESSION_TTL_DAYS'
+        | 'SESSION_IDLE_HOURS'
+        | 'COOKIE_SECURE'
+        | 'PUBLIC_URL'
+        | 'REQUIRE_ADMIN_MFA'
+      >
     >
   /** Returns true when all hard dependencies (database) are reachable. */
   isReady: () => Promise<boolean>
@@ -103,6 +113,8 @@ export function buildApi({
       SESSION_TTL_DAYS: config.SESSION_TTL_DAYS ?? 30,
       SESSION_IDLE_HOURS: config.SESSION_IDLE_HOURS ?? 24 * 7,
       COOKIE_SECURE: config.COOKIE_SECURE ?? true,
+      PUBLIC_URL: config.PUBLIC_URL,
+      REQUIRE_ADMIN_MFA: config.REQUIRE_ADMIN_MFA ?? true,
     },
     setupToken,
     now,
@@ -132,6 +144,7 @@ export function buildApi({
   })
 
   app.addHook('preHandler', authHook(services))
+  app.addHook('preHandler', mfaEnforcementHook(services))
   const idempotency = idempotencyHooks(services)
   app.addHook('preHandler', idempotency.preHandler)
   app.addHook('onSend', idempotency.onSend)
@@ -139,5 +152,7 @@ export function buildApi({
   registerAuthRoutes(app, services)
   registerContactRoutes(app, services)
   registerProjectRoutes(app, services)
+  registerUserRoutes(app, services)
+  registerWebauthnRoutes(app, services)
   return app
 }

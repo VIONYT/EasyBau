@@ -1,9 +1,10 @@
-import { withTenant } from '@opc/db'
 import {
   changePasswordRequest,
   type LoginResponse,
   loginRequest,
+  loginTotpRequest,
   type Me,
+  type SecurityOverview,
   type SetupStatus,
   setupRequest,
   switchTenantRequest,
@@ -12,7 +13,7 @@ import {
   totpEnableRequest,
 } from '@opc/schemas'
 import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify'
-import { type AuthContext, requireAuth, type Services, sessionCookieName } from '../context.js'
+import { mfaSetupRequired, requireAuth, type Services, sessionCookieName } from '../context.js'
 import { HttpError, parse } from '../http.js'
 import { generateTotpSecret, safeEqual, totpUri, verifyTotp } from '../security/crypto.js'
 import { hashPassword, verifyDummy, verifyPassword } from '../security/passwords.js'
@@ -20,75 +21,27 @@ import {
   createSession,
   deleteSession,
   deleteSessionsOfUser,
-  hitRateLimit,
-  listMemberships,
   loadSession,
   loadTenantContext,
   resetRateLimit,
 } from '../security/sessions.js'
+import {
+  audit,
+  buildMe,
+  clearSessionCookie,
+  createChallenge,
+  deleteChallenge,
+  finishLogin,
+  mfaMethodsOf,
+  rateLimit,
+  setSessionCookie,
+  useChallenge,
+} from './auth-common.js'
+
+export { buildMe } from './auth-common.js'
 
 const LOGIN_FAILED = 'E-Mail-Adresse oder Passwort ist falsch.'
-const WINDOW = 15 * 60
-
-function setSessionCookie(reply: FastifyReply, services: Services, token: string) {
-  reply.setCookie(sessionCookieName(services.config.COOKIE_SECURE), token, {
-    httpOnly: true,
-    secure: services.config.COOKIE_SECURE,
-    sameSite: 'lax',
-    path: '/',
-    maxAge: services.config.SESSION_TTL_DAYS * 24 * 3600,
-  })
-}
-
-function clearSessionCookie(reply: FastifyReply, services: Services) {
-  reply.clearCookie(sessionCookieName(services.config.COOKIE_SECURE), {
-    path: '/',
-    secure: services.config.COOKIE_SECURE,
-    httpOnly: true,
-    sameSite: 'lax',
-  })
-}
-
-async function rateLimit(services: Services, key: string, limit: number) {
-  const result = await hitRateLimit(services.sql, key, limit, WINDOW)
-  if (!result.allowed) {
-    throw new HttpError(
-      429,
-      `Zu viele Versuche. Bitte in ${Math.ceil(result.retryAfterSeconds / 60)} Minuten erneut versuchen.`,
-    )
-  }
-}
-
-export async function buildMe(
-  services: Services,
-  auth: Pick<AuthContext, 'userId' | 'tenantId'>,
-): Promise<Me> {
-  const [user] = await services.sql<
-    { id: string; email: string; displayName: string; totpEnabled: boolean }[]
-  >`
-    select id, email, display_name as "displayName", (totp_enabled_at is not null) as "totpEnabled"
-    from app_user where id = ${auth.userId}`
-  const context = await loadTenantContext(services.sql, auth.userId, auth.tenantId)
-  if (!user || !context) throw new HttpError(401, 'Bitte melden Sie sich an.')
-  return {
-    user,
-    tenant: { id: context.tenantId, name: context.tenantName },
-    role: { key: context.roleKey, name: context.roleName, access: context.access },
-    permissions: [...context.permissions].sort(),
-    memberships: await listMemberships(services.sql, auth.userId),
-    twoFactorSetupRequired: context.roleKey === 'admin' && !user.totpEnabled,
-  }
-}
-
-async function audit(services: Services, tenantId: string, userId: string, action: string) {
-  await withTenant(
-    services.sql,
-    { tenantId, userId },
-    (tx) => tx`
-    insert into audit_event (tenant_id, actor_user_id, action, entity, entity_id, hash)
-    values (${tenantId}, ${userId}, ${action}, 'app_user', ${userId}, ''::bytea)`,
-  )
-}
+const TOTP_INVALID = 'Der Bestätigungscode ist ungültig oder abgelaufen.'
 
 export function registerAuthRoutes(app: FastifyInstance, services: Services) {
   const { sql } = services
@@ -168,44 +121,82 @@ export function registerAuthRoutes(app: FastifyInstance, services: Services) {
       await verifyDummy(input.password)
       throw new HttpError(401, LOGIN_FAILED)
     }
-    if (!(await verifyPassword(user.passwordHash, input.password)))
+    if (!(await verifyPassword(user.passwordHash, input.password))) {
       throw new HttpError(401, LOGIN_FAILED)
+    }
 
-    let mfaVerified = false
-    if (user.totpSecret) {
-      if (!input.totp) return { status: 'totp_required' }
+    await resetRateLimit(sql, `login:email:${input.email}`)
+    const methods = await mfaMethodsOf(services, user.id)
+    if (methods.length === 0) {
+      return finishLogin(services, request, reply, {
+        userId: user.id,
+        requestedTenantId: input.tenantId,
+        mfaVerified: false,
+        method: 'password',
+      })
+    }
+    // One-shot variant for API clients: password and TOTP code in the same request.
+    if (input.totp && user.totpSecret) {
       const step = verifyTotp(
         services.cipher.decrypt(user.totpSecret),
         input.totp,
         services.now(),
         user.totpLastStep === null ? null : Number(user.totpLastStep),
       )
-      if (step === null)
-        throw new HttpError(401, 'Der Bestätigungscode ist ungültig oder abgelaufen.', {
-          totp: 'Code ungültig.',
-        })
+      if (step === null) throw new HttpError(401, TOTP_INVALID, { totp: 'Code ungültig.' })
       await sql`update app_user set totp_last_step = ${step} where id = ${user.id}`
-      mfaVerified = true
+      return finishLogin(services, request, reply, {
+        userId: user.id,
+        requestedTenantId: input.tenantId,
+        mfaVerified: true,
+        method: 'password+totp',
+      })
     }
-
-    const memberships = await listMemberships(sql, user.id)
-    const membership = memberships.find((m) => m.tenantId === input.tenantId) ?? memberships[0]
-    if (!membership) throw new HttpError(403, 'Ihr Zugang ist keiner Firma zugeordnet.')
-
-    await resetRateLimit(sql, `login:email:${input.email}`)
-    await sql`update app_user set last_login_at = now(), failed_logins = 0 where id = ${user.id}`
-    const token = await createSession(sql, {
+    await createChallenge(services, reply, {
+      purpose: 'mfa_login',
       userId: user.id,
-      tenantId: membership.tenantId,
-      userAgent: request.headers['user-agent'],
-      ttlDays: services.config.SESSION_TTL_DAYS,
-      mfaVerified,
+      requestedTenantId: input.tenantId ?? null,
     })
-    await audit(services, membership.tenantId, user.id, 'login')
-    setSessionCookie(reply, services, token)
+    return { status: 'mfa_required', methods }
+  })
+
+  // Second step with a TOTP code (the password was checked in the first step).
+  app.post('/api/v1/auth/login/totp', async (request, reply): Promise<LoginResponse> => {
+    const { code } = parse(loginTotpRequest, request.body)
+    const challenge = await useChallenge(services, request, 'mfa_login')
+    const [user] = await sql<{ secret: Buffer | null; lastStep: string | null }[]>`
+      select totp_secret_enc as secret, totp_last_step as "lastStep"
+      from app_user where id = ${challenge.userId as string} and is_active`
+    if (!user?.secret)
+      throw new HttpError(400, 'Für diesen Zugang ist keine App-Bestätigung eingerichtet.')
+    const step = verifyTotp(
+      services.cipher.decrypt(user.secret),
+      code,
+      services.now(),
+      user.lastStep === null ? null : Number(user.lastStep),
+    )
+    if (step === null) throw new HttpError(401, TOTP_INVALID, { code: 'Code ungültig.' })
+    await sql`update app_user set totp_last_step = ${step} where id = ${challenge.userId as string}`
+    await deleteChallenge(services, challenge.id)
+    return finishLogin(services, request, reply, {
+      userId: challenge.userId as string,
+      requestedTenantId: challenge.requestedTenantId,
+      mfaVerified: true,
+      method: 'totp',
+    })
+  })
+
+  app.get('/api/v1/auth/security', async (request): Promise<SecurityOverview> => {
+    const auth = requireAuth(request)
+    const credentials = await sql<SecurityOverview['credentials']>`
+      select id, name, device_type as "deviceType", backed_up as "backedUp",
+             to_char(created_at at time zone 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS.MS"Z"') as "createdAt",
+             to_char(last_used_at at time zone 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS.MS"Z"') as "lastUsedAt"
+      from webauthn_credential where user_id = ${auth.userId} order by created_at`
     return {
-      status: 'ok',
-      me: await buildMe(services, { userId: user.id, tenantId: membership.tenantId }),
+      totpEnabled: auth.totpEnabled,
+      credentials,
+      mfaRequired: services.config.REQUIRE_ADMIN_MFA && auth.roleKey === 'admin',
     }
   })
 
@@ -296,6 +287,12 @@ export function registerAuthRoutes(app: FastifyInstance, services: Services) {
       user.lastStep === null ? null : Number(user.lastStep),
     )
     if (!passwordOk || step === null) throw new HttpError(403, 'Passwort oder Code ist falsch.')
+    if (mfaSetupRequired(services, { ...auth, totpEnabled: false })) {
+      throw new HttpError(
+        409,
+        'Als Admin brauchen Sie mindestens einen zweiten Faktor. Richten Sie zuerst einen Sicherheitsschlüssel ein.',
+      )
+    }
     await sql`update app_user set totp_secret_enc = null, totp_enabled_at = null, totp_last_step = null
               where id = ${auth.userId}`
     await audit(services, auth.tenantId, auth.userId, 'totp_disabled')
@@ -325,6 +322,7 @@ export function authHook(services: Services) {
       email: session.email,
       displayName: session.displayName,
       totpEnabled: session.totpEnabled,
+      webauthnCount: session.webauthnCount,
       tenantId: context.tenantId,
       tenantName: context.tenantName,
       roleKey: context.roleKey,
@@ -332,5 +330,22 @@ export function authHook(services: Services) {
       access: context.access,
       permissions: new Set(context.permissions),
     }
+  }
+}
+
+/** Paths an admin without second factor may still use (to set one up or log out). */
+const MFA_SETUP_PATHS = ['/api/v1/auth/', '/api/v1/setup']
+
+/** Enforces the second factor for admins (DESIGN.md §5.2) on the server, not only in the UI. */
+export function mfaEnforcementHook(services: Services) {
+  return async (request: FastifyRequest) => {
+    const auth = request.auth
+    if (!auth || !mfaSetupRequired(services, auth)) return
+    const path = request.url.split('?')[0] ?? ''
+    if (!path.startsWith('/api/v1/') || MFA_SETUP_PATHS.some((p) => path.startsWith(p))) return
+    throw new HttpError(
+      403,
+      'Bitte richten Sie zuerst die Zwei-Faktor-Anmeldung ein (App-Code oder Sicherheitsschlüssel).',
+    )
   }
 }

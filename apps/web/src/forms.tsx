@@ -6,7 +6,7 @@ interface FieldProps {
   name: string
   type?: 'text' | 'email' | 'password'
   autoComplete?: string
-  hint?: string
+  hint?: string | undefined
   required?: boolean
   error?: string | undefined
   inputMode?: 'text' | 'numeric'

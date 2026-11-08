@@ -230,6 +230,14 @@ describe.skipIf(!baseUrl)('API: setup, login, contacts, projects (integration)',
       expect(sameOrigin.statusCode).toBe(200)
     })
 
+    it('blocks admins without second factor from working (server-side)', async () => {
+      const res = await as(session).get('/api/v1/contacts')
+      expect(res.statusCode).toBe(403)
+      expect(res.json().detail).toMatch(/Zwei-Faktor/)
+      expect((await as(session).get('/api/v1/auth/me')).json().twoFactorSetupRequired).toBe(true)
+      expect((await as(session).get('/api/v1/auth/security')).statusCode).toBe(200)
+    })
+
     it('enables two-factor login (TOTP) with replay protection', async () => {
       const setup = await as(session).post('/api/v1/auth/totp/setup')
       expect(setup.statusCode).toBe(200)
@@ -248,7 +256,7 @@ describe.skipIf(!baseUrl)('API: setup, login, contacts, projects (integration)',
       const withoutCode = await request('POST', '/api/v1/auth/login', {
         body: { email: ADMIN.email, password: ADMIN.password },
       })
-      expect(withoutCode.json()).toEqual({ status: 'totp_required' })
+      expect(withoutCode.json()).toEqual({ status: 'mfa_required', methods: ['totp'] })
       expect(sessionOf(withoutCode)).toBe('')
 
       // The code used for enabling must not be accepted again (replay).
@@ -566,7 +574,7 @@ describe.skipIf(!baseUrl)('API: setup, login, contacts, projects (integration)',
         await tx`insert into tenant (id, name) values (${otherTenant}, 'Andere Firma')`
         await tx`select seed_tenant_defaults()`
         await tx`insert into membership (tenant_id, user_id, role_id)
-                 select ${otherTenant}, ${user?.id as string}, id from role where key = 'admin'`
+                 select ${otherTenant}, ${user?.id as string}, id from role where key = 'office_lead'`
       })
       const login = await request('POST', '/api/v1/auth/login', {
         body: { email: 'fremd@example.test', password: 'fremd-passwort-1234' },
