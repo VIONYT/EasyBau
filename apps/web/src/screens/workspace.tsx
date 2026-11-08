@@ -6,6 +6,7 @@ import { t } from '../i18n'
 import { type Route, useRoute } from '../router'
 import { DocumentScreen } from './document'
 import { MeasurementScreen } from './measurement'
+import { PrintScreen } from './print'
 import { ProjectScreen } from './project'
 import { Projects } from './projects'
 import { ReportScreen } from './report'
@@ -38,7 +39,8 @@ export function Workspace({
     current.view === 'project' ||
     current.view === 'document' ||
     current.view === 'measurement' ||
-    current.view === 'report'
+    current.view === 'report' ||
+    current.view === 'print'
       ? 'projects'
       : current.view
   const tabs: { key: Tab; label: string; visible: boolean }[] = [
@@ -68,7 +70,10 @@ export function Workspace({
   const routeKey =
     current.view === 'project'
       ? `project-${current.id}`
-      : current.view === 'document' || current.view === 'measurement' || current.view === 'report'
+      : current.view === 'document' ||
+          current.view === 'measurement' ||
+          current.view === 'report' ||
+          current.view === 'print'
         ? `${current.view}-${current.id}`
         : current.view
   return (
@@ -108,6 +113,7 @@ export function Workspace({
         {current.view === 'measurement' ? (
           <MeasurementScreen me={me} id={current.id} navigate={navigate} />
         ) : null}
+        {current.view === 'print' ? <PrintScreen id={current.id} navigate={navigate} /> : null}
         {current.view === 'report' ? (
           <ReportScreen me={me} id={current.id} navigate={navigate} />
         ) : null}

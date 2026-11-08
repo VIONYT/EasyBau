@@ -1,17 +1,24 @@
 import type {
+  ContactSummary,
   DocumentDetail,
   DocumentItem,
   EditablePositionType,
   Me,
+  Page,
   TaxRateSummary,
   UnitSummary,
 } from '@opc/schemas'
-import { PRICED_POSITION_TYPES, TAX_MODES } from '@opc/schemas/constants'
+import {
+  CHANGE_ORDER_BASES,
+  COST_KINDS,
+  PRICED_POSITION_TYPES,
+  TAX_MODES,
+} from '@opc/schemas/constants'
 import { type FormEvent, useCallback, useEffect, useState } from 'react'
 import { ApiError, api, apiWithEtag } from '../api'
 import { centsToInput, formatCents, formatInputNumber, formatQuantity, parseEuro } from '../format'
 import { Field, FormError, optional, SelectField, TextArea, useForm, value } from '../forms'
-import { type TextKey, t } from '../i18n'
+import { type TextKey, t, tf } from '../i18n'
 import type { Navigate } from '../router'
 import { documentLabel, StatusChip } from './documents'
 
@@ -84,18 +91,27 @@ export function DocumentScreen({ me, id, navigate }: { me: Me; id: string; navig
         {doc.number ?? t('documents.draftNoNumber')}
         {doc.contact ? ` · ${doc.contact.displayName}` : ''}
       </p>
-      {doc.status === 'draft' ? (
-        <p className="hint">{t('doc.finalizeLater')}</p>
-      ) : (
+      {doc.status !== 'draft' ? (
         <p className="notice inline" role="status">
           {t('doc.locked')}
         </p>
-      )}
+      ) : null}
       <FormError>{error}</FormError>
+
+      {doc.type === 'quote' || doc.type === 'change_order' ? (
+        <ChangeOrderSwitch doc={doc} editable={editable} apply={apply} />
+      ) : null}
+      <DocumentActions
+        doc={doc}
+        canWrite={me.permissions.includes('document.write')}
+        apply={apply}
+        navigate={navigate}
+      />
 
       <HeaderForm doc={doc} etag={etag} editable={editable} apply={apply} />
       <Positions doc={doc} editable={editable} units={units} rates={rates} apply={apply} />
       <Totals doc={doc} />
+      {me.permissions.includes('price.view') ? <InternalCalculation doc={doc} /> : null}
 
       {editable ? (
         <button type="button" className="button ghost danger" onClick={remove}>
@@ -119,6 +135,14 @@ function HeaderForm({
 }) {
   const [saved, setSaved] = useState(false)
   const billed = doc.type === 'invoice' || doc.type === 'credit_note'
+  const offer = ['quote', 'cost_estimate', 'change_order'].includes(doc.type)
+  const [contacts, setContacts] = useState<ContactSummary[]>([])
+  useEffect(() => {
+    if (!editable) return
+    api<Page<ContactSummary>>('GET', '/api/v1/contacts?limit=100')
+      .then((page) => setContacts(page.items))
+      .catch(() => undefined)
+  }, [editable])
   const form = useForm(
     async (data) => {
       setSaved(false)
@@ -134,6 +158,8 @@ function HeaderForm({
           closingText: optional(data, 'closingText') ?? null,
           discountPercent: optional(data, 'discountPercent') ?? null,
           taxMode: value(data, 'taxMode'),
+          contactId: value(data, 'contactId') || null,
+          ...(offer ? { validUntil: optional(data, 'validUntil') ?? null } : {}),
           ...(billed
             ? {
                 serviceFrom: optional(data, 'serviceFrom') ?? null,
@@ -182,12 +208,34 @@ function HeaderForm({
               }))}
             />
           </div>
+          <SelectField
+            label={t('doc.recipient')}
+            name="contactId"
+            defaultValue={doc.contact?.id ?? ''}
+            options={[
+              { value: '', label: t('common.none') },
+              ...(doc.contact && !contacts.some((c) => c.id === doc.contact?.id)
+                ? [{ value: doc.contact.id, label: doc.contact.displayName }]
+                : []),
+              ...contacts.map((c) => ({ value: c.id, label: c.displayName })),
+            ]}
+            error={form.fieldErrors.contactId}
+          />
           <Field
             label={t('doc.place')}
             name="placeOfPerformance"
             defaultValue={doc.placeOfPerformance ?? ''}
             error={form.fieldErrors.placeOfPerformance}
           />
+          {offer ? (
+            <Field
+              label={t('q.validUntil')}
+              name="validUntil"
+              type="date"
+              defaultValue={doc.validUntil ?? undefined}
+              error={form.fieldErrors.validUntil}
+            />
+          ) : null}
           {billed ? (
             <div className="row">
               <Field
@@ -255,6 +303,7 @@ function Positions({
 }) {
   const [adding, setAdding] = useState<EditablePositionType | null>(null)
   const [editingId, setEditingId] = useState<string | null>(null)
+  const [calcId, setCalcId] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
 
   const run = async (call: () => Promise<{ data: Doc; etag: string | null }>) => {
@@ -291,7 +340,18 @@ function Positions({
                 paddingInlineStart: `calc(${item.level} * var(--space-4) + var(--space-2))`,
               }}
             >
-              {editingId === item.id ? (
+              {calcId === item.id ? (
+                <CalculationForm
+                  doc={doc}
+                  item={item}
+                  units={units}
+                  onDone={(result) => {
+                    apply(result)
+                    setCalcId(null)
+                  }}
+                  onCancel={() => setCalcId(null)}
+                />
+              ) : editingId === item.id ? (
                 <ItemForm
                   doc={doc}
                   item={item}
@@ -310,6 +370,16 @@ function Positions({
                   <PositionView item={item} subtotal={doc.totals.titleSubtotals[item.id]} />
                   {editable ? (
                     <span className="actions">
+                      {isPriced(item.positionType) ? (
+                        <button
+                          type="button"
+                          className="button ghost small"
+                          aria-label={`${t('q.calc')}: ${item.shortText ?? ''}`}
+                          onClick={() => setCalcId(item.id)}
+                        >
+                          {t('q.calc')}
+                        </button>
+                      ) : null}
                       <button
                         type="button"
                         className="button ghost icon"
@@ -422,6 +492,14 @@ function PositionView({ item, subtotal }: { item: DocumentItem; subtotal: number
           </span>
         ) : null}
         {item.fromMeasurement ? <span className="tag ok">{t('doc.fromMeasurement')}</span> : null}
+        {item.calculation ? (
+          <span className="tag calc-tag">
+            {t('q.calc')}
+            {item.calculation.marginPercent
+              ? ` · ${t('q.margin')} ${formatQuantity(item.calculation.marginPercent)} %`
+              : ''}
+          </span>
+        ) : null}
         {item.longText ? <span className="hint pre block">{item.longText}</span> : null}
         <span className="muted block calc">
           {formatQuantity(item.quantity, item.unit?.decimals)} {item.unit?.symbol} ×{' '}
@@ -570,6 +648,7 @@ function ItemForm({
             ) : null}
             <Field
               label={lumpSum ? t('doc.lumpPrice') : t('doc.unitPrice')}
+              hint={item?.costLines.length ? t('q.calcFromCalc') : undefined}
               name="unitPrice"
               inputMode="decimal"
               defaultValue={centsToInput(item?.unitPriceCents)}
@@ -652,6 +731,491 @@ function Totals({ doc }: { doc: Doc }) {
           </div>
         ))}
       </dl>
+    </div>
+  )
+}
+
+// ---- Schalter „Nachtragsangebot“ ----------------------------------------------------------------
+
+function ChangeOrderSwitch({
+  doc,
+  editable,
+  apply,
+}: {
+  doc: Doc
+  editable: boolean
+  apply: Apply
+}) {
+  const isChangeOrder = doc.type === 'change_order'
+  const [asking, setAsking] = useState(false)
+  const [basis, setBasis] = useState<string>('additional_work')
+  const [reason, setReason] = useState('')
+  const [error, setError] = useState<string | null>(null)
+  const [busy, setBusy] = useState(false)
+  const disabled = !editable || !doc.canConvertToChangeOrder || busy
+
+  const convert = async (to: 'quote' | 'change_order') => {
+    setBusy(true)
+    setError(null)
+    try {
+      apply(
+        await apiWithEtag<Doc>('POST', `/api/v1/documents/${doc.id}/convert`, {
+          to,
+          ...(to === 'change_order' ? { basis, reason: reason.trim() || undefined } : {}),
+        }),
+      )
+      setAsking(false)
+    } catch (err) {
+      setError((err as ApiError).message)
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  return (
+    <div className="panel switch-panel">
+      <label className="switch">
+        <input
+          type="checkbox"
+          role="switch"
+          aria-checked={isChangeOrder || asking}
+          checked={isChangeOrder || asking}
+          disabled={disabled}
+          aria-describedby="co-switch-hint"
+          onChange={(e) => {
+            if (e.target.checked) setAsking(true)
+            else if (isChangeOrder) convert('quote')
+            else setAsking(false)
+          }}
+        />
+        <span className="switch-track" aria-hidden="true">
+          <span className="switch-thumb" />
+        </span>
+        <span className="switch-label">{t('q.changeOrderSwitch')}</span>
+      </label>
+      <p id="co-switch-hint" className="hint">
+        {doc.canConvertToChangeOrder || isChangeOrder
+          ? t('q.changeOrderSwitchHint')
+          : t('q.changeOrderNeedsContract')}
+      </p>
+      {isChangeOrder && doc.changeOrderInfo ? (
+        <p className="muted">
+          {t('q.changeOrderInfo')} {doc.changeOrderInfo.contractLabel}
+          {doc.changeOrder ? ` · ${t(`doc.basis.${doc.changeOrder.basis}` as TextKey)}` : ''}
+          {doc.changeOrderInfo.reason ? ` · ${doc.changeOrderInfo.reason}` : ''}
+        </p>
+      ) : null}
+      {asking && !isChangeOrder ? (
+        <div className="stack">
+          <SelectField
+            label={t('doc.basis')}
+            name="basis"
+            value={basis}
+            onChange={setBasis}
+            options={CHANGE_ORDER_BASES.map((b) => ({
+              value: b,
+              label: t(`doc.basis.${b}` as TextKey),
+            }))}
+          />
+          <div className="field">
+            <label htmlFor="co-reason">{t('doc.reason')}</label>
+            <textarea
+              id="co-reason"
+              className="textarea"
+              rows={2}
+              value={reason}
+              onChange={(e) => setReason(e.target.value)}
+            />
+          </div>
+          <div className="button-row">
+            <button
+              type="button"
+              className="button primary auto"
+              disabled={busy}
+              onClick={() => convert('change_order')}
+            >
+              {t('q.convert')}
+            </button>
+            <button type="button" className="button ghost" onClick={() => setAsking(false)}>
+              {t('common.cancel')}
+            </button>
+          </div>
+        </div>
+      ) : null}
+      <FormError>{error}</FormError>
+    </div>
+  )
+}
+
+// ---- Fertigstellen, Status, Vorschau ------------------------------------------------------------
+
+function DocumentActions({
+  doc,
+  canWrite,
+  apply,
+  navigate,
+}: {
+  doc: Doc
+  canWrite: boolean
+  apply: Apply
+  navigate: Navigate
+}) {
+  const [error, setError] = useState<string | null>(null)
+  const [busy, setBusy] = useState(false)
+  const offer = ['quote', 'cost_estimate', 'change_order'].includes(doc.type)
+  const billed = doc.type === 'invoice' || doc.type === 'credit_note'
+  const run = async (path: string, body?: unknown, confirmText?: string) => {
+    if (confirmText && !window.confirm(confirmText)) return
+    setBusy(true)
+    setError(null)
+    try {
+      apply(await apiWithEtag<Doc>('POST', `/api/v1/documents/${doc.id}/${path}`, body ?? {}))
+    } catch (err) {
+      setError((err as ApiError).message)
+    } finally {
+      setBusy(false)
+    }
+  }
+  return (
+    <div className="doc-actions">
+      <a
+        className="button ghost"
+        href={`/dokumente/${doc.id}/druck`}
+        onClick={(e) => {
+          e.preventDefault()
+          navigate({ view: 'print', id: doc.id })
+        }}
+      >
+        {t('q.preview')}
+      </a>
+      {canWrite && doc.status === 'draft' && !billed ? (
+        <button
+          type="button"
+          className="button primary auto"
+          disabled={busy}
+          onClick={() => run('finalize', undefined, t('q.finalizeConfirm'))}
+        >
+          {t('q.finalize')}
+        </button>
+      ) : null}
+      {canWrite && offer && doc.status === 'finalized' ? (
+        <button
+          type="button"
+          className="button ghost"
+          disabled={busy}
+          onClick={() => run('status', { status: 'sent' })}
+        >
+          {t('q.markSent')}
+        </button>
+      ) : null}
+      {canWrite && offer && (doc.status === 'finalized' || doc.status === 'sent') ? (
+        <>
+          <button
+            type="button"
+            className="button ghost"
+            disabled={busy}
+            onClick={() => run('status', { status: 'accepted' })}
+          >
+            {t('q.markAccepted')}
+          </button>
+          <button
+            type="button"
+            className="button ghost danger"
+            disabled={busy}
+            onClick={() => run('status', { status: 'rejected' })}
+          >
+            {t('q.markRejected')}
+          </button>
+        </>
+      ) : null}
+      {doc.status === 'draft' && !billed ? <p className="hint">{t('q.finalizeHint')}</p> : null}
+      {billed && doc.status === 'draft' ? <p className="hint">{t('doc.finalizeLater')}</p> : null}
+      <FormError>{error}</FormError>
+    </div>
+  )
+}
+
+// ---- Interne Kalkulation (Kosten, Marge, Soll-Stunden) ------------------------------------------
+
+function InternalCalculation({ doc }: { doc: Doc }) {
+  const totals = doc.totals
+  const percent =
+    totals.netCents > 0
+      ? ((totals.marginCents / totals.netCents) * 100).toFixed(1).replace('.', ',')
+      : null
+  return (
+    <details className="panel internal">
+      <summary>
+        <h2 className="summary-title">{t('q.internal')}</h2>
+      </summary>
+      <dl className="totals">
+        <div>
+          <dt>{t('q.cost')}</dt>
+          <dd>{formatCents(totals.costCents)}</dd>
+        </div>
+        <div>
+          <dt>{t('q.margin')}</dt>
+          <dd>
+            {formatCents(totals.marginCents)}
+            {percent ? ` (${percent} %)` : ''}
+          </dd>
+        </div>
+        <div>
+          <dt>{t('q.laborHours')}</dt>
+          <dd>{formatQuantity(totals.laborHours)} Std</dd>
+        </div>
+        {totals.uncalculatedCount ? (
+          <div>
+            <dt>{t('q.uncalculated')}</dt>
+            <dd>{totals.uncalculatedCount}</dd>
+          </div>
+        ) : null}
+      </dl>
+    </details>
+  )
+}
+
+// ---- Kalkulation of a position ------------------------------------------------------------------
+
+type CostLineInput = {
+  kind: (typeof COST_KINDS)[number]
+  description: string
+  quantity: string
+  unitId: string
+  cost: string
+  markup: string
+}
+
+function CalculationForm({
+  doc,
+  item,
+  units,
+  onDone,
+  onCancel,
+}: {
+  doc: Doc
+  item: DocumentItem
+  units: UnitSummary[]
+  onDone: Apply
+  onCancel: () => void
+}) {
+  const unitOf = (id: string) => units.find((u) => u.id === id)
+  const [calcMode, setCalcMode] = useState<'unit_price' | 'total_price'>(
+    item.calcMode ?? 'unit_price',
+  )
+  const [lines, setLines] = useState<CostLineInput[]>(
+    item.costLines.length
+      ? item.costLines.map((l) => ({
+          kind: l.kind,
+          description: l.description ?? '',
+          quantity: formatInputNumber(l.quantity),
+          unitId: l.unit?.id ?? '',
+          cost: centsToInput(l.unitCostCents),
+          markup: formatInputNumber(l.markupPercent),
+        }))
+      : [
+          {
+            kind: 'labor',
+            description: '',
+            quantity: '',
+            unitId: units.find((u) => u.symbol === 'min')?.id ?? '',
+            cost: '',
+            markup: '',
+          },
+        ],
+  )
+  const [error, setError] = useState<string | null>(null)
+  const [busy, setBusy] = useState(false)
+  const change = (index: number, patch: Partial<CostLineInput>) =>
+    setLines((all) => all.map((l, i) => (i === index ? { ...l, ...patch } : l)))
+  const isTime = (unitId: string) => ['min', 'Std'].includes(unitOf(unitId)?.symbol ?? '')
+
+  const save = async (remove = false) => {
+    setError(null)
+    const body = remove
+      ? { calcMode, lines: [] }
+      : {
+          calcMode,
+          lines: lines.map((l, index) => {
+            const cents = parseEuro(l.cost)
+            if (cents === null || Number.isNaN(cents)) {
+              throw new Error(`${t('q.calcCost')} (${index + 1}): ${t('doc.invalidAmount')}`)
+            }
+            return {
+              kind: l.kind,
+              description: l.description.trim() || undefined,
+              quantity: l.quantity.trim() || '0',
+              unitId: l.unitId || null,
+              unitCostCents: cents,
+              markupPercent: l.markup.trim() || null,
+            }
+          }),
+        }
+    setBusy(true)
+    try {
+      onDone(
+        await apiWithEtag<Doc>(
+          'POST',
+          `/api/v1/documents/${doc.id}/items/${item.id}/calculation`,
+          body,
+        ),
+      )
+    } catch (err) {
+      setError(
+        err instanceof ApiError
+          ? [err.message, ...Object.values(err.fieldErrors)].join(' ')
+          : String((err as Error).message),
+      )
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  return (
+    <div className="item-form calc-form">
+      <h3>
+        {t('q.calcTitle')}: {item.oz} {item.shortText}
+      </h3>
+      <SelectField
+        label={t('q.calcMode')}
+        name="calcMode"
+        value={calcMode}
+        onChange={(v) => setCalcMode(v as 'unit_price' | 'total_price')}
+        options={(['unit_price', 'total_price'] as const).map((m) => ({
+          value: m,
+          label: t(`q.calcMode.${m}` as TextKey),
+        }))}
+      />
+      <ul className="rows">
+        {lines.map((line, i) => (
+          // biome-ignore lint/suspicious/noArrayIndexKey: rows have no id; order is the identity
+          <li key={i} className="row-card">
+            <div className="row">
+              <SelectField
+                label={t('q.calcKind')}
+                name={`kind-${i}`}
+                value={line.kind}
+                onChange={(v) => change(i, { kind: v as CostLineInput['kind'] })}
+                options={COST_KINDS.map((k) => ({ value: k, label: t(`q.kind.${k}` as TextKey) }))}
+              />
+              <div className="field">
+                <label htmlFor={`calc-${i}-description`}>{t('q.calcDescription')}</label>
+                <input
+                  id={`calc-${i}-description`}
+                  value={line.description}
+                  onChange={(e) => change(i, { description: e.target.value })}
+                />
+              </div>
+            </div>
+            <div className="row-with-action">
+              <div className="row four">
+                <div className="field">
+                  <label htmlFor={`calc-${i}-quantity`}>{t('q.calcQuantity')}</label>
+                  <input
+                    id={`calc-${i}-quantity`}
+                    inputMode="decimal"
+                    value={line.quantity}
+                    onChange={(e) => change(i, { quantity: e.target.value })}
+                  />
+                </div>
+                <div className="field">
+                  <label htmlFor={`calc-${i}-unit`}>{t('q.calcUnit')}</label>
+                  <select
+                    id={`calc-${i}-unit`}
+                    className="select"
+                    value={line.unitId}
+                    onChange={(e) => change(i, { unitId: e.target.value })}
+                  >
+                    <option value="">–</option>
+                    {units.map((u) => (
+                      <option key={u.id} value={u.id}>
+                        {u.symbol}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+                <div className="field">
+                  <label htmlFor={`calc-${i}-cost`}>
+                    {line.kind === 'labor' && isTime(line.unitId)
+                      ? t('q.calcRate')
+                      : t('q.calcCost')}
+                  </label>
+                  <input
+                    id={`calc-${i}-cost`}
+                    inputMode="decimal"
+                    value={line.cost}
+                    onChange={(e) => change(i, { cost: e.target.value })}
+                  />
+                </div>
+                <div className="field">
+                  <label htmlFor={`calc-${i}-markup`}>{t('q.calcMarkup')}</label>
+                  <input
+                    id={`calc-${i}-markup`}
+                    inputMode="decimal"
+                    placeholder={t('q.calcMarkupDefault')}
+                    value={line.markup}
+                    onChange={(e) => change(i, { markup: e.target.value })}
+                  />
+                </div>
+              </div>
+              <button
+                type="button"
+                className="button ghost icon danger"
+                aria-label={t('d.row.remove')}
+                onClick={() => setLines((all) => all.filter((_, j) => j !== i))}
+              >
+                ✕
+              </button>
+            </div>
+          </li>
+        ))}
+      </ul>
+      <button
+        type="button"
+        className="button ghost small"
+        onClick={() =>
+          setLines((all) => [
+            ...all,
+            { kind: 'material', description: '', quantity: '', unitId: '', cost: '', markup: '' },
+          ])
+        }
+      >
+        {t('q.calcAddLine')}
+      </button>
+      {item.calculation ? (
+        <p className="muted">
+          {tf('q.calcSummary', {
+            cost: formatCents(item.calculation.costCents),
+            margin: formatCents(item.calculation.marginCents),
+            percent: formatQuantity(item.calculation.marginPercent ?? '0'),
+            hours: formatQuantity(item.calculation.laborHours),
+          })}
+        </p>
+      ) : null}
+      <FormError>{error}</FormError>
+      <div className="button-row">
+        <button
+          type="button"
+          className="button primary auto"
+          disabled={busy}
+          onClick={() => save()}
+        >
+          {t('common.save')}
+        </button>
+        {item.costLines.length ? (
+          <button
+            type="button"
+            className="button ghost danger"
+            disabled={busy}
+            onClick={() => save(true)}
+          >
+            {t('q.calcRemove')}
+          </button>
+        ) : null}
+        <button type="button" className="button ghost" onClick={onCancel}>
+          {t('common.cancel')}
+        </button>
+      </div>
     </div>
   )
 }

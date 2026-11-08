@@ -8,6 +8,7 @@ export type Route =
   | { view: 'security' }
   | { view: 'project'; id: string; section: ProjectSection }
   | { view: 'document'; id: string }
+  | { view: 'print'; id: string }
   | { view: 'measurement'; id: string }
   | { view: 'report'; id: string }
 
@@ -33,6 +34,8 @@ export function parseRoute(path: string): Route {
       section: section ? SECTIONS[section] : 'overview',
     }
   }
+  const print = new RegExp(`^/dokumente/(${UUID})/druck/?$`).exec(path)
+  if (print) return { view: 'print', id: print[1] as string }
   const document = new RegExp(`^/dokumente/(${UUID})/?$`).exec(path)
   if (document) return { view: 'document', id: document[1] as string }
   const measurement = new RegExp(`^/aufmass/(${UUID})/?$`).exec(path)
@@ -67,6 +70,8 @@ export function pathOf(route: Route): string {
     }
     case 'document':
       return `/dokumente/${route.id}`
+    case 'print':
+      return `/dokumente/${route.id}/druck`
     case 'measurement':
       return `/aufmass/${route.id}`
     case 'report':

@@ -167,7 +167,7 @@ const de = {
   'doc.invoice.final': 'Schlussrechnung',
   'doc.invoice.cancellation': 'Stornorechnung',
   'doc.status.draft': 'Entwurf',
-  'doc.status.finalized': 'Festgeschrieben',
+  'doc.status.finalized': 'Fertiggestellt',
   'doc.status.sent': 'Versendet',
   'doc.status.accepted': 'Beauftragt',
   'doc.status.partially_accepted': 'Teilbeauftragt',
@@ -404,10 +404,72 @@ const de = {
   'd.locked': 'Dieser Bericht ist unterschrieben und gesperrt.',
   'd.delete': 'Bericht löschen',
   'd.deleteConfirm': 'Diesen offenen Bericht löschen?',
+  'q.changeOrderSwitch': 'Nachtragsangebot',
+  'q.changeOrderSwitchHint':
+    'Aus diesem Angebot einen Nachtrag zum Hauptauftrag machen (Nummerierung N01 …).',
+  'q.changeOrderNeedsContract':
+    'Erst möglich, wenn das Projekt eine Auftragsbestätigung (Hauptauftrag) hat.',
+  'q.changeOrderInfo': 'Nachtrag zum Hauptauftrag',
+  'q.convert': 'Umschalten',
+  'q.validUntil': 'Bindefrist (gültig bis)',
+  'q.preview': 'Vorschau / Drucken',
+  'q.finalize': 'Fertigstellen',
+  'q.finalizeConfirm':
+    'Dokument jetzt fertigstellen? Es bekommt eine Nummer und kann danach nicht mehr geändert werden.',
+  'q.finalizeHint': 'Fertigstellen vergibt die Nummer und friert Empfänger und Firmendaten ein.',
+  'q.markSent': 'Als versendet markieren',
+  'q.markAccepted': 'Beauftragt',
+  'q.markRejected': 'Abgelehnt',
+  'q.calc': 'Kalkulation',
+  'q.calcTitle': 'Kalkulation der Position',
+  'q.calcMode': 'Kostenzeilen gelten für',
+  'q.calcMode.unit_price': 'eine Einheit (Einheitspreis)',
+  'q.calcMode.total_price': 'die ganze Menge (Gesamtpreis)',
+  'q.calcKind': 'Art',
+  'q.kind.labor': 'Lohn',
+  'q.kind.material': 'Material',
+  'q.kind.equipment': 'Gerät',
+  'q.kind.subcontract': 'Fremdleistung',
+  'q.kind.other': 'Sonstiges',
+  'q.calcDescription': 'Beschreibung',
+  'q.calcQuantity': 'Menge',
+  'q.calcUnit': 'Einheit',
+  'q.calcCost': 'Kosten je Einheit (€)',
+  'q.calcRate': 'Stundensatz (€/Std)',
+  'q.calcMarkup': 'Zuschlag (%)',
+  'q.calcMarkupDefault': 'leer = Vorgabe der Firma',
+  'q.calcAddLine': '+ Kostenzeile',
+  'q.calcRemove': 'Kalkulation entfernen',
+  'q.calcFromCalc': 'aus Kalkulation',
+  'q.calcSummary': 'Kosten {cost} · Marge {margin} ({percent} %) · {hours} Std',
+  'q.cost': 'Kosten',
+  'q.margin': 'Marge',
+  'q.laborHours': 'Soll-Stunden',
+  'q.uncalculated': 'Positionen ohne Kalkulation (mit Verkaufspreis angesetzt)',
+  'q.internal': 'Interne Kalkulation (erscheint nicht im Dokument)',
+  'print.draft': 'ENTWURF',
+  'print.number': 'Nummer',
+  'print.date': 'Datum',
+  'print.project': 'Projekt',
+  'print.validUntil': 'Gültig bis',
+  'print.place': 'Leistungsort',
+  'print.pos': 'Pos.',
+  'print.text': 'Leistung',
+  'print.quantity': 'Menge',
+  'print.unitPrice': 'EP',
+  'print.total': 'GP',
+  'print.print': 'Drucken / als PDF speichern',
+  'print.back': 'Zurück zum Dokument',
+  'print.paymentDays': 'Zahlbar innerhalb von {days} Tagen ohne Abzug.',
 } as const
 
 export type TextKey = keyof typeof de
 
 export function t(key: TextKey): string {
   return de[key]
+}
+
+/** Text with placeholders: tf('q.calcSummary', { cost: '…' }) replaces {cost}. */
+export function tf(key: TextKey, values: Record<string, string>): string {
+  return t(key).replace(/\{(\w+)\}/g, (_, name: string) => values[name] ?? `{${name}}`)
 }

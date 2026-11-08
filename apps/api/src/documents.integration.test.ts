@@ -186,6 +186,11 @@ describe.skipIf(!process.env.DATABASE_URL)('project documents (integration)', ()
           },
         ],
         titleSubtotals: { [title]: 56_250 },
+        // No Kalkulation yet: three counted positions with prices entered directly.
+        costCents: 0,
+        marginCents: 85_230,
+        laborHours: '0.00',
+        uncalculatedCount: 3,
       })
       expect(doc.netTotalCents).toBe(85_230)
       quote = doc

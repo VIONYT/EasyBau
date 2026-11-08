@@ -5,6 +5,11 @@ Alle wesentlichen Änderungen, vor allem solche, die Betreiber betreffen (neue V
 ## Unveröffentlicht
 
 ### Neu
+- Angebotserstellung: Kalkulation je Position mit Kostenzeilen (Lohn als Zeit × Stundensatz, Material, Gerät, Fremdleistung, Sonstiges), Zuschlägen je Kostenart (Vorgabe der Firma oder je Zeile) und Modus Einheits-/Gesamtpreis; der Server rechnet EP, GP, Kosten, Marge und Soll-Stunden. Interne Kalkulation (Kosten, Marge, Soll-Stunden) im Editor, nicht im Dokument. Die Kalkulation wird beim Übernehmen in Folgedokumente mitkopiert.
+- Empfänger, Bindefrist („gültig bis“) im Kopf; Fertigstellen vergibt die Nummer (A-…, KV-…, AB-…), friert Firma und Empfänger ein und sperrt das Dokument; danach Status versendet → beauftragt / abgelehnt.
+- Schalter „Nachtragsangebot“: ein Angebots-Entwurf wird mit einem Klick zum Nachtrag zum Hauptauftrag (Grund nach VOB/B/BGB, Begründung, Nummerierung N01.1 …) und zurück; fertiggestellte Nachträge erhalten die Nummer des Auftrags mit Zusatz (z. B. AB-00101/N01); beauftragt/abgelehnt wird am Nachtrag mitgeführt.
+- Druckansicht als Brief (Absender, Empfänger, Nummer, Positionen, Summen, Fußzeile) zum Drucken oder „Als PDF speichern“ im Browser; Entwürfe mit Wasserzeichen.
+- Datenbank-Migration `0011_quote_workflow`.
 - Bautagebuch im Projekt: ein Bautagesbericht je Tag mit Wetter (Wetterlage, Temperaturen), Personal und Stunden (vorbelegt mit Projektteam und Arbeitszeiten der Firma), ausgeführten Leistungen, Material, Geräten, besonderen Vorkommnissen und Fotos (direkt mit der Kamera, abgelegt in der Projektablage unter „Fotos“).
 - Unterschrift schließt den Bericht ab: Kopfdaten (Auftraggeber, Leistungsort, Firma) werden eingefroren, Bericht und Fotos sind danach unveränderlich (Beweisfunktion, VOB/B § 6). Ergänzungen als neuer Bericht für denselben Tag.
 - Berichte laufen über Vorlagen; Regiebericht, Einsatzbericht, Abnahmeprotokoll, Bedenken-/Behinderungsanzeige u. a. sind über die API bereits nutzbar (Oberfläche folgt).

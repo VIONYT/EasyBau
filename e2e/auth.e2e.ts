@@ -322,6 +322,98 @@ test('Bautagebuch: daily report with weather, team, work, photo and signature', 
   await expect(page.getByText(/Regen, 3 °C – 8,5 °C · 1 Person · 8,5 Std · 1 Foto/)).toBeVisible()
 })
 
+test('Angebot: Kalkulation, Fertigstellen, Druckansicht und Nachtrag-Schalter', async () => {
+  test.skip(!SETUP_TOKEN, 'SETUP_TOKEN must be set for a fresh stack')
+  test.setTimeout(120_000)
+
+  // Kunde anlegen
+  await page.getByRole('button', { name: 'Kontakte' }).click()
+  await page.getByLabel('Name der Organisation').fill('Wohnbau Nord eG')
+  await page.getByRole('button', { name: 'Speichern' }).click()
+  await expect(page.getByText('Wohnbau Nord eG')).toBeVisible()
+
+  // Angebot öffnen
+  await page.getByRole('button', { name: 'Projekte' }).click()
+  await page.getByRole('link', { name: /Sanierung Lindenweg/ }).click()
+  await page.getByRole('button', { name: 'Dokumente' }).click()
+  await page.getByRole('link', { name: /^Angebot/ }).click()
+  await expect(page.getByRole('heading', { name: 'Angebot', exact: true })).toBeVisible()
+
+  // Nachtrag-Schalter: ohne Hauptauftrag nicht möglich
+  await expect(page.getByRole('switch', { name: 'Nachtragsangebot' })).toBeDisabled()
+
+  // Kalkulation: 18 min Lohn à 54 €/Std + 0,3 l Farbe à 8 € → EP 18,60 €
+  await page.getByRole('button', { name: 'Kalkulation: Wandfläche streichen' }).click()
+  await page.getByLabel('Menge', { exact: true }).first().fill('18')
+  await page.getByLabel('Stundensatz (€/Std)').fill('54')
+  await page.getByRole('button', { name: '+ Kostenzeile' }).click()
+  await page.getByLabel('Art').nth(1).selectOption({ label: 'Material' })
+  await page.getByLabel('Menge', { exact: true }).nth(1).fill('0,3')
+  await page.getByLabel('Einheit', { exact: true }).nth(1).selectOption({ label: 'l' })
+  await page.getByLabel('Kosten je Einheit (€)').fill('8')
+  await page.getByRole('button', { name: 'Speichern', exact: true }).last().click()
+  await expect(page.locator('.position--item .calc')).toContainText('36,44 m² × 18,60')
+  await expect(page.locator('.position--item .amount')).toHaveText('677,78\u00a0€')
+  await expect(page.locator('.calc-tag')).toContainText('Kalkulation')
+
+  // Empfänger wählen und fertigstellen
+  await page.getByLabel('Empfänger').selectOption({ label: 'Wohnbau Nord eG' })
+  await page.getByRole('button', { name: 'Speichern', exact: true }).first().click()
+  await expect(page.getByText('Gespeichert.')).toBeVisible()
+  page.once('dialog', (dialog) => dialog.accept())
+  await page.getByRole('button', { name: 'Fertigstellen' }).click()
+  await expect(page.getByText(/^A-00101/)).toBeVisible()
+  await expect(page.getByText('Fertiggestellt', { exact: true })).toBeVisible()
+  await expectNoHorizontalScroll(page)
+
+  // Druckansicht
+  await page.getByRole('link', { name: 'Vorschau / Drucken' }).click()
+  await expect(page.getByRole('heading', { name: 'Angebot A-00101' })).toBeVisible()
+  await expect(page.locator('.letter-recipient')).toContainText('Wohnbau Nord eG')
+  await expect(page.locator('.letter-totals .grand dd')).toHaveText('806,56\u00a0€')
+  await expectNoHorizontalScroll(page)
+  if (SCREENSHOTS)
+    await page.screenshot({ path: `${SCREENSHOTS}/angebot-druck.png`, fullPage: true })
+  await page.getByRole('link', { name: /Zurück zum Dokument/ }).click()
+  await page.getByRole('button', { name: 'Beauftragt' }).click()
+  await expect(page.getByText('Beauftragt', { exact: true }).first()).toBeVisible()
+
+  // Hauptauftrag aus dem Angebot, fertigstellen
+  await page.getByRole('link', { name: /Sanierung Lindenweg/ }).click()
+  await page.getByRole('button', { name: 'Neues Dokument' }).click()
+  await page.getByRole('radio', { name: 'Auftragsbestätigung', exact: true }).check()
+  await page.getByLabel('Positionen übernehmen aus').selectOption({ index: 1 })
+  await page.getByRole('button', { name: 'Dokument erstellen' }).click()
+  await expect(page.getByRole('heading', { name: 'Auftragsbestätigung' })).toBeVisible()
+  page.once('dialog', (dialog) => dialog.accept())
+  await page.getByRole('button', { name: 'Fertigstellen' }).click()
+  await expect(page.getByText(/^AB-00101/)).toBeVisible()
+
+  // Neues Angebot → per Schalter zum Nachtragsangebot
+  await page.getByRole('link', { name: /Sanierung Lindenweg/ }).click()
+  await page.getByRole('button', { name: 'Neues Dokument' }).click()
+  await page.getByRole('button', { name: 'Dokument erstellen' }).click()
+  await expect(page.getByRole('heading', { name: 'Angebot', exact: true })).toBeVisible()
+  await page.getByRole('switch', { name: 'Nachtragsangebot' }).check()
+  await page.getByLabel('Begründung').fill('Zusätzliche Fensterlaibungen')
+  await page.getByRole('button', { name: 'Umschalten' }).click()
+  await expect(page.getByRole('heading', { name: 'Nachtragsangebot N01' })).toBeVisible()
+  await expect(page.getByText(/Nachtrag zum Hauptauftrag AB-00101/)).toBeVisible()
+  await page.getByRole('button', { name: '+ Position' }).click()
+  await page.getByLabel('Kurztext').fill('Fensterlaibung putzen')
+  await page.getByLabel('Menge').fill('4')
+  await page.getByLabel('Einheit', { exact: true }).selectOption({ label: 'Stk. – Stück' })
+  await page.getByLabel('Einheitspreis netto (€)').fill('45')
+  await page.getByRole('button', { name: 'Hinzufügen', exact: true }).click()
+  await expect(page.locator('.position--item .oz')).toHaveText('N01.1')
+  await expectNoHorizontalScroll(page)
+  if (SCREENSHOTS) await page.screenshot({ path: `${SCREENSHOTS}/nachtrag.png`, fullPage: true })
+  // Schalter zurück: wieder ein normales Angebot
+  await page.getByRole('switch', { name: 'Nachtragsangebot' }).click()
+  await expect(page.getByRole('heading', { name: 'Angebot', exact: true })).toBeVisible()
+  await expect(page.locator('.position--item .oz')).toHaveText('1')
+})
+
 test('second factor fails without the security key', async () => {
   test.skip(!SETUP_TOKEN, 'SETUP_TOKEN must be set for a fresh stack')
   // Without the key the second step of the login fails with a readable message.

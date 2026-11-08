@@ -1237,3 +1237,297 @@ legend.h2 + * {
 .form-error p {
   margin: 0;
 }
+
+/* --- Angebot: Nachtrag-Schalter, Aktionen, Kalkulation --------------------- */
+.switch {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  min-height: 44px;
+  cursor: pointer;
+  font-weight: 600;
+}
+
+.switch > input[type="checkbox"] {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  margin: 0;
+  opacity: 0;
+  cursor: inherit;
+}
+
+.switch-track {
+  position: relative;
+  flex: none;
+  width: 52px;
+  height: 30px;
+  background: var(--color-border);
+  border-radius: 999px;
+  transition: background 0.15s;
+}
+
+.switch-thumb {
+  position: absolute;
+  top: 3px;
+  left: 3px;
+  width: 24px;
+  height: 24px;
+  background: #ffffff;
+  border-radius: 50%;
+  box-shadow: 0 1px 3px rgb(0 0 0 / 0.3);
+  transition: transform 0.15s;
+}
+
+.switch input:checked + .switch-track {
+  background: var(--color-primary);
+}
+
+.switch input:checked + .switch-track .switch-thumb {
+  transform: translateX(22px);
+}
+
+.switch input:focus-visible + .switch-track {
+  outline: 3px solid var(--color-accent);
+  outline-offset: 2px;
+}
+
+.switch input:disabled + .switch-track {
+  opacity: 0.5;
+}
+
+.switch:has(input:disabled) {
+  cursor: not-allowed;
+}
+
+.doc-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-2);
+  margin-bottom: var(--space-4);
+}
+
+.doc-actions .hint {
+  flex-basis: 100%;
+}
+
+.row.four {
+  grid-template-columns: repeat(auto-fit, minmax(110px, 1fr));
+}
+
+.calc-tag {
+  color: var(--color-primary);
+}
+
+/* --- Druckansicht (Brief) ---------------------------------------------------- */
+.print-tools {
+  margin-bottom: var(--space-4);
+}
+
+.letter {
+  position: relative;
+  max-width: 210mm;
+  margin: 0 auto;
+  padding: 16mm 18mm;
+  color: #111827;
+  background: #ffffff;
+  border: 1px solid var(--color-border);
+  font-size: 10.5pt;
+  line-height: 1.45;
+  overflow-wrap: anywhere;
+}
+
+.letter .watermark {
+  position: absolute;
+  inset: 30% 0 auto;
+  text-align: center;
+  font-size: 64pt;
+  font-weight: 800;
+  color: rgb(185 28 28 / 0.12);
+  transform: rotate(-20deg);
+  pointer-events: none;
+}
+
+.letter-head {
+  display: flex;
+  justify-content: flex-end;
+  margin-bottom: 10mm;
+}
+
+.letter-issuer {
+  display: grid;
+  text-align: right;
+}
+
+.letter-address-row {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  gap: 6mm;
+  margin-bottom: 8mm;
+}
+
+.letter-recipient {
+  display: grid;
+  min-width: 0;
+  max-width: 85mm;
+}
+
+.sender-line {
+  margin-bottom: 2mm;
+  font-size: 7.5pt;
+  color: #4b5563;
+  text-decoration: underline;
+}
+
+.letter-meta {
+  display: grid;
+  grid-template-columns: auto auto;
+  gap: 1mm 4mm;
+  margin: 0;
+  font-size: 9.5pt;
+}
+
+.letter-meta dt {
+  color: #4b5563;
+}
+
+.letter-meta dd {
+  margin: 0;
+}
+
+.letter-title {
+  margin: 0 0 2mm;
+  font-size: 15pt;
+  color: #111827;
+}
+
+.letter-subject {
+  margin: 0 0 3mm;
+  font-weight: 600;
+}
+
+.letter-small {
+  font-size: 9pt;
+  color: #4b5563;
+}
+
+.letter-items {
+  width: 100%;
+  margin: 4mm 0;
+  border-collapse: collapse;
+  font-variant-numeric: tabular-nums;
+}
+
+.letter-items th,
+.letter-items td {
+  padding: 1.5mm 1.5mm;
+  vertical-align: top;
+  text-align: left;
+  border-bottom: 1px solid #e5e7eb;
+}
+
+.letter-items th {
+  font-size: 9pt;
+  border-bottom: 1.5px solid #111827;
+}
+
+.letter-items .num {
+  text-align: right;
+  white-space: nowrap;
+}
+
+.letter-items th,
+.letter-items td:first-child {
+  white-space: nowrap;
+}
+
+.letter-items .title-row td {
+  background: #f3f4f6;
+}
+
+.letter-totals {
+  display: grid;
+  gap: 1mm;
+  max-width: 95mm;
+  margin: 0 0 6mm auto;
+  font-variant-numeric: tabular-nums;
+}
+
+.letter-totals > div {
+  display: flex;
+  justify-content: space-between;
+  gap: 4mm;
+}
+
+.letter-totals dd {
+  margin: 0;
+  white-space: nowrap;
+}
+
+.letter-totals .grand {
+  padding-top: 1mm;
+  border-top: 1.5px solid #111827;
+  font-weight: 700;
+}
+
+.letter-foot {
+  display: grid;
+  gap: 0.5mm;
+  margin-top: 10mm;
+  padding-top: 2mm;
+  border-top: 1px solid #e5e7eb;
+  font-size: 7.5pt;
+  color: #4b5563;
+  text-align: center;
+}
+
+@media (max-width: 600px) {
+  .letter {
+    padding: var(--space-4);
+    font-size: 10pt;
+  }
+
+  .letter-items {
+    font-size: 8.5pt;
+  }
+
+  .letter-items th,
+  .letter-items td {
+    padding: 1mm 0.75mm;
+  }
+}
+
+@media print {
+  @page {
+    size: A4;
+    margin: 0;
+  }
+
+  body {
+    background: #ffffff;
+  }
+
+  .workspace > .topbar,
+  .workspace > .tabs,
+  .content .no-print {
+    display: none;
+  }
+
+  .content {
+    max-width: none;
+    padding: 0;
+  }
+
+  .letter {
+    border: 0;
+    max-width: none;
+  }
+
+  .letter-items tr {
+    break-inside: avoid;
+  }
+}

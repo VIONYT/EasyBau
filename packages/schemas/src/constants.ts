@@ -111,3 +111,6 @@ export const SUPPORTED_SECTION_TYPES = [
 ] as const
 
 export const SIGNER_ROLES = ['contractor', 'client', 'other'] as const
+
+/** Kostenarten der Kalkulation: Lohn, Material, Gerät, Fremdleistung, Sonstiges. */
+export const COST_KINDS = ['labor', 'material', 'equipment', 'subcontract', 'other'] as const

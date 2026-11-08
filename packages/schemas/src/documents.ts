@@ -2,6 +2,7 @@ import { z } from 'zod'
 import { id, isoDate, optionalText } from './common.js'
 import {
   CHANGE_ORDER_BASES,
+  COST_KINDS,
   CREATABLE_INVOICE_KINDS,
   DOCUMENT_TYPES,
   EDITABLE_POSITION_TYPES,
@@ -92,6 +93,8 @@ export const updateDocumentRequest = z
     paymentDueDays: z.number().int().min(0).max(365).nullable(),
     discountPercent: percent('Gesamtrabatt').nullable(),
     taxMode: z.enum(TAX_MODES),
+    /** Angebot: Bindefrist. */
+    validUntil: isoDate.nullable(),
   })
   .partial()
   .superRefine((value, ctx) => {
@@ -154,6 +157,40 @@ export type UpdateItemRequest = z.infer<typeof updateItemRequest>
 
 export const moveItemRequest = z.object({ direction: z.enum(['up', 'down']) })
 
+export type CostKind = (typeof COST_KINDS)[number]
+
+/** Kalkulation of a position: cost lines with markup → EP (DESIGN.md §4.2). */
+export const calculationRequest = z.object({
+  calcMode: z.enum(['unit_price', 'total_price']).default('unit_price'),
+  lines: z
+    .array(
+      z.object({
+        kind: z.enum(COST_KINDS),
+        description: optionalText(300),
+        quantity: decimalText('Menge', 10, 4),
+        unitId: id.nullish(),
+        /** Cost per unit in cents; labor in min/Std: hourly rate (Stundensatz). */
+        unitCostCents: cents.refine((v) => v >= 0, 'Kosten dürfen nicht negativ sein.'),
+        /** Zuschlag in percent; omitted: company default for the cost kind. */
+        markupPercent: decimalText('Zuschlag', 4, 4).nullish(),
+      }),
+    )
+    .max(50),
+})
+export type CalculationRequest = z.infer<typeof calculationRequest>
+
+/** Schalter „Nachtragsangebot“: a draft quote becomes a change order and back. */
+export const convertDocumentRequest = z.object({
+  to: z.enum(['quote', 'change_order']),
+  basis: z.enum(CHANGE_ORDER_BASES).optional(),
+  reason: optionalText(2000),
+})
+
+/** After completion: sent → accepted / rejected (quotes, cost estimates, change orders). */
+export const documentStatusRequest = z.object({
+  status: z.enum(['sent', 'accepted', 'rejected']),
+})
+
 export interface DocumentOption {
   type: DocumentType
   invoiceKind: InvoiceKind | null
@@ -198,6 +235,26 @@ export interface DocumentItem {
   taxRatePercent: string | null
   /** Quantity was taken over from the measurement (Aufmaß). */
   fromMeasurement: boolean
+  calcMode: 'unit_price' | 'total_price' | null
+  /** Kostenzeilen; empty: the price is entered directly. */
+  costLines: CostLine[]
+  /** Only for calculated positions. */
+  calculation: {
+    costCents: number
+    marginCents: number
+    marginPercent: string | null
+    laborHours: string
+  } | null
+}
+
+export interface CostLine {
+  id: string
+  kind: CostKind
+  description: string | null
+  quantity: string
+  unit: UnitRef | null
+  unitCostCents: number
+  markupPercent: string
 }
 
 export interface DocumentTaxLine {
@@ -217,6 +274,17 @@ export interface DocumentTotals {
   taxLines: DocumentTaxLine[]
   /** Title id → subtotal of the positions below it. */
   titleSubtotals: Record<string, number>
+  /** Kalkulation of the counted positions: cost, margin and planned labor hours (Soll-Stunden). */
+  costCents: number
+  marginCents: number
+  laborHours: string
+  /** Counted positions without calculation (price entered directly). */
+  uncalculatedCount: number
+}
+
+export interface PartyAddress {
+  name: string
+  lines: string[]
 }
 
 export interface DocumentDetail extends DocumentSummary {
@@ -231,6 +299,15 @@ export interface DocumentDetail extends DocumentSummary {
   discountPercent: string | null
   taxMode: TaxMode
   sourceDocumentId: string | null
+  validUntil: string | null
+  /** Firma (Absender) and Empfänger; snapshots once the document is completed. */
+  issuer: PartyAddress & { contact: string[]; legal: string[] }
+  recipient: PartyAddress | null
+  finalizedAt: string | null
+  /** Change orders: main contract, reason. */
+  changeOrderInfo: { contractId: string; contractLabel: string; reason: string | null } | null
+  /** Schalter „Nachtragsangebot“ possible (draft quote/change order with a main contract). */
+  canConvertToChangeOrder: boolean
   items: DocumentItem[]
   totals: DocumentTotals
 }
