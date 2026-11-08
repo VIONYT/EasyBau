@@ -12,10 +12,15 @@
   },
   "scripts": {
     "build": "tsc -p tsconfig.build.json",
-    "typecheck": "tsc -p tsconfig.json --noEmit"
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "migrate": "tsx --conditions=source src/cli/migrate.ts"
   },
   "dependencies": {
     "@opc/config": "workspace:*",
     "postgres": "4.1.0"
-  }
+  },
+  "files": [
+    "dist",
+    "migrations"
+  ]
 }

@@ -15,6 +15,14 @@ check() {
   esac
 }
 
+# Wait until the proxy has its certificate and the app answers (max. 60 s).
+i=0
+until $CURL "$BASE_URL/healthz" >/dev/null 2>&1; do
+  i=$((i + 1))
+  [ "$i" -ge 30 ] && { echo "FAIL stack did not become reachable at $BASE_URL"; exit 1; }
+  sleep 2
+done
+
 check "liveness"        /healthz      '"status":"ok"'
 check "readiness (db)"  /readyz       '"status":"ready"'
 check "api metadata"    /api/v1/meta  '"name"'

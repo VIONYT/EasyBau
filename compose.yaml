@@ -29,6 +29,7 @@ x-app-env: &app-env
   LOG_LEVEL: ${LOG_LEVEL:-info}
   DATABASE_URL: postgres://${POSTGRES_USER:-openplancraft}:${POSTGRES_PASSWORD:?POSTGRES_PASSWORD fehlt in .env}@db:5432/${POSTGRES_DB:-openplancraft}
   DATABASE_POOL_MAX: ${DATABASE_POOL_MAX:-5}
+  MIGRATE_ON_START: ${MIGRATE_ON_START:-true}
 
 services:
   proxy:

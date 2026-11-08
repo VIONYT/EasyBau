@@ -99,7 +99,7 @@ Alle Kästen laufen als Container im selben `docker compose`-Stack beim Betreibe
 | Backend | **Fastify** + `@fastify/swagger` | Schnell, schlank, OpenAPI aus Schemas |
 | Validierung | **Zod** (geteilt) | Gleiche Validierung im Client und auf dem Server |
 | DB | **PostgreSQL 17** | Transaktionen, RLS, Trigger für Unveränderbarkeit, JSONB |
-| ORM / Migrationen | **Drizzle ORM** + drizzle-kit | Typsicher, SQL-nah, gut für Trigger/RLS |
+| Migrationen / Zugriff | **Versionierte SQL-Migrationen** mit eigenem Runner (Prüfsummen, Advisory Lock), Zugriff über `postgres` (parametrisierte Tagged Templates) | RLS, Trigger und Hash-Kette liegen vollständig im SQL; siehe [ADR 0003](docs/adr/0003-sql-migrationen.md) |
 | Jobs | **pg-boss** (Warteschlange in PostgreSQL) | Kein eigener Queue-Container. Jobs werden **in derselben Transaktion** wie die fachliche Änderung angelegt (z. B. Festschreiben → „PDF/E-Rechnung erzeugen“) und können nicht verloren gehen. Wiederholungen, Zeitpläne (Cron) und Singleton-Jobs sind eingebaut |
 | PDF | **Typst**: Vorlagen in `packages/pdf-templates` (Typst-Markup + JSON-Daten), Erzeugung über die Typst-CLI im Worker-Image; Ausgabe **PDF/A-3b** mit eingebetteter E-Rechnungs-XML (`pdf.embed`); Schriften im Image gebündelt | Ein PDF dauert typischerweise Millisekunden statt Sekunden, und der Speicherbedarf liegt bei wenigen MB statt 300–500 MB für Chromium. Dieselben Vorlagen können per WebAssembly auch für die Live-Vorschau im Browser genutzt werden. Fallback: Nachbearbeitung mit der E-Rechnungs-Bibliothek, falls eine PDF/A-Prüfung (veraPDF in CI) fehlschlägt |
 | E-Rechnung | **`@e-invoice-eu/core`** (Factur-X/ZUGFeRD, XRechnung UBL/CII); Validierung mit **KoSIT-Validator** (Docker-Sidecar, CI) | Bewährte Bibliothek + offizieller Prüfer |
@@ -124,7 +124,7 @@ openplancraft/
 ├─ packages/
 │  ├─ domain/         # Reine Geschäftslogik: Kalkulation, Aufmaß-Formelparser, Mengenfortschreibung, Steuern, Summen, Nummern-Formate (keine I/O)
 │  ├─ schemas/        # Zod-Schemas + Typen (API-Verträge)
-│  ├─ db/             # Drizzle-Schema, Migrationen, RLS/Trigger-SQL, Seeds
+│  ├─ db/             # SQL-Migrationen (Schema, RLS, Trigger, Standarddaten), Runner, withTenant()
 │  ├─ einvoice/       # Mapping Dokument → EN16931, ZUGFeRD/XRechnung, Validierung
 │  ├─ exports/        # DATEV-EXTF, GoBD-Z3 (index.xml), Gesamtexport
 │  ├─ pdf-templates/  # Typst-Vorlagen für Dokumente, Berichte, Mahnungen, Aufmaßblätter
@@ -475,7 +475,7 @@ invoice ─┬─ payment (date, amount_cents, method, reference)
 | Eingangsrechnungen | ✔ | ✔ | lesen (Projekt) | – | – |
 | Exporte (DATEV/GoBD), Audit-Log | ✔ | ✔ | – | – | – |
 
-- Eingaben mit Zod validiert, SQL nur parametrisiert (Drizzle), Ausgabe-Escaping in React und PDF-Templates, strikte **CSP**, Upload-Prüfung (MIME-Sniffing, Größenlimit, keine aktiven Inhalte), signierte, kurzlebige S3-URLs.
+- Eingaben mit Zod validiert, SQL nur parametrisiert (Tagged Templates), Ausgabe-Escaping in React und PDF-Templates, strikte **CSP**, Upload-Prüfung (MIME-Sniffing, Größenlimit, keine aktiven Inhalte), signierte, kurzlebige S3-URLs.
 - Abhängigkeiten: Renovate, `pnpm audit`, CodeQL in CI; Secrets nie im Repo.
 
 ### 5.3 Finanzverwaltung und Steuerberater

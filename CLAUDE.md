@@ -5,10 +5,10 @@ OpenPlancraft ist eine **Open-Source**-Betriebssoftware (ERP) für Bau- und Hand
 **Lies vor jeder größeren Änderung [`DESIGN.md`](DESIGN.md)** (Architektur, Datenmodell, UX). Hintergrund: [`docs/RESEARCH.md`](docs/RESEARCH.md). Dieses Projekt ist ein eigenständiges Produkt: übernimm keine Texte, Logos, Markennamen oder Screens von Plancraft oder anderen Anbietern.
 
 ## Projektstatus
-Grundgerüst steht: Monorepo, Services (`server` = API + Worker per `APP_ROLE`), Web-Platzhalter, Docker-Stack (proxy, app, db; Profil `standard` mit separatem `worker`), Test-Stack und CI. Noch nicht im Stack: storage (S3/Object Lock), kosit, backup. Fachmodule folgen in der Reihenfolge der MVP-Module in DESIGN.md §2.
+Grundgerüst steht, Datenbankschema für das MVP ist angelegt (Migrationen 0001–0005). Monorepo, Services (`server` = API + Worker per `APP_ROLE`), Web-Platzhalter, Docker-Stack (proxy, app, db; Profil `standard` mit separatem `worker`), Test-Stack und CI. Noch nicht im Stack: storage (S3/Object Lock), kosit, backup. Fachmodule folgen in der Reihenfolge der MVP-Module in DESIGN.md §2.
 
 ## Stack (Kurzfassung)
-TypeScript strict · pnpm + Turborepo · Fastify · Zod · PostgreSQL 17 + Drizzle · pg-boss (Queue in PostgreSQL) · Typst (PDF/A-3) · S3 via MinIO (Object Lock) · Caddy · Docker Compose · React 19 + Vite + TanStack Router/Query · Tailwind 4 + Radix/shadcn · vite-plugin-pwa + Dexie · Vitest, Testcontainers, Playwright.
+TypeScript strict · pnpm + Turborepo · Fastify · Zod · PostgreSQL 17 (SQL-Migrationen, ADR 0003) · pg-boss (Queue in PostgreSQL) · Typst (PDF/A-3) · S3 via MinIO (Object Lock) · Caddy · Docker Compose · React 19 + Vite + TanStack Router/Query · Tailwind 4 + Radix/shadcn · vite-plugin-pwa + Dexie · Vitest, Testcontainers, Playwright.
 
 ## Struktur
 ```
@@ -17,7 +17,7 @@ apps/api      Fastify-App (buildApi), ohne eigenen Prozessstart → mit inject()
 apps/worker   pg-boss-Jobs (startWorker)
 apps/web      React/Vite-PWA
 packages/config  Env-Schema (zod) – einzige Stelle für Konfiguration
-packages/db      Postgres-Pool, Readiness
+packages/db      SQL-Migrationen (migrations/), Runner, createSql (runtime/admin), withTenant(), Readiness
 geplant: packages/domain  packages/schemas  packages/einvoice  packages/exports  packages/pdf-templates  packages/ui
 docker/ (Dockerfiles)  infra/ (Caddyfile, smoke-test.sh)  docs/
 ```
@@ -36,9 +36,17 @@ pnpm test           # Vitest; *.integration.test.ts laufen nur, wenn DATABASE_UR
 pnpm build
 docker compose -f compose.test.yaml run --rm --build test     # komplette Testpipeline in Docker (wie CI)
 docker compose up -d --build && BASE_URL=https://localhost sh infra/smoke-test.sh   # Stack + Smoke-Test
+pnpm db:migrate     # Migrationen anwenden (läuft sonst automatisch beim API-Start)
 ```
-Geplant: `pnpm test:e2e` (Playwright), Datenbank-Migrationen (`pnpm db:generate` / `db:migrate`).
+Geplant: `pnpm test:e2e` (Playwright).
 Vor jedem Commit: `pnpm lint && pnpm typecheck && pnpm test`. Vor einem Pull Request: die Docker-Testpipeline.
+
+## Datenbank (ADR 0003)
+- Schema nur über neue Dateien `packages/db/migrations/NNNN_name.sql`. **Angewendete Migrationen nie ändern** (Prüfsumme bricht den Start ab).
+- Neue Fachtabelle: `tenant_id uuid not null references tenant(id)` + `select enable_tenant_rls('tabelle')`; steuerrelevant zusätzlich `add_audit_trigger`, mit `updated_at` → `add_updated_at_trigger`, Kind eines Belegs → `document_id` + `add_document_child_guard`.
+- Anwendungscode greift nur über `createSql(config)` (Rolle `opc_app`) und `withTenant(sql, { tenantId, userId }, tx => …)` zu. Der Admin-Modus ist nur für Migrationen und pg-boss.
+- Nummern nur über `next_number(kind)` in der Festschreibe-Transaktion.
+- Integrationstests: `*.integration.test.ts` mit Helfern aus `packages/db/src/test-support.ts`. Erwartete DB-Fehler innerhalb einer Transaktion immer in `tx.savepoint(...)` kapseln.
 
 ## Open Source & Self-Hosting
 - **Ressourcen sparsam**: Ziel ist das Profil *kompakt* (ca. 1 GB RAM, Server mit 2 GB). Keine neuen Container ohne ADR. Was PostgreSQL kann (Queue, Sessions, Rate-Limit, Volltextsuche), läuft in PostgreSQL – kein Redis/Valkey, kein Elasticsearch, kein Chromium. PDFs nur mit Typst. Der Code muss in beiden Profilen funktionieren (API und Worker im selben Prozess oder getrennt).

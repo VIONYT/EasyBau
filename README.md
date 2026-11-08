@@ -6,7 +6,7 @@ Webbasierte Betriebssoftware für Bau- und Handwerksbetriebe: Kundenmanagement, 
 
 **Lizenz:** [AGPL-3.0-or-later](LICENSE) · „OpenPlancraft“ ist ein Arbeitstitel und wird vor dem ersten Release umbenannt.
 
-**Status:** Grundgerüst (Services, Docker-Stack, Tests, CI). Fachmodule folgen.
+**Status:** Grundgerüst (Services, Docker-Stack, Tests, CI) und Datenbankschema für das MVP. Fachmodule folgen.
 
 ## Schnellstart (Self-Hosting)
 
@@ -35,4 +35,5 @@ Tests: `pnpm check` (Lint, Typen, Tests) oder komplett in Docker: `docker compos
 - [CLAUDE.md](CLAUDE.md) – Arbeitsregeln und Konventionen für die Entwicklung
 - [docs/RESEARCH.md](docs/RESEARCH.md) – Markt- und Rechtsrecherche
 - [docs/adr/0001-open-source-self-hosting.md](docs/adr/0001-open-source-self-hosting.md) – Entscheidung zu Open Source, Docker und Lizenz
+- [docs/adr/0003-sql-migrationen.md](docs/adr/0003-sql-migrationen.md) – Datenbankschema als SQL-Migrationen, Rollen, Mandantentrennung
 - [docs/adr/0002-schlanker-stack.md](docs/adr/0002-schlanker-stack.md) – Schlanker Stack: PostgreSQL, Typst, Betriebsprofile (ab 2 GB RAM)

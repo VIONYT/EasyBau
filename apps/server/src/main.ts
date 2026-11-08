@@ -1,6 +1,6 @@
 import { buildApi } from '@opc/api'
 import { ConfigError, loadConfig, runsApi, runsWorker } from '@opc/config'
-import { createSql, pingDatabase } from '@opc/db'
+import { createSql, migrate, pingDatabase } from '@opc/db'
 import { startWorker, type Worker } from '@opc/worker'
 import { pino } from 'pino'
 
@@ -13,6 +13,23 @@ import { pino } from 'pino'
 async function main(): Promise<void> {
   const config = loadConfig()
   const logger = pino({ level: config.LOG_LEVEL, base: { role: config.APP_ROLE } })
+
+  // Migrations run with the admin login, before anything else touches the schema (ADR 0003).
+  // Several containers may start at once; the runner serialises itself with an advisory lock.
+  if (config.MIGRATE_ON_START && runsApi(config.APP_ROLE)) {
+    const admin = createSql({ ...config, DATABASE_POOL_MAX: 1 }, { mode: 'admin' })
+    try {
+      const result = await migrate(admin, { log: (message) => logger.info(message) })
+      logger.info(
+        { applied: result.applied.length, total: result.alreadyApplied + result.applied.length },
+        'database schema up to date',
+      )
+    } finally {
+      await admin.end({ timeout: 5 })
+    }
+  }
+
+  // Application queries use the restricted runtime role, so row level security always applies.
   const sql = createSql(config)
 
   const app = buildApi({

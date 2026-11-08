@@ -10,6 +10,12 @@ describe('loadConfig', () => {
     expect(config.PROFILE).toBe('compact')
     expect(config.PORT).toBe(3000)
     expect(config.NODE_ENV).toBe('production')
+    expect(config.MIGRATE_ON_START).toBe(true)
+  })
+
+  it('parses boolean flags', () => {
+    expect(loadConfig({ ...base, MIGRATE_ON_START: 'false' }).MIGRATE_ON_START).toBe(false)
+    expect(() => loadConfig({ ...base, MIGRATE_ON_START: 'yes' })).toThrow(/MIGRATE_ON_START/)
   })
 
   it('coerces numeric variables', () => {
