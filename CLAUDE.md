@@ -54,6 +54,7 @@ Wenn eine Anforderung einer dieser Regeln widerspricht: nicht umsetzen, sondern 
 - Fachbegriffe im Code laut Glossar unten konsistent verwenden.
 - DB: `snake_case`, Tabellennamen im Singular, UUIDv7-Primärschlüssel, `created_at`/`updated_at` (`timestamptz`), Belegdatum als `date`.
 - API: REST `/api/v1`, Fehler als RFC 9457 Problem Details mit deutschem `detail`, Cursor-Paginierung, `ETag`/`If-Match` für Entwürfe.
+- Einheiten nur aus der Tabelle `unit` (Systemeinheiten siehe DESIGN.md §4.2.1). Jede Einheit braucht einen UN/ECE-Code für die E-Rechnung. Keine Einheiten als freie Strings in Positionen.
 - Frontend: Mobile-first. Touch-Ziele ≥ 44 px (Baustellen-Screens 56 px). Jede neue Seite muss auf 375 px Breite ohne horizontales Scrollen funktionieren. Beträge mit `tabular-nums` und `Intl.NumberFormat('de-DE', { style: 'currency', currency: 'EUR' })`.
 - Komponenten aus `packages/ui` verwenden. Farben und Abstände nur über Design-Tokens (DESIGN.md §7.2).
 - Zugänglichkeit WCAG 2.2 AA: Labels, Fokusreihenfolge, Kontraste, Tastaturbedienung.
@@ -92,6 +93,7 @@ Wenn eine Anforderung einer dieser Regeln widerspricht: nicht umsetzen, sondern 
 | Aufschlag | `markup_percent` |
 | Lohn / Material / Gerät / Fremdleistung | `labor` / `material` / `equipment` / `subcontract` |
 | Festschreiben | `finalize` |
+| Einheit / Gebinde / Gebindeinhalt | `unit` / `dimension = container` / `pack_size` |
 | Hauptauftrag / Vertragssumme | `contract` / `contract_total_cents` |
 | Nachtrag (Nachtragsangebot) | `change_order` (`change_order_meta.basis`: `changed_work`, `additional_work`, `quantity_variance`, `bgb_650b`, `other`) |
 | Leistungs- und Artikelstamm | `catalog_item` |
