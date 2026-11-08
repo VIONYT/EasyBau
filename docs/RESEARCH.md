@@ -81,7 +81,10 @@ Der Auftraggeber hat Screenshots einer Testinstanz bereitgestellt. Ausgewertet w
 - **Rechnungsdetail**: offene Forderung, Zahlungen, Abzüge, Kürzen, Notiz, zusammenhängende Dokumente. Zahlungserinnerung, 1. und 2. Mahnung werden nacheinander erzeugt.
 - **Einstellungen**: Mahnstufen mit Frist, Verzugszinsen und Gebühr; Bezahlcode (Name, IBAN, Betrag ohne Skonto, Rechnungsnummer); Abschläge kumulativ als Standard; Zuschläge je Kostenart (nicht rückwirkend); Lohnkostenanteil-Matrix (Rechnungen/Angebote × Personen/Organisationen); Zahlungsziel 7 Tage, kein Skonto als Vorgabe.
 - **Eingangsrechnung**: Belegvorschau mit per KI ausgelesenen Daten (Lieferant, Nummer, Datum, Netto, Zahlstatus), Kostenzuweisung mit Restbetrag oder je Position, „Prüfung bestätigen“.
+- **Schlussrechnung**: Quelldokument wird im Dialog gewählt (Abschläge, Angebote, Nachtragsangebote) oder leer begonnen. Im Kopf stehen Leistungszeitraum, Leistungsort und eine Referenz auf den Abschlag. Die „Zahlungsaufstellung“ zieht **Zahlungen** ab; ein unbezahlter Abschlag erschien dort als „keine Zahlungen“. Ein Schlusstext ersetzt bisherige Abschläge, dazu kommt der Standardsatz „Leistungsdatum = Rechnungsdatum“. Die Vorschau hat die Aktion „Dokument fertigstellen“.
+- **Kostenzuweisung (Eingang)**: Projekt oder Betriebsbereich (Lager, Büro, Mitarbeiter, Fahrzeuge, Werkstatt, Sonstiges), Betrag und Kostenart, mehrfach aufteilbar.
 - **Beobachtete Lücken / Chancen**:
+  - In der Schlussrechnung werden Zahlungen statt gestellter Abschlagsrechnungen gegengerechnet. Bei unbezahlten Abschlägen kann so Umsatzsteuer doppelt ausgewiesen werden; wir ziehen die gestellten Abschläge mit ihrer Steuer ab (DESIGN.md §4.1).
   - Das Aufmaß besteht nur aus Zeilen in der Position. Räume, Variablen und eine Mengenfortschreibung sind nicht sichtbar.
   - Das Nachtragsangebot ist ein Dokumenttyp. Rechtsgrundlage, Nachweise, Beauftragungsstatus und Vertragssumme (Hauptauftrag + Nachträge) waren nicht sichtbar. Das ist unser Ansatzpunkt (DESIGN.md §4.4).
   - Es gibt keine Jahres-Nummernkreise.
