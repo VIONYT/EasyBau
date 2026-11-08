@@ -18,7 +18,7 @@ Grundlage: [`docs/RESEARCH.md`](docs/RESEARCH.md). Arbeitsregeln für Agenten un
 5. **Handwerkersprache.** „Rechnung korrigieren“ statt „Stornobeleg generieren“; Fachbegriffe nur wo üblich (Aufmaß, LV, Abschlag).
 
 ### Betriebsmodell: Open Source & Self-Hosting
-- Das System ist **Open Source** (Lizenzvorschlag: AGPL-3.0, siehe [ADR 0001](docs/adr/0001-open-source-self-hosting.md)). Firmen betreiben es **auf ihrer eigenen Infrastruktur**: eigener Server, Rechenzentrum, Hoster ihrer Wahl, auch im Büro.
+- Das System ist **Open Source** (Lizenz: **AGPL-3.0-or-later**, siehe [ADR 0001](docs/adr/0001-open-source-self-hosting.md)). Firmen betreiben es **auf ihrer eigenen Infrastruktur**: eigener Server, Rechenzentrum, Hoster ihrer Wahl, auch im Büro.
 - Auslieferung ausschließlich als **Docker-Images** plus `docker compose`-Stack. Eine Installation besteht aus `.env` anpassen und `docker compose up -d`.
 - **Keine Pflicht-Abhängigkeit von externen SaaS-Diensten.** Alles Nötige läuft im Stack. Externe Dienste (Wetter, KI, Fehler-Tracking, DATEV-Online) sind optional und abschaltbar.
 - Keine Telemetrie ohne ausdrückliche Zustimmung (Opt-in).
@@ -594,7 +594,7 @@ Suchen · Benachrichtigungen · Übersicht · Projekte · Angebote · Ausgangsre
 ---
 
 ## 9. Offene Fragen
-1. ~~Hosting-Anbieter~~ → entschieden: Open Source, Self-Hosting per Docker (§1, §3.5). Offen: **Lizenz** (Vorschlag AGPL-3.0) und **Projektname** (siehe ADR 0001).
+1. ~~Hosting-Anbieter~~ → entschieden: Open Source, Self-Hosting per Docker (§1, §3.5). Lizenz AGPL-3.0-or-later; der Projektname „OpenPlancraft“ ist nur Arbeitstitel und wird vor dem ersten Release ersetzt (ADR 0001).
 2. ~~Preismodell~~ → entfällt als Lizenzthema. Optional später: bezahlter Support oder Hosting-Angebot durch Dritte.
 3. Österreich bereits im MVP oder erst in Phase 2?
 4. Formale GoBD-Testierung (IDW PS 880) anstreben?

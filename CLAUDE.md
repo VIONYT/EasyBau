@@ -37,6 +37,7 @@ Vor jedem Commit: `pnpm lint && pnpm typecheck && pnpm test`. Vor einem Pull Req
 ## Open Source & Self-Hosting
 - Alles muss **im eigenen `docker compose`-Stack** lauffähig sein. Keine Pflicht-Abhängigkeit von externen SaaS-Diensten. Externe Dienste sind optional, über `.env` schaltbar und standardmäßig aus.
 - Jede neue Einstellung wird in `.env.example` dokumentiert und hat einen sicheren Standardwert. Geheimnisse sind auch als `*_FILE` möglich.
+- Lizenz **AGPL-3.0-or-later** (`LICENSE`). „OpenPlancraft“ ist nur Arbeitstitel: Produktname, Image- und Paketnamen nie verstreut hart codieren, sondern zentral konfigurieren, damit die Umbenennung vor dem Release einfach bleibt.
 - Keine Telemetrie ohne Opt-in. Keine Lizenzschlüssel oder Feature-Sperren im Code.
 - Abhängigkeiten nur mit OSI-kompatibler Lizenz, die zur Projektlizenz passt (AGPL-kompatibel; keine SSPL/BSL).
 - Migrationen müssen automatisch, idempotent und vorwärtskompatibel laufen (Upgrade-Test in CI). Betreiber führen keine manuellen SQL-Schritte aus.
