@@ -16,7 +16,8 @@
     "lint": "biome check .",
     "format": "biome format --write .",
     "check": "pnpm lint && pnpm typecheck && pnpm test",
-    "db:migrate": "pnpm --filter @opc/db migrate"
+    "db:migrate": "pnpm --filter @opc/db migrate",
+    "test:coverage": "vitest run --coverage"
   },
   "devDependencies": {
     "@biomejs/biome": "2.6.6",
@@ -24,6 +25,7 @@
     "tsx": "4.23.15",
     "turbo": "2.11.10",
     "typescript": "5.9.3",
-    "vitest": "4.1.0"
+    "vitest": "4.1.0",
+    "@vitest/coverage-v8": "4.1.0"
   }
 }

@@ -18,7 +18,8 @@ apps/worker   pg-boss-Jobs (startWorker)
 apps/web      React/Vite-PWA
 packages/config  Env-Schema (zod) – einzige Stelle für Konfiguration
 packages/db      SQL-Migrationen (migrations/), Runner, createSql (runtime/admin), withTenant(), Readiness
-geplant: packages/domain  packages/schemas  packages/einvoice  packages/exports  packages/pdf-templates  packages/ui
+packages/domain  Reine Rechenlogik: Aufmaß-Formeln, Aufmaßzeilen/Mengen, Kalkulation (Position, Dokument, Zielpreis, Gebinde), Einheiten
+geplant: packages/schemas  packages/einvoice  packages/exports  packages/pdf-templates  packages/ui
 docker/ (Dockerfiles)  infra/ (Caddyfile, smoke-test.sh)  docs/
 ```
 - Pakete exportieren über die Condition `source` direkt TypeScript (Entwicklung, Tests); gebaut wird nach `dist/`. Imports innerhalb eines Pakets mit `.js`-Endung (NodeNext).
@@ -33,6 +34,7 @@ DATABASE_URL=postgres://openplancraft:<pw>@localhost:5432/openplancraft pnpm dev
 pnpm lint           # Biome (Lint + Format-Prüfung); pnpm format schreibt Formatierung
 pnpm typecheck
 pnpm test           # Vitest; *.integration.test.ts laufen nur, wenn DATABASE_URL gesetzt ist
+pnpm test:coverage  # wie test, erzwingt 100 % Abdeckung für packages/domain (CI)
 pnpm build
 docker compose -f compose.test.yaml run --rm --build test     # komplette Testpipeline in Docker (wie CI)
 docker compose up -d --build && BASE_URL=https://localhost sh infra/smoke-test.sh   # Stack + Smoke-Test

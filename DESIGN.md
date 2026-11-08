@@ -352,7 +352,7 @@ Einheiten werden einheitlich in Kalkulation, Aufmaß, Angeboten, Nachträgen und
 - Beide Sichten zeigen dieselben Zeilen; eine Zeile, die im Blatt erfasst wurde, erscheint auch in der Position und umgekehrt.
 
 **Formelsprache** (`packages/domain/measurement`)
-- Deutsches Zahlenformat (`4,25`), Operatoren `+ - * / ( )`, Potenz `^`, Funktionen `pi`, `sqrt`, `round`, Variablen aus dem Raum, Zeilenverweise optional später.
+- Deutsches Zahlenformat (`4,25`, Punkt wird ebenfalls akzeptiert, keine Tausenderpunkte), Operatoren `+ - * / ( )` sowie `×`/`·` für mal und `:`/`÷` für geteilt, Potenz `^` (rechtsassoziativ, ganze Hochzahlen −10…10), Konstante `pi`, Funktionen `sqrt`, `abs`, `round(x; n)`, `ceil`, `floor`, `min`, `max`. Argumente werden mit `;` getrennt, weil das Komma das Dezimalzeichen ist. Variablen aus dem Raum, ohne Groß-/Kleinschreibung (`L`, `B`, `H`). Ergebnis gerundet auf 4 Nachkommastellen (kaufmännisch). Fehlermeldungen auf Deutsch mit Position. Grenzen: 500 Zeichen, 400 Bausteine, Schachtelungstiefe 50. Implementierung: `packages/domain/src/measurement/formula.ts`, abgesichert durch Fuzzing. Zeilenverweise optional später.
 - **Eigener Parser (Tokenizer + Pratt-Parser), niemals `eval`/`Function`.** Gleiche Implementierung im Browser (offline, Live-Ergebnis) und auf dem Server (maßgebliche Berechnung).
 - Vorlagen erzeugen Formeln: Rechteck `L*B`, Wandfläche `2*(L+B)*H`, Dreieck `g*h/2`, Kreis `pi*r^2`, Volumen `L*B*H`, Laufmeter, Stück.
 - Abzugsregeln (z. B. Öffnungen < 2,5 m² nach VOB/C nicht abziehen) als **optionale, gewerkspezifische Hinweise**, nicht als harte Automatik – der Nutzer entscheidet.

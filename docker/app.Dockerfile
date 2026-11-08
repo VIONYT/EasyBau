@@ -16,6 +16,7 @@ COPY apps/worker/package.json apps/worker/
 COPY apps/web/package.json apps/web/
 COPY packages/config/package.json packages/config/
 COPY packages/db/package.json packages/db/
+COPY packages/domain/package.json packages/domain/
 RUN --mount=type=secret,id=extra_ca --mount=type=cache,id=pnpm,target=/pnpm/store \
     pnpm install --frozen-lockfile
 
@@ -29,7 +30,7 @@ RUN --mount=type=secret,id=extra_ca --mount=type=cache,id=pnpm,target=/pnpm/stor
 FROM deps AS test
 ENV NODE_EXTRA_CA_CERTS=
 COPY . .
-CMD ["sh", "-c", "pnpm lint && pnpm typecheck && pnpm test"]
+CMD ["sh", "-c", "pnpm lint && pnpm typecheck && pnpm test:coverage"]
 
 FROM node:22-alpine AS runtime
 ENV NODE_ENV=production PORT=3000
