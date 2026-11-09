@@ -60,7 +60,17 @@ Danach `https://<APP_DOMAIN>` öffnen, den Code eingeben, die Firma und das erst
 - E-Mails gehen zuerst in einen Postausgang in der Datenbank und werden vom Worker versendet (bis zu 5 Versuche mit wachsender Pause). Status und Fehler: Einstellungen › Betrieb. Inhalte (z. B. Einladungslinks) werden nach dem Versand gelöscht.
 - Antworten gehen an die E-Mail-Adresse der Firma (Einstellungen › Firma).
 
-## 6. Updates
+## 6. Exporte
+
+Unter Einstellungen › Betrieb (Rolle mit Recht „Exporte“, standardmäßig Inhaber und Büro):
+
+- **DATEV-Buchungsstapel**: CSV-Datei im DATEV-Format (EXTF) für einen Zeitraum, mit den festgeschriebenen Rechnungen und Gutschriften (je Steuersatz eine Buchung) und den Zahlungseingängen. Vorher unter Einstellungen › DATEV Berater- und Mandantennummer, Kontenrahmen und ggf. abweichende Erlöskonten eintragen. Den ersten Import bitte mit dem Steuerberater abstimmen.
+- **GoBD-Export (Z3)**: ZIP mit `index.xml` und CSV-Tabellen nach dem Beschreibungsstandard für die Datenträgerüberlassung an die Betriebsprüfung. Die Datei `gdpdu-01-09-2004.dtd` wird von der Prüfsoftware mitgebracht.
+- **Vollständiger Datenexport**: alle Daten der Firma als JSON und alle Dateien der Projektablage in einem ZIP, z. B. für einen Umzug oder als zusätzliche Sicherung. Zugangsdaten (Passwörter, Schlüssel) und die verschlüsselte IBAN sind nicht enthalten. Der Export ist keine Wiederherstellung – dafür gibt es die Sicherung.
+
+Jeder Export wird im Audit-Log vermerkt.
+
+## 7. Updates
 
 ```bash
 git pull && docker compose up -d --build
@@ -68,7 +78,7 @@ git pull && docker compose up -d --build
 
 Datenbank-Migrationen laufen beim Start automatisch (`MIGRATE_ON_START=true`). Eine bereits angewendete Migration wird nie verändert; der Start bricht ab, falls doch.
 
-## 7. Prüfen
+## 8. Prüfen
 
 ```bash
 BASE_URL=https://<APP_DOMAIN> sh infra/smoke-test.sh

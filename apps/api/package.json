@@ -24,6 +24,7 @@
     "zod": "4.6.7",
     "@simplewebauthn/server": "14.1.0",
     "@opc/storage": "workspace:*",
-    "@opc/domain": "workspace:*"
+    "@opc/domain": "workspace:*",
+    "@opc/exports": "workspace:*"
   }
 }

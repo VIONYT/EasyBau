@@ -50,6 +50,9 @@ importers:
       '@opc/domain':
         specifier: workspace:*
         version: link:../../packages/domain
+      '@opc/exports':
+        specifier: workspace:*
+        version: link:../../packages/exports
       '@opc/schemas':
         specifier: workspace:*
         version: link:../../packages/schemas
@@ -163,6 +166,8 @@ importers:
       fast-check:
         specifier: 4.10.2
         version: 4.10.2
+
+  packages/exports: {}
 
   packages/schemas:
     dependencies:

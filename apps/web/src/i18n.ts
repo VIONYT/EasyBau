@@ -538,6 +538,18 @@ const de = {
   'sys.mail.sending': 'wird gesendet',
   'sys.mail.sent': 'gesendet',
   'sys.mail.failed': 'fehlgeschlagen',
+  'sys.exports': 'Exporte',
+  'sys.exportsHint':
+    'Für Steuerberater und Betriebsprüfung. Es werden nur festgeschriebene Rechnungen und Gutschriften des Zeitraums berücksichtigt.',
+  'sys.from': 'Von',
+  'sys.to': 'Bis',
+  'sys.exportDatev': 'DATEV-Buchungsstapel',
+  'sys.exportGobd': 'GoBD-Export (Z3)',
+  'sys.exportBusy': 'Wird erstellt …',
+  'sys.exportFull': 'Vollständiger Datenexport',
+  'sys.exportFullHint':
+    'Alle Daten der Firma als JSON und alle Dateien der Ablage in einem ZIP-Archiv. Zugangsdaten und verschlüsselte Bankdaten sind nicht enthalten.',
+  'sys.exportFullButton': 'Datenexport herunterladen',
   'users.sendEmail': 'Einladung zusätzlich per E-Mail senden',
   'users.emailSent': 'Die Einladung wurde in den E-Mail-Postausgang gelegt.',
   's.saved': 'Gespeichert.',

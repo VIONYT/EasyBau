@@ -17,6 +17,7 @@ COPY apps/web/package.json apps/web/
 COPY packages/config/package.json packages/config/
 COPY packages/db/package.json packages/db/
 COPY packages/domain/package.json packages/domain/
+COPY packages/exports/package.json packages/exports/
 COPY packages/schemas/package.json packages/schemas/
 COPY packages/storage/package.json packages/storage/
 RUN --mount=type=secret,id=extra_ca --mount=type=cache,id=pnpm,target=/pnpm/store \

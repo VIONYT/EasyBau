@@ -5,7 +5,7 @@ OpenPlancraft ist eine **Open-Source**-Betriebssoftware (ERP) für Bau- und Hand
 **Lies vor jeder größeren Änderung [`DESIGN.md`](DESIGN.md)** (Architektur, Datenmodell, UX). Hintergrund: [`docs/RESEARCH.md`](docs/RESEARCH.md). Dieses Projekt ist ein eigenständiges Produkt: übernimm keine Texte, Logos, Markennamen oder Screens von Plancraft oder anderen Anbietern.
 
 ## Projektstatus
-Grundgerüst steht, Datenbankschema für das MVP ist angelegt (Migrationen 0001–0012). Rechenlogik (`packages/domain`), Ersteinrichtung, Anmeldung (Sitzung, TOTP, WebAuthn/Sicherheitsschlüssel als zweiter Faktor und Passkey, Rate-Limit, erzwungene Admin-2FA), Benutzerverwaltung mit Einladungen, API für Kontakte und Projekte, Projektanlage, Projektablage (Ordner, Upload, ADR 0004) Dokumente mit Leistungsverzeichnis, Kalkulation je Position, Fertigstellen (Angebot/KV/AB/Nachtrag, ohne Rechnungen), Nachtrag-Schalter und Druckansicht (PDF/A über Typst folgt) Aufmaß (Blätter, Räume, Formelzeilen, Mengenübernahme, gemeinsames Aufmaß) Bautagebuch (Berichte aus Vorlagen, Fotos, Unterschrift) und Stammdaten mit DATANORM-Katalogen sowie die Weboberfläche dazu sind fertig. Monorepo, Services (`server` = API + Worker per `APP_ROLE`), Web-Platzhalter, Docker-Stack (proxy, app, db, Volume `files`; Profil `standard` mit separatem `worker`), Test-Stack und CI. Noch nicht im Stack: Archiv-Objektspeicher (S3/Object Lock), kosit, backup. Fachmodule folgen in der Reihenfolge der MVP-Module in DESIGN.md §2.
+Grundgerüst steht, Datenbankschema für das MVP ist angelegt (Migrationen 0001–0013). Rechenlogik (`packages/domain`), Ersteinrichtung, Anmeldung (Sitzung, TOTP, WebAuthn/Sicherheitsschlüssel als zweiter Faktor und Passkey, Rate-Limit, erzwungene Admin-2FA), Benutzerverwaltung mit Einladungen, API für Kontakte und Projekte, Projektanlage, Projektablage (Ordner, Upload, ADR 0004) Dokumente mit Leistungsverzeichnis, Kalkulation je Position, Fertigstellen (Angebot/KV/AB/Nachtrag, ohne Rechnungen), Nachtrag-Schalter und Druckansicht (PDF/A über Typst folgt) Aufmaß (Blätter, Räume, Formelzeilen, Mengenübernahme, gemeinsames Aufmaß) Bautagebuch (Berichte aus Vorlagen, Fotos, Unterschrift) Stammdaten mit DATANORM-Katalogen, Einstellungen, optionaler E-Mail-Versand (SMTP, Postausgang) und Exporte (DATEV, GoBD Z3, Vollexport) sowie die Weboberfläche dazu sind fertig. Monorepo, Services (`server` = API + Worker per `APP_ROLE`), Web-Platzhalter, Docker-Stack (proxy, app, db, Volume `files`; Profil `standard` mit separatem `worker`), Test-Stack und CI. Noch nicht im Stack: Archiv-Objektspeicher (S3/Object Lock), kosit, backup. Fachmodule folgen in der Reihenfolge der MVP-Module in DESIGN.md §2.
 
 ## Stack (Kurzfassung)
 TypeScript strict · pnpm + Turborepo · Fastify · Zod · PostgreSQL 17 (SQL-Migrationen, ADR 0003) · pg-boss (Queue in PostgreSQL) · Typst (PDF/A-3) · S3 via MinIO (Object Lock) · Caddy · Docker Compose · React 19 + Vite + TanStack Router/Query · Tailwind 4 + Radix/shadcn · vite-plugin-pwa + Dexie · Vitest, Testcontainers, Playwright.
@@ -14,18 +14,19 @@ TypeScript strict · pnpm + Turborepo · Fastify · Zod · PostgreSQL 17 (SQL-Mi
 ```
 apps/server   Composition Root: startet API und/oder Worker je nach APP_ROLE (all|api|worker)
 apps/api      Fastify-App (buildApi), ohne eigenen Prozessstart → mit inject() testbar.
-              routes/ (auth, auth-common, webauthn, users, contacts, projects, documents, files, measurements, reports, catalog), security/ (crypto, passwords, sessions),
+              routes/ (auth, auth-common, webauthn, users, contacts, projects, documents, files, measurements, reports, catalog, settings, email, exports), security/ (crypto, passwords, sessions),
               testing/ (Test-Harness, Software-Authenticator für WebAuthn), context.ts
               (requireAuth, requirePermission, inTenant), http.ts (HttpError, parse, Cursor, ETag), idempotency.ts
-apps/worker   pg-boss-Jobs (startWorker)
+apps/worker   pg-boss-Jobs (startWorker), E-Mail-Versand aus dem Postausgang (email.ts)
 apps/web      React/Vite-PWA (screens/, router.ts, webauthn.ts, i18n.ts)
 e2e/          Playwright-Tests gegen einen laufenden Stack (virtueller FIDO2-Schlüssel per CDP)
 packages/config  Env-Schema (zod) – einzige Stelle für Konfiguration
 packages/db      SQL-Migrationen (migrations/), Runner, createSql (runtime/admin), withTenant(), Readiness
 packages/domain  Reine Rechenlogik: Aufmaß-Formeln, Aufmaßzeilen/Mengen, Kalkulation (Position, Dokument, Zielpreis, Gebinde), Einheiten, DATANORM-Leser (catalog/datanorm.ts)
 packages/schemas Zod-Schemas und DTO-Typen der API (Server + Web); `@opc/schemas/constants` ohne zod für Werte im Web
+packages/exports Exportformate ohne I/O-Abhängigkeiten: ZIP-Stream, CSV, DATEV-Buchungsstapel, GoBD index.xml
 packages/storage Dateiablage: ObjectStore (Dateisystem), Upload-Typprüfung, Dateinamen (ADR 0004)
-geplant: packages/einvoice  packages/exports  packages/pdf-templates  packages/ui
+geplant: packages/einvoice  packages/pdf-templates  packages/ui
 docker/ (Dockerfiles)  infra/ (Caddyfile, smoke-test.sh)  docs/
 ```
 - Pakete exportieren über die Condition `source` direkt TypeScript (Entwicklung, Tests); gebaut wird nach `dist/`. Imports innerhalb eines Pakets mit `.js`-Endung (NodeNext).

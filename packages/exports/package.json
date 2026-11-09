@@ -1,0 +1,18 @@
+{
+  "name": "@opc/exports",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Export formats: streaming ZIP, CSV, DATEV Buchungsstapel, GoBD Datenträgerüberlassung. No I/O except streams.",
+  "exports": {
+    ".": {
+      "source": "./src/index.ts",
+      "types": "./src/index.ts",
+      "default": "./dist/index.js"
+    }
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.build.json",
+    "typecheck": "tsc -p tsconfig.json --noEmit"
+  }
+}

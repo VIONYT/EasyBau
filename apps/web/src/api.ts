@@ -80,3 +80,32 @@ async function send<T>(path: string, init: RequestInit): Promise<{ data: T; etag
   }
   return { data: data as T, etag }
 }
+
+/**
+ * Downloads a generated file (export). Errors arrive as Problem Details and are shown
+ * instead of being saved as a file.
+ */
+export async function downloadFile(path: string): Promise<void> {
+  let response: Response
+  try {
+    response = await fetch(path, { credentials: 'same-origin' })
+  } catch {
+    throw new ApiError(0, t('common.networkError'))
+  }
+  if (!response.ok) {
+    const problem = (await response.json().catch(() => null)) as Problem | null
+    throw new ApiError(
+      response.status,
+      problem?.detail ?? response.statusText,
+      problem?.errors ?? {},
+    )
+  }
+  const name =
+    /filename="([^"]+)"/.exec(response.headers.get('content-disposition') ?? '')?.[1] ?? 'export'
+  const url = URL.createObjectURL(await response.blob())
+  const link = document.createElement('a')
+  link.href = url
+  link.download = name
+  link.click()
+  setTimeout(() => URL.revokeObjectURL(url), 10_000)
+}
