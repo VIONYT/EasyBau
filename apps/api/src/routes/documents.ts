@@ -28,6 +28,7 @@ import {
   type DocumentSummary,
   type DocumentTotals,
   documentStatusRequest,
+  finalizeRequest,
   moveItemRequest,
   PRICED_POSITION_TYPES,
   type TaxRateSummary,
@@ -37,6 +38,7 @@ import {
 } from '@opc/schemas'
 import type { FastifyInstance, FastifyReply } from 'fastify'
 import { z } from 'zod'
+import { billingDoc, legalNotesOf, loadDeductions, refreshDeductions } from '../billing.js'
 import {
   type AuthContext,
   inTenant,
@@ -46,6 +48,7 @@ import {
   type Services,
 } from '../context.js'
 import { checkIfMatch, etagOf, HttpError, notFound, parse } from '../http.js'
+import { finalizeInvoice } from './invoices.js'
 
 const projectParam = z.object({ id: z.uuid('Ungültige ID.') })
 const documentParam = z.object({ id: z.uuid('Ungültige ID.') })
@@ -108,6 +111,8 @@ interface ItemRow {
   taxCategory: TaxCategory | null
   fromMeasurement: boolean
   calcMode: 'unit_price' | 'total_price' | null
+  cumulativeQuantity: string | null
+  previouslyBilledQuantity: string | null
 }
 
 interface CostRow {
@@ -132,7 +137,8 @@ async function loadItems(tx: Tx, documentId: string): Promise<ItemRow[]> {
            unit_price_cents::text as "unitPriceCents", trim_scale(discount_percent)::text as "discountPercent",
            total_cents::text as "totalCents", trim_scale(tax_rate_percent)::text as "taxRatePercent",
            tax_category as "taxCategory", quantity_from_measurement as "fromMeasurement",
-           calc_mode as "calcMode"
+           calc_mode as "calcMode", trim_scale(cumulative_quantity)::text as "cumulativeQuantity",
+           trim_scale(previously_billed_quantity)::text as "previouslyBilledQuantity"
     from document_item where document_id = ${documentId}`
 }
 
@@ -241,11 +247,42 @@ function calculationError(error: unknown): never {
  * totals of a draft and stores them. The server always calculates itself; the client only shows
  * what it gets back (rule 11 analog).
  */
+/** Document fields that influence the totals. */
+interface TotalsSettings {
+  taxMode: string
+  discountPercent: string | null
+  retentionPercent: string | null
+  constructionLevyPercent: string | null
+  cashDiscountPercent: string | null
+}
+
+const TOTALS_SETTINGS = (tx: Tx) => tx`
+  tax_mode as "taxMode", discount_percent::text as "discountPercent",
+  retention_percent::text as "retentionPercent",
+  construction_levy_percent::text as "constructionLevyPercent",
+  cash_discount_percent::text as "cashDiscountPercent"`
+
+function totalsInput(doc: TotalsSettings) {
+  return {
+    taxMode: doc.taxMode as 'standard',
+    ...(doc.discountPercent ? { discountPercent: doc.discountPercent } : {}),
+    ...(doc.retentionPercent ? { retentionPercent: doc.retentionPercent } : {}),
+    ...(doc.constructionLevyPercent
+      ? { constructionLevyPercent: doc.constructionLevyPercent }
+      : {}),
+    ...(doc.cashDiscountPercent ? { cashDiscountPercent: doc.cashDiscountPercent } : {}),
+  }
+}
+
 export async function recalculate(tx: Tx, documentId: string): Promise<void> {
-  const [doc] = await tx<{ taxMode: string; discountPercent: string | null }[]>`
-    select tax_mode as "taxMode", discount_percent::text as "discountPercent"
-    from document where id = ${documentId}`
+  const [doc] = await tx<(TotalsSettings & { invoiceKind: string | null })[]>`
+    select ${TOTALS_SETTINGS(tx)}, invoice_kind as "invoiceKind" from document where id = ${documentId}`
   if (!doc) return
+  // A Stornorechnung mirrors the cancelled invoice exactly; it is never recalculated.
+  if (doc.invoiceKind === 'cancellation') return
+  const billing = await billingDoc(tx, documentId)
+  if (billing) await refreshDeductions(tx, billing)
+  const { inputs: deductions } = await loadDeductions(tx, documentId)
   const rows = await loadItems(tx, documentId)
   const costs = await loadCostLines(tx, documentId)
   const prefix = await ozPrefixOf(tx, documentId)
@@ -271,11 +308,7 @@ export async function recalculate(tx: Tx, documentId: string): Promise<void> {
   }
   let totals: ReturnType<typeof calculateDocumentTotals>
   try {
-    totals = calculateDocumentTotals({
-      lines,
-      taxMode: doc.taxMode as 'standard',
-      ...(doc.discountPercent ? { discountPercent: doc.discountPercent } : {}),
-    })
+    totals = calculateDocumentTotals({ lines, ...totalsInput(doc), deductions })
   } catch (error) {
     calculationError(error)
   }
@@ -283,6 +316,7 @@ export async function recalculate(tx: Tx, documentId: string): Promise<void> {
     update document set net_total_cents = ${totals.netCents.toString()},
                         tax_total_cents = ${totals.taxCents.toString()},
                         gross_total_cents = ${totals.grossCents.toString()},
+                        payable_cents = ${totals.payableCents.toString()},
                         updated_at = now()
     where id = ${documentId}`
   await tx`delete from document_tax_line where document_id = ${documentId}`
@@ -298,9 +332,12 @@ export async function recalculate(tx: Tx, documentId: string): Promise<void> {
 function totalsOf(
   rows: ItemRow[],
   costs: Map<string, CostRow[]>,
-  doc: { taxMode: string; discountPercent: string | null },
+  doc: TotalsSettings,
+  deductions: Awaited<ReturnType<typeof loadDeductions>>,
 ): DocumentTotals {
   const totals = calculateDocumentTotals({
+    ...totalsInput(doc),
+    deductions: deductions.inputs,
     lines: rows.map((row) => ({
       id: row.id,
       parentId: row.parentId,
@@ -309,8 +346,6 @@ function totalsOf(
       ...(row.taxRatePercent ? { taxRatePercent: row.taxRatePercent } : {}),
       ...(row.taxCategory ? { taxCategory: row.taxCategory } : {}),
     })),
-    taxMode: doc.taxMode as 'standard',
-    ...(doc.discountPercent ? { discountPercent: doc.discountPercent } : {}),
   })
   // Kalkulation of the counted positions (Soll-Kosten, Soll-Stunden).
   let costCents = 0n
@@ -328,6 +363,16 @@ function totalsOf(
     laborHundredths += BigInt(roundTo(calc.laborHours, 2).replace('.', ''))
   }
   return {
+    performance: {
+      netCents: Number(totals.performance.netCents),
+      taxCents: Number(totals.performance.taxCents),
+      grossCents: Number(totals.performance.grossCents),
+    },
+    deductions: deductions.summaries,
+    retentionCents: Number(totals.retentionCents),
+    constructionLevyCents: Number(totals.constructionLevyCents),
+    payableCents: Number(totals.payableCents),
+    cashDiscountCents: Number(totals.cashDiscountCents),
     itemsNetCents: Number(totals.itemsNetCents),
     discountCents: Number(totals.discountCents),
     netCents: Number(totals.netCents),
@@ -354,7 +399,7 @@ function totalsOf(
 
 type Issuer = DocumentDetail['issuer']
 
-async function liveIssuer(tx: Tx): Promise<Issuer> {
+export async function liveIssuer(tx: Tx): Promise<Issuer> {
   const [t] = await tx<
     {
       name: string
@@ -394,15 +439,16 @@ async function liveIssuer(tx: Tx): Promise<Issuer> {
 }
 
 /** Empfänger: billing address (Rechnungsempfänger) if present, otherwise the main address. */
-async function liveRecipient(
+export async function liveRecipient(
   tx: Tx,
   contactId: string | null,
 ): Promise<DocumentDetail['recipient']> {
   if (!contactId) return null
-  const [c] = await tx<
-    { name: string }[]
-  >`select display_name as name from contact where id = ${contactId}`
+  const [c] = await tx<{ name: string; private: boolean; vatId: string | null }[]>`
+    select display_name as name, kind = 'person' as private, vat_id as "vatId"
+    from contact where id = ${contactId}`
   if (!c) return null
+  const extra = { private: c.private, vatId: c.vatId }
   const [a] = await tx<
     {
       recipientBlock: string | null
@@ -417,7 +463,7 @@ async function liveRecipient(
            postal_code as "postalCode", city, country_code as "countryCode"
     from contact_address where contact_id = ${contactId} and kind in ('billing', 'main')
     order by (kind = 'billing') desc limit 1`
-  if (!a) return { name: c.name, lines: [] }
+  if (!a) return { name: c.name, lines: [], ...extra }
   const block =
     a.recipientBlock
       ?.split('\n')
@@ -432,6 +478,7 @@ async function liveRecipient(
       [a.postalCode, a.city].filter(Boolean).join(' ') || null,
       a.countryCode !== 'DE' ? a.countryCode : null,
     ].filter((v): v is string => !!v),
+    ...extra,
   }
 }
 
@@ -439,13 +486,21 @@ async function liveRecipient(
 
 type DocumentRow = Omit<
   DocumentDetail,
-  'items' | 'totals' | 'issuer' | 'recipient' | 'changeOrderInfo' | 'canConvertToChangeOrder'
-> & {
-  updatedRaw: Date
-  contactId: string | null
-  issuerSnapshot: Issuer | null
-  recipientSnapshot: DocumentDetail['recipient'] | null
-}
+  | 'items'
+  | 'totals'
+  | 'issuer'
+  | 'recipient'
+  | 'changeOrderInfo'
+  | 'canConvertToChangeOrder'
+  | 'legalNotes'
+> &
+  TotalsSettings & {
+    updatedRaw: Date
+    contactId: string | null
+    issuerSnapshot: Issuer | null
+    recipientSnapshot: DocumentDetail['recipient'] | null
+    storedNotes: string[] | null
+  }
 
 export async function loadDocument(
   tx: Tx,
@@ -463,14 +518,19 @@ export async function loadDocument(
            d.intro_text as "introText", d.closing_text as "closingText", d.payment_due_days as "paymentDueDays",
            trim_scale(d.discount_percent)::text as "discountPercent", d.tax_mode as "taxMode",
            d.source_document_id as "sourceDocumentId",
-           d.issuer_snapshot as "issuerSnapshot", d.recipient_snapshot as "recipientSnapshot"
+           d.issuer_snapshot as "issuerSnapshot", d.recipient_snapshot as "recipientSnapshot",
+           trim_scale(d.cash_discount_percent)::text as "cashDiscountPercent", d.cash_discount_days as "cashDiscountDays",
+           trim_scale(d.retention_percent)::text as "retentionPercent",
+           trim_scale(d.construction_levy_percent)::text as "constructionLevyPercent",
+           d.progress_billing_mode as "progressBillingMode", ${DATE(tx, 'd.due_date')} as "dueDate",
+           d.cancel_reason as "cancelReason", d.legal_notes as "storedNotes"
     from ${fromDocuments(tx)}
     left join contact c on c.id = d.contact_id
     where d.id = ${id} and ${projectVisibility(tx, auth)}`
   if (!row) return null
   const rows = await loadItems(tx, id)
   const costs = await loadCostLines(tx, id)
-  const { updatedRaw, contactId, issuerSnapshot, recipientSnapshot, ...doc } = row
+  const { updatedRaw, contactId, issuerSnapshot, recipientSnapshot, storedNotes, ...doc } = row
   const items: DocumentItem[] = outline(rows).map(({ row: r, level }) => {
     const lines = costs.get(r.id) ?? []
     const calc = lines.length ? (priceOf(r, lines) as ReturnType<typeof calculateItem>) : null
@@ -491,6 +551,8 @@ export async function loadDocument(
       totalCents: r.totalCents === null ? null : Number(r.totalCents),
       taxRatePercent: r.taxRatePercent,
       fromMeasurement: r.fromMeasurement,
+      cumulativeQuantity: r.cumulativeQuantity,
+      previouslyBilledQuantity: r.previouslyBilledQuantity,
       calcMode: r.calcMode,
       costLines: lines.map((l) => ({
         id: l.id,
@@ -522,16 +584,19 @@ export async function loadDocument(
     doc.status === 'draft' &&
     (doc.type === 'change_order' ||
       (doc.type === 'quote' && (await projectFacts(tx, doc.projectId)).hasContract))
-  return {
+  const detail: DocumentDetail = {
     ...doc,
     issuer: issuerSnapshot ?? (await liveIssuer(tx)),
     recipient: recipientSnapshot ?? (await liveRecipient(tx, contactId)),
     changeOrderInfo: info ?? null,
     canConvertToChangeOrder: canConvert,
     items,
-    totals: totalsOf(rows, costs, doc),
-    etag: etagOf(updatedRaw),
+    totals: totalsOf(rows, costs, doc, await loadDeductions(tx, id)),
+    legalNotes: [],
   }
+  // Finalized: the frozen notes; drafts: a live preview.
+  detail.legalNotes = storedNotes ?? (doc.status === 'draft' ? legalNotesOf(detail) : [])
+  return { ...detail, etag: etagOf(updatedRaw) }
 }
 
 /** Locks a draft for changes; finalized documents are immutable (rule 2). */
@@ -925,6 +990,11 @@ export function registerDocumentRoutes(app: FastifyInstance, services: Services)
         discountPercent: 'discount_percent',
         taxMode: 'tax_mode',
         validUntil: 'valid_until',
+        cashDiscountPercent: 'cash_discount_percent',
+        cashDiscountDays: 'cash_discount_days',
+        retentionPercent: 'retention_percent',
+        constructionLevyPercent: 'construction_levy_percent',
+        progressBillingMode: 'progress_billing_mode',
       }
       const columns: Record<string, unknown> = {}
       for (const [key, column] of Object.entries(map)) {
@@ -1257,10 +1327,8 @@ export function registerDocumentRoutes(app: FastifyInstance, services: Services)
         from document where id = ${id}`
       if (!d) throw notFound('Das Dokument')
       if (d.type === 'invoice' || d.type === 'credit_note') {
-        throw new HttpError(
-          409,
-          'Rechnungen und Gutschriften werden mit der E-Rechnung festgeschrieben (folgt in einem der nächsten Schritte).',
-        )
+        await finalizeInvoice(tx, auth, id, parse(finalizeRequest, request.body ?? {}))
+        return loadDocument(tx, auth, id)
       }
       if (!d.contactId) {
         throw new HttpError(400, 'Bitte zuerst einen Empfänger wählen.', {

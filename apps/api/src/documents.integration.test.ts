@@ -163,7 +163,7 @@ describe.skipIf(!process.env.DATABASE_URL)('project documents (integration)', ()
         totalCents: 25_000,
       })
       // Optional positions are printed but not summed.
-      expect(doc.totals).toEqual({
+      expect(doc.totals).toMatchObject({
         itemsNetCents: 85_230,
         discountCents: 0,
         netCents: 85_230,
@@ -367,7 +367,7 @@ describe.skipIf(!process.env.DATABASE_URL)('project documents (integration)', ()
       expect(doc.items.map((i) => [i.oz, i.shortText, i.totalCents])).toEqual(
         quote.items.map((i) => [i.oz, i.shortText, i.totalCents]),
       )
-      expect(doc.totals).toEqual({
+      expect(doc.totals).toMatchObject({
         ...quote.totals,
         titleSubtotals: Object.fromEntries(
           Object.values(quote.totals.titleSubtotals).map((v) => [doc.items[0]?.id, v]),

@@ -25,6 +25,7 @@ import {
 } from '@opc/schemas'
 import type { FastifyInstance, FastifyReply } from 'fastify'
 import { z } from 'zod'
+import { applyInvoiceMeasurements, billingDoc } from '../billing.js'
 import {
   type AuthContext,
   inTenant,
@@ -708,6 +709,18 @@ export function registerMeasurementRoutes(app: FastifyInstance, services: Servic
     const { id } = parse(sheetParam, request.params)
     const doc = await inTenant(services, auth, async (tx) => {
       await lockDraft(tx, auth, id)
+      const billing = await billingDoc(tx, id)
+      if (billing?.type === 'invoice') {
+        // Rechnungen: Leistungsaufmaß, kumuliert − bereits abgerechnet (Mengenfortschreibung).
+        if (!(await applyInvoiceMeasurements(tx, billing))) {
+          throw new HttpError(
+            409,
+            'Zu den Positionen dieser Rechnung gibt es noch kein Leistungsaufmaß.',
+          )
+        }
+        await recalculate(tx, id)
+        return loadDocument(tx, auth, id)
+      }
       const sums = await tx<{ itemId: string; quantity: string }[]>`
         select l.document_item_id as "itemId",
                trim_scale(round(sum(l.result_qty), coalesce(max(u.decimals), 2)))::text as quantity

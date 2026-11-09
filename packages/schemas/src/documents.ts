@@ -95,9 +95,25 @@ export const updateDocumentRequest = z
     taxMode: z.enum(TAX_MODES),
     /** Angebot: Bindefrist. */
     validUntil: isoDate.nullable(),
+    /** Rechnungen: Skonto, Sicherheitseinbehalt, Bauumlage, Abschlagsart. */
+    cashDiscountPercent: percent('Skonto').nullable(),
+    cashDiscountDays: z.number().int().min(0).max(365).nullable(),
+    retentionPercent: percent('Sicherheitseinbehalt').nullable(),
+    constructionLevyPercent: percent('Bauumlage').nullable(),
+    progressBillingMode: z.enum(['cumulative', 'individual']),
   })
   .partial()
   .superRefine((value, ctx) => {
+    if (
+      (value.cashDiscountPercent !== undefined || value.cashDiscountDays !== undefined) &&
+      (value.cashDiscountPercent == null) !== (value.cashDiscountDays == null)
+    ) {
+      ctx.addIssue({
+        code: 'custom',
+        path: ['cashDiscountDays'],
+        message: 'Skonto braucht Prozent und Tage.',
+      })
+    }
     if (value.serviceFrom && value.serviceTo && value.serviceTo < value.serviceFrom) {
       ctx.addIssue({
         code: 'custom',
@@ -186,6 +202,19 @@ export const convertDocumentRequest = z.object({
   reason: optionalText(2000),
 })
 
+/** Festschreiben: warnings (e.g. free positions) must be confirmed explicitly. */
+export const finalizeRequest = z.object({ acknowledgeWarnings: z.boolean().default(false) })
+
+/** Result of the check before finalizing an invoice (Pflichtangaben, Regel 12). */
+export interface FinalizeCheck {
+  /** Blocking problems (German), with the field to fix. */
+  errors: { field: string; message: string }[]
+  /** Need confirmation, e.g. positions that are not part of the contract. */
+  warnings: { field: string; message: string }[]
+  /** Number the document will get (preview; drawn only when finalizing). */
+  numberPreview: string | null
+}
+
 /** After completion: sent → accepted / rejected (quotes, cost estimates, change orders). */
 export const documentStatusRequest = z.object({
   status: z.enum(['sent', 'accepted', 'rejected']),
@@ -239,6 +268,9 @@ export interface DocumentItem {
   taxRatePercent: string | null
   /** Quantity was taken over from the measurement (Aufmaß). */
   fromMeasurement: boolean
+  /** Rechnungen: Leistungsstand laut Leistungsaufmaß and quantity already billed before. */
+  cumulativeQuantity: string | null
+  previouslyBilledQuantity: string | null
   calcMode: 'unit_price' | 'total_price' | null
   /** Kostenzeilen; empty: the price is entered directly. */
   costLines: CostLine[]
@@ -269,7 +301,27 @@ export interface DocumentTaxLine {
   exemptionReason: string | null
 }
 
+/** An earlier invoice deducted by a Schlussrechnung / kumulative Abschlagsrechnung. */
+export interface DeductionSummary {
+  documentId: string
+  number: string | null
+  invoiceKind: InvoiceKind | null
+  progressNo: number | null
+  documentDate: string
+  netCents: number
+  taxCents: number
+  grossCents: number
+}
+
 export interface DocumentTotals {
+  /** Gesamtleistung; equals net/tax/gross unless earlier invoices are deducted. */
+  performance: { netCents: number; taxCents: number; grossCents: number }
+  deductions: DeductionSummary[]
+  retentionCents: number
+  constructionLevyCents: number
+  /** Zahlbetrag: gross − Sicherheitseinbehalt − Bauumlage. */
+  payableCents: number
+  cashDiscountCents: number
   itemsNetCents: number
   discountCents: number
   netCents: number
@@ -289,6 +341,10 @@ export interface DocumentTotals {
 export interface PartyAddress {
   name: string
   lines: string[]
+  /** Recipient is a private person (Aufbewahrungshinweis § 14 Abs. 4 Nr. 9 UStG). */
+  private?: boolean
+  /** USt-IdNr. of the recipient. */
+  vatId?: string | null
 }
 
 export interface DocumentDetail extends DocumentSummary {
@@ -302,6 +358,17 @@ export interface DocumentDetail extends DocumentSummary {
   paymentDueDays: number | null
   discountPercent: string | null
   taxMode: TaxMode
+  /** Rechnungen. */
+  cashDiscountPercent: string | null
+  cashDiscountDays: number | null
+  retentionPercent: string | null
+  constructionLevyPercent: string | null
+  progressBillingMode: 'cumulative' | 'individual' | null
+  /** Fälligkeit: document date + payment term (set when finalized). */
+  dueDate: string | null
+  cancelReason: string | null
+  /** Pflichthinweise (§ 13b, Skonto, Aufbewahrung …); frozen when finalized. */
+  legalNotes: string[]
   sourceDocumentId: string | null
   validUntil: string | null
   /** Firma (Absender) and Empfänger; snapshots once the document is completed. */

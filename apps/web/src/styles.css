@@ -1618,3 +1618,98 @@ fieldset.plain {
   color: inherit;
   font-weight: 600;
 }
+
+/* Rechnungen: Abschlagsaufstellung, Pflichthinweise, Festschreiben */
+.deduction-table {
+  width: 100%;
+  margin: 0 0 var(--space-4);
+  border-collapse: collapse;
+  font-variant-numeric: tabular-nums;
+}
+.deduction-table caption {
+  margin-bottom: var(--space-2);
+  font-weight: 600;
+  text-align: left;
+}
+.deduction-table .row-label,
+.deduction-table .amount-cell,
+.deduction-table .col-head {
+  padding: var(--space-1) var(--space-2);
+  border-bottom: 1px solid var(--color-border);
+}
+.deduction-table .row-label {
+  font-weight: 400;
+  text-align: left;
+}
+.deduction-table .amount-cell,
+.deduction-table .col-head {
+  text-align: right;
+  white-space: nowrap;
+}
+.deduction-table .rest-row > * {
+  font-weight: 700;
+  border-bottom: 0;
+}
+@media (max-width: 34rem) {
+  .deduction-table thead {
+    display: none;
+  }
+  .deduction-table .data-row {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    padding: var(--space-2) 0;
+    border-bottom: 1px solid var(--color-border);
+  }
+  .deduction-table .data-row > .row-label {
+    grid-column: 1 / -1;
+    padding: 0;
+    border: 0;
+  }
+  .deduction-table .data-row > .amount-cell {
+    padding: 0;
+    border: 0;
+    text-align: left;
+  }
+  .deduction-table .amount-cell::before {
+    content: attr(data-label);
+    display: block;
+    color: var(--color-muted);
+    font-size: 0.8rem;
+  }
+}
+.legal-notes {
+  margin: var(--space-4) 0 0;
+  padding-left: 1.2rem;
+  color: var(--color-muted);
+}
+.finalize-panel {
+  flex-basis: 100%;
+  margin-top: var(--space-2);
+  padding: var(--space-4);
+  border: 2px solid var(--color-primary);
+  border-radius: var(--radius);
+  background: var(--color-surface);
+}
+.finalize-panel h2 {
+  margin-top: 0;
+}
+.issue-list {
+  margin: var(--space-2) 0;
+  padding-left: 1.2rem;
+  color: var(--color-error);
+}
+.warning-list {
+  color: var(--color-warning);
+}
+.check-row {
+  display: flex;
+  gap: var(--space-2);
+  align-items: flex-start;
+  min-height: 44px;
+  margin: var(--space-2) 0;
+}
+.check-row > .check-box {
+  width: 22px;
+  height: 22px;
+  margin-top: 2px;
+}

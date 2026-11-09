@@ -5,6 +5,7 @@ import { formatCents, formatDateTime, formatQuantity } from '../format'
 import { FormError } from '../forms'
 import { type TextKey, t, tf } from '../i18n'
 import type { Navigate } from '../router'
+import { DeductionTable } from './document'
 import { documentLabel } from './documents'
 
 const COUNTED = new Set(['item', 'lump_sum'])
@@ -86,6 +87,23 @@ export function PrintScreen({ id, navigate }: { id: string; navigate: Navigate }
               <>
                 <dt>{t('print.validUntil')}</dt>
                 <dd>{formatDateTime(doc.validUntil, 'date')}</dd>
+              </>
+            ) : null}
+            {doc.serviceFrom || doc.serviceTo ? (
+              <>
+                <dt>{t('print.service')}</dt>
+                <dd>
+                  {[doc.serviceFrom, doc.serviceTo]
+                    .filter((d, i, all) => d && all.indexOf(d) === i)
+                    .map((d) => formatDateTime(d, 'date'))
+                    .join(' – ')}
+                </dd>
+              </>
+            ) : null}
+            {doc.dueDate ? (
+              <>
+                <dt>{t('print.due')}</dt>
+                <dd>{formatDateTime(doc.dueDate, 'date')}</dd>
               </>
             ) : null}
             <dt>{t('print.project')}</dt>
@@ -176,6 +194,7 @@ export function PrintScreen({ id, navigate }: { id: string; navigate: Navigate }
           </tbody>
         </table>
 
+        {doc.totals.deductions.length ? <DeductionTable doc={doc} /> : null}
         <dl className="letter-totals">
           <div>
             <dt>{t('doc.net')}</dt>
@@ -201,12 +220,36 @@ export function PrintScreen({ id, navigate }: { id: string; navigate: Navigate }
             </div>
           ))}
           <div className="grand">
-            <dt>{t('doc.gross')}</dt>
+            <dt>{doc.totals.deductions.length ? t('inv.restGross') : t('doc.gross')}</dt>
             <dd>{formatCents(doc.totals.grossCents)}</dd>
           </div>
+          {doc.totals.retentionCents ? (
+            <div>
+              <dt>
+                {t('inv.retention')} {formatQuantity(doc.retentionPercent)} %
+              </dt>
+              <dd>− {formatCents(doc.totals.retentionCents)}</dd>
+            </div>
+          ) : null}
+          {doc.totals.constructionLevyCents ? (
+            <div>
+              <dt>
+                {t('inv.levy')} {formatQuantity(doc.constructionLevyPercent)} %
+              </dt>
+              <dd>− {formatCents(doc.totals.constructionLevyCents)}</dd>
+            </div>
+          ) : null}
+          {doc.totals.retentionCents || doc.totals.constructionLevyCents ? (
+            <div className="grand">
+              <dt>{t('inv.payable')}</dt>
+              <dd>{formatCents(doc.totals.payableCents)}</dd>
+            </div>
+          ) : null}
         </dl>
 
-        {doc.paymentDueDays !== null ? (
+        {doc.legalNotes.length ? (
+          doc.legalNotes.map((note) => <p key={note}>{note}</p>)
+        ) : doc.paymentDueDays !== null ? (
           <p>{tf('print.paymentDays', { days: String(doc.paymentDueDays) })}</p>
         ) : null}
         {doc.closingText ? <p className="pre">{doc.closingText}</p> : null}

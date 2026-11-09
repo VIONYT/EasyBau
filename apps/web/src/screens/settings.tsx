@@ -1,3 +1,4 @@
+import { checkNumberPattern, formatNumber } from '@opc/domain'
 import type {
   Company,
   DatevSettings,
@@ -11,7 +12,6 @@ import type {
   WageGroup,
   WorkingDay,
 } from '@opc/schemas'
-import { checkNumberPattern, formatNumber } from '@opc/domain'
 import { COST_KINDS, DOCUMENT_TYPES } from '@opc/schemas/constants'
 import { type ReactNode, useCallback, useEffect, useId, useRef, useState } from 'react'
 import { ApiError, api } from '../api'
@@ -362,7 +362,7 @@ function NumberSequenceCard({
           </p>
         ) : null}
       </div>
-      <div className="button-row" role="group" aria-label={t('s.n.tokens')}>
+      <div className="button-row">
         {NUMBER_TOKENS.map((token) => (
           <button
             key={token}

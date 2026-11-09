@@ -4,6 +4,7 @@ import type {
   DocumentDetail,
   DocumentItem,
   EditablePositionType,
+  FinalizeCheck,
   Me,
   Page,
   SupplierArticle,
@@ -16,9 +17,16 @@ import {
   PRICED_POSITION_TYPES,
   TAX_MODES,
 } from '@opc/schemas/constants'
-import { type FormEvent, useCallback, useEffect, useState } from 'react'
+import { type FormEvent, useCallback, useEffect, useId, useState } from 'react'
 import { ApiError, api, apiWithEtag } from '../api'
-import { centsToInput, formatCents, formatInputNumber, formatQuantity, parseEuro } from '../format'
+import {
+  centsToInput,
+  formatCents,
+  formatDateTime,
+  formatInputNumber,
+  formatQuantity,
+  parseEuro,
+} from '../format'
 import { Field, FormError, optional, SelectField, TextArea, useForm, value } from '../forms'
 import { type TextKey, t, tf } from '../i18n'
 import type { Navigate } from '../router'
@@ -131,6 +139,7 @@ export function DocumentScreen({ me, id, navigate }: { me: Me; id: string; navig
       <DocumentActions
         doc={doc}
         canWrite={me.permissions.includes('document.write')}
+        canFinalize={me.permissions.includes('document.finalize')}
         apply={apply}
         navigate={navigate}
       />
@@ -199,6 +208,15 @@ function HeaderForm({
                 serviceFrom: optional(data, 'serviceFrom') ?? null,
                 serviceTo: optional(data, 'serviceTo') ?? null,
                 paymentDueDays: days === '' ? null : Number(days),
+                cashDiscountPercent: optional(data, 'cashDiscountPercent') ?? null,
+                cashDiscountDays: optional(data, 'cashDiscountDays')
+                  ? Number(value(data, 'cashDiscountDays'))
+                  : null,
+                retentionPercent: optional(data, 'retentionPercent') ?? null,
+                constructionLevyPercent: optional(data, 'constructionLevyPercent') ?? null,
+                ...(doc.invoiceKind === 'progress'
+                  ? { progressBillingMode: value(data, 'progressBillingMode') }
+                  : {}),
               }
             : {}),
         },
@@ -294,6 +312,49 @@ function HeaderForm({
                 error={form.fieldErrors.paymentDueDays}
               />
             </div>
+          ) : null}
+          {billed ? (
+            <div className="row">
+              <Field
+                label={t('inv.cashDiscountPercent')}
+                name="cashDiscountPercent"
+                inputMode="decimal"
+                defaultValue={doc.cashDiscountPercent?.replace('.', ',') ?? ''}
+                error={form.fieldErrors.cashDiscountPercent}
+              />
+              <Field
+                label={t('inv.cashDiscountDays')}
+                name="cashDiscountDays"
+                inputMode="numeric"
+                defaultValue={doc.cashDiscountDays === null ? '' : String(doc.cashDiscountDays)}
+                error={form.fieldErrors.cashDiscountDays}
+              />
+              <Field
+                label={t('inv.retention')}
+                name="retentionPercent"
+                inputMode="decimal"
+                defaultValue={doc.retentionPercent?.replace('.', ',') ?? ''}
+                error={form.fieldErrors.retentionPercent}
+              />
+              <Field
+                label={t('inv.levy')}
+                name="constructionLevyPercent"
+                inputMode="decimal"
+                defaultValue={doc.constructionLevyPercent?.replace('.', ',') ?? ''}
+                error={form.fieldErrors.constructionLevyPercent}
+              />
+            </div>
+          ) : null}
+          {doc.invoiceKind === 'progress' ? (
+            <SelectField
+              label={t('inv.mode')}
+              name="progressBillingMode"
+              defaultValue={doc.progressBillingMode ?? 'cumulative'}
+              options={[
+                { value: 'cumulative', label: t('inv.mode.cumulative') },
+                { value: 'individual', label: t('inv.mode.individual') },
+              ]}
+            />
           ) : null}
           <Field
             label={t('doc.discount')}
@@ -546,6 +607,20 @@ function PositionView({ item, subtotal }: { item: DocumentItem; subtotal: number
           </span>
         ) : null}
         {item.longText ? <span className="hint pre block">{item.longText}</span> : null}
+        {item.cumulativeQuantity !== null || item.previouslyBilledQuantity !== null ? (
+          <span className="hint block">
+            {[
+              item.cumulativeQuantity !== null
+                ? `${t('inv.measured')} ${formatQuantity(item.cumulativeQuantity, item.unit?.decimals)} ${item.unit?.symbol ?? ''}`
+                : null,
+              item.previouslyBilledQuantity !== null
+                ? `${t('inv.billedBefore')} ${formatQuantity(item.previouslyBilledQuantity, item.unit?.decimals)} ${item.unit?.symbol ?? ''}`
+                : null,
+            ]
+              .filter(Boolean)
+              .join(' · ')}
+          </span>
+        ) : null}
         <span className="muted block calc">
           {formatQuantity(item.quantity, item.unit?.decimals)} {item.unit?.symbol} ×{' '}
           {formatCents(item.unitPriceCents)}
@@ -762,12 +837,35 @@ function Totals({ doc }: { doc: Doc }) {
   }
   rows.push({
     key: 'gross',
-    label: t('doc.gross'),
+    label: totals.deductions.length ? t('inv.restGross') : t('doc.gross'),
     value: formatCents(totals.grossCents),
     grand: true,
   })
+  if (totals.retentionCents) {
+    rows.push({
+      key: 'retention',
+      label: `${t('inv.retention')} ${formatQuantity(doc.retentionPercent)} %`,
+      value: `− ${formatCents(totals.retentionCents)}`,
+    })
+  }
+  if (totals.constructionLevyCents) {
+    rows.push({
+      key: 'levy',
+      label: `${t('inv.levy')} ${formatQuantity(doc.constructionLevyPercent)} %`,
+      value: `− ${formatCents(totals.constructionLevyCents)}`,
+    })
+  }
+  if (totals.retentionCents || totals.constructionLevyCents) {
+    rows.push({
+      key: 'payable',
+      label: t('inv.payable'),
+      value: formatCents(totals.payableCents),
+      grand: true,
+    })
+  }
   return (
     <div className="panel">
+      {totals.deductions.length ? <DeductionTable doc={doc} /> : null}
       <dl className="totals">
         {rows.map((row) => (
           <div key={row.key} className={row.grand ? 'grand' : undefined}>
@@ -776,7 +874,90 @@ function Totals({ doc }: { doc: Doc }) {
           </div>
         ))}
       </dl>
+      {doc.legalNotes.length ? (
+        <ul className="legal-notes">
+          {doc.legalNotes.map((note) => (
+            <li key={note}>{note}</li>
+          ))}
+        </ul>
+      ) : null}
     </div>
+  )
+}
+
+/** Abschlagsaufstellung (§ 14 Abs. 5 UStG): Gesamtleistung − Abschläge = Restbetrag. */
+export function DeductionTable({ doc }: { doc: Doc }) {
+  const { performance, deductions } = doc.totals
+  const label = (d: Doc['totals']['deductions'][number]) =>
+    `${documentLabel({ type: 'invoice', invoiceKind: d.invoiceKind, progressNo: d.progressNo, changeOrder: null })} ${d.number ?? ''} ${t('inv.of')} ${formatDateTime(d.documentDate, 'date')}`
+  const row = (
+    key: string,
+    name: string,
+    net: number,
+    tax: number,
+    gross: number,
+    sign = '',
+    rest = false,
+  ) => (
+    <tr key={key} className={`data-row${rest ? ' rest-row' : ''}`}>
+      <th scope="row" className="row-label">
+        {name}
+      </th>
+      {(
+        [
+          ['inv.net', net],
+          ['inv.tax', tax],
+          ['inv.gross', gross],
+        ] as const
+      ).map(([label, cents]) => (
+        <td key={label} className="amount-cell" data-label={t(label)}>
+          {sign}
+          {formatCents(cents)}
+        </td>
+      ))}
+    </tr>
+  )
+  return (
+    <table className="deduction-table">
+      <caption>{t('inv.deductionTitle')}</caption>
+      <thead>
+        <tr>
+          <td />
+          <th scope="col" className="col-head">
+            {t('inv.net')}
+          </th>
+          <th scope="col" className="col-head">
+            {t('inv.tax')}
+          </th>
+          <th scope="col" className="col-head">
+            {t('inv.gross')}
+          </th>
+        </tr>
+      </thead>
+      <tbody>
+        {row(
+          'performance',
+          t('inv.performance'),
+          performance.netCents,
+          performance.taxCents,
+          performance.grossCents,
+        )}
+        {deductions.map((d) =>
+          row(d.documentId, label(d), d.netCents, d.taxCents, d.grossCents, '− '),
+        )}
+      </tbody>
+      <tfoot>
+        {row(
+          'rest',
+          t('inv.rest'),
+          doc.totals.netCents,
+          doc.totals.taxCents,
+          doc.totals.grossCents,
+          '',
+          true,
+        )}
+      </tfoot>
+    </table>
   )
 }
 
@@ -897,16 +1078,19 @@ function ChangeOrderSwitch({
 function DocumentActions({
   doc,
   canWrite,
+  canFinalize,
   apply,
   navigate,
 }: {
   doc: Doc
   canWrite: boolean
+  canFinalize: boolean
   apply: Apply
   navigate: Navigate
 }) {
   const [error, setError] = useState<string | null>(null)
   const [busy, setBusy] = useState(false)
+  const [finalizing, setFinalizing] = useState(false)
   const offer = ['quote', 'cost_estimate', 'change_order'].includes(doc.type)
   const billed = doc.type === 'invoice' || doc.type === 'credit_note'
   const run = async (path: string, body?: unknown, confirmText?: string) => {
@@ -973,10 +1157,131 @@ function DocumentActions({
           </button>
         </>
       ) : null}
+      {canFinalize && billed && doc.status === 'draft' && !finalizing ? (
+        <button type="button" className="button primary auto" onClick={() => setFinalizing(true)}>
+          {t('inv.finalize')}
+        </button>
+      ) : null}
       {doc.status === 'draft' && !billed ? <p className="hint">{t('q.finalizeHint')}</p> : null}
-      {billed && doc.status === 'draft' ? <p className="hint">{t('doc.finalizeLater')}</p> : null}
+      {billed && doc.status === 'draft' && !canFinalize ? (
+        <p className="hint">{t('inv.noPermission')}</p>
+      ) : null}
       <FormError>{error}</FormError>
+      {finalizing ? (
+        <FinalizeInvoice
+          doc={doc}
+          onDone={(result) => {
+            setFinalizing(false)
+            apply(result)
+          }}
+          onCancel={() => setFinalizing(false)}
+        />
+      ) : null}
     </div>
+  )
+}
+
+/**
+ * Festschreiben einer Rechnung (DESIGN.md §7.7): Pflichtangaben-Prüfung, Hinweise bestätigen,
+ * künftige Nummer, deutlicher Hinweis auf die Unveränderbarkeit.
+ */
+function FinalizeInvoice({
+  doc,
+  onDone,
+  onCancel,
+}: {
+  doc: Doc
+  onDone: (result: { data: Doc; etag: string | null }) => void
+  onCancel: () => void
+}) {
+  const [check, setCheck] = useState<FinalizeCheck | null>(null)
+  const [error, setError] = useState<string | null>(null)
+  const [acknowledged, setAcknowledged] = useState(false)
+  const [busy, setBusy] = useState(false)
+  const headingId = useId()
+  // Re-check whenever the draft changes.
+  // biome-ignore lint/correctness/useExhaustiveDependencies: doc.updatedAt triggers a new check
+  useEffect(() => {
+    setCheck(null)
+    api<FinalizeCheck>('GET', `/api/v1/documents/${doc.id}/finalize-check`)
+      .then(setCheck)
+      .catch((err: ApiError) => setError(err.message))
+  }, [doc.id, doc.updatedAt])
+  const blocked = !check || check.errors.length > 0
+  const submit = async () => {
+    setBusy(true)
+    setError(null)
+    try {
+      onDone(
+        await apiWithEtag<Doc>('POST', `/api/v1/documents/${doc.id}/finalize`, {
+          acknowledgeWarnings: acknowledged,
+        }),
+      )
+    } catch (err) {
+      const e = err as ApiError
+      setError([e.message, ...Object.values(e.fieldErrors)].join(' '))
+    } finally {
+      setBusy(false)
+    }
+  }
+  return (
+    <section className="finalize-panel" aria-labelledby={headingId}>
+      <h2 id={headingId}>{t('inv.finalizeTitle')}</h2>
+      {!check && !error ? <p className="muted">{t('common.loading')}</p> : null}
+      {check?.errors.length ? (
+        <div role="alert">
+          <p>
+            <strong>{t('inv.missing')}</strong>
+          </p>
+          <ul className="issue-list">
+            {check.errors.map((issue) => (
+              <li key={issue.message}>{issue.message}</li>
+            ))}
+          </ul>
+        </div>
+      ) : null}
+      {check && !check.errors.length ? (
+        <>
+          <p className="success">{t('inv.complete')}</p>
+          {check.warnings.length ? (
+            <>
+              <ul className="issue-list warning-list">
+                {check.warnings.map((issue) => (
+                  <li key={issue.message}>{issue.message}</li>
+                ))}
+              </ul>
+              <label className="check-row">
+                <input
+                  type="checkbox"
+                  className="check-box"
+                  checked={acknowledged}
+                  onChange={(e) => setAcknowledged(e.target.checked)}
+                />
+                <span>{t('inv.acknowledge')}</span>
+              </label>
+            </>
+          ) : null}
+          <p>
+            {t('inv.numberPreview')} <strong>{check.numberPreview}</strong>
+          </p>
+          <p className="notice inline">{t('inv.finalizeWarning')}</p>
+        </>
+      ) : null}
+      <FormError>{error}</FormError>
+      <div className="button-row">
+        <button
+          type="button"
+          className="button primary auto"
+          disabled={busy || blocked || (check.warnings.length > 0 && !acknowledged)}
+          onClick={submit}
+        >
+          {t('inv.finalizeNow')}
+        </button>
+        <button type="button" className="button ghost" onClick={onCancel}>
+          {t('common.cancel')}
+        </button>
+      </div>
+    </section>
   )
 }
 

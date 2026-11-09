@@ -7,7 +7,6 @@ import {
   expectDbError,
   openTestDb,
   type TestDb,
-  type TestTenant,
   testDatabaseUrl,
 } from './test-support.js'
 

@@ -45,6 +45,28 @@ export interface DocumentTotalsInput {
   constructionLevyPercent?: NumericInput
   /** Skonto in percent of the payable amount (shown as information, not deducted). */
   cashDiscountPercent?: NumericInput
+  /**
+   * Schlussrechnung / kumulative Abschlagsrechnung: earlier invoices whose amounts are deducted
+   * per tax rate (§ 14 Abs. 5 UStG). The positions then show the total performance.
+   */
+  deductions?: readonly DeductedInvoice[]
+}
+
+export interface DeductedInvoice {
+  id: string
+  taxLines: readonly {
+    category: TaxCategory
+    ratePercent: NumericInput
+    netCents: bigint
+    taxCents: bigint
+  }[]
+}
+
+export interface DeductionRow {
+  id: string
+  netCents: bigint
+  taxCents: bigint
+  grossCents: bigint
 }
 
 export interface TaxLine {
@@ -57,9 +79,17 @@ export interface TaxLine {
 }
 
 export interface DocumentTotals {
+  /**
+   * Gesamtleistung (positions after discount). Without deductions equal to net/tax/gross; with
+   * deductions its tax is the tax of this invoice plus the deducted tax, so the table adds up.
+   */
+  performance: { netCents: bigint; taxCents: bigint; grossCents: bigint }
+  /** Deducted earlier invoices (empty without deductions). */
+  deductions: DeductionRow[]
   /** Sum of all counted positions before document discount. */
   itemsNetCents: bigint
   discountCents: bigint
+  /** Amounts of THIS invoice (after deductions): its VAT base per rate. */
   netCents: bigint
   taxCents: bigint
   grossCents: bigint
@@ -155,8 +185,30 @@ export function calculateDocumentTotals(input: DocumentTotalsInput): DocumentTot
     groups.set(key, group)
   }
 
+  // Deducted invoices reduce the net per (category, rate); groups only present there count too.
+  const deducted = new Map<string, { net: bigint; tax: bigint }>()
+  const deductions: DeductionRow[] = []
+  for (const invoice of input.deductions ?? []) {
+    const row = { id: invoice.id, netCents: 0n, taxCents: 0n, grossCents: 0n }
+    for (const line of invoice.taxLines) {
+      const rate = toDecimal(line.ratePercent)
+      const key = `${line.category}|${rate.toFixed(4)}`
+      if (!groups.has(key)) groups.set(key, { category: line.category, rate, net: 0n, labor: 0n })
+      const sum = deducted.get(key) ?? { net: 0n, tax: 0n }
+      sum.net += line.netCents
+      sum.tax += line.taxCents
+      deducted.set(key, sum)
+      row.netCents += line.netCents
+      row.taxCents += line.taxCents
+    }
+    row.grossCents = row.netCents + row.taxCents
+    deductions.push(row)
+  }
+
   const taxLines: TaxLine[] = []
   let discountCents = 0n
+  let performanceNet = 0n
+  let performanceTax = 0n
   let laborNet = 0n
   let laborGross = 0n
   const ordered = [...groups.values()].sort(
@@ -165,9 +217,14 @@ export function calculateDocumentTotals(input: DocumentTotalsInput): DocumentTot
   for (const group of ordered) {
     // The document discount is applied per tax group (document-level allowance per category).
     const groupDiscount = toCents(new Decimal(group.net.toString()).mul(discount))
-    const net = group.net - groupDiscount
+    const own = group.net - groupDiscount
     discountCents += groupDiscount
+    const minus = deducted.get(`${group.category}|${group.rate.toFixed(4)}`) ?? { net: 0n, tax: 0n }
+    // VAT of this invoice is computed on its own base (BR-CO-17), not as a difference of taxes.
+    const net = own - minus.net
     const tax = toCents(new Decimal(net.toString()).mul(group.rate).div(100))
+    performanceNet += own
+    performanceTax += tax + minus.tax
     const reason = EXEMPTION_REASONS[group.category]
     taxLines.push({
       category: group.category,
@@ -181,10 +238,11 @@ export function calculateDocumentTotals(input: DocumentTotalsInput): DocumentTot
     laborGross += labor + toCents(new Decimal(labor.toString()).mul(group.rate).div(100))
   }
 
-  const netCents = itemsNetCents - discountCents
+  const netCents = taxLines.reduce((sum, t) => sum + t.netCents, 0n)
   const taxCents = taxLines.reduce((sum, t) => sum + t.taxCents, 0n)
   const grossCents = netCents + taxCents
-  const gross = new Decimal(grossCents.toString())
+  // Retention and levy apply to the amount requested with this invoice (never below zero).
+  const gross = new Decimal((grossCents > 0n ? grossCents : 0n).toString())
   const retentionCents = toCents(
     gross.mul(percentOrZero(input.retentionPercent, 'Der Sicherheitseinbehalt')),
   )
@@ -193,12 +251,18 @@ export function calculateDocumentTotals(input: DocumentTotalsInput): DocumentTot
   )
   const payableCents = grossCents - retentionCents - constructionLevyCents
   const cashDiscountCents = toCents(
-    new Decimal(payableCents.toString()).mul(
+    new Decimal((payableCents > 0n ? payableCents : 0n).toString()).mul(
       percentOrZero(input.cashDiscountPercent, 'Das Skonto'),
     ),
   )
 
   return {
+    performance: {
+      netCents: performanceNet,
+      taxCents: performanceTax,
+      grossCents: performanceNet + performanceTax,
+    },
+    deductions,
     itemsNetCents,
     discountCents,
     netCents,
