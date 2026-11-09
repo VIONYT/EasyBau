@@ -180,7 +180,7 @@ describe.skipIf(!testDatabaseUrl)('database schema (integration)', () => {
     it('supports year prefix with yearly reset', async () => {
       const tenant = await createTenant(db, 'Jahr')
       const [row] = await tenant.run(async (tx) => {
-        await tx`update number_sequence set include_year = true, reset_yearly = true where kind = 'quote'`
+        await tx`update number_sequence set pattern = 'A-{Jahr}-{Nummer}', reset_yearly = true where kind = 'quote'`
         await tx`select next_number('quote', '2026-12-30')`
         return tx<{ n: string }[]>`select next_number('quote', '2027-01-04') as n`
       })

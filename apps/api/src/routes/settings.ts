@@ -1,5 +1,5 @@
 import type { Tx } from '@opc/db'
-import { hourlyRateCents } from '@opc/domain'
+import { checkNumberPattern, formatNumber, hourlyRateCents } from '@opc/domain'
 import {
   type Company,
   companyRequest,
@@ -84,8 +84,20 @@ export async function datevSettings(tx: Tx): Promise<DatevSettings> {
   return { ...DEFAULT_DATEV, ...(row?.datev ?? {}) }
 }
 
-function preview(seq: Omit<NumberSequence, 'preview'>, year: number): string {
-  return `${seq.prefix}${seq.includeYear ? `${year}-` : ''}${String(seq.nextValue).padStart(seq.minLength, '0')}`
+/** Next value as shown in the settings: with yearly restart the counter of the current year. */
+const nextValueOfYear = (tx: Tx) => tx`
+  (case when s.reset_yearly then coalesce(
+     (select y.next_value from number_sequence_year y
+      where y.kind = s.kind and y.year = extract(year from current_date)),
+     case when s.current_year >= extract(year from current_date) then greatest(s.next_value, s.start_value)
+          else s.start_value end)
+   else s.next_value end)::int`
+
+function preview(seq: Omit<NumberSequence, 'preview'>, now = new Date()): string {
+  return formatNumber(seq.pattern, seq.nextValue, seq.minLength, {
+    year: now.getFullYear(),
+    month: now.getMonth() + 1,
+  })
 }
 
 const companyColumns: Record<keyof Omit<Company, 'iban'>, string> = {
@@ -156,13 +168,12 @@ export function registerSettingsRoutes(app: FastifyInstance, services: Services)
     const auth = requirePermission(request, 'settings.read')
     return inTenant(services, auth, async (tx) => {
       const rows = await tx<Omit<NumberSequence, 'preview'>[]>`
-        select kind, prefix, next_value::int as "nextValue", min_length as "minLength",
-               include_year as "includeYear", reset_yearly as "resetYearly"
-        from number_sequence
+        select kind, pattern, ${nextValueOfYear(tx)} as "nextValue", min_length as "minLength",
+               reset_yearly as "resetYearly"
+        from number_sequence s
         order by array_position(array['contact','project','quote','cost_estimate','order_confirmation',
                                       'delivery_note','invoice','credit_note'], kind)`
-      const year = new Date().getFullYear()
-      return rows.map((r) => ({ ...r, preview: preview(r, year) }))
+      return rows.map((r) => ({ ...r, preview: preview(r) }))
     })
   })
 
@@ -172,36 +183,54 @@ export function registerSettingsRoutes(app: FastifyInstance, services: Services)
     const input = parse(numberSequenceRequest, request.body)
     return inTenant(services, auth, async (tx) => {
       const columns: Record<string, unknown> = {}
-      if (input.prefix !== undefined) columns.prefix = input.prefix
-      if (input.nextValue !== undefined) columns.next_value = input.nextValue
+      if (input.pattern !== undefined) {
+        const problem = checkNumberPattern(input.pattern)
+        if (problem) throw invalid({ pattern: problem })
+        columns.pattern = input.pattern
+      }
       if (input.minLength !== undefined) columns.min_length = input.minLength
-      if (input.includeYear !== undefined) columns.include_year = input.includeYear
       if (input.resetYearly !== undefined) columns.reset_yearly = input.resetYearly
+      const fail = (error: { message?: string }): never => {
+        if (String(error.message).includes('must not be decreased')) {
+          throw invalid({
+            nextValue:
+              'Rechnungs- und Gutschriftnummern dürfen nicht zurückgesetzt werden (lückenlose Nummerierung).',
+          })
+        }
+        if (String(error.message).includes('restart yearly with the year')) {
+          throw invalid({
+            resetYearly:
+              'Jährlich neu beginnen geht nur mit {Jahr} oder {JJ} im Schema, sonst würden Nummern doppelt vergeben.',
+          })
+        }
+        throw error
+      }
       if (Object.keys(columns).length) {
-        await tx`update number_sequence set ${tx(columns)} where kind = ${kind}`.catch(
-          (error: { message?: string }) => {
-            if (String(error.message).includes('must not be decreased')) {
-              throw invalid({
-                nextValue:
-                  'Rechnungs- und Gutschriftnummern dürfen nicht zurückgesetzt werden (lückenlose Nummerierung).',
-              })
-            }
-            if (String(error.message).includes('restart yearly with the year')) {
-              throw invalid({
-                resetYearly:
-                  'Jährlich neu beginnen geht bei Rechnungen und Gutschriften nur mit Jahr in der Nummer, sonst würden Nummern doppelt vergeben.',
-              })
-            }
-            throw error
-          },
-        )
+        await tx`update number_sequence set ${tx(columns)} where kind = ${kind}`.catch(fail)
+      }
+      if (input.nextValue !== undefined) {
+        // With yearly restart the value is the counter of the current year (Nummernkreis je Jahr).
+        const [seq] = await tx<{ yearly: boolean }[]>`
+          select reset_yearly as yearly from number_sequence where kind = ${kind}`
+        if (seq?.yearly) {
+          await tx`
+            insert into number_sequence_year (tenant_id, kind, year, next_value)
+            values (current_tenant_id(), ${kind}, extract(year from current_date)::smallint, ${input.nextValue})
+            on conflict (tenant_id, kind, year) do update set next_value = excluded.next_value`.catch(
+            fail,
+          )
+        } else {
+          await tx`update number_sequence set next_value = ${input.nextValue} where kind = ${kind}`.catch(
+            fail,
+          )
+        }
       }
       const [row] = await tx<Omit<NumberSequence, 'preview'>[]>`
-        select kind, prefix, next_value::int as "nextValue", min_length as "minLength",
-               include_year as "includeYear", reset_yearly as "resetYearly"
-        from number_sequence where kind = ${kind}`
+        select kind, pattern, ${nextValueOfYear(tx)} as "nextValue", min_length as "minLength",
+               reset_yearly as "resetYearly"
+        from number_sequence s where kind = ${kind}`
       if (!row) throw notFound('Der Nummernkreis')
-      return { ...row, preview: preview(row, new Date().getFullYear()) }
+      return { ...row, preview: preview(row) }
     })
   })
 

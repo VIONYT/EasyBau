@@ -625,10 +625,13 @@ const de = {
   's.n.kind.delivery_note': 'Lieferscheine',
   's.n.kind.invoice': 'Rechnungen',
   's.n.kind.credit_note': 'Gutschriften',
-  's.n.prefix': 'Präfix',
+  's.n.pattern': 'Schema',
+  's.n.patternHint':
+    'Schema mit Platzhaltern: {Jahr} = 2026, {JJ} = 26, {Monat} = 11, {Nummer} = fortlaufende Nummer mit führenden Nullen. Beispiele: R{Jahr}-{Nummer} → R2026-00101, R{Nummer}-{Jahr} → R00101-2026. Jährlich neu beginnen geht nur mit Jahr im Schema.',
+  's.n.tokens': 'Platzhalter einfügen',
+  's.n.insert': 'Einfügen:',
   's.n.next': 'Nächste Nummer',
   's.n.length': 'Stellen',
-  's.n.year': 'Jahr in der Nummer',
   's.n.reset': 'Jährlich neu beginnen',
   's.n.preview': 'Nächste',
   's.n.invoiceHint':

@@ -11,8 +11,9 @@ import type {
   WageGroup,
   WorkingDay,
 } from '@opc/schemas'
+import { checkNumberPattern, formatNumber } from '@opc/domain'
 import { COST_KINDS, DOCUMENT_TYPES } from '@opc/schemas/constants'
-import { type ReactNode, useCallback, useEffect, useId, useState } from 'react'
+import { type ReactNode, useCallback, useEffect, useId, useRef, useState } from 'react'
 import { ApiError, api } from '../api'
 import { formatCents, formatInputNumber, parseEuro } from '../format'
 import { FormError } from '../forms'
@@ -286,77 +287,136 @@ function NumberSettings() {
   const { data, setData, error } = useResource<NumberSequence[]>(
     '/api/v1/settings/number-sequences',
   )
-  const save = useSave()
   if (error) return <FormError>{error}</FormError>
   if (!data) return <p className="muted">{t('common.loading')}</p>
-  const change = (kind: string, patch: Partial<NumberSequence>) =>
-    setData(data.map((s) => (s.kind === kind ? { ...s, ...patch } : s)))
+  const change = (seq: NumberSequence) => setData(data.map((s) => (s.kind === seq.kind ? seq : s)))
   return (
     <Panel title={t('s.numbers')}>
       <p className="hint">{t('s.n.invoiceHint')}</p>
+      <p className="hint">{t('s.n.patternHint')}</p>
       <ul className="rows">
         {data.map((s) => (
-          <li key={s.kind} className="row-card">
-            <h3>
-              {t(`s.n.kind.${s.kind}` as TextKey)}{' '}
-              <span className="muted">
-                · {t('s.n.preview')}: {s.preview}
-              </span>
-            </h3>
-            <div className="row four">
-              <Input
-                label={t('s.n.prefix')}
-                value={s.prefix}
-                onChange={(v) => change(s.kind, { prefix: v })}
-              />
-              <Input
-                label={t('s.n.next')}
-                inputMode="numeric"
-                value={String(s.nextValue)}
-                onChange={(v) => change(s.kind, { nextValue: Number(v.replace(/\D/g, '')) })}
-              />
-              <Input
-                label={t('s.n.length')}
-                inputMode="numeric"
-                value={String(s.minLength)}
-                onChange={(v) => change(s.kind, { minLength: Number(v.replace(/\D/g, '')) || 1 })}
-              />
-            </div>
-            <div className="button-row">
-              <Check
-                label={t('s.n.year')}
-                checked={s.includeYear}
-                onChange={(v) => change(s.kind, { includeYear: v })}
-              />
-              <Check
-                label={t('s.n.reset')}
-                checked={s.resetYearly}
-                onChange={(v) => change(s.kind, { resetYearly: v })}
-              />
-              <button
-                type="button"
-                className="button ghost small"
-                disabled={save.busy}
-                onClick={() =>
-                  save.run(async () => {
-                    const { kind, preview: _, ...body } = s
-                    const updated = await api<NumberSequence>(
-                      'PATCH',
-                      `/api/v1/settings/number-sequences/${kind}`,
-                      body,
-                    )
-                    change(kind, updated)
-                  })
-                }
-              >
-                {t('common.save')}
-              </button>
-            </div>
-          </li>
+          <NumberSequenceCard key={s.kind} seq={s} onChange={change} />
         ))}
       </ul>
-      {save.message}
     </Panel>
+  )
+}
+
+const NUMBER_TOKENS = ['{Jahr}', '{JJ}', '{Monat}', '{Nummer}'] as const
+
+/** One Nummernkreis: schema with placeholders, live preview of the next number. */
+function NumberSequenceCard({
+  seq,
+  onChange,
+}: {
+  seq: NumberSequence
+  onChange: (seq: NumberSequence) => void
+}) {
+  const save = useSave()
+  const id = useId()
+  const input = useRef<HTMLInputElement>(null)
+  const set = (patch: Partial<NumberSequence>) => onChange({ ...seq, ...patch })
+  const problem = checkNumberPattern(seq.pattern)
+  const now = new Date()
+  const preview = problem
+    ? null
+    : formatNumber(seq.pattern, seq.nextValue, seq.minLength, {
+        year: now.getFullYear(),
+        month: now.getMonth() + 1,
+      })
+  const insert = (token: string) => {
+    const el = input.current
+    const from = el?.selectionStart ?? seq.pattern.length
+    const to = el?.selectionEnd ?? seq.pattern.length
+    set({ pattern: seq.pattern.slice(0, from) + token + seq.pattern.slice(to) })
+    requestAnimationFrame(() => {
+      el?.focus()
+      el?.setSelectionRange(from + token.length, from + token.length)
+    })
+  }
+  return (
+    <li className="row-card">
+      <h3>
+        {t(`s.n.kind.${seq.kind}` as TextKey)}{' '}
+        <span className="muted">
+          · {t('s.n.preview')}: <strong>{preview ?? '–'}</strong>
+        </span>
+      </h3>
+      <div className="field">
+        <label htmlFor={`${id}-pattern`}>{t('s.n.pattern')}</label>
+        <input
+          id={`${id}-pattern`}
+          ref={input}
+          value={seq.pattern}
+          maxLength={40}
+          spellCheck={false}
+          autoCapitalize="off"
+          aria-invalid={problem ? true : undefined}
+          aria-describedby={problem ? `${id}-problem` : undefined}
+          onChange={(e) => set({ pattern: e.target.value })}
+        />
+        {problem ? (
+          <p className="field-error" id={`${id}-problem`}>
+            {problem}
+          </p>
+        ) : null}
+      </div>
+      <div className="button-row" role="group" aria-label={t('s.n.tokens')}>
+        {NUMBER_TOKENS.map((token) => (
+          <button
+            key={token}
+            type="button"
+            className="button ghost small"
+            aria-label={`${t('s.n.insert')} ${token}`}
+            onClick={() => insert(token)}
+          >
+            {token}
+          </button>
+        ))}
+      </div>
+      <div className="row four">
+        <Input
+          label={t('s.n.next')}
+          inputMode="numeric"
+          value={String(seq.nextValue)}
+          onChange={(v) => set({ nextValue: Number(v.replace(/\D/g, '')) })}
+        />
+        <Input
+          label={t('s.n.length')}
+          inputMode="numeric"
+          value={String(seq.minLength)}
+          onChange={(v) => set({ minLength: Math.min(Number(v.replace(/\D/g, '')) || 1, 12) })}
+        />
+      </div>
+      <div className="button-row">
+        <Check
+          label={t('s.n.reset')}
+          checked={seq.resetYearly}
+          onChange={(v) => set({ resetYearly: v })}
+        />
+        <button
+          type="button"
+          className="button ghost small"
+          disabled={save.busy || problem !== null}
+          onClick={() =>
+            save.run(async () => {
+              const { kind, preview: _, ...body } = seq
+              onChange(
+                await api<NumberSequence>(
+                  'PATCH',
+                  `/api/v1/settings/number-sequences/${kind}`,
+                  body,
+                ),
+              )
+            })
+          }
+        >
+          {t('common.save')}
+        </button>
+      </div>
+      {save.message}
+    </li>
   )
 }
 

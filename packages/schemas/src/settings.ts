@@ -77,21 +77,20 @@ export interface Company {
 
 export interface NumberSequence {
   kind: string
-  prefix: string
+  /** Schema with placeholders, e.g. „R{Jahr}-{Nummer}“ (packages/domain numbering.ts). */
+  pattern: string
   nextValue: number
   minLength: number
-  includeYear: boolean
   resetYearly: boolean
-  /** Example of the next number, e.g. „R-2026-00101“. */
+  /** Example of the next number, e.g. „R2026-00101“. */
   preview: string
 }
 
 export const numberSequenceRequest = z
   .object({
-    prefix: z.string().max(20),
+    pattern: z.string().trim().max(40, 'Das Schema darf höchstens 40 Zeichen lang sein.'),
     nextValue: z.number().int().min(0).max(1_000_000_000),
     minLength: z.number().int().min(1).max(12),
-    includeYear: z.boolean(),
     resetYearly: z.boolean(),
   })
   .partial()

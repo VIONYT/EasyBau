@@ -82,17 +82,35 @@ describe.skipIf(!process.env.DATABASE_URL)('Einstellungen (integration)', () => 
   it('configures number sequences but never lets invoice numbers go back', async () => {
     let list: NumberSequence[] = (await admin.get('/api/v1/settings/number-sequences')).json()
     expect(list.find((s) => s.kind === 'invoice')).toMatchObject({
-      prefix: 'R-',
+      pattern: 'R-{Nummer}',
       nextValue: 101,
       preview: 'R-00101',
     })
+    const year = new Date().getFullYear()
+    // Freely chosen schema: year before or after the running number.
     const res = await admin.patch('/api/v1/settings/number-sequences/invoice', {
-      prefix: 'RE-',
-      includeYear: true,
+      pattern: 'R{Jahr}-{Nummer}',
       nextValue: 500,
     })
-    expect(res.json()).toMatchObject({ prefix: 'RE-', nextValue: 500 })
-    expect(res.json().preview).toMatch(/^RE-\d{4}-00500$/)
+    expect(res.json()).toMatchObject({
+      pattern: 'R{Jahr}-{Nummer}',
+      nextValue: 500,
+      preview: `R${year}-00500`,
+    })
+    const after = await admin.patch('/api/v1/settings/number-sequences/quote', {
+      pattern: 'A{FortlaufendeNummer}-{Jahr}',
+    })
+    expect(after.json().preview).toMatch(new RegExp(`^A\\d{5}-${year}$`))
+    const wrong = await admin.patch('/api/v1/settings/number-sequences/quote', {
+      pattern: 'A{Tag}-{Nummer}',
+    })
+    expect(wrong.statusCode).toBe(400)
+    expect(wrong.json().errors.pattern).toMatch(/Unbekannter Platzhalter/)
+    expect(
+      (await admin.patch('/api/v1/settings/number-sequences/quote', { pattern: 'A-{Jahr}' })).json()
+        .errors.pattern,
+    ).toMatch(/genau einmal \{Nummer\}/)
+
     const back = await admin.patch('/api/v1/settings/number-sequences/invoice', { nextValue: 100 })
     expect(back.json().errors.nextValue).toMatch(/nicht zurückgesetzt/)
     // Restarting every year without the year in the number would issue numbers twice.
@@ -100,15 +118,21 @@ describe.skipIf(!process.env.DATABASE_URL)('Einstellungen (integration)', () => 
       resetYearly: true,
     })
     expect(noYear.statusCode).toBe(400)
-    expect(noYear.json().errors.resetYearly).toMatch(/nur mit Jahr/)
-    expect(
-      (
-        await admin.patch('/api/v1/settings/number-sequences/credit_note', {
-          includeYear: true,
-          resetYearly: true,
-        })
-      ).statusCode,
-    ).toBe(200)
+    expect(noYear.json().errors.resetYearly).toMatch(/nur mit \{Jahr\}/)
+    const yearly = await admin.patch('/api/v1/settings/number-sequences/credit_note', {
+      pattern: 'G{JJ}/{Nummer}',
+      resetYearly: true,
+    })
+    expect(yearly.statusCode, yearly.body).toBe(200)
+    // With yearly restart the next value is the counter of the current year.
+    const set = await admin.patch('/api/v1/settings/number-sequences/credit_note', {
+      nextValue: 7,
+      minLength: 3,
+    })
+    expect(set.json()).toMatchObject({
+      nextValue: 7,
+      preview: `G${String(year % 100).padStart(2, '0')}/007`,
+    })
     expect(
       (await admin.patch('/api/v1/settings/number-sequences/quote', { nextValue: 1 })).statusCode,
     ).toBe(200)
