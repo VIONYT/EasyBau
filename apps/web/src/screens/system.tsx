@@ -219,8 +219,8 @@ type CheckState = 'ok' | 'warning' | 'off'
 
 function Check({ state, title, children }: { state: CheckState; title: string; children: string }) {
   return (
-    <li className={`check check--${state}`}>
-      <span className="check__state">{t(`sys.check.${state}` as TextKey)}</span>
+    <li className={`op-check op-check--${state}`}>
+      <span className="op-check__state">{t(`sys.check.${state}` as TextKey)}</span>
       <span>
         <strong>{title}</strong>
         <span className="muted">{children}</span>
@@ -253,7 +253,7 @@ function OperationsPanel() {
   return (
     <div className="panel">
       <h2>{t('sys.check')}</h2>
-      <ul className="check-list">
+      <ul className="op-check-list">
         <Check state={backupFresh ? 'ok' : 'warning'} title={t('sys.backup')}>
           {last
             ? `${t('sys.backupLast')} ${describe(last)}${backupFresh ? '' : ` – ${t('sys.backupOld')}`}`

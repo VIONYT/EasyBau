@@ -180,6 +180,8 @@ describe('PDF/A mit Typst', () => {
       { createdAt: new Date('2026-11-21T10:00:00Z') },
     )
     expect(pdf.subarray(0, 5).toString()).toBe('%PDF-')
+    if (process.env.PDF_SAMPLE_DIR)
+      writeFileSync(join(process.env.PDF_SAMPLE_DIR, 'final.pdf'), pdf)
     const raw = pdf.toString('latin1')
     // XMP: PDF/A-3, conformance B.
     expect(raw).toMatch(/pdfaid:part(>|=")3/)

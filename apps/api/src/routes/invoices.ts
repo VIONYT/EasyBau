@@ -168,7 +168,7 @@ export async function cancelInvoice(
                           contact_id, tax_mode, currency, discount_percent, retention_percent,
                           construction_levy_percent, source_document_id, created_by)
     select tenant_id, project_id, 'invoice', 'cancellation', id, ${input.reason},
-           ${`Storno zu Rechnung ${original.number}`}, current_date, service_from, service_to,
+           subject, current_date, service_from, service_to,
            place_of_performance, contact_id, tax_mode, currency, discount_percent, retention_percent,
            construction_levy_percent, id, ${auth.userId}
     from document where id = ${id}

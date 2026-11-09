@@ -146,20 +146,25 @@
   })
 }
 
-#align(right, block(width: 95mm, above: 3mm, breakable: false, {
-  for row in data.body.totals {
-    if row.grand { line(length: 100%, stroke: 1.2pt) }
-    grid(
-      columns: (1fr, auto),
-      column-gutter: 4mm,
-      align: (left, right),
-      if row.grand { strong(row.label) } else { row.label },
-      if row.grand { strong(row.value) } else { row.value },
-    )
-    if row.note != none { block(above: 0.5mm, below: 1mm, text(size: 8pt, fill: muted, row.note)) }
-    v(0.8mm, weak: true)
-  }
-}))
+#align(right, block(width: 95mm, above: 4mm, breakable: false, table(
+  columns: (1fr, auto),
+  stroke: none,
+  inset: (x: 0pt, y: 1.3mm),
+  column-gutter: 4mm,
+  align: (x, y) => if x == 0 { left } else { right },
+  ..data.body.totals
+    .map(row => {
+      let cells = ()
+      if row.grand { cells.push(table.hline(stroke: 1.2pt + rgb("#111827"))) }
+      cells.push(if row.grand { strong(row.label) } else { row.label })
+      cells.push(if row.grand { strong(row.value) } else { row.value })
+      if row.note != none {
+        cells.push(table.cell(colspan: 2, text(size: 8pt, fill: muted, row.note)))
+      }
+      cells
+    })
+    .flatten(),
+)))
 
 #for note in data.body.notes { block(above: 3mm, text(size: 9.5pt, note)) }
 #if data.body.closing != none { block(above: 4mm, lines(data.body.closing)) }
