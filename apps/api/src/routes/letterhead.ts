@@ -135,9 +135,10 @@ export function registerLetterheadRoutes(app: FastifyInstance, services: Service
       }
       const upload = pending
       const asset = await inTenant(services, auth, async (tx) => {
-        const [existing] = await tx<{ id: string }[]>`
-          select id from tenant_asset where sha256 = ${upload.sha256}`
-        if (existing) return existing
+        const [existing] = await tx<{ id: string; kind: string }[]>`
+          select id, kind from tenant_asset where sha256 = ${upload.sha256}`
+        if (existing?.kind === 'logo') return existing
+        if (existing) throw new HttpError(409, 'Dieses Bild kann nicht als Logo verwendet werden.')
         const [ids] = await tx<{ id: string }[]>`select uuid_v7() as id`
         const assetId = (ids as { id: string }).id
         const key = `${auth.tenantId}/assets/${assetId}`

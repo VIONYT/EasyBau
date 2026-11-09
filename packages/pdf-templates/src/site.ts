@@ -17,7 +17,12 @@ export interface SiteLetterContext {
   layout: Parameters<typeof letterFrame>[0]['layout']
   values: LetterheadValues
   recipient: string[]
+  /** Handwritten signatures available as template assets: asset id → path (e.g. /sig-1.png). */
+  signatureImages?: ReadonlyMap<string, string>
 }
+
+const signatureImage = (ctx: SiteLetterContext, assetId: string | null) =>
+  (assetId && ctx.signatureImages?.get(assetId)) || null
 
 type SiteLetter = Omit<LetterPdfInput, 'logo'> & { logoPosition: LogoPosition | null }
 
@@ -126,11 +131,13 @@ export function sheetLetter(sheet: MeasurementSheetDetail, ctx: SiteLetterContex
         label: 'Auftragnehmer',
         name: sheet.signedByContractor ?? '',
         date: sheet.signedAt ? timestamp(sheet.signedAt) : null,
+        image: signatureImage(ctx, sheet.contractorSignatureAssetId),
       },
       {
         label: 'Auftraggeber',
         name: sheet.signedByClient ?? '',
         date: sheet.signedAt ? timestamp(sheet.signedAt) : null,
+        image: signatureImage(ctx, sheet.clientSignatureAssetId),
       },
     ],
   })
@@ -351,6 +358,7 @@ export function reportLetter(
           label: ROLE[s.role] ?? s.role,
           name: s.name,
           date: timestamp(s.signedAt),
+          image: signatureImage(ctx, s.imageAssetId),
         }))
         const open = (section.roles ?? ['contractor', 'client']).map((role) => ({
           label: ROLE[role] ?? role,

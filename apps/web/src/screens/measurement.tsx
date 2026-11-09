@@ -14,6 +14,14 @@ import { formatDateTime, formatInputNumber, formatQuantity, formatUnitAmount } f
 import { Field, FormError, optional, SelectField, useForm, value } from '../forms'
 import { type TextKey, t } from '../i18n'
 import type { Navigate } from '../router'
+import {
+  initialChoice,
+  resolveSignature,
+  type SignatureChoice,
+  SignatureImage,
+  SignatureInput,
+  useMySignature,
+} from '../signature'
 import { documentLabel } from './documents'
 
 type Sheet = MeasurementSheetDetail
@@ -139,10 +147,26 @@ export function MeasurementScreen({
         </a>
       </div>
       {sheet.status === 'signed' ? (
-        <p className="notice inline" role="status">
+        <div className="notice inline signature-list" role="status">
           {t('m.signedBy')} {formatDateTime(sheet.signedAt)}: {sheet.signedByContractor} /{' '}
           {sheet.signedByClient}
-        </p>
+          {sheet.contractorSignatureAssetId || sheet.clientSignatureAssetId ? (
+            <div className="row">
+              {sheet.contractorSignatureAssetId ? (
+                <SignatureImage
+                  url={`/api/v1/assets/${sheet.contractorSignatureAssetId}`}
+                  alt={t('sig.contractor')}
+                />
+              ) : null}
+              {sheet.clientSignatureAssetId ? (
+                <SignatureImage
+                  url={`/api/v1/assets/${sheet.clientSignatureAssetId}`}
+                  alt={t('sig.client')}
+                />
+              ) : null}
+            </div>
+          ) : null}
+        </div>
       ) : null}
       <FormError>{error}</FormError>
 
@@ -778,11 +802,16 @@ function Quantities({ me, sheet }: { me: Me; sheet: Sheet }) {
 // ---- Joint measurement ------------------------------------------------------------------------
 
 function SignPanel({ sheet, me, apply }: { sheet: Sheet; me: Me; apply: Apply }) {
+  const [mine] = useMySignature()
+  const [contractor, setContractor] = useState<SignatureChoice>(() => initialChoice(true))
+  const [client, setClient] = useState<SignatureChoice>(() => initialChoice(false))
   const form = useForm(async (data) => {
     if (!window.confirm(t('m.signConfirm'))) throw new ApiError(0, '')
     return apiWithEtag<Sheet>('POST', `/api/v1/measurement-sheets/${sheet.id}/sign`, {
       contractorName: value(data, 'contractorName'),
       clientName: value(data, 'clientName'),
+      contractorSignatureAssetId: await resolveSignature(contractor, mine),
+      clientSignatureAssetId: await resolveSignature(client, null),
     })
   }, apply)
   return (
@@ -806,6 +835,24 @@ function SignPanel({ sheet, me, apply }: { sheet: Sheet; me: Me; apply: Apply })
             name="clientName"
             required
             error={form.fieldErrors.clientName}
+          />
+        </div>
+        <div className="signature-row">
+          <SignatureInput
+            id="signature-contractor"
+            label={t('sig.contractor')}
+            own
+            mine={mine}
+            choice={contractor}
+            onChange={setContractor}
+          />
+          <SignatureInput
+            id="signature-client"
+            label={t('sig.client')}
+            own={false}
+            mine={null}
+            choice={client}
+            onChange={setClient}
           />
         </div>
         <button

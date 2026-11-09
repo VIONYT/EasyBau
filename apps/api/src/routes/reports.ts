@@ -27,6 +27,7 @@ import {
   type Services,
 } from '../context.js'
 import { checkIfMatch, etagOf, HttpError, notFound, parse } from '../http.js'
+import { ownSignature } from './signatures.js'
 
 const projectParam = z.object({ id: z.uuid('Ungültige ID.') })
 const reportParam = z.object({ id: z.uuid('Ungültige ID.') })
@@ -152,7 +153,8 @@ export async function loadReport(
     from report_photo ph join file f on f.id = ph.file_id
     where ph.report_id = ${id} order by ph.sort, ph.created_at`
   const signatures = await tx<ReportDetail['signatures']>`
-    select signer_role as role, signer_name as name, ${ISO(tx, 'signed_at')} as "signedAt"
+    select signer_role as role, signer_name as name, ${ISO(tx, 'signed_at')} as "signedAt",
+           image_asset_id as "imageAssetId"
     from report_signature where report_id = ${id} order by signed_at, id`
   const sections = row.templateSnapshot ?? row.sections
   return {
@@ -485,10 +487,16 @@ export function registerReportRoutes(app: FastifyInstance, services: Services) {
             .join(', ')}.`,
         })
       }
-      for (const signature of signatures) {
+      for (const [index, signature] of signatures.entries()) {
+        const image = await ownSignature(
+          tx,
+          auth,
+          signature.signatureAssetId,
+          `signatures.${index}.signatureAssetId`,
+        )
         await tx`
-          insert into report_signature (tenant_id, report_id, signer_name, signer_role)
-          values (${auth.tenantId}, ${id}, ${signature.name}, ${signature.role})`
+          insert into report_signature (tenant_id, report_id, signer_name, signer_role, image_asset_id)
+          values (${auth.tenantId}, ${id}, ${signature.name}, ${signature.role}, ${image})`
       }
       const [live] = await tx<{ header: ReportDetail['header'] }[]>`
         select json_build_object(

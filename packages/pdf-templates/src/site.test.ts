@@ -67,6 +67,8 @@ const sheet: MeasurementSheetDetail = {
   signedAt: '2026-11-06T15:30:00.000Z',
   signedByContractor: 'Erika Meister',
   signedByClient: 'Hans Berger',
+  contractorSignatureAssetId: null,
+  clientSignatureAssetId: null,
   locations: [
     {
       id: 'eg',
@@ -217,6 +219,33 @@ describe('Aufmaßblatt und Berichte als PDF/A', () => {
     }
   })
 
+  it('draws handwritten signatures above the signature lines', () => {
+    const drawn = {
+      ...sheet,
+      contractorSignatureAssetId: 'sig-contractor',
+      clientSignatureAssetId: 'sig-unknown',
+    }
+    const { logoPosition: _, ...letter } = sheetLetter(drawn, {
+      ...context,
+      signatureImages: new Map([['sig-contractor', '/sig-1.png']]),
+    })
+    expect(letter.body.blocks.at(-1)).toMatchObject({
+      kind: 'signatures',
+      items: [
+        { label: 'Auftragnehmer', image: '/sig-1.png' },
+        { label: 'Auftraggeber', image: null },
+      ],
+    })
+    const { logoPosition: __, ...without } = sheetLetter(sheet, context)
+    const plain = renderLetterPdf({ ...without, logo: null })
+    const pdf = renderLetterPdf(
+      { ...letter, logo: null },
+      { assets: [{ path: '/sig-1.png', data: PNG }] },
+    )
+    expect(pdf.toString('latin1')).toMatch(/pdfaid:part(>|=")3/)
+    expect(pdf.length).toBeGreaterThan(plain.length)
+  })
+
   it('renders an open sheet with empty signature lines', () => {
     const open = {
       ...sheet,
@@ -232,8 +261,8 @@ describe('Aufmaßblatt und Berichte als PDF/A', () => {
     expect(letter.body.blocks.at(-1)).toEqual({
       kind: 'signatures',
       items: [
-        { label: 'Auftragnehmer', name: '', date: null },
-        { label: 'Auftraggeber', name: '', date: null },
+        { label: 'Auftragnehmer', name: '', date: null, image: null },
+        { label: 'Auftraggeber', name: '', date: null, image: null },
       ],
     })
     const noLocation = sheetLetter(
@@ -334,7 +363,12 @@ describe('Aufmaßblatt und Berichte als PDF/A', () => {
         y: { value: false },
       },
       signatures: [
-        { role: 'client' as const, name: 'Hans Berger', signedAt: '2026-11-06T16:00:00.000Z' },
+        {
+          role: 'client' as const,
+          name: 'Hans Berger',
+          signedAt: '2026-11-06T16:00:00.000Z',
+          imageAssetId: null,
+        },
       ],
     }
     const letter = reportLetter(signed, { ...context, units: new Map(), photos: [] })
@@ -357,7 +391,7 @@ describe('Aufmaßblatt und Berichte als PDF/A', () => {
       { kind: 'facts', rows: [{ label: 'Frist', value: '–' }] },
       {
         kind: 'signatures',
-        items: [{ label: 'Auftraggeber', name: 'Hans Berger', date: '06.11.2026' }],
+        items: [{ label: 'Auftraggeber', name: 'Hans Berger', date: '06.11.2026', image: null }],
       },
     ])
   })

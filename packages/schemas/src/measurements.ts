@@ -29,6 +29,9 @@ export const updateSheetRequest = z
 export const signSheetRequest = z.object({
   contractorName: text(200),
   clientName: text(200),
+  /** Handwritten signatures (PNG uploaded via POST /api/v1/signatures). */
+  contractorSignatureAssetId: id.nullish(),
+  clientSignatureAssetId: id.nullish(),
 })
 
 export const locationRequest = z.object({
@@ -138,6 +141,8 @@ export interface MeasurementSheetDetail extends MeasurementSheetSummary {
   signedAt: string | null
   signedByContractor: string | null
   signedByClient: string | null
+  contractorSignatureAssetId: string | null
+  clientSignatureAssetId: string | null
   locations: MeasurementLocation[]
   lines: MeasurementLine[]
   /** Per assigned LV position: quantity on this sheet, measured total and deviation (VOB/B § 2 Abs. 3). */

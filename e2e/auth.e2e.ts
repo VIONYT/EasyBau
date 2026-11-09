@@ -38,6 +38,22 @@ async function expectNoHorizontalScroll(page: Page) {
   expect(overflow).toBe(false)
 }
 
+/** Draws a signature-like stroke with the mouse into the pad with this accessible name. */
+async function drawSignature(page: Page, name: string) {
+  const pad = page.getByRole('img', { name })
+  await pad.scrollIntoViewIfNeeded()
+  const box = await pad.boundingBox()
+  if (!box) throw new Error(`signature pad ${name} not visible`)
+  const y = box.y + box.height * 0.6
+  await page.mouse.move(box.x + 30, y)
+  await page.mouse.down()
+  for (let i = 1; i <= 12; i++) {
+    await page.mouse.move(box.x + 30 + i * 14, y - Math.sin(i / 1.5) * 30, { steps: 2 })
+  }
+  await page.mouse.up()
+  await expect(page.getByText('Unterschrift erfasst.').first()).toBeVisible()
+}
+
 test.describe.configure({ mode: 'serial' })
 
 // Shared between the serial tests: the logged-in admin with the virtual key.
@@ -257,9 +273,16 @@ test('measurement sheet (Aufmaß) with rooms, formulas and quantity takeover', a
   // Gemeinsames Aufmaß: danach gesperrt
   await page.getByText('Gemeinsames Aufmaß abschließen', { exact: true }).first().click()
   await page.getByLabel('Für den Auftraggeber').fill('Frau Müller')
+  // Handwritten signatures (pen/finger/mouse); the own one is kept in the account.
+  await drawSignature(page, 'Unterschrift Auftragnehmer')
+  await drawSignature(page, 'Unterschrift Auftraggeber')
+  await expect(page.getByLabel('Für künftige Dokumente in meinem Konto speichern')).toBeChecked()
+  if (SCREENSHOTS)
+    await page.screenshot({ path: `${SCREENSHOTS}/unterschrift.png`, fullPage: true })
   page.once('dialog', (dialog) => dialog.accept())
   await page.getByRole('button', { name: 'Gemeinsames Aufmaß abschließen' }).click()
   await expect(page.getByText(/Abgeschlossen am .*Frau Müller/)).toBeVisible()
+  await expect(page.getByRole('img', { name: 'Unterschrift Auftraggeber' })).toBeVisible()
   await expect(page.getByRole('button', { name: '+ Zeile erfassen' })).toHaveCount(0)
 
   // The quote now shows the measured quantity.
@@ -307,7 +330,8 @@ test('Bautagebuch: daily report with weather, team, work, photo and signature', 
   await expectNoHorizontalScroll(page)
   if (SCREENSHOTS) await page.screenshot({ path: `${SCREENSHOTS}/bautagebuch.png`, fullPage: true })
 
-  // Signing locks the report.
+  // Signing locks the report; the signature from the account is already there.
+  await expect(page.getByText('Aus Ihrem Konto übernommen.')).toBeVisible()
   page.once('dialog', (dialog) => dialog.accept())
   await page.getByRole('button', { name: 'Unterschreiben und abschließen' }).click()
   await expect(page.getByText('Dieser Bericht ist unterschrieben und gesperrt.')).toBeVisible()
@@ -315,6 +339,7 @@ test('Bautagebuch: daily report with weather, team, work, photo and signature', 
   await expect(
     page.getByText(new RegExp(`${ADMIN.name} \\(Auftragnehmer\\), unterschrieben am`)),
   ).toBeVisible()
+  await expect(page.getByRole('img', { name: 'Unterschrift Auftragnehmer' })).toBeVisible()
 
   // The Bautagebuch of the project lists the day.
   await page.getByRole('link', { name: /Sanierung Lindenweg/ }).click()

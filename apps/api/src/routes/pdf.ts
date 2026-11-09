@@ -78,6 +78,29 @@ async function siteContext(tx: Tx, projectId: string): Promise<SiteLetterContext
   }
 }
 
+/** Handwritten signatures as template assets (/sig-N.png); unreadable images are left out. */
+async function signatureAssets(
+  tx: Tx,
+  services: Services,
+  assetIds: (string | null)[],
+): Promise<{ images: Map<string, string>; assets: { path: string; data: Buffer }[] }> {
+  const ids = [...new Set(assetIds.filter((id): id is string => Boolean(id)))]
+  const images = new Map<string, string>()
+  const assets: { path: string; data: Buffer }[] = []
+  if (!ids.length) return { images, assets }
+  const rows = await tx<{ id: string; key: string }[]>`
+    select id, storage_key as key from tenant_asset
+    where id in ${tx(ids)} and kind = 'signature' and mime_type = 'image/png'`
+  for (const [index, row] of rows.entries()) {
+    const path = `/sig-${index + 1}.png`
+    const data = await readAll(services.storage.read(row.key))
+    if (!isUsableImage(path, data)) continue
+    images.set(row.id, path)
+    assets.push({ path, data })
+  }
+  return { images, assets }
+}
+
 const PHOTO_TYPES: Record<string, string> = {
   'image/jpeg': 'jpg',
   'image/png': 'png',
@@ -91,8 +114,18 @@ export async function sheetPdf(services: Services, auth: AuthContext, id: string
   return inTenant(services, auth, async (tx) => {
     const sheet = await loadSheet(tx, auth, id)
     if (!sheet) return null
-    const { logoPosition, ...letter } = sheetLetter(sheet, await siteContext(tx, sheet.projectId))
-    const pdf = renderLetterPdf({ ...letter, logo: await logoFor(tx, services, logoPosition) })
+    const signatures = await signatureAssets(tx, services, [
+      sheet.contractorSignatureAssetId,
+      sheet.clientSignatureAssetId,
+    ])
+    const { logoPosition, ...letter } = sheetLetter(sheet, {
+      ...(await siteContext(tx, sheet.projectId)),
+      signatureImages: signatures.images,
+    })
+    const pdf = renderLetterPdf(
+      { ...letter, logo: await logoFor(tx, services, logoPosition) },
+      { assets: signatures.assets },
+    )
     return { data: pdf, filename: `Aufmass_${sheet.title}.pdf` }
   })
 }
@@ -126,8 +159,15 @@ export async function reportPdf(services: Services, auth: AuthContext, id: strin
       assets.push({ path, data })
       photos.push({ path, caption: photo.caption })
     }
+    const signatures = await signatureAssets(
+      tx,
+      services,
+      report.signatures.map((s) => s.imageAssetId),
+    )
+    assets.push(...signatures.assets)
     const { logoPosition, ...letter } = reportLetter(report, {
       ...(await siteContext(tx, report.projectId)),
+      signatureImages: signatures.images,
       units,
       photos,
       skippedPhotos: Math.min(report.photos.length, MAX_PHOTOS) - photos.length,

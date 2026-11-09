@@ -146,7 +146,10 @@
       columns: (1fr,) * calc.max(b.items.len(), 2),
       column-gutter: 10mm,
       ..b.items.map(s => {
-        v(10mm)
+        let image-path = s.at("image", default: none)
+        // Same height with or without a handwritten signature, so the lines stay aligned.
+        block(height: 16mm, width: 100%, below: 0.6mm,
+          if image-path != none { image(image-path, width: 100%, height: 100%, fit: "contain") })
         line(length: 100%, stroke: 0.5pt)
         text(size: 8.5pt, [#s.label: #s.name])
         if s.date != none { linebreak() + text(size: 8.5pt, fill: muted, s.date) }

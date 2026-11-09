@@ -25,6 +25,7 @@ import { registerPdfRoutes } from './routes/pdf.js'
 import { registerProjectRoutes } from './routes/projects.js'
 import { registerReportRoutes } from './routes/reports.js'
 import { registerSettingsRoutes } from './routes/settings.js'
+import { registerSignatureRoutes } from './routes/signatures.js'
 import { registerUserRoutes } from './routes/users.js'
 import { registerWebauthnRoutes } from './routes/webauthn.js'
 import { FieldCipher } from './security/crypto.js'
@@ -181,6 +182,7 @@ export function buildApi({
   registerInvoiceRoutes(app, services)
   registerLetterheadRoutes(app, services)
   registerPdfRoutes(app, services)
+  registerSignatureRoutes(app, services)
   registerMeasurementRoutes(app, services)
   registerReportRoutes(app, services)
   registerCatalogRoutes(app, services)

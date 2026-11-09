@@ -68,7 +68,11 @@ export type LetterBlock =
       rows: { cells: string[]; group: boolean; strong: boolean }[]
     }
   | { kind: 'images'; items: { path: string; caption: string | null }[] }
-  | { kind: 'signatures'; items: { label: string; name: string; date: string | null }[] }
+  | {
+      kind: 'signatures'
+      /** `image`: path of a handwritten signature (PNG asset), drawn above the line. */
+      items: { label: string; name: string; date: string | null; image?: string | null }[]
+    }
 
 /** Image files referenced by blocks (path in the virtual file system of the template). */
 export interface LetterAsset {

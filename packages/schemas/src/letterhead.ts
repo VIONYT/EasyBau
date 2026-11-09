@@ -38,3 +38,19 @@ export interface LetterheadSettings {
   /** Values of the placeholders ({Firma}, {IBAN} …) from Einstellungen › Firma. */
   values: Record<string, string | null>
 }
+
+// ---- Handschriftliche Unterschrift -------------------------------------------------------------
+
+/** The signature a user keeps in the account (drawn once, reused when signing). */
+export interface MySignature {
+  assetId: string
+  url: string
+  updatedAt: string
+}
+
+export const saveMySignatureRequest = z.object({ assetId: id })
+
+export interface UploadedSignature {
+  assetId: string
+  url: string
+}

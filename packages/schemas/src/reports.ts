@@ -113,7 +113,14 @@ export const addReportPhotoRequest = z.object({
 
 export const signReportRequest = z.object({
   signatures: z
-    .array(z.object({ role: z.enum(SIGNER_ROLES), name: text(200) }))
+    .array(
+      z.object({
+        role: z.enum(SIGNER_ROLES),
+        name: text(200),
+        /** Handwritten signature (PNG uploaded via POST /api/v1/signatures). */
+        signatureAssetId: id.nullish(),
+      }),
+    )
     .min(1, 'Mindestens eine Unterschrift.')
     .max(5),
 })
@@ -148,6 +155,8 @@ export interface ReportSignature {
   role: SignerRole
   name: string
   signedAt: string
+  /** Handwritten signature image (/api/v1/assets/:id), if drawn. */
+  imageAssetId: string | null
 }
 
 export interface ReportDetail extends ReportSummary {

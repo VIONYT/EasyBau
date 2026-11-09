@@ -1900,3 +1900,87 @@ fieldset.plain {
   clip-path: inset(50%);
   white-space: nowrap;
 }
+
+/* Handwritten signature (pen, finger, mouse). The pad stays paper-white in dark mode as well. */
+.signature-pad {
+  display: grid;
+  gap: var(--space-2);
+  margin-bottom: var(--space-4);
+}
+
+.signature-pad__label {
+  font-weight: 500;
+}
+
+.signature-pad__area {
+  position: relative;
+}
+
+.signature-pad canvas {
+  display: block;
+  width: 100%;
+  touch-action: none;
+  user-select: none;
+  -webkit-user-select: none;
+  background: #ffffff;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius);
+  cursor: crosshair;
+}
+
+.signature-pad__line {
+  position: absolute;
+  left: var(--space-6);
+  right: var(--space-6);
+  bottom: 40px;
+  border-bottom: 1px solid #94a3b8;
+  pointer-events: none;
+}
+
+.signature-pad__actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-2);
+}
+
+.signature-pad__actions .button {
+  min-height: 44px;
+}
+
+.signature-stored {
+  display: flex;
+  align-items: center;
+  min-height: 96px;
+  padding: var(--space-2) var(--space-4);
+  background: #ffffff;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius);
+}
+
+.signature-image {
+  display: block;
+  max-width: 100%;
+  max-height: 96px;
+  object-fit: contain;
+}
+
+.signature-list .signature-image {
+  margin-top: var(--space-2);
+  padding: var(--space-1) var(--space-2);
+  background: #ffffff;
+  border-radius: var(--space-1);
+  max-height: 72px;
+}
+
+.signature-row {
+  display: grid;
+  gap: var(--space-4);
+}
+
+@media (min-width: 720px) {
+  .signature-row {
+    grid-template-columns: 1fr 1fr;
+  }
+}

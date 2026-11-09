@@ -14,6 +14,14 @@ import { formatDateTime, formatInputNumber } from '../format'
 import { FormError } from '../forms'
 import { type TextKey, t } from '../i18n'
 import type { Navigate } from '../router'
+import {
+  initialChoice,
+  resolveSignature,
+  type SignatureChoice,
+  SignatureImage,
+  SignatureInput,
+  useMySignature,
+} from '../signature'
 
 type Data = Record<string, Record<string, unknown>>
 type Row = Record<string, string | null | undefined>
@@ -714,15 +722,26 @@ function Signatures({
     ),
   ]
   const [names, setNames] = useState<Record<string, string>>({ contractor: me.user.displayName })
+  const [mine] = useMySignature()
+  // The signed-in user signs as Auftragnehmer; everyone else draws on this device.
+  const [choices, setChoices] = useState<Record<string, SignatureChoice>>(() =>
+    Object.fromEntries(roles.map((role) => [role, initialChoice(role === 'contractor')])),
+  )
   if (report.signatures.length) {
     return (
       <div className="panel">
         <h2>{t('d.section.signatures')}</h2>
-        <ul className="list plain">
+        <ul className="list plain signature-list">
           {report.signatures.map((s) => (
             <li key={`${s.role}-${s.signedAt}`}>
               <strong>{s.name}</strong> ({t(`d.role.${s.role}` as TextKey)}), {t('d.signedAt')}{' '}
               {formatDateTime(s.signedAt)}
+              {s.imageAssetId ? (
+                <SignatureImage
+                  url={`/api/v1/assets/${s.imageAssetId}`}
+                  alt={t(`sig.${s.role}` as TextKey)}
+                />
+              ) : null}
             </li>
           ))}
         </ul>
@@ -734,11 +753,20 @@ function Signatures({
   const sign = async () => {
     if (save && !(await save())) return
     if (!window.confirm(t('d.signConfirm'))) return
-    await run(() =>
-      apiWithEtag<ReportDetail>('POST', `/api/v1/reports/${report.id}/sign`, {
-        signatures: roles.map((role) => ({ role, name: names[role] ?? '' })),
-      }),
-    )
+    await run(async () => {
+      const signatures = []
+      for (const role of roles) {
+        const choice = choices[role] ?? initialChoice(false)
+        signatures.push({
+          role,
+          name: names[role] ?? '',
+          signatureAssetId: await resolveSignature(choice, role === 'contractor' ? mine : null),
+        })
+      }
+      return apiWithEtag<ReportDetail>('POST', `/api/v1/reports/${report.id}/sign`, {
+        signatures,
+      })
+    })
   }
   return (
     <div className="panel">
@@ -751,6 +779,14 @@ function Signatures({
             id={`signer-${role}`}
             value={names[role] ?? ''}
             onChange={(e) => setNames({ ...names, [role]: e.target.value })}
+          />
+          <SignatureInput
+            id={`signature-${role}`}
+            label={t(`sig.${role}` as TextKey)}
+            own={role === 'contractor'}
+            mine={role === 'contractor' ? mine : null}
+            choice={choices[role] ?? initialChoice(role === 'contractor')}
+            onChange={(choice) => setChoices((current) => ({ ...current, [role]: choice }))}
           />
         </div>
       ))}

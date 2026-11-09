@@ -37,6 +37,7 @@ import {
 } from '../context.js'
 import { checkIfMatch, etagOf, HttpError, notFound, parse } from '../http.js'
 import { loadDocument, lockDraft, recalculate, sendDocument } from './documents.js'
+import { ownSignature } from './signatures.js'
 
 const projectParam = z.object({ id: z.uuid('Ungültige ID.') })
 const sheetParam = z.object({ id: z.uuid('Ungültige ID.') })
@@ -284,7 +285,9 @@ export async function loadSheet(
     select ${summaryColumns(tx)}, s.updated_at as "updatedRaw",
            json_build_object('id', p.id, 'number', p.number, 'name', p.name) as project,
            ${ISO(tx, 's.signed_at')} as "signedAt", s.signed_by_contractor as "signedByContractor",
-           s.signed_by_client as "signedByClient"
+           s.signed_by_client as "signedByClient",
+           s.contractor_signature_asset_id as "contractorSignatureAssetId",
+           s.client_signature_asset_id as "clientSignatureAssetId"
     from measurement_sheet s
     join project p on p.id = s.project_id
     left join app_user u on u.id = s.created_by
@@ -481,9 +484,23 @@ export function registerMeasurementRoutes(app: FastifyInstance, services: Servic
         { n: number }[]
       >`select count(*)::int as n from measurement_line where sheet_id = ${id}`
       if (!count?.n) throw new HttpError(409, 'Ein leeres Aufmaß kann nicht abgeschlossen werden.')
+      const contractorImage = await ownSignature(
+        tx,
+        auth,
+        input.contractorSignatureAssetId,
+        'contractorSignatureAssetId',
+      )
+      const clientImage = await ownSignature(
+        tx,
+        auth,
+        input.clientSignatureAssetId,
+        'clientSignatureAssetId',
+      )
       await tx`
         update measurement_sheet set status = 'signed', signed_at = now(),
-               signed_by_contractor = ${input.contractorName}, signed_by_client = ${input.clientName}
+               signed_by_contractor = ${input.contractorName}, signed_by_client = ${input.clientName},
+               contractor_signature_asset_id = ${contractorImage},
+               client_signature_asset_id = ${clientImage}
         where id = ${id}`
       return loadSheet(tx, auth, id)
     })
