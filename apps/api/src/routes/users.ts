@@ -17,6 +17,7 @@ import { HttpError, notFound, parse } from '../http.js'
 import { randomToken, sha256 } from '../security/crypto.js'
 import { hashPassword, verifyPassword } from '../security/passwords.js'
 import { audit, finishLogin, rateLimit } from './auth-common.js'
+import { queueEmail } from './email.js'
 
 const userParam = z.object({ userId: z.uuid('Ungültige ID.') })
 const idParam = z.object({ id: z.uuid('Ungültige ID.') })
@@ -177,10 +178,35 @@ export function registerUserRoutes(app: FastifyInstance, services: Services) {
                to_char(i.expires_at at time zone 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS.MS"Z"') as "expiresAt",
                to_char(i.created_at at time zone 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS.MS"Z"') as "createdAt"
         from inserted i join role r on r.id = i.role_id`
-      return row as InvitationSummary
+      const summary = row as InvitationSummary
+      const acceptUrl = `${publicOrigin(services, request)}/einladung#${token}`
+      const emailQueued = Boolean(input.sendEmail && services.config.SMTP_ENABLED)
+      if (emailQueued) {
+        await queueEmail(tx, auth, {
+          kind: 'invitation',
+          to: input.email,
+          subject: `Einladung zu ${auth.tenantName}`,
+          text: [
+            `Hallo${input.displayName ? ` ${input.displayName}` : ''},`,
+            '',
+            `${auth.displayName} lädt Sie zu ${auth.tenantName} ein (Rolle: ${summary.role.name}).`,
+            'Über diesen Link legen Sie Ihr Passwort fest und melden sich an:',
+            '',
+            acceptUrl,
+            '',
+            `Der Link ist ${INVITATION_DAYS} Tage gültig und nur einmal verwendbar.`,
+            'Wenn Sie diese Einladung nicht erwartet haben, ignorieren Sie die E-Mail einfach.',
+          ].join('\n'),
+        })
+      }
+      return { summary, acceptUrl, emailQueued }
     })
     reply.status(201)
-    return { invitation, acceptUrl: `${publicOrigin(services, request)}/einladung#${token}` }
+    return {
+      invitation: invitation.summary,
+      acceptUrl: invitation.acceptUrl,
+      emailQueued: invitation.emailQueued,
+    }
   })
 
   app.delete('/api/v1/invitations/:id', async (request, reply) => {

@@ -82,6 +82,24 @@ describe('secrets', () => {
     expect(() => loadConfig({ ...base, PUBLIC_URL: 'ftp://x' })).toThrow(/PUBLIC_URL/)
   })
 
+  it('keeps e-mail off unless SMTP is configured', async () => {
+    const { smtpEnabled } = await import('./index.js')
+    const config = loadConfig(base)
+    expect(smtpEnabled(config)).toBe(false)
+    expect([config.SMTP_PORT, config.SMTP_SECURE]).toEqual([587, false])
+    const smtp = loadConfig({
+      ...base,
+      SMTP_HOST: 'mail.example.de',
+      SMTP_PORT: '465',
+      SMTP_SECURE: 'true',
+      SMTP_FROM: 'Muster Bau <buero@example.de>',
+      SMTP_PASSWORD_FILE: '',
+    })
+    expect(smtpEnabled(smtp)).toBe(true)
+    expect([smtp.SMTP_PORT, smtp.SMTP_SECURE]).toEqual([465, true])
+    expect(() => loadConfig({ ...base, SMTP_HOST: 'mail.example.de' })).toThrow(/SMTP_FROM/)
+  })
+
   it('has storage defaults and limits uploads', () => {
     const config = loadConfig(base)
     expect([config.STORAGE_DIR, config.UPLOAD_MAX_MB]).toEqual(['/data/files', 50])

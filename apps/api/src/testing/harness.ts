@@ -19,7 +19,7 @@ export interface Harness {
 }
 
 export async function createHarness(
-  options: { requireAdminMfa?: boolean; uploadMaxMb?: number } = {},
+  options: { requireAdminMfa?: boolean; uploadMaxMb?: number; smtp?: boolean } = {},
 ): Promise<Harness> {
   const baseUrl = process.env.DATABASE_URL as string
   const root = createSql({ DATABASE_URL: baseUrl, DATABASE_POOL_MAX: 1 }, { mode: 'admin' })
@@ -46,6 +46,9 @@ export async function createHarness(
       COOKIE_SECURE: false,
       REQUIRE_ADMIN_MFA: options.requireAdminMfa ?? true,
       UPLOAD_MAX_MB: options.uploadMaxMb ?? 50,
+      ...(options.smtp
+        ? { SMTP_HOST: 'smtp.test', SMTP_FROM: 'Test-ERP <noreply@example.test>' }
+        : {}),
     },
     storage: new FsObjectStore(storageDir),
     isReady: async () => true,

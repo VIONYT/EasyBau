@@ -35,6 +35,8 @@ export const inviteRequest = z.object({
   email,
   displayName: optionalText(200),
   roleKey: z.string().min(1, 'Bitte eine Rolle wählen.').max(50),
+  /** Also send the link by e-mail (only when SMTP is configured). */
+  sendEmail: z.boolean().optional(),
 })
 export type InviteRequest = z.infer<typeof inviteRequest>
 
@@ -42,6 +44,8 @@ export interface InviteResponse {
   invitation: InvitationSummary
   /** Link to hand over to the person (shown once; only its hash is stored). */
   acceptUrl: string
+  /** The link was put into the e-mail outbox. */
+  emailQueued: boolean
 }
 
 export const updateMemberRequest = z.object({ roleKey: z.string().min(1).max(50) })

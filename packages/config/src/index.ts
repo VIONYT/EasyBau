@@ -58,11 +58,30 @@ const envSchema = z.object({
     .transform((v) => v === 'true'),
   /** Directory for uploaded files (project filing). In Docker a named volume (ADR 0004). */
   STORAGE_DIR: z.string().min(1).default('/data/files'),
+  /**
+   * E-mail via SMTP (optional, off by default). Without SMTP_HOST nothing is sent; invitation
+   * links are shown in the app instead.
+   */
+  SMTP_HOST: z.string().min(1).optional(),
+  SMTP_PORT: z.coerce.number().int().min(1).max(65535).default(587),
+  /** true: TLS from the start (port 465); false: STARTTLS (port 587). */
+  SMTP_SECURE: z
+    .enum(['true', 'false'])
+    .default('false')
+    .transform((v) => v === 'true'),
+  SMTP_USER: z.string().min(1).optional(),
+  SMTP_PASSWORD: z.string().min(1).optional(),
+  /** Sender, e.g. "Muster Bau GmbH <buero@muster-bau.de>". Required with SMTP_HOST. */
+  SMTP_FROM: z.string().min(3).optional(),
   /** Maximum size of one uploaded file in megabytes. */
   UPLOAD_MAX_MB: z.coerce.number().int().min(1).max(2048).default(50),
 })
 
 export type Config = z.infer<typeof envSchema>
+
+/** True when e-mail can be sent (SMTP_HOST and SMTP_FROM configured). */
+export const smtpEnabled = (config: Pick<Config, 'SMTP_HOST' | 'SMTP_FROM'>): boolean =>
+  Boolean(config.SMTP_HOST && config.SMTP_FROM)
 
 export class ConfigError extends Error {
   override name = 'ConfigError'
@@ -76,6 +95,11 @@ export function loadConfig(env: Record<string, string | undefined> = process.env
       .map((issue) => `  - ${issue.path.join('.')}: ${issue.message}`)
       .join('\n')
     throw new ConfigError(`Invalid configuration:\n${details}`)
+  }
+  if (parsed.data.SMTP_HOST && !parsed.data.SMTP_FROM) {
+    throw new ConfigError(
+      'Invalid configuration:\n  - SMTP_FROM: Absender fehlt (erforderlich mit SMTP_HOST)',
+    )
   }
   return parsed.data
 }

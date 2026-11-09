@@ -8,6 +8,11 @@
       "source": "./src/index.ts",
       "types": "./src/index.ts",
       "default": "./dist/index.js"
+    },
+    "./test-support": {
+      "source": "./src/test-support.ts",
+      "types": "./src/test-support.ts",
+      "default": "./dist/test-support.js"
     }
   },
   "scripts": {

@@ -1,4 +1,10 @@
-import type { InvitationSummary, InviteResponse, MemberSummary, RoleSummary } from '@opc/schemas'
+import type {
+  EmailSettings,
+  InvitationSummary,
+  InviteResponse,
+  MemberSummary,
+  RoleSummary,
+} from '@opc/schemas'
 import { useCallback, useEffect, useId, useState } from 'react'
 import { type ApiError, api } from '../api'
 import { formatDateTime } from '../format'
@@ -12,6 +18,13 @@ export function Users() {
   const [invitations, setInvitations] = useState<InvitationSummary[]>([])
   const [error, setError] = useState<string | null>(null)
   const [link, setLink] = useState<string | null>(null)
+  const [emailQueued, setEmailQueued] = useState(false)
+  const [emailEnabled, setEmailEnabled] = useState(false)
+  useEffect(() => {
+    api<EmailSettings>('GET', '/api/v1/settings/email')
+      .then((s) => setEmailEnabled(s.enabled))
+      .catch(() => setEmailEnabled(false))
+  }, [])
 
   const reload = useCallback(() => {
     Promise.all([
@@ -45,9 +58,11 @@ export function Users() {
         email: value(data, 'email'),
         displayName: optional(data, 'displayName'),
         roleKey: value(data, 'roleKey'),
+        sendEmail: data.get('sendEmail') === 'on',
       }),
     (result) => {
       setLink(result.acceptUrl)
+      setEmailQueued(result.emailQueued)
       reload()
     },
   )
@@ -132,11 +147,22 @@ export function Users() {
             error={invite.fieldErrors.displayName}
           />
           <RoleField roles={roles} error={invite.fieldErrors.roleKey} />
+          {emailEnabled ? (
+            <label className="check">
+              <input type="checkbox" name="sendEmail" defaultChecked />
+              {t('users.sendEmail')}
+            </label>
+          ) : null}
           <button type="submit" className="button primary" disabled={invite.busy}>
             {t('users.inviteSend')}
           </button>
         </form>
         {link ? <InviteLink link={link} /> : null}
+        {link && emailQueued ? (
+          <p className="success" role="status">
+            {t('users.emailSent')}
+          </p>
+        ) : null}
       </div>
 
       {invitations.length ? (

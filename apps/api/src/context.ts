@@ -42,6 +42,9 @@ export interface Services {
     | 'UPLOAD_MAX_MB'
   > & {
     PUBLIC_URL?: string | undefined
+    /** SMTP configured: e-mails are queued in the outbox and sent by the worker. */
+    SMTP_ENABLED: boolean
+    SMTP_FROM?: string | undefined
   }
   /** Uploaded files (project filing, ADR 0004). */
   storage: ObjectStore

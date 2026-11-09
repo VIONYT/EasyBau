@@ -14,6 +14,7 @@ import { authHook, mfaEnforcementHook, registerAuthRoutes } from './routes/auth.
 import { registerCatalogRoutes } from './routes/catalog.js'
 import { registerContactRoutes } from './routes/contacts.js'
 import { registerDocumentRoutes } from './routes/documents.js'
+import { registerEmailRoutes } from './routes/email.js'
 import { registerFileRoutes } from './routes/files.js'
 import { registerMeasurementRoutes } from './routes/measurements.js'
 import { registerProjectRoutes } from './routes/projects.js'
@@ -39,6 +40,8 @@ export interface ApiDeps {
         | 'REQUIRE_ADMIN_MFA'
         | 'STORAGE_DIR'
         | 'UPLOAD_MAX_MB'
+        | 'SMTP_HOST'
+        | 'SMTP_FROM'
       >
     >
   /** Returns true when all hard dependencies (database) are reachable. */
@@ -128,6 +131,8 @@ export function buildApi({
       PUBLIC_URL: config.PUBLIC_URL,
       REQUIRE_ADMIN_MFA: config.REQUIRE_ADMIN_MFA ?? true,
       UPLOAD_MAX_MB: config.UPLOAD_MAX_MB ?? 50,
+      SMTP_ENABLED: Boolean(config.SMTP_HOST && config.SMTP_FROM),
+      SMTP_FROM: config.SMTP_FROM,
     },
     storage: storage ?? new FsObjectStore(config.STORAGE_DIR ?? '/data/files'),
     setupToken,
@@ -172,6 +177,7 @@ export function buildApi({
   registerReportRoutes(app, services)
   registerCatalogRoutes(app, services)
   registerSettingsRoutes(app, services)
+  registerEmailRoutes(app, services)
   registerUserRoutes(app, services)
   registerWebauthnRoutes(app, services)
   return app
