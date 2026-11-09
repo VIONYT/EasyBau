@@ -21,6 +21,7 @@ import { registerInvoiceRoutes } from './routes/invoices.js'
 import { registerLetterheadRoutes } from './routes/letterhead.js'
 import { registerMeasurementRoutes } from './routes/measurements.js'
 import { registerOperationsRoutes } from './routes/operations.js'
+import { registerPdfRoutes } from './routes/pdf.js'
 import { registerProjectRoutes } from './routes/projects.js'
 import { registerReportRoutes } from './routes/reports.js'
 import { registerSettingsRoutes } from './routes/settings.js'
@@ -179,6 +180,7 @@ export function buildApi({
   registerDocumentRoutes(app, services)
   registerInvoiceRoutes(app, services)
   registerLetterheadRoutes(app, services)
+  registerPdfRoutes(app, services)
   registerMeasurementRoutes(app, services)
   registerReportRoutes(app, services)
   registerCatalogRoutes(app, services)

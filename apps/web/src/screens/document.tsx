@@ -1127,6 +1127,14 @@ function DocumentActions({
       >
         {t('q.preview')}
       </a>
+      <a
+        className="button ghost"
+        href={`/api/v1/documents/${doc.id}/pdf`}
+        target="_blank"
+        rel="noopener"
+      >
+        {t('doc.pdf')}
+      </a>
       {canWrite && doc.status === 'draft' && !billed ? (
         <button
           type="button"

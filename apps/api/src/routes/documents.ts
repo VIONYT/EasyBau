@@ -50,6 +50,7 @@ import {
 import { checkIfMatch, etagOf, HttpError, notFound, parse } from '../http.js'
 import { finalizeInvoice } from './invoices.js'
 import { companyValues, loadLetterhead } from './letterhead.js'
+import { archiveDocumentPdf } from './pdf.js'
 
 const projectParam = z.object({ id: z.uuid('Ungültige ID.') })
 const documentParam = z.object({ id: z.uuid('Ungültige ID.') })
@@ -1376,6 +1377,10 @@ export function registerDocumentRoutes(app: FastifyInstance, services: Services)
         where id = ${id} and project_id = ${current.projectId}`
       return loadDocument(tx, auth, id)
     })
+    // Archive the PDF/A original right away (best effort, a later download archives as well).
+    await archiveDocumentPdf(services, auth, id).catch((error: unknown) =>
+      request.log.warn({ err: error }, 'PDF archiving after finalize failed'),
+    )
     return sendDocument(reply, doc)
   })
 

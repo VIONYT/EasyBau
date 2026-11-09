@@ -538,6 +538,8 @@ const de = {
   'lh.sampleText':
     'Hier stehen später Anfangstext, Positionen, Summen und Pflichthinweise des Dokuments. Die Fußzeile erscheint auf jeder Seite.',
   'print.service': 'Leistungszeitraum',
+  'print.pdf': 'PDF/A herunterladen',
+  'doc.pdf': 'PDF',
   'print.due': 'Fällig am',
   'print.cancelled': 'STORNIERT',
   'print.draft': 'ENTWURF',
@@ -551,7 +553,7 @@ const de = {
   'print.quantity': 'Menge',
   'print.unitPrice': 'EP',
   'print.total': 'GP',
-  'print.print': 'Drucken / als PDF speichern',
+  'print.print': 'Drucken',
   'print.back': 'Zurück zum Dokument',
   'print.paymentDays': 'Zahlbar innerhalb von {days} Tagen ohne Abzug.',
   'nav.catalog': 'Stammdaten',

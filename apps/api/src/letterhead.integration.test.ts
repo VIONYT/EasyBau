@@ -1,3 +1,5 @@
+import { createHash } from 'node:crypto'
+import { withTenant } from '@opc/db'
 import type { DocumentDetail, LetterheadSettings } from '@opc/schemas'
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
 import { Client, createHarness, type Harness } from './testing/harness.js'
@@ -12,11 +14,12 @@ describe.skipIf(!process.env.DATABASE_URL)('Briefpapier (integration)', () => {
   let h: Harness
   let admin: Client
   let worker: Client
+  let tenantId: string
 
   beforeAll(async () => {
     h = await createHarness({ requireAdminMfa: false })
     admin = new Client(h.app)
-    await admin.post('/api/v1/setup', {
+    const setup = await admin.post('/api/v1/setup', {
       setupToken: h.setupToken,
       company: { name: 'Brief Bau GmbH' },
       admin: {
@@ -25,6 +28,7 @@ describe.skipIf(!process.env.DATABASE_URL)('Briefpapier (integration)', () => {
         displayName: 'Chef',
       },
     })
+    tenantId = setup.json().tenant.id
     await admin.patch('/api/v1/settings/company', {
       street: 'Werkstraße 2',
       postalCode: '30169',
@@ -143,6 +147,14 @@ describe.skipIf(!process.env.DATABASE_URL)('Briefpapier (integration)', () => {
       unitId: units.find((u) => u.symbol === 'm²')?.id,
       unitPriceCents: 1000,
     })
+    // PDF/A of the draft: rendered on every request, with watermark, not archived.
+    const draftPdf = await admin.get(`/api/v1/documents/${quote.id}/pdf`)
+    expect(draftPdf.statusCode, draftPdf.body).toBe(200)
+    expect(draftPdf.headers['content-type']).toBe('application/pdf')
+    expect(draftPdf.headers['content-disposition']).toContain('Angebot_Entwurf.pdf')
+    expect(draftPdf.rawPayload.subarray(0, 5).toString()).toBe('%PDF-')
+    expect(draftPdf.rawPayload.toString('latin1')).toMatch(/pdfaid:part(>|=")3/)
+
     // Drafts show the current letterhead …
     let draft = (await admin.get(`/api/v1/documents/${quote.id}`)).json() as DocumentDetail
     expect(draft.issuer.letterhead?.font).toBe('serif')
@@ -157,5 +169,27 @@ describe.skipIf(!process.env.DATABASE_URL)('Briefpapier (integration)', () => {
     draft = (await admin.get(`/api/v1/documents/${quote.id}`)).json() as DocumentDetail
     expect(draft.issuer.letterhead).toMatchObject({ font: 'serif', logo: { assetId } })
     expect(draft.issuer.values?.Bank).toBe('Sparkasse Hannover')
+
+    // Finalizing archived the PDF/A original once; every download returns exactly these bytes.
+    const first = await admin.get(`/api/v1/documents/${quote.id}/pdf`)
+    const second = await admin.get(`/api/v1/documents/${quote.id}/pdf`)
+    expect(first.statusCode).toBe(200)
+    expect(first.headers['content-disposition']).toContain('Angebot_A-00101.pdf')
+    expect(second.rawPayload.equals(first.rawPayload)).toBe(true)
+    const artifacts = await withTenant(
+      h.sql,
+      { tenantId },
+      (tx) => tx<{ kind: string; sha: string; size: string; until: string }[]>`
+        select kind, encode(sha256, 'hex') as sha, size_bytes::text as size, locked_until::text as until
+        from document_artifact where document_id = ${quote.id}`,
+    )
+    expect(artifacts).toHaveLength(1)
+    expect(artifacts[0]).toMatchObject({
+      kind: 'pdf',
+      sha: createHash('sha256').update(first.rawPayload).digest('hex'),
+      size: String(first.rawPayload.length),
+    })
+    expect(artifacts[0]?.until).toMatch(/^\d{4}-12-31$/)
+    expect((await worker.get(`/api/v1/documents/${quote.id}/pdf`)).statusCode).toBe(403)
   })
 })

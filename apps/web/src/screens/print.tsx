@@ -45,8 +45,8 @@ function fallbackValues(doc: DocumentDetail) {
 }
 
 /**
- * Letter view of a document for printing or „Als PDF speichern“ in the browser.
- * The archived PDF/A (Typst) for invoices follows with finalizing invoices (DESIGN.md §4.1).
+ * Letter view of a document (DIN 5008 Form B, A4). The PDF/A-3 is rendered with Typst on the
+ * server; finalized documents return their archived original.
  */
 export function PrintScreen({ id, navigate }: { id: string; navigate: Navigate }) {
   const [doc, setDoc] = useState<DocumentDetail | null>(null)
@@ -78,7 +78,15 @@ export function PrintScreen({ id, navigate }: { id: string; navigate: Navigate }
         >
           ← {t('print.back')}
         </a>
-        <button type="button" className="button primary auto" onClick={() => window.print()}>
+        <a
+          className="button primary auto"
+          href={`/api/v1/documents/${doc.id}/pdf`}
+          target="_blank"
+          rel="noopener"
+        >
+          {t('print.pdf')}
+        </a>
+        <button type="button" className="button ghost" onClick={() => window.print()}>
           {t('print.print')}
         </button>
       </div>

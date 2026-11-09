@@ -8,6 +8,7 @@ import { billingDoc, invoiceFinalizeCheck, legalNotesOf } from '../billing.js'
 import { type AuthContext, inTenant, requirePermission, type Services } from '../context.js'
 import { HttpError, notFound, parse } from '../http.js'
 import { copyItems, liveIssuer, loadDocument, lockDraft, recalculate } from './documents.js'
+import { archiveDocumentPdf } from './pdf.js'
 
 const documentParam = z.object({ id: z.uuid('Ungültige ID.') })
 
@@ -255,6 +256,9 @@ export function registerInvoiceRoutes(app: FastifyInstance, services: Services) 
     const { id } = parse(documentParam, request.params)
     const input = parse(cancelInvoiceRequest, request.body ?? {})
     const result = await inTenant(services, auth, (tx) => cancelInvoice(tx, auth, id, input))
+    await archiveDocumentPdf(services, auth, result.cancellation.id).catch((error: unknown) =>
+      request.log.warn({ err: error }, 'PDF archiving after cancellation failed'),
+    )
     return reply.status(201).send(result)
   })
 
