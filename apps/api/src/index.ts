@@ -18,6 +18,7 @@ import { registerEmailRoutes } from './routes/email.js'
 import { registerExportRoutes } from './routes/exports.js'
 import { registerFileRoutes } from './routes/files.js'
 import { registerMeasurementRoutes } from './routes/measurements.js'
+import { registerOperationsRoutes } from './routes/operations.js'
 import { registerProjectRoutes } from './routes/projects.js'
 import { registerReportRoutes } from './routes/reports.js'
 import { registerSettingsRoutes } from './routes/settings.js'
@@ -180,6 +181,7 @@ export function buildApi({
   registerSettingsRoutes(app, services)
   registerEmailRoutes(app, services)
   registerExportRoutes(app, services)
+  registerOperationsRoutes(app, services)
   registerUserRoutes(app, services)
   registerWebauthnRoutes(app, services)
   return app

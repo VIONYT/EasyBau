@@ -5,6 +5,8 @@ Alle wesentlichen Änderungen, vor allem solche, die Betreiber betreffen (neue V
 ## Unveröffentlicht
 
 ### Neu
+- **Neuer Dienst `backup`** (ADR 0005, gleiches Image wie `db`, neues Volume `backups`): tägliche, geprüfte Sicherung von Datenbank und Ablage mit Aufbewahrungsfrist; Wiederherstellung mit `infra/restore.sh`. Neue Variablen `BACKUP_TIME` (Standard 02:30, `off` schaltet ab), `BACKUP_KEEP_DAYS` (14), `BACKUP_DIR` (Volume `backups` oder Pfad), `TZ` (Europe/Berlin). Datenbank-Migration `0014_backup_run`.
+- Betriebs-Check unter Einstellungen › Betrieb: letzte Sicherung, E-Mail-Versand, HTTPS, Zwei-Faktor-Pflicht.
 - Exporte (Einstellungen › Betrieb, Recht `export.run`): DATEV-Buchungsstapel (EXTF 7.00, Windows-1252) mit Erlösbuchungen je Steuersatz und Zahlungseingängen, Konten nach SKR03/SKR04 oder eigenen Vorgaben; GoBD-Datenträgerüberlassung (Z3) als ZIP mit `index.xml` (Beschreibungsstandard) und CSV-Tabellen für Rechnungen, Positionen, Umsatzsteuer, Zahlungen, Debitoren und Änderungsprotokoll; vollständiger Datenexport aller Firmendaten (JSON je Tabelle) samt Projektablage als ZIP. Jeder Export wird im Audit-Log vermerkt.
 - Neues Paket `packages/exports` (ZIP-Stream ohne Zwischenspeicher, CSV, DATEV, GoBD).
 - E-Mail-Versand (optional) über SMTP: neue Variablen `SMTP_HOST`, `SMTP_PORT`, `SMTP_SECURE`, `SMTP_USER`, `SMTP_PASSWORD`/`SMTP_PASSWORD_FILE`, `SMTP_FROM` (Standard: aus). Postausgang in der Datenbank, Versand durch den Worker mit Wiederholungen; Einladungen können per E-Mail verschickt werden; Test-E-Mail und Postausgang unter Einstellungen › Betrieb. Datenbank-Migration `0013_email_outbox`.

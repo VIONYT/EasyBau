@@ -295,3 +295,25 @@ export const datevSettingsRequest = z.object({
 export type DatevSettings = z.infer<typeof datevSettingsRequest>
 
 export const settingsIdParam = z.object({ id })
+
+// ---- Betrieb (Betriebs-Check) -------------------------------------------------------------------
+
+export interface BackupRunSummary {
+  name: string
+  status: 'ok' | 'failed'
+  startedAt: string
+  finishedAt: string
+  dbBytes: number | null
+  filesBytes: number | null
+  message: string | null
+}
+
+export interface OperationsStatus {
+  backup: {
+    /** Newest successful backup; the check warns if it is older than 26 hours. */
+    lastSuccess: BackupRunSummary | null
+    recent: BackupRunSummary[]
+  }
+  email: { enabled: boolean; queued: number; failed: number }
+  security: { requireAdminMfa: boolean; https: boolean }
+}

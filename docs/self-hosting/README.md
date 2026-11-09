@@ -48,8 +48,7 @@ Danach `https://<APP_DOMAIN>` öffnen, den Code eingeben, die Firma und das erst
 ## 4. Dateien (Projektablage)
 
 - Hochgeladene Dateien liegen im Docker-Volume `files` (im Container `/data/files`), die Datenbank kennt Name, Größe und Prüfsumme (SHA-256). Siehe [ADR 0004](../adr/0004-dateiablage.md).
-- **Das Volume `files` gehört zur Sicherung**, zusammen mit der Datenbank. Eine Sicherung nur der Datenbank enthält keine Fotos und Pläne. Beispiel für eine einfache Kopie:
-  `docker run --rm -v openplancraft_files:/data -v "$PWD":/backup alpine tar czf /backup/files.tgz -C /data .`
+- **Das Volume `files` gehört zur Sicherung**, zusammen mit der Datenbank. Der Dienst `backup` sichert beides gemeinsam (Abschnitt 6).
 - Größte erlaubte Datei: `UPLOAD_MAX_MB` (Standard 50). Erlaubt sind PDF, Bilder (JPG, PNG, GIF, WebP, HEIC), Videos (MP4, MOV), Office-Dateien, ZIP, Pläne (DWG, DXF), Text/CSV/XML und GAEB (X31, X81–X86). Der Inhalt muss zur Dateiendung passen.
 - Für jede neue Firma wird eine Ordnerstruktur angelegt; jedes neue Projekt bekommt diese Ordner.
 
@@ -60,7 +59,36 @@ Danach `https://<APP_DOMAIN>` öffnen, den Code eingeben, die Firma und das erst
 - E-Mails gehen zuerst in einen Postausgang in der Datenbank und werden vom Worker versendet (bis zu 5 Versuche mit wachsender Pause). Status und Fehler: Einstellungen › Betrieb. Inhalte (z. B. Einladungslinks) werden nach dem Versand gelöscht.
 - Antworten gehen an die E-Mail-Adresse der Firma (Einstellungen › Firma).
 
-## 6. Exporte
+## 6. Sicherung und Wiederherstellung
+
+Der Dienst `backup` ([ADR 0005](../adr/0005-backup-dienst.md)) sichert **täglich um `BACKUP_TIME`** (Standard 02:30, Zeitzone `TZ`) die Datenbank und die Ablage. Jede Sicherung ist ein Verzeichnis `JJJJ-MM-TT_HHMMSS` mit `db.dump`, `files.tar.gz` und `SHA256SUMS` und wird direkt nach dem Schreiben geprüft. Sicherungen älter als `BACKUP_KEEP_DAYS` (Standard 14) werden gelöscht, aber nur nach einer erfolgreichen neuen Sicherung.
+
+Den Zustand zeigt **Einstellungen › Betrieb › Betriebs-Check** (Warnung, wenn die letzte erfolgreiche Sicherung älter als 26 Stunden ist).
+
+```bash
+docker compose exec backup backup.sh run              # sofort sichern
+docker compose exec backup backup.sh list             # Sicherungen anzeigen
+docker compose exec backup backup.sh verify <Name>    # Sicherung prüfen
+docker compose logs backup                            # Protokoll
+```
+
+**Ziel:** Standard ist das Docker-Volume `backups` auf demselben Server. Das schützt vor Bedienfehlern, nicht vor einem Plattendefekt oder Einbruch. Deshalb:
+
+- `BACKUP_DIR` auf einen anderen Datenträger oder ein NAS legen (z. B. `BACKUP_DIR=/mnt/nas/openplancraft`), **und/oder**
+- die Sicherungen regelmäßig außer Haus kopieren, am besten verschlüsselt (z. B. mit restic oder borg auf ein zweites Gerät oder einen Speicherdienst in der EU). Das Volume liegt unter `docker volume inspect openplancraft_backups`.
+- Die **`.env` getrennt sichern** (Passwortmanager oder Tresor). Ohne denselben `APP_SECRET` sind Zwei-Faktor-Geheimnisse und IBAN nach einer Wiederherstellung nicht lesbar.
+- Die Sicherungen sind nicht verschlüsselt: Zugriff auf das Sicherungsziel wie auf den Server selbst beschränken.
+
+**Wiederherstellen** (z. B. nach einem Fehler oder auf einem neuen Server mit derselben `.env`):
+
+```bash
+sh infra/restore.sh                # vorhandene Sicherungen anzeigen
+sh infra/restore.sh <Name>         # Sicherung prüfen, Rückfrage, Datenbank + Ablage ersetzen, Stack starten
+```
+
+Auf einem neuen Server zuerst Repository und `.env` einrichten und die Sicherungsverzeichnisse nach `BACKUP_DIR` (bzw. in das Volume `backups`) kopieren. Alles, was nach der Sicherung eingegeben wurde, ist danach verloren. Wiederherstellen regelmäßig üben, z. B. auf einem Testrechner.
+
+## 7. Exporte
 
 Unter Einstellungen › Betrieb (Rolle mit Recht „Exporte“, standardmäßig Inhaber und Büro):
 
@@ -70,7 +98,7 @@ Unter Einstellungen › Betrieb (Rolle mit Recht „Exporte“, standardmäßig 
 
 Jeder Export wird im Audit-Log vermerkt.
 
-## 7. Updates
+## 8. Updates
 
 ```bash
 git pull && docker compose up -d --build
@@ -78,10 +106,10 @@ git pull && docker compose up -d --build
 
 Datenbank-Migrationen laufen beim Start automatisch (`MIGRATE_ON_START=true`). Eine bereits angewendete Migration wird nie verändert; der Start bricht ab, falls doch.
 
-## 8. Prüfen
+## 9. Prüfen
 
 ```bash
 BASE_URL=https://<APP_DOMAIN> sh infra/smoke-test.sh
 ```
 
-Noch nicht im Stack und in Arbeit: Archivspeicher mit Object Lock für festgeschriebene Belege, KoSIT-Prüfer, automatisches Backup.
+Noch nicht im Stack und in Arbeit: Archivspeicher mit Object Lock für festgeschriebene Belege, KoSIT-Prüfer.

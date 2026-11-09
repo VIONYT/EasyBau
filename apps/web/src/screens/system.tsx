@@ -1,4 +1,10 @@
-import type { EmailMessageSummary, EmailSettings, Me } from '@opc/schemas'
+import type {
+  BackupRunSummary,
+  EmailMessageSummary,
+  EmailSettings,
+  Me,
+  OperationsStatus,
+} from '@opc/schemas'
 import { useCallback, useEffect, useId, useState } from 'react'
 import { type ApiError, api, downloadFile } from '../api'
 import { formatDateTime } from '../format'
@@ -35,6 +41,7 @@ export function SystemSettings({ me }: { me: Me }) {
           </dl>
         ) : null}
       </div>
+      <OperationsPanel />
       <EmailPanel canWrite={me.permissions.includes('settings.write')} />
       {me.permissions.includes('export.run') ? <ExportPanel /> : null}
     </>
@@ -190,6 +197,101 @@ function ExportPanel() {
       <a className="button ghost" href="/api/v1/exports/full" download>
         {t('sys.exportFullButton')}
       </a>
+    </div>
+  )
+}
+
+const DAY_MS = 26 * 60 * 60 * 1000
+
+function formatBytes(bytes: number | null): string {
+  if (bytes === null) return ''
+  const units = ['B', 'KB', 'MB', 'GB', 'TB']
+  let value = bytes
+  let unit = 0
+  while (value >= 1024 && unit < units.length - 1) {
+    value /= 1024
+    unit++
+  }
+  return `${new Intl.NumberFormat('de-DE', { maximumFractionDigits: unit ? 1 : 0 }).format(value)} ${units[unit]}`
+}
+
+type CheckState = 'ok' | 'warning' | 'off'
+
+function Check({ state, title, children }: { state: CheckState; title: string; children: string }) {
+  return (
+    <li className={`check check--${state}`}>
+      <span className="check__state">{t(`sys.check.${state}` as TextKey)}</span>
+      <span>
+        <strong>{title}</strong>
+        <span className="muted">{children}</span>
+      </span>
+    </li>
+  )
+}
+
+/** Betriebs-Check: is the installation backed up, can it send e-mails, is it secure? */
+function OperationsPanel() {
+  const [status, setStatus] = useState<OperationsStatus | null>(null)
+  const [error, setError] = useState<string | null>(null)
+  useEffect(() => {
+    api<OperationsStatus>('GET', '/api/v1/settings/operations')
+      .then(setStatus)
+      .catch((err: ApiError) => setError(err.message))
+  }, [])
+  if (!status) return error ? <FormError>{error}</FormError> : null
+  const last = status.backup.lastSuccess
+  const backupFresh = last !== null && Date.now() - new Date(last.finishedAt).getTime() < DAY_MS
+  const describe = (run: BackupRunSummary) =>
+    [
+      formatDateTime(run.finishedAt),
+      run.status === 'ok'
+        ? `${formatBytes(run.dbBytes)} + ${formatBytes(run.filesBytes)}`
+        : run.message,
+    ]
+      .filter(Boolean)
+      .join(' · ')
+  return (
+    <div className="panel">
+      <h2>{t('sys.check')}</h2>
+      <ul className="check-list">
+        <Check state={backupFresh ? 'ok' : 'warning'} title={t('sys.backup')}>
+          {last
+            ? `${t('sys.backupLast')} ${describe(last)}${backupFresh ? '' : ` – ${t('sys.backupOld')}`}`
+            : t('sys.backupNone')}
+        </Check>
+        <Check
+          state={!status.email.enabled ? 'off' : status.email.failed ? 'warning' : 'ok'}
+          title={t('sys.email')}
+        >
+          {!status.email.enabled
+            ? t('sys.emailOffShort')
+            : status.email.failed
+              ? t('sys.emailFailed').replace('{n}', String(status.email.failed))
+              : t('sys.emailOk')}
+        </Check>
+        <Check state={status.security.https ? 'ok' : 'warning'} title={t('sys.https')}>
+          {status.security.https ? t('sys.httpsOk') : t('sys.httpsOff')}
+        </Check>
+        <Check state={status.security.requireAdminMfa ? 'ok' : 'warning'} title={t('sys.mfa')}>
+          {status.security.requireAdminMfa ? t('sys.mfaOk') : t('sys.mfaOff')}
+        </Check>
+      </ul>
+      {status.backup.recent.length ? (
+        <>
+          <h3>{t('sys.backupRecent')}</h3>
+          <ul className="list">
+            {status.backup.recent.map((run) => (
+              <li key={run.name}>
+                <strong>{run.name}</strong>
+                <span className="muted">
+                  {t(`sys.backup.${run.status}` as TextKey)} · {describe(run)}
+                </span>
+              </li>
+            ))}
+          </ul>
+        </>
+      ) : null}
+      <p className="muted">{t('sys.backupHint')}</p>
     </div>
   )
 }

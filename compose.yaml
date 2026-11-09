@@ -4,7 +4,8 @@
 #
 # Profile "compact" (default): proxy, app (API + worker), db.
 # Profile "standard": additionally a separate worker -> COMPOSE_PROFILES=standard and APP_ROLE=api.
-# Planned services (see DESIGN.md §3.5): storage (S3 + Object Lock), kosit, backup.
+# backup: daily database + Ablage backup into BACKUP_DIR (ADR 0005), restore with infra/restore.sh.
+# Planned services (see DESIGN.md §3.5): storage (S3 + Object Lock), kosit.
 
 name: openplancraft
 
@@ -110,9 +111,38 @@ services:
       timeout: 3s
       retries: 20
 
+  # Daily backup of database and Ablage (ADR 0005). Same image as db, idles in a sleep loop.
+  backup:
+    image: postgres:17-alpine
+    restart: unless-stopped
+    entrypoint: ["sh", "/opt/backup/backup.sh"]
+    command: ["daemon"]
+    read_only: true
+    tmpfs: [/tmp]
+    environment:
+      PGHOST: db
+      PGDATABASE: ${POSTGRES_DB:-openplancraft}
+      PGUSER: ${POSTGRES_USER:-openplancraft}
+      PGPASSWORD: ${POSTGRES_PASSWORD:?POSTGRES_PASSWORD fehlt in .env}
+      BACKUP_TIME: ${BACKUP_TIME:-02:30}
+      BACKUP_KEEP_DAYS: ${BACKUP_KEEP_DAYS:-14}
+      TZ: ${TZ:-Europe/Berlin}
+      PATH: /opt/backup:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
+    volumes:
+      # Directory, not file: an updated script (git pull) is used without recreating the container.
+      - ./infra/backup:/opt/backup:ro
+      # Read-write only for restore (infra/restore.sh).
+      - files:/data/files
+      # Named volume "backups" or a host path such as /mnt/nas/openplancraft.
+      - ${BACKUP_DIR:-backups}:/backups
+    depends_on:
+      db:
+        condition: service_healthy
+
 volumes:
   db-data:
   files:
+  backups:
   caddy-data:
   caddy-config:
 
