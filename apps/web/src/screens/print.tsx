@@ -49,9 +49,9 @@ export function PrintScreen({ id, navigate }: { id: string; navigate: Navigate }
       </div>
 
       <article className={`letter${doc.status === 'draft' ? ' draft' : ''}`} aria-label={label}>
-        {doc.status === 'draft' ? (
+        {doc.status === 'draft' || doc.status === 'cancelled' ? (
           <div className="watermark" aria-hidden="true">
-            {t('print.draft')}
+            {doc.status === 'draft' ? t('print.draft') : t('print.cancelled')}
           </div>
         ) : null}
         <header className="letter-head">

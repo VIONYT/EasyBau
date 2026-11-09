@@ -91,10 +91,34 @@ export function DocumentScreen({ me, id, navigate }: { me: Me; id: string; navig
         <StatusChip status={doc.status} />
       </div>
       <p className="muted">
-        {doc.number ?? t('documents.draftNoNumber')}
+        {doc.status === 'cancelled' && doc.number ? (
+          <s className="locked-number">{doc.number}</s>
+        ) : (
+          (doc.number ?? t('documents.draftNoNumber'))
+        )}
         {doc.contact ? ` · ${doc.contact.displayName}` : ''}
       </p>
-      {doc.status !== 'draft' ? (
+      {doc.cancelledBy ? (
+        <p className="notice inline cancelled-notice" role="status">
+          {t('doc.cancelledNotice')
+            .replace('{number}', doc.number ?? '')
+            .replace('{cancellation}', doc.cancelledBy.number)}{' '}
+          <a
+            href={`/dokumente/${doc.cancelledBy.id}`}
+            onClick={(e) => {
+              e.preventDefault()
+              navigate({ view: 'document', id: (doc.cancelledBy as { id: string }).id })
+            }}
+          >
+            {t('doc.openCancellation')}
+          </a>
+        </p>
+      ) : doc.cancels?.number ? (
+        <p className="notice inline" role="status">
+          {t('doc.cancels').replace('{number}', doc.cancels.number)}
+        </p>
+      ) : null}
+      {doc.status !== 'draft' && !doc.cancelledBy ? (
         <p className="notice inline" role="status">
           {t('doc.locked')}
         </p>

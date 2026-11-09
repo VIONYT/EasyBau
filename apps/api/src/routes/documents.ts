@@ -74,7 +74,11 @@ function summaryColumns(tx: Tx) {
     ${ISO(tx, 'd.updated_at')} as "updatedAt",
     case when cu.id is null then null else json_build_object('id', cu.id, 'displayName', cu.display_name) end as "createdBy",
     case when co.document_id is null then null
-         else json_build_object('number', co.number, 'basis', co.basis, 'status', co.status) end as "changeOrder"`
+         else json_build_object('number', co.number, 'basis', co.basis, 'status', co.status) end as "changeOrder",
+    (select json_build_object('id', s.id, 'number', s.number) from document s
+      where s.cancels_document_id = d.id and s.finalized_at is not null) as "cancelledBy",
+    (select json_build_object('id', o.id, 'number', o.number) from document o
+      where o.id = d.cancels_document_id) as "cancels"`
 }
 
 const fromDocuments = (tx: Tx) => tx`

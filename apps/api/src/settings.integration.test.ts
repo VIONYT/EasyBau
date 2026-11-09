@@ -95,6 +95,20 @@ describe.skipIf(!process.env.DATABASE_URL)('Einstellungen (integration)', () => 
     expect(res.json().preview).toMatch(/^RE-\d{4}-00500$/)
     const back = await admin.patch('/api/v1/settings/number-sequences/invoice', { nextValue: 100 })
     expect(back.json().errors.nextValue).toMatch(/nicht zurückgesetzt/)
+    // Restarting every year without the year in the number would issue numbers twice.
+    const noYear = await admin.patch('/api/v1/settings/number-sequences/credit_note', {
+      resetYearly: true,
+    })
+    expect(noYear.statusCode).toBe(400)
+    expect(noYear.json().errors.resetYearly).toMatch(/nur mit Jahr/)
+    expect(
+      (
+        await admin.patch('/api/v1/settings/number-sequences/credit_note', {
+          includeYear: true,
+          resetYearly: true,
+        })
+      ).statusCode,
+    ).toBe(200)
     expect(
       (await admin.patch('/api/v1/settings/number-sequences/quote', { nextValue: 1 })).statusCode,
     ).toBe(200)

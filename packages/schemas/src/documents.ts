@@ -216,6 +216,10 @@ export interface DocumentSummary {
   createdBy: { id: string; displayName: string } | null
   updatedAt: string
   changeOrder: { number: number; basis: ChangeOrderBasis; status: string } | null
+  /** Finalized cancellation of this invoice: the invoice is locked, its number stays used. */
+  cancelledBy: { id: string; number: string } | null
+  /** For a cancellation: the invoice it cancels. */
+  cancels: { id: string; number: string | null } | null
 }
 
 export interface DocumentItem {

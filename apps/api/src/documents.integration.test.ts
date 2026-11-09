@@ -476,6 +476,51 @@ describe.skipIf(!process.env.DATABASE_URL)('project documents (integration)', ()
     }
   })
 
+  it('shows a cancelled invoice as locked with the number of its cancellation', async () => {
+    const { doc } = await create({ type: 'invoice', invoiceKind: 'standard' })
+    const finalize = (id: string, number: string) =>
+      withTenant(
+        h.sql,
+        { tenantId },
+        (tx) => tx`
+        update document set status = 'finalized', finalized_at = now(), number = ${number},
+               content_hash = sha256(${number}::bytea), recipient_snapshot = '{}', issuer_snapshot = '{}'
+        where id = ${id}`,
+      )
+    await finalize(doc.id, 'R-00201')
+    const [storno] = await withTenant(
+      h.sql,
+      { tenantId },
+      (tx) => tx<{ id: string }[]>`
+      insert into document (tenant_id, project_id, type, invoice_kind, cancels_document_id)
+      values (${tenantId}, ${projectId}, 'invoice', 'cancellation', ${doc.id}) returning id`,
+    )
+    await finalize(storno?.id as string, 'R-00202')
+
+    const original = (await admin.get(`/api/v1/documents/${doc.id}`)).json() as DocumentDetail
+    expect(original).toMatchObject({
+      status: 'cancelled',
+      number: 'R-00201',
+      cancelledBy: { id: storno?.id, number: 'R-00202' },
+      cancels: null,
+    })
+    const cancellation = (
+      await admin.get(`/api/v1/documents/${storno?.id}`)
+    ).json() as DocumentDetail
+    expect(cancellation).toMatchObject({
+      invoiceKind: 'cancellation',
+      cancelledBy: null,
+      cancels: { id: doc.id, number: 'R-00201' },
+    })
+    // Locked: neither editable nor deletable, and no status change back.
+    expect((await admin.delete(`/api/v1/documents/${doc.id}`)).statusCode).toBe(409)
+    expect(
+      (await admin.post(`/api/v1/documents/${doc.id}/status`, { status: 'sent' })).statusCode,
+    ).toBe(409)
+    const list = (await admin.get(docsUrl())).json() as DocumentDetail[]
+    expect(list.find((d) => d.id === doc.id)?.cancelledBy?.number).toBe('R-00202')
+  })
+
   it('requires document permissions and project visibility', async () => {
     const invite = await admin.post('/api/v1/invitations', {
       email: 'bau@example.test',

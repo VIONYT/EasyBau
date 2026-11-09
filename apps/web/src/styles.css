@@ -1599,3 +1599,22 @@ fieldset.plain {
     gap: 0;
   }
 }
+
+/* Storno: the cancelled invoice stays visible but locked; number struck through and greyed. */
+.list-link.is-cancelled a {
+  background: var(--color-bg);
+}
+.list-link.is-cancelled strong,
+.list-link.is-cancelled .amount {
+  color: var(--color-muted);
+}
+.list-link.is-cancelled .amount {
+  text-decoration: line-through;
+}
+.locked-number {
+  color: var(--color-muted);
+}
+.notice.cancelled-notice a {
+  color: inherit;
+  font-weight: 600;
+}

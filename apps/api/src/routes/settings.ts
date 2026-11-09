@@ -186,6 +186,12 @@ export function registerSettingsRoutes(app: FastifyInstance, services: Services)
                   'Rechnungs- und Gutschriftnummern dürfen nicht zurückgesetzt werden (lückenlose Nummerierung).',
               })
             }
+            if (String(error.message).includes('restart yearly with the year')) {
+              throw invalid({
+                resetYearly:
+                  'Jährlich neu beginnen geht bei Rechnungen und Gutschriften nur mit Jahr in der Nummer, sonst würden Nummern doppelt vergeben.',
+              })
+            }
             throw error
           },
         )

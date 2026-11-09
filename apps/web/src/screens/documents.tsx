@@ -92,7 +92,10 @@ export function ProjectDocuments({
             <h3>{t(group.key)}</h3>
             <ul className="list">
               {docs.map((d) => (
-                <li key={d.id} className="list-link">
+                <li
+                  key={d.id}
+                  className={`list-link${d.status === 'cancelled' ? ' is-cancelled' : ''}`}
+                >
                   <a
                     href={`/dokumente/${d.id}`}
                     onClick={(e) => {
@@ -105,8 +108,21 @@ export function ProjectDocuments({
                       <span className="amount">{formatCents(d.netTotalCents)}</span>
                     </span>
                     <span className="muted">
+                      {d.status === 'cancelled' && d.number ? (
+                        <>
+                          <s className="locked-number">{d.number}</s>{' '}
+                        </>
+                      ) : null}
                       {[
-                        d.number ?? t('documents.draftNoNumber'),
+                        d.status === 'cancelled'
+                          ? null
+                          : (d.number ?? t('documents.draftNoNumber')),
+                        d.cancelledBy
+                          ? t('doc.cancelledBy').replace('{number}', d.cancelledBy.number)
+                          : null,
+                        d.cancels?.number
+                          ? t('doc.cancels').replace('{number}', d.cancels.number)
+                          : null,
                         d.subject,
                         formatDateTime(d.documentDate, 'date'),
                       ]
