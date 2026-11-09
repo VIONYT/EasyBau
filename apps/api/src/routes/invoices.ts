@@ -1,13 +1,13 @@
 import { createHash } from 'node:crypto'
 import type { Tx } from '@opc/db'
 import { addDays } from '@opc/domain'
-import type { FinalizeCheck } from '@opc/schemas'
+import { type CancelInvoiceResult, cancelInvoiceRequest, type FinalizeCheck } from '@opc/schemas'
 import type { FastifyInstance } from 'fastify'
 import { z } from 'zod'
 import { billingDoc, invoiceFinalizeCheck, legalNotesOf } from '../billing.js'
 import { type AuthContext, inTenant, requirePermission, type Services } from '../context.js'
 import { HttpError, notFound, parse } from '../http.js'
-import { loadDocument, lockDraft, recalculate } from './documents.js'
+import { copyItems, liveIssuer, loadDocument, lockDraft, recalculate } from './documents.js'
 
 const documentParam = z.object({ id: z.uuid('Ungültige ID.') })
 
@@ -124,7 +124,140 @@ export async function finalizeInvoice(
     where id = ${id} and project_id = ${current.projectId}`
 }
 
+/**
+ * Storno: a Stornorechnung (own number) mirrors the invoice with negated quantities, tax lines and
+ * deductions and is finalized at once; the DB trigger then marks the invoice as cancelled
+ * (migration 0015). The cancelled invoice keeps its number and stays locked for good.
+ * `reissue` creates a copy of the original as a new draft („Rechnung korrigieren“).
+ */
+export async function cancelInvoice(
+  tx: Tx,
+  auth: AuthContext,
+  id: string,
+  input: { reason: string; reissue: boolean },
+): Promise<CancelInvoiceResult> {
+  const original = await loadDocument(tx, auth, id)
+  if (!original) throw notFound('Die Rechnung')
+  await tx`select id from document where id = ${id} for update`
+  if (original.type !== 'invoice' || original.invoiceKind === 'cancellation') {
+    throw new HttpError(409, 'Stornieren lässt sich nur eine Rechnung, keine Stornorechnung.')
+  }
+  if (original.status === 'draft') {
+    throw new HttpError(409, 'Ein Entwurf hat noch keine Nummer und kann einfach gelöscht werden.')
+  }
+  if (original.status === 'cancelled') {
+    throw new HttpError(409, `Die Rechnung ${original.number} ist bereits storniert.`)
+  }
+  const [deducting] = await tx<{ number: string }[]>`
+    select d.number from document_deduction dd join document d on d.id = dd.document_id
+    where dd.deducted_document_id = ${id} and d.finalized_at is not null
+      and d.status <> 'cancelled' and d.invoice_kind <> 'cancellation'
+    limit 1`
+  if (deducting) {
+    throw new HttpError(
+      409,
+      `Diese Rechnung ist in der Rechnung ${deducting.number} angerechnet. Bitte zuerst ${deducting.number} stornieren.`,
+    )
+  }
+
+  // 1. Stornorechnung as a draft: same recipient, place and tax case; positions negated.
+  const [created] = await tx<{ id: string }[]>`
+    insert into document (tenant_id, project_id, type, invoice_kind, cancels_document_id, cancel_reason,
+                          subject, document_date, service_from, service_to, place_of_performance,
+                          contact_id, tax_mode, currency, discount_percent, retention_percent,
+                          construction_levy_percent, source_document_id, created_by)
+    select tenant_id, project_id, 'invoice', 'cancellation', id, ${input.reason},
+           ${`Storno zu Rechnung ${original.number}`}, current_date, service_from, service_to,
+           place_of_performance, contact_id, tax_mode, currency, discount_percent, retention_percent,
+           construction_levy_percent, id, ${auth.userId}
+    from document where id = ${id}
+    returning id`
+  const cancellationId = (created as { id: string }).id
+  await copyItems(tx, id, cancellationId)
+  await tx`
+    update document_item set quantity = -quantity, total_cents = -total_cents,
+           cumulative_quantity = null, previously_billed_quantity = null
+    where document_id = ${cancellationId}`
+  await tx`
+    insert into document_tax_line (tenant_id, document_id, tax_category, rate_percent, net_cents, tax_cents, exemption_reason)
+    select tenant_id, ${cancellationId}, tax_category, rate_percent, -net_cents, -tax_cents, exemption_reason
+    from document_tax_line where document_id = ${id}`
+  await tx`
+    insert into document_deduction (tenant_id, document_id, deducted_document_id, net_cents, tax_cents, gross_cents)
+    select tenant_id, ${cancellationId}, deducted_document_id, -net_cents, -tax_cents, -gross_cents
+    from document_deduction where document_id = ${id}`
+  await tx`
+    update document c set net_total_cents = -o.net_total_cents, tax_total_cents = -o.tax_total_cents,
+           gross_total_cents = -o.gross_total_cents, payable_cents = -coalesce(o.payable_cents, o.gross_total_cents)
+    from document o where o.id = ${id} and c.id = ${cancellationId}`
+
+  // 2. Finalize the Stornorechnung immediately (own number, never reused).
+  const detail = await loadDocument(tx, auth, cancellationId)
+  if (!detail) throw notFound('Die Stornorechnung')
+  const [next] = await tx<{ n: string }[]>`
+    select next_number('invoice', ${detail.documentDate}::date) as n`
+  const number = (next as { n: string }).n
+  const issuer = await liveIssuer(tx)
+  const legalNotes = legalNotesOf({ ...detail, issuer, recipient: original.recipient })
+  const {
+    etag: _,
+    updatedAt: __,
+    ...content
+  } = {
+    ...detail,
+    number,
+    issuer,
+    recipient: original.recipient,
+    legalNotes,
+  }
+  const hash = createHash('sha256').update(JSON.stringify(content)).digest()
+  await tx`
+    update document set number = ${number}, status = 'finalized', finalized_at = now(),
+           finalized_by = ${auth.userId}, content_hash = ${hash},
+           issuer_snapshot = ${tx.json(issuer as never)},
+           recipient_snapshot = ${tx.json(original.recipient as never)},
+           legal_notes = ${tx.json(legalNotes)}
+    where id = ${cancellationId}`
+
+  // 3. „Rechnung korrigieren“: the original as a new draft (same kind and Abschlag number).
+  let reissue: CancelInvoiceResult['reissue'] = null
+  if (input.reissue) {
+    const [copy] = await tx<{ id: string }[]>`
+      insert into document (tenant_id, project_id, type, invoice_kind, progress_no, progress_billing_mode,
+                            subject, service_from, service_to, place_of_performance, contact_id,
+                            contact_person_id, tax_mode, currency, intro_text, closing_text,
+                            payment_due_days, cash_discount_percent, cash_discount_days, discount_percent,
+                            retention_percent, construction_levy_percent, show_labor_share,
+                            source_document_id, created_by)
+      select tenant_id, project_id, type, invoice_kind, progress_no, progress_billing_mode,
+             subject, service_from, service_to, place_of_performance, contact_id,
+             contact_person_id, tax_mode, currency, intro_text, closing_text,
+             payment_due_days, cash_discount_percent, cash_discount_days, discount_percent,
+             retention_percent, construction_levy_percent, show_labor_share, id, ${auth.userId}
+      from document where id = ${id}
+      returning id`
+    const reissueId = (copy as { id: string }).id
+    await copyItems(tx, id, reissueId)
+    await tx`
+      update document_item n set quantity_from_measurement = o.quantity_from_measurement,
+             cumulative_quantity = o.cumulative_quantity,
+             previously_billed_quantity = o.previously_billed_quantity
+      from document_item o where n.document_id = ${reissueId} and o.id = n.source_item_id`
+    await recalculate(tx, reissueId)
+    reissue = { id: reissueId }
+  }
+  return { cancellation: { id: cancellationId, number }, reissue }
+}
+
 export function registerInvoiceRoutes(app: FastifyInstance, services: Services) {
+  app.post('/api/v1/documents/:id/cancel', async (request, reply) => {
+    const auth = requirePermission(request, 'document.cancel')
+    const { id } = parse(documentParam, request.params)
+    const input = parse(cancelInvoiceRequest, request.body ?? {})
+    const result = await inTenant(services, auth, (tx) => cancelInvoice(tx, auth, id, input))
+    return reply.status(201).send(result)
+  })
+
   app.get('/api/v1/documents/:id/finalize-check', async (request): Promise<FinalizeCheck> => {
     const auth = requirePermission(request, 'document.read')
     const { id } = parse(documentParam, request.params)

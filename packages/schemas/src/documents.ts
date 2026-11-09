@@ -202,6 +202,25 @@ export const convertDocumentRequest = z.object({
   reason: optionalText(2000),
 })
 
+/**
+ * Storno (DESIGN.md §4.1): a Stornorechnung with its own number cancels the invoice completely;
+ * `reissue` additionally creates a corrected copy as a new draft („Rechnung korrigieren“).
+ */
+export const cancelInvoiceRequest = z.object({
+  reason: z
+    .string()
+    .trim()
+    .min(3, 'Bitte einen Grund für das Storno angeben.')
+    .max(500, 'Der Grund darf höchstens 500 Zeichen lang sein.'),
+  reissue: z.boolean().default(false),
+})
+
+export interface CancelInvoiceResult {
+  cancellation: { id: string; number: string }
+  /** New draft („Rechnung korrigieren“). */
+  reissue: { id: string } | null
+}
+
 /** Festschreiben: warnings (e.g. free positions) must be confirmed explicitly. */
 export const finalizeRequest = z.object({ acknowledgeWarnings: z.boolean().default(false) })
 

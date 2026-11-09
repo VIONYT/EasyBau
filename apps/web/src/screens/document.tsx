@@ -1,4 +1,5 @@
 import type {
+  CancelInvoiceResult,
   CatalogItem,
   ContactSummary,
   DocumentDetail,
@@ -140,6 +141,7 @@ export function DocumentScreen({ me, id, navigate }: { me: Me; id: string; navig
         doc={doc}
         canWrite={me.permissions.includes('document.write')}
         canFinalize={me.permissions.includes('document.finalize')}
+        canCancel={me.permissions.includes('document.cancel')}
         apply={apply}
         navigate={navigate}
       />
@@ -1079,18 +1081,26 @@ function DocumentActions({
   doc,
   canWrite,
   canFinalize,
+  canCancel,
   apply,
   navigate,
 }: {
   doc: Doc
   canWrite: boolean
   canFinalize: boolean
+  canCancel: boolean
   apply: Apply
   navigate: Navigate
 }) {
   const [error, setError] = useState<string | null>(null)
   const [busy, setBusy] = useState(false)
   const [finalizing, setFinalizing] = useState(false)
+  const [cancelling, setCancelling] = useState<'cancel' | 'correct' | null>(null)
+  const cancellable =
+    canCancel &&
+    doc.type === 'invoice' &&
+    doc.invoiceKind !== 'cancellation' &&
+    (doc.status === 'finalized' || doc.status === 'sent')
   const offer = ['quote', 'cost_estimate', 'change_order'].includes(doc.type)
   const billed = doc.type === 'invoice' || doc.type === 'credit_note'
   const run = async (path: string, body?: unknown, confirmText?: string) => {
@@ -1162,11 +1172,40 @@ function DocumentActions({
           {t('inv.finalize')}
         </button>
       ) : null}
+      {cancellable && !cancelling ? (
+        <>
+          <button type="button" className="button ghost" onClick={() => setCancelling('correct')}>
+            {t('inv.correct')}
+          </button>
+          <button
+            type="button"
+            className="button ghost danger"
+            onClick={() => setCancelling('cancel')}
+          >
+            {t('inv.cancel')}
+          </button>
+        </>
+      ) : null}
       {doc.status === 'draft' && !billed ? <p className="hint">{t('q.finalizeHint')}</p> : null}
       {billed && doc.status === 'draft' && !canFinalize ? (
         <p className="hint">{t('inv.noPermission')}</p>
       ) : null}
       <FormError>{error}</FormError>
+      {cancelling ? (
+        <CancelInvoice
+          doc={doc}
+          reissue={cancelling === 'correct'}
+          onDone={async (result) => {
+            setCancelling(null)
+            if (result.reissue) {
+              navigate({ view: 'document', id: result.reissue.id })
+            } else {
+              apply(await apiWithEtag<Doc>('GET', `/api/v1/documents/${doc.id}`))
+            }
+          }}
+          onCancel={() => setCancelling(null)}
+        />
+      ) : null}
       {finalizing ? (
         <FinalizeInvoice
           doc={doc}
@@ -1178,6 +1217,76 @@ function DocumentActions({
         />
       ) : null}
     </div>
+  )
+}
+
+/**
+ * Storno (DESIGN.md §4.1, §7.6): Stornorechnung with its own number; „Rechnung korrigieren“
+ * creates the new draft in the same step and explains what happens.
+ */
+function CancelInvoice({
+  doc,
+  reissue,
+  onDone,
+  onCancel,
+}: {
+  doc: Doc
+  reissue: boolean
+  onDone: (result: CancelInvoiceResult) => void
+  onCancel: () => void
+}) {
+  const [reason, setReason] = useState('')
+  const [error, setError] = useState<string | null>(null)
+  const [busy, setBusy] = useState(false)
+  const headingId = useId()
+  const reasonId = useId()
+  const submit = async () => {
+    setBusy(true)
+    setError(null)
+    try {
+      onDone(
+        await api<CancelInvoiceResult>('POST', `/api/v1/documents/${doc.id}/cancel`, {
+          reason,
+          reissue,
+        }),
+      )
+    } catch (err) {
+      const e = err as ApiError
+      setError([e.message, ...Object.values(e.fieldErrors)].join(' '))
+    } finally {
+      setBusy(false)
+    }
+  }
+  return (
+    <section className="finalize-panel" aria-labelledby={headingId}>
+      <h2 id={headingId}>{reissue ? t('inv.correctTitle') : t('inv.cancelTitle')}</h2>
+      <p>{tf('inv.cancelExplain', { number: doc.number ?? '' })}</p>
+      {reissue ? <p>{t('inv.correctExplain')}</p> : null}
+      <div className="field">
+        <label htmlFor={reasonId}>{t('inv.cancelReason')}</label>
+        <textarea
+          id={reasonId}
+          rows={3}
+          maxLength={500}
+          value={reason}
+          onChange={(e) => setReason(e.target.value)}
+        />
+      </div>
+      <FormError>{error}</FormError>
+      <div className="button-row">
+        <button
+          type="button"
+          className={`button auto ${reissue ? 'primary' : 'danger'}`}
+          disabled={busy || reason.trim().length < 3}
+          onClick={submit}
+        >
+          {reissue ? t('inv.correctNow') : t('inv.cancelNow')}
+        </button>
+        <button type="button" className="button ghost" onClick={onCancel}>
+          {t('common.cancel')}
+        </button>
+      </div>
+    </section>
   )
 }
 

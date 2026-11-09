@@ -266,6 +266,17 @@ const de = {
   'inv.finalizeWarning':
     'Nach dem Festschreiben kann die Rechnung nicht mehr geändert oder gelöscht werden. Korrekturen erfolgen über eine Stornorechnung.',
   'inv.finalizeNow': 'Jetzt festschreiben',
+  'inv.correct': 'Rechnung korrigieren …',
+  'inv.cancel': 'Stornieren …',
+  'inv.correctTitle': 'Rechnung korrigieren',
+  'inv.cancelTitle': 'Rechnung stornieren',
+  'inv.cancelExplain':
+    'Es wird eine Stornorechnung mit eigener Nummer erstellt und sofort festgeschrieben. Sie hebt die Rechnung {number} vollständig auf. Die Rechnung {number} bleibt mit ihrer Nummer erhalten, wird gesperrt und die Nummer wird nie wieder vergeben.',
+  'inv.correctExplain':
+    'Anschließend wird eine Kopie als neuer Entwurf angelegt. Diesen können Sie ändern und als neue Rechnung festschreiben.',
+  'inv.cancelReason': 'Grund für das Storno (wird auf der Stornorechnung gedruckt)',
+  'inv.correctNow': 'Stornieren und neuen Entwurf anlegen',
+  'inv.cancelNow': 'Endgültig stornieren',
   'files.title': 'Ablage',
   'files.all': 'Alle Dateien',
   'files.upload': 'Dateien hochladen',

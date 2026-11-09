@@ -491,6 +491,92 @@ test('Stammdaten, DATANORM-Katalog und Einfügen ins Angebot', async () => {
   await expectNoHorizontalScroll(page)
 })
 
+test('Rechnung: Pflichtangaben, Festschreiben und Korrigieren per Storno', async () => {
+  test.skip(!SETUP_TOKEN, 'SETUP_TOKEN must be set for a fresh stack')
+  test.setTimeout(120_000)
+
+  // Rechnung aus der Auftragsbestätigung
+  await page.getByRole('button', { name: 'Projekte' }).click()
+  await page.getByRole('link', { name: /Sanierung Lindenweg/ }).click()
+  await page.getByRole('button', { name: 'Dokumente' }).click()
+  await page.getByRole('button', { name: 'Neues Dokument' }).click()
+  await page.getByRole('radio', { name: 'Rechnung', exact: true }).check()
+  const source = page.getByLabel('Positionen übernehmen aus')
+  const ab = await source.locator('option', { hasText: 'AB-00101' }).getAttribute('value')
+  await source.selectOption(ab as string)
+  await page.getByRole('button', { name: 'Dokument erstellen' }).click()
+  await expect(page.getByRole('heading', { name: 'Rechnung', exact: true })).toBeVisible()
+  const invoiceUrl = page.url()
+
+  // Pflichtangaben fehlen: der Dialog nennt sie, Festschreiben ist gesperrt
+  await page.getByRole('button', { name: 'Rechnung festschreiben …' }).click()
+  const missing = page.getByRole('alert')
+  await expect(missing).toContainText('Anschrift Ihrer Firma')
+  await expect(missing).toContainText('Empfänger mit vollständiger Anschrift fehlt.')
+  await expect(page.getByRole('button', { name: 'Jetzt festschreiben' })).toBeDisabled()
+  await page.getByRole('button', { name: 'Abbrechen' }).click()
+
+  // Firmenanschrift, Steuernummer und Kundenanschrift ergänzen
+  expect(
+    (
+      await page.request.patch('/api/v1/settings/company', {
+        data: {
+          street: 'Werkstraße 2',
+          postalCode: '30169',
+          city: 'Hannover',
+          taxNumber: '25/123/45678',
+        },
+      })
+    ).status(),
+  ).toBe(200)
+  const contacts = await (await page.request.get('/api/v1/contacts?q=Wohnbau')).json()
+  const customer = contacts.items[0] as { id: string }
+  expect(
+    (
+      await page.request.patch(`/api/v1/contacts/${customer.id}`, {
+        data: {
+          addresses: [
+            { kind: 'main', street: 'Lindenweg 4', postalCode: '30159', city: 'Hannover' },
+          ],
+        },
+      })
+    ).status(),
+  ).toBe(200)
+  await page.goto(invoiceUrl)
+  await page.getByLabel('Leistung von').fill('2026-10-01')
+  await page.getByLabel('Leistung bis').fill('2026-10-31')
+  await page.getByRole('button', { name: 'Speichern', exact: true }).first().click()
+  await expect(page.getByText('Gespeichert.')).toBeVisible()
+
+  // Festschreiben mit Vorschau der Nummer
+  await page.getByRole('button', { name: 'Rechnung festschreiben …' }).click()
+  await expect(page.getByText('Alle Pflichtangaben sind vorhanden.')).toBeVisible()
+  await expect(page.getByText('Die Rechnung erhält die Nummer')).toContainText('R-00101')
+  await expectNoHorizontalScroll(page)
+  if (SCREENSHOTS)
+    await page.screenshot({ path: `${SCREENSHOTS}/rechnung-festschreiben.png`, fullPage: true })
+  await page.getByRole('button', { name: 'Jetzt festschreiben' }).click()
+  await expect(page.getByText(/^R-00101/)).toBeVisible()
+  await expect(page.getByText('Fertiggestellt', { exact: true })).toBeVisible()
+  await expect(page.locator('.legal-notes')).toContainText('Zahlbar ohne Abzug bis')
+
+  // Rechnung korrigieren: Storno mit eigener Nummer + neuer Entwurf
+  await page.getByRole('button', { name: 'Rechnung korrigieren …' }).click()
+  await page.getByLabel(/Grund für das Storno/).fill('Falscher Leistungszeitraum')
+  await page.getByRole('button', { name: 'Stornieren und neuen Entwurf anlegen' }).click()
+  await expect(page.getByRole('heading', { name: 'Rechnung', exact: true })).toBeVisible()
+  await expect(page.getByText('Entwurf', { exact: true }).first()).toBeVisible()
+
+  // Im Projekt: R-00101 gesperrt und ausgegraut, Stornorechnung R-00102
+  await page.getByRole('link', { name: /Sanierung Lindenweg/ }).click()
+  await expect(page.getByText('storniert durch R-00102')).toBeVisible()
+  await expect(page.locator('.is-cancelled .locked-number')).toHaveText('R-00101')
+  await expect(page.getByText('Storno zu Rechnung R-00101').first()).toBeVisible()
+  await expectNoHorizontalScroll(page)
+  if (SCREENSHOTS)
+    await page.screenshot({ path: `${SCREENSHOTS}/rechnung-storno.png`, fullPage: true })
+})
+
 test('second factor fails without the security key', async () => {
   test.skip(!SETUP_TOKEN, 'SETUP_TOKEN must be set for a fresh stack')
   // Without the key the second step of the login fails with a readable message.

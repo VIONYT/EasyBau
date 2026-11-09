@@ -820,7 +820,7 @@ async function createDocument(
 }
 
 /** Copies the outline of a document (Zusammenhängend erstellen), keeping the reference per item. */
-async function copyItems(tx: Tx, fromId: string, toId: string) {
+export async function copyItems(tx: Tx, fromId: string, toId: string) {
   const order = outline(await loadItems(tx, fromId))
   const newIds = new Map<string, string>()
   for (const { row } of order) {

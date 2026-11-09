@@ -234,8 +234,10 @@ describe.skipIf(!process.env.DATABASE_URL)('Rechnungen (integration)', () => {
     })
   })
 
+  let final: DocumentDetail
+
   it('deducts all progress invoices in the Schlussrechnung and warns about free positions', async () => {
-    const final = await create({
+    final = await create({
       type: 'invoice',
       invoiceKind: 'final',
       sourceDocumentId: contract.id,
@@ -347,5 +349,111 @@ describe.skipIf(!process.env.DATABASE_URL)('Rechnungen (integration)', () => {
     const res = await lead.post(`/api/v1/documents/${invoice.id}/finalize`)
     expect(res.statusCode).toBe(403)
     expect(res.json().detail).toMatch(/Berechtigung/)
+    expect(
+      (await lead.post(`/api/v1/documents/${final.id}/cancel`, { reason: 'Fehler' })).statusCode,
+    ).toBe(403)
+  })
+
+  const cancel = (id: string, body: Record<string, unknown>) =>
+    admin.post(`/api/v1/documents/${id}/cancel`, body)
+
+  it('does not cancel a progress invoice that the final invoice deducts', async () => {
+    const res = await cancel(progress1.id, { reason: 'Mengen falsch' })
+    expect(res.statusCode).toBe(409)
+    expect(res.json().detail).toBe(
+      'Diese Rechnung ist in der Rechnung R-00103 angerechnet. Bitte zuerst R-00103 stornieren.',
+    )
+    expect((await cancel(final.id, { reason: '' })).json().errors.reason).toBe(
+      'Bitte einen Grund für das Storno angeben.',
+    )
+  })
+
+  let reissue: DocumentDetail
+
+  it('corrects the final invoice: Stornorechnung with own number plus a new draft', async () => {
+    const res = await cancel(final.id, { reason: 'Einbehalt falsch vereinbart', reissue: true })
+    expect(res.statusCode, res.body).toBe(201)
+    const result = res.json()
+    expect(result.cancellation.number).toBe('R-00104')
+
+    const cancellation = (
+      await admin.get(`/api/v1/documents/${result.cancellation.id}`)
+    ).json() as DocumentDetail
+    expect(cancellation).toMatchObject({
+      invoiceKind: 'cancellation',
+      status: 'finalized',
+      number: 'R-00104',
+      cancels: { id: final.id, number: 'R-00103' },
+      cancelReason: 'Einbehalt falsch vereinbart',
+      recipient: { name: 'Wohnbau Nord eG' },
+    })
+    // The Stornorechnung mirrors the final invoice exactly (negated), incl. the deductions.
+    expect(cancellation.items.map((i) => i.quantity)).toEqual(['-80', '-5', '-1'])
+    expect(cancellation.totals).toMatchObject({
+      netCents: -2_000,
+      taxCents: -380,
+      grossCents: -2_380,
+      deductions: [{ netCents: -65_000 }, { netCents: -40_000 }],
+    })
+    expect(cancellation.legalNotes).toEqual([
+      'Diese Stornorechnung hebt die Rechnung R-00103 vollständig auf. Grund: Einbehalt falsch vereinbart',
+    ])
+
+    // The original keeps its number, is cancelled and locked for good.
+    const original = (await admin.get(`/api/v1/documents/${final.id}`)).json() as DocumentDetail
+    expect(original).toMatchObject({
+      status: 'cancelled',
+      number: 'R-00103',
+      cancelledBy: { id: result.cancellation.id, number: 'R-00104' },
+    })
+    expect((await cancel(final.id, { reason: 'nochmal' })).json().detail).toBe(
+      'Die Rechnung R-00103 ist bereits storniert.',
+    )
+    expect((await cancel(result.cancellation.id, { reason: 'nochmal' })).statusCode).toBe(409)
+    expect((await admin.delete(`/api/v1/documents/${final.id}`)).statusCode).toBe(409)
+
+    // „Rechnung korrigieren“: a new draft of the final invoice without number.
+    reissue = (await admin.get(`/api/v1/documents/${result.reissue.id}`)).json()
+    expect(reissue).toMatchObject({
+      type: 'invoice',
+      invoiceKind: 'final',
+      status: 'draft',
+      number: null,
+      retentionPercent: '5',
+      totals: { netCents: 2_000, deductions: [{ number: 'R-00101' }, { number: 'R-00102' }] },
+    })
+    expect(reissue.items.map((i) => [i.quantity, i.fromMeasurement])).toEqual([
+      ['80', true],
+      ['5', true],
+      ['1', false],
+    ])
+  })
+
+  it('cancels a progress invoice once the final invoice is cancelled and never reuses numbers', async () => {
+    const res = await cancel(progress2.id, { reason: 'Doppelt berechnet' })
+    expect(res.statusCode, res.body).toBe(201)
+    expect(res.json()).toMatchObject({ cancellation: { number: 'R-00105' }, reissue: null })
+    // The corrected final invoice now deducts only the remaining progress invoice.
+    const draft = (await admin.get(`/api/v1/documents/${reissue.id}`)).json() as DocumentDetail
+    expect(draft.totals.deductions.map((d) => d.number)).toEqual(['R-00101'])
+    expect(draft.totals.netCents).toBe(107_000 - 65_000)
+    const done = await finalize(reissue.id, { acknowledgeWarnings: true })
+    expect(done.statusCode, done.body).toBe(200)
+    expect(done.json().number).toBe('R-00106')
+    const numbers = (
+      (await admin.get(`/api/v1/projects/${projectId}/documents`)).json() as DocumentDetail[]
+    )
+      .filter((d) => d.type === 'invoice' && d.number)
+      .map((d) => [d.number, d.status])
+    expect(numbers).toEqual(
+      expect.arrayContaining([
+        ['R-00101', 'finalized'],
+        ['R-00102', 'cancelled'],
+        ['R-00103', 'cancelled'],
+        ['R-00104', 'finalized'],
+        ['R-00105', 'finalized'],
+        ['R-00106', 'finalized'],
+      ]),
+    )
   })
 })

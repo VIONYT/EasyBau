@@ -59,11 +59,18 @@ export async function refreshDeductions(tx: Tx, doc: BillingDoc): Promise<void> 
       and d.finalized_at is not null and d.status <> 'cancelled'`
 }
 
-/** Deducted invoices with their VAT per rate (for the domain) and as summary (for the API). */
+/**
+ * Deducted invoices with their VAT per rate (for the domain) and as summary (for the API).
+ * Drafts always show the current state (earlier invoices may have been cancelled meanwhile);
+ * finalized documents show their stored rows.
+ */
 export async function loadDeductions(
   tx: Tx,
   documentId: string,
 ): Promise<{ inputs: DeductedInvoice[]; summaries: DeductionSummary[] }> {
+  const doc = await billingDoc(tx, documentId)
+  const live = doc?.status === 'draft' && doc.invoiceKind !== 'cancellation'
+  if (live && !cumulative(doc)) return { inputs: [], summaries: [] }
   const rows = await tx<
     (Omit<DeductionSummary, 'netCents' | 'taxCents' | 'grossCents'> & {
       net: string
@@ -72,15 +79,27 @@ export async function loadDeductions(
       sign: number
     })[]
   >`
-    select dd.deducted_document_id as "documentId", d.number, d.invoice_kind as "invoiceKind",
-           d.progress_no as "progressNo", to_char(d.document_date, 'YYYY-MM-DD') as "documentDate",
-           dd.net_cents::text as net, dd.tax_cents::text as tax, dd.gross_cents::text as gross,
-           case when o.invoice_kind = 'cancellation' then -1 else 1 end as sign
-    from document_deduction dd
-    join document d on d.id = dd.deducted_document_id
-    join document o on o.id = dd.document_id
-    where dd.document_id = ${documentId}
-    order by d.document_date, d.number`
+    ${
+      live
+        ? tx`
+      select d.id as "documentId", d.number, d.invoice_kind as "invoiceKind", d.progress_no as "progressNo",
+             to_char(d.document_date, 'YYYY-MM-DD') as "documentDate", d.net_total_cents::text as net,
+             d.tax_total_cents::text as tax, d.gross_total_cents::text as gross, 1 as sign
+      from document d
+      where d.project_id = ${doc.projectId} and d.type = 'invoice' and d.id <> ${documentId}
+        and d.invoice_kind in ('progress', 'partial')
+        and d.finalized_at is not null and d.status <> 'cancelled'`
+        : tx`
+      select dd.deducted_document_id as "documentId", d.number, d.invoice_kind as "invoiceKind",
+             d.progress_no as "progressNo", to_char(d.document_date, 'YYYY-MM-DD') as "documentDate",
+             dd.net_cents::text as net, dd.tax_cents::text as tax, dd.gross_cents::text as gross,
+             case when o.invoice_kind = 'cancellation' then -1 else 1 end as sign
+      from document_deduction dd
+      join document d on d.id = dd.deducted_document_id
+      join document o on o.id = dd.document_id
+      where dd.document_id = ${documentId}`
+    }
+    order by "documentDate", number`
   if (!rows.length) return { inputs: [], summaries: [] }
   const lines = await tx<
     { documentId: string; category: TaxCategory; rate: string; net: string; tax: string }[]
