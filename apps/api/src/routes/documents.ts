@@ -49,6 +49,7 @@ import {
 } from '../context.js'
 import { checkIfMatch, etagOf, HttpError, notFound, parse } from '../http.js'
 import { finalizeInvoice } from './invoices.js'
+import { companyValues, loadLetterhead } from './letterhead.js'
 
 const projectParam = z.object({ id: z.uuid('Ungültige ID.') })
 const documentParam = z.object({ id: z.uuid('Ungültige ID.') })
@@ -424,6 +425,9 @@ export async function liveIssuer(tx: Tx): Promise<Issuer> {
   if (!t) return { name: '', lines: [], contact: [], legal: [] }
   const place = [t.postalCode, t.city].filter(Boolean).join(' ')
   return {
+    // Briefpapier and its placeholder values; frozen with the document (rule 4).
+    letterhead: await loadLetterhead(tx),
+    values: (await companyValues(tx)) as Record<string, string | null>,
     name: t.name,
     lines: [t.street, place].filter((v): v is string => !!v),
     contact: [t.phone ? `Tel. ${t.phone}` : null, t.email, t.website].filter(

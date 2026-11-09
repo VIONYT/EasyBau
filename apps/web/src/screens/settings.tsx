@@ -18,6 +18,7 @@ import { ApiError, api } from '../api'
 import { formatCents, formatInputNumber, parseEuro } from '../format'
 import { FormError } from '../forms'
 import { type TextKey, t } from '../i18n'
+import { LetterheadEditor } from './letterhead'
 import { SystemSettings } from './system'
 
 type Section =
@@ -30,6 +31,7 @@ type Section =
   | 'units'
   | 'workingHours'
   | 'texts'
+  | 'letterhead'
   | 'filing'
   | 'datev'
   | 'system'
@@ -44,6 +46,7 @@ const SECTIONS: { key: Section; label: TextKey }[] = [
   { key: 'units', label: 's.units' },
   { key: 'workingHours', label: 's.workingHours' },
   { key: 'texts', label: 's.texts' },
+  { key: 'letterhead', label: 'lh.title' },
   { key: 'filing', label: 's.filing' },
   { key: 'datev', label: 's.datev' },
   { key: 'system', label: 'sys.title' },
@@ -87,6 +90,7 @@ export function Settings({ me }: { me: Me }) {
         {section === 'units' ? <UnitSettings /> : null}
         {section === 'workingHours' ? <WorkingHourSettings /> : null}
         {section === 'texts' ? <TextSettings /> : null}
+        {section === 'letterhead' ? <LetterheadEditor canEdit={canWrite} /> : null}
         {section === 'filing' ? <FilingSettings /> : null}
         {section === 'datev' ? <DatevSettingsForm /> : null}
         {section === 'system' ? <SystemSettings me={me} /> : null}

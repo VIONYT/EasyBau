@@ -577,6 +577,56 @@ test('Rechnung: Pflichtangaben, Festschreiben und Korrigieren per Storno', async
     await page.screenshot({ path: `${SCREENSHOTS}/rechnung-storno.png`, fullPage: true })
 })
 
+// Smallest valid PNG (1 × 1 px) as logo.
+const LOGO_PNG = Buffer.from(
+  'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==',
+  'base64',
+)
+
+test('Briefpapier: WYSIWYG-Editor nach DIN 5008 B und Druckansicht', async () => {
+  test.skip(!SETUP_TOKEN, 'SETUP_TOKEN must be set for a fresh stack')
+  test.setTimeout(120_000)
+
+  await page.getByRole('button', { name: 'Einstellungen' }).click()
+  await page.locator('#settings-section').selectOption({ label: 'Briefpapier' })
+  await expect(page.getByRole('heading', { name: 'Briefpapier' })).toBeVisible()
+  await expect(page.locator('.letter-sheet .letter-sender')).toContainText('Muster Bau GmbH')
+
+  // Logo hochladen, Firmennamen per Tastatur verschieben, Akzentfarbe ändern
+  await page.locator('.file-button input[type=file]').setInputFiles({
+    name: 'logo.png',
+    mimeType: 'image/png',
+    buffer: LOGO_PNG,
+  })
+  await expect(page.locator('.letter-sheet .letter-logo')).toBeVisible()
+  const name = page.getByRole('button', { name: /^Textfeld: \{Firma\}/ })
+  await name.focus()
+  await page.keyboard.press('Shift+ArrowDown')
+  await expect(page.getByLabel('Oben (mm)')).toHaveValue('20')
+  await page.getByLabel('Akzentfarbe').fill('#8a1c1c')
+  await expectNoHorizontalScroll(page)
+  if (SCREENSHOTS)
+    await page.screenshot({ path: `${SCREENSHOTS}/briefpapier-editor.png`, fullPage: true })
+  await page.getByRole('button', { name: 'Speichern', exact: true }).click()
+  await expect(page.getByText('Briefpapier gespeichert.')).toBeVisible()
+
+  // Druckansicht eines Dokuments: Briefkopf, Anschriftfeld und Fußzeile nach DIN 5008 B
+  await page.getByRole('button', { name: 'Projekte' }).click()
+  await page.getByRole('link', { name: /Sanierung Lindenweg/ }).click()
+  await page.getByRole('button', { name: 'Dokumente' }).click()
+  await page
+    .getByRole('link', { name: /^Rechnung/ })
+    .last()
+    .click()
+  await page.getByRole('link', { name: 'Vorschau / Drucken' }).click()
+  await expect(page.locator('.letter-sheet .letter-logo')).toBeVisible()
+  await expect(page.locator('.letter-recipient')).toContainText('Lindenweg 4')
+  await expect(page.locator('.letter-footer')).toContainText('Werkstraße 2')
+  await expectNoHorizontalScroll(page)
+  if (SCREENSHOTS)
+    await page.screenshot({ path: `${SCREENSHOTS}/briefpapier-druck.png`, fullPage: true })
+})
+
 test('second factor fails without the security key', async () => {
   test.skip(!SETUP_TOKEN, 'SETUP_TOKEN must be set for a fresh stack')
   // Without the key the second step of the login fails with a readable message.

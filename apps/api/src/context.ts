@@ -96,12 +96,22 @@ export function requirePermission(request: FastifyRequest, ...permissions: strin
 }
 
 /** Runs a query block in the tenant of the current session (RLS + audit actor). */
+/** Services of a running transaction, e.g. to decrypt fields deep inside loaders. */
+const transactionServices = new WeakMap<object, Services>()
+
+export function servicesOf(tx: Tx): Services | undefined {
+  return transactionServices.get(tx)
+}
+
 export function inTenant<T>(
   services: Services,
   auth: AuthContext,
   fn: (tx: Tx) => Promise<T>,
 ): Promise<T> {
-  return withTenant(services.sql, { tenantId: auth.tenantId, userId: auth.userId }, fn)
+  return withTenant(services.sql, { tenantId: auth.tenantId, userId: auth.userId }, (tx) => {
+    transactionServices.set(tx, services)
+    return fn(tx)
+  })
 }
 
 export type Handler = (request: FastifyRequest, reply: FastifyReply) => Promise<unknown>

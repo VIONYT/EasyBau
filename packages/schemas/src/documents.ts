@@ -10,6 +10,7 @@ import {
   PRICED_POSITION_TYPES,
   TAX_MODES,
 } from './constants.js'
+import type { LetterheadLayout } from './letterhead.js'
 
 export type DocumentType = (typeof DOCUMENT_TYPES)[number]
 
@@ -390,8 +391,16 @@ export interface DocumentDetail extends DocumentSummary {
   legalNotes: string[]
   sourceDocumentId: string | null
   validUntil: string | null
-  /** Firma (Absender) and Empfänger; snapshots once the document is completed. */
-  issuer: PartyAddress & { contact: string[]; legal: string[] }
+  /**
+   * Firma (Absender) and Empfänger; snapshots once the document is completed. The letterhead and
+   * its placeholder values are frozen with it (missing in documents finalized before 0018).
+   */
+  issuer: PartyAddress & {
+    contact: string[]
+    legal: string[]
+    letterhead?: LetterheadLayout
+    values?: Record<string, string | null>
+  }
   recipient: PartyAddress | null
   finalizedAt: string | null
   /** Change orders: main contract, reason. */
