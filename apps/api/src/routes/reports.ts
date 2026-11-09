@@ -119,7 +119,7 @@ function toSummary(row: ReportRow): ReportSummary {
   }
 }
 
-async function loadReport(
+export async function loadReport(
   tx: Tx,
   auth: AuthContext,
   id: string,

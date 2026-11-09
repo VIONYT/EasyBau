@@ -2,7 +2,7 @@ import { readFileSync } from 'node:fs'
 import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { NodeCompiler } from '@myriaddreamin/typst-ts-node-compiler'
-import type { LetterPdfInput } from './types.js'
+import type { LetterAsset, LetterPdfInput } from './types.js'
 
 /** Package root (works from src/ during development and dist/ when built). */
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..')
@@ -21,6 +21,25 @@ function getCompiler(): NodeCompiler {
     template = readFileSync(join(ROOT, 'templates', 'letter.typ'), 'utf8')
   }
   return compiler
+}
+
+/**
+ * Can Typst decode this image? Photos from the Ablage may be damaged or in a format the PDF
+ * cannot embed; such photos are left out instead of failing the whole document.
+ */
+export function isUsableImage(path: string, data: Buffer): boolean {
+  if (!/^\/[a-z0-9-]+\.(png|jpg|webp|gif)$/.test(path)) return false
+  const typst = getCompiler()
+  typst.mapShadow(path, data)
+  try {
+    const compiled = typst.compile({ mainFileContent: `#image("${path}", width: 1cm)` })
+    const error = compiled.takeError()
+    return !error && compiled.result !== null
+  } catch {
+    return false
+  } finally {
+    typst.resetShadow()
+  }
 }
 
 export class PdfRenderError extends Error {
@@ -43,9 +62,10 @@ export function renderLetterPdf(
       | (Omit<NonNullable<LetterPdfInput['logo']>, 'path'> & { data: Buffer; mime: string })
       | null
   },
-  options: { createdAt?: Date } = {},
+  options: { createdAt?: Date; assets?: LetterAsset[] } = {},
 ): Buffer {
   const typst = getCompiler()
+  for (const asset of options.assets ?? []) typst.mapShadow(asset.path, asset.data)
   const { logo, ...rest } = input
   let data: LetterPdfInput = { ...rest, logo: null }
   if (logo) {
@@ -58,20 +78,25 @@ export function renderLetterPdf(
   }
   typst.mapShadow('/data.json', Buffer.from(JSON.stringify(data)))
   try {
-    return typst.pdf(
-      { mainFileContent: template as string },
-      {
-        pdfStandard: 'a-3b',
-        ...(options.createdAt
-          ? { creationTimestamp: Math.floor(options.createdAt.getTime() / 1000) }
-          : {}),
-      },
-    )
+    const compiled = typst.compile({ mainFileContent: template as string })
+    const error = compiled.takeError()
+    if (error) {
+      const messages = typst
+        .fetchDiagnostics(error)
+        .map((d: { message?: string; range?: string }) =>
+          `${d.message ?? ''} ${d.range ?? ''}`.trim(),
+        )
+      throw new PdfRenderError(`Typst: ${messages.join('; ') || error.compilationStatus}`)
+    }
+    return typst.pdf(compiled.result as never, {
+      pdfStandard: 'a-3b',
+      ...(options.createdAt
+        ? { creationTimestamp: Math.floor(options.createdAt.getTime() / 1000) }
+        : {}),
+    })
   } catch (error) {
-    const diagnostics = (error as { shortDiagnostics?: unknown[] }).shortDiagnostics
-    throw new PdfRenderError(
-      `Typst: ${diagnostics ? JSON.stringify(diagnostics) : String((error as Error).message)}`,
-    )
+    if (error instanceof PdfRenderError) throw error
+    throw new PdfRenderError(`Typst: ${String((error as Error).message)}`)
   } finally {
     typst.resetShadow()
     typst.evictCache(10)

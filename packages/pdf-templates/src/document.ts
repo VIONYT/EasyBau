@@ -1,13 +1,6 @@
-import {
-  DIN5008B,
-  defaultLetterhead,
-  fillPlaceholders,
-  formatEuro,
-  formatUnitQuantity,
-  germanDate,
-  type LetterheadValues,
-} from '@opc/domain'
+import { formatEuro, formatUnitQuantity, germanDate, type LetterheadValues } from '@opc/domain'
 import type { DocumentDetail } from '@opc/schemas'
+import { type LogoPosition, letterFrame } from './frame.js'
 import type { LetterPdfInput } from './types.js'
 
 /** German document titles (the PDF is a German business letter). */
@@ -66,10 +59,7 @@ const percent = germanPercent
 export function documentLetter(
   doc: DocumentDetail,
   options: { watermark: string | null },
-): Omit<LetterPdfInput, 'logo'> & {
-  logoPosition: { assetId: string; x: number; y: number; width: number; maxHeight: number } | null
-} {
-  const layout = doc.issuer.letterhead ?? defaultLetterhead()
+): Omit<LetterPdfInput, 'logo'> & { logoPosition: LogoPosition | null } {
   const values: LetterheadValues = doc.issuer.values ?? {
     Firma: doc.issuer.name,
     Straße: doc.issuer.lines[0] ?? null,
@@ -186,26 +176,15 @@ export function documentLetter(
       : []
 
   return {
-    title: `${title}${doc.number ? ` ${doc.number}` : ''}`,
-    author: doc.issuer.name,
-    font: layout.font,
-    accent: layout.accentColor,
-    foldMarks: layout.foldMarks,
-    watermark: options.watermark,
-    logoPosition: layout.logo
-      ? {
-          ...layout.logo,
-          maxHeight: Math.max(DIN5008B.header.height - layout.logo.y, 5),
-        }
-      : null,
-    texts: layout.texts
-      .map((x) => ({ ...x, text: fillPlaceholders(x.text, values) }))
-      .filter((x) => x.text.trim() !== '')
-      .map(({ id: _, ...x }) => x),
-    senderLine: fillPlaceholders(layout.senderLine, values),
-    recipient: doc.recipient ? [doc.recipient.name, ...doc.recipient.lines] : [],
-    info,
-    footer: layout.footer.map((c) => fillPlaceholders(c, values)).filter((c) => c.trim() !== ''),
+    ...letterFrame({
+      issuerName: doc.issuer.name,
+      layout: doc.issuer.letterhead,
+      values,
+      recipient: doc.recipient ? [doc.recipient.name, ...doc.recipient.lines] : [],
+      info,
+      title: `${title}${doc.number ? ` ${doc.number}` : ''}`,
+      watermark: options.watermark,
+    }),
     body: {
       heading: `${title}${doc.number ? ` ${doc.number}` : ''}`,
       subject: doc.subject,
@@ -242,6 +221,7 @@ export function documentLetter(
       totals,
       notes,
       closing: doc.closingText,
+      blocks: [],
     },
   }
 }

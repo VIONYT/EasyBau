@@ -10,10 +10,9 @@ Grundgerüst steht, Datenbankschema für das MVP ist angelegt (Migrationen 0001�
 ## Offene Punkte nach Priorität (Stand 2026-11-09, Migration 0018)
 **Pflege:** Diese Liste ist das Gedächtnis zwischen Chats. Erledigtes hier streichen (und unter „Projektstatus“ ergänzen), neue Erkenntnisse eintragen, Datum/Migrationsstand oben aktualisieren. Reihenfolge innerhalb einer Stufe = empfohlene Bearbeitungsreihenfolge.
 
-**Zuletzt erledigt:** Einstellungen-UI, E-Mail-Postausgang (SMTP), Exporte (DATEV/GoBD/Vollexport), Backup-Dienst + `infra/restore.sh` + Betriebs-Check, Storno-Sperre in der DB (0015: stornierte Rechnung bleibt mit Nummer erhalten, gesperrt, ausgegraut; Nummern nie wiederverwendet), Nummernkreis je Jahr + frei wählbares Schema `{Jahr}`/`{JJ}`/`{Monat}`/`{Nummer}` (0016, `packages/domain/src/numbering.ts`, `next_number` überspringt vergebene Nummern), Rechnungen festschreiben mit § 14-Prüfung, Abschlägen und Schlussrechnung (0017), Storno/„Rechnung korrigieren“, Briefpapier-Editor DIN 5008 B / A4 mit Logo (0018), PDF/A-3b mit Typst (ADR 0006).
+**Zuletzt erledigt:** Einstellungen-UI, E-Mail-Postausgang (SMTP), Exporte (DATEV/GoBD/Vollexport), Backup-Dienst + `infra/restore.sh` + Betriebs-Check, Storno-Sperre in der DB (0015: stornierte Rechnung bleibt mit Nummer erhalten, gesperrt, ausgegraut; Nummern nie wiederverwendet), Nummernkreis je Jahr + frei wählbares Schema `{Jahr}`/`{JJ}`/`{Monat}`/`{Nummer}` (0016, `packages/domain/src/numbering.ts`, `next_number` überspringt vergebene Nummern), Rechnungen festschreiben mit § 14-Prüfung, Abschlägen und Schlussrechnung (0017), Storno/„Rechnung korrigieren“, Briefpapier-Editor DIN 5008 B / A4 mit Logo (0018), PDF/A-3b mit Typst (ADR 0006), Aufmaßblatt und Berichte als PDF/A (`packages/pdf-templates/src/site.ts`, `GET /measurement-sheets/:id/pdf`, `GET /reports/:id/pdf`). PDF/A-Prüfung: Typst prüft beim Export, Test prüft die Kennung; veraPDF bewusst nicht im Betriebs-Stack (höchstens optionaler CI-Schritt mit ZUGFeRD).
 
 ### P1 – Pflicht vor dem Echtbetrieb (Rechnungen, Recht, GoBD)
-4. **PDF-Anlagen**: Aufmaßblatt und Berichte (Bautagebuch) als PDF/A über `packages/pdf-templates`. PDF/A-Prüfung: Typst prüft beim Export selbst, der Test prüft die PDF/A-3b-Kennung; veraPDF **nicht** in den Betriebs-Stack aufnehmen (Java, kein Laufzeitnutzen). Höchstens später als optionaler CI-Schritt, wenn ZUGFeRD-PDFs entstehen.
 5. **E-Rechnung**: ZUGFeRD 2.x EN 16931 (PDF/A-3 + XML) und XRechnung UBL in `packages/einvoice`; **KoSIT-Validator** als Container (ADR nötig) – Versand/Archiv nur nach bestandener Prüfung (Regel 8). Leitweg-ID/E-Rechnungs-Daten am Kontakt in der UI prüfen.
 6. **Revisionssicheres Archiv** (WORM, Object Lock; ADR 0004 Punkt 4): Original + SHA-256 je festgeschriebenem Beleg; Belegdateien in GoBD-/DATEV-Export aufnehmen.
 7. **Zahlungen & Forderungen** (Tabellen existieren seit 0004, API/UI fehlen): Zahlung/Teilzahlung, Abzüge, Kürzung, offene Forderung, GiroCode (`payment_qr`), **Rechnungsliste** mit Status (offen, teilbezahlt, bezahlt, überfällig, angemahnt, storniert) und Summen.
@@ -68,7 +67,7 @@ packages/domain  Reine Rechenlogik: Aufmaß-Formeln, Aufmaßzeilen/Mengen, Kalku
 packages/schemas Zod-Schemas und DTO-Typen der API (Server + Web); `@opc/schemas/constants` ohne zod für Werte im Web
 packages/exports Exportformate ohne I/O-Abhängigkeiten: ZIP-Stream, CSV, DATEV-Buchungsstapel, GoBD index.xml
 packages/storage Dateiablage: ObjectStore (Dateisystem), Upload-Typprüfung, Dateinamen (ADR 0004)
-packages/pdf-templates Typst-Vorlage `templates/letter.typ` (DIN 5008 B, A4), Schriften in `fonts/`, `renderLetterPdf()` (PDF/A-3b), `documentLetter()` (Dokument → Vorlagendaten)
+packages/pdf-templates Typst-Vorlage `templates/letter.typ` (DIN 5008 B, A4; Bausteine heading/text/facts/table/images/signatures), Schriften in `fonts/`, `renderLetterPdf()` (PDF/A-3b), `documentLetter()`, `sheetLetter()`, `reportLetter()`, `letterFrame()`
 geplant: packages/einvoice  packages/ui
 docker/ (Dockerfiles)  infra/ (Caddyfile, smoke-test.sh, backup/backup.sh, restore.sh)  docs/
 ```

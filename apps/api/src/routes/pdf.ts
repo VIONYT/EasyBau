@@ -1,12 +1,30 @@
 import { Readable } from 'node:stream'
 import type { Tx } from '@opc/db'
-import { documentLetter, documentTitle, renderLetterPdf } from '@opc/pdf-templates'
+import type { LetterheadValues } from '@opc/domain'
+import {
+  documentLetter,
+  documentTitle,
+  isUsableImage,
+  type LogoPosition,
+  renderLetterPdf,
+  reportLetter,
+  type SiteLetterContext,
+  sheetLetter,
+} from '@opc/pdf-templates'
 import type { DocumentDetail } from '@opc/schemas'
-import type { FastifyInstance } from 'fastify'
+import type { FastifyInstance, FastifyReply } from 'fastify'
 import { z } from 'zod'
-import { type AuthContext, inTenant, requirePermission, type Services } from '../context.js'
+import {
+  type AuthContext,
+  inTenant,
+  requireAuth,
+  requirePermission,
+  type Services,
+} from '../context.js'
 import { notFound, parse } from '../http.js'
-import { loadDocument } from './documents.js'
+import { liveIssuer, liveRecipient, loadDocument } from './documents.js'
+import { loadSheet } from './measurements.js'
+import { loadReport } from './reports.js'
 
 const documentParam = z.object({ id: z.uuid('Ungültige ID.') })
 const MAX_PDF_BYTES = 50 * 1024 * 1024
@@ -17,6 +35,21 @@ async function readAll(stream: Readable): Promise<Buffer> {
   return Buffer.concat(chunks)
 }
 
+async function logoFor(
+  tx: Tx,
+  services: Services,
+  logoPosition: LogoPosition | null,
+): Promise<LetterLogo | null> {
+  if (!logoPosition) return null
+  const [asset] = await tx<{ key: string; mime: string }[]>`
+    select storage_key as key, mime_type as mime from tenant_asset where id = ${logoPosition.assetId}`
+  if (!asset) return null
+  const { assetId: _, ...position } = logoPosition
+  return { ...position, data: await readAll(services.storage.read(asset.key)), mime: asset.mime }
+}
+
+type LetterLogo = NonNullable<Parameters<typeof renderLetterPdf>[0]['logo']>
+
 /** Renders a document as PDF/A-3b (letter per DIN 5008 Form B, A4, letterhead of the snapshot). */
 async function render(
   tx: Tx,
@@ -25,23 +58,86 @@ async function render(
   watermark: string | null,
 ): Promise<Buffer> {
   const { logoPosition, ...letter } = documentLetter(doc, { watermark })
-  let logo = null
-  if (logoPosition) {
-    const [asset] = await tx<{ key: string; mime: string }[]>`
-      select storage_key as key, mime_type as mime from tenant_asset where id = ${logoPosition.assetId}`
-    if (asset) {
-      const { assetId: _, ...position } = logoPosition
-      logo = {
-        ...position,
-        data: await readAll(services.storage.read(asset.key)),
-        mime: asset.mime,
-      }
-    }
-  }
   return renderLetterPdf(
-    { ...letter, logo },
+    { ...letter, logo: await logoFor(tx, services, logoPosition) },
     doc.finalizedAt ? { createdAt: new Date(doc.finalizedAt) } : {},
   )
+}
+
+/** Company frame of Aufmaßblatt and Berichte: live letterhead, customer of the project. */
+async function siteContext(tx: Tx, projectId: string): Promise<SiteLetterContext> {
+  const issuer = await liveIssuer(tx)
+  const [project] = await tx<{ customerId: string | null }[]>`
+    select customer_id as "customerId" from project where id = ${projectId}`
+  const recipient = await liveRecipient(tx, project?.customerId ?? null)
+  return {
+    issuerName: issuer.name,
+    layout: issuer.letterhead,
+    values: (issuer.values ?? {}) as LetterheadValues,
+    recipient: recipient ? [recipient.name, ...recipient.lines] : [],
+  }
+}
+
+const PHOTO_TYPES: Record<string, string> = {
+  'image/jpeg': 'jpg',
+  'image/png': 'png',
+  'image/webp': 'webp',
+  'image/gif': 'gif',
+}
+const MAX_PHOTOS = 24
+
+/** Aufmaßblatt as PDF/A (rendered on request from the current, for signed sheets locked data). */
+export async function sheetPdf(services: Services, auth: AuthContext, id: string) {
+  return inTenant(services, auth, async (tx) => {
+    const sheet = await loadSheet(tx, auth, id)
+    if (!sheet) return null
+    const { logoPosition, ...letter } = sheetLetter(sheet, await siteContext(tx, sheet.projectId))
+    const pdf = renderLetterPdf({ ...letter, logo: await logoFor(tx, services, logoPosition) })
+    return { data: pdf, filename: `Aufmass_${sheet.title}.pdf` }
+  })
+}
+
+/** Bericht (Bautagebuch, Regiebericht …) as PDF/A with its photos. */
+export async function reportPdf(services: Services, auth: AuthContext, id: string) {
+  return inTenant(services, auth, async (tx) => {
+    const report = await loadReport(tx, auth, id)
+    if (!report) return null
+    const units = new Map(
+      (
+        await tx<{ id: string; symbol: string; decimals: number }[]>`
+          select id, symbol, decimals from unit`
+      ).map((u) => [u.id, { symbol: u.symbol, decimals: u.decimals }]),
+    )
+    const photos: { path: string; caption: string | null }[] = []
+    const assets: { path: string; data: Buffer }[] = []
+    const ids = report.photos.slice(0, MAX_PHOTOS).map((p) => p.fileId)
+    const files = ids.length
+      ? await tx<{ id: string; key: string; mime: string }[]>`
+          select id, storage_key as key, mime_type as mime from file where id in ${tx(ids)}`
+      : []
+    for (const [index, photo] of report.photos.slice(0, MAX_PHOTOS).entries()) {
+      const file = files.find((f) => f.id === photo.fileId)
+      const extension = file ? PHOTO_TYPES[file.mime] : undefined
+      // e.g. HEIC or damaged files: not in the PDF, the original stays in the Ablage
+      if (!file || !extension) continue
+      const path = `/photo-${index + 1}.${extension}`
+      const data = await readAll(services.storage.read(file.key))
+      if (!isUsableImage(path, data)) continue
+      assets.push({ path, data })
+      photos.push({ path, caption: photo.caption })
+    }
+    const { logoPosition, ...letter } = reportLetter(report, {
+      ...(await siteContext(tx, report.projectId)),
+      units,
+      photos,
+      skippedPhotos: Math.min(report.photos.length, MAX_PHOTOS) - photos.length,
+    })
+    const pdf = renderLetterPdf(
+      { ...letter, logo: await logoFor(tx, services, logoPosition) },
+      { assets },
+    )
+    return { data: pdf, filename: `${report.template.name}_${report.reportDate}.pdf` }
+  })
 }
 
 /**
@@ -124,5 +220,31 @@ export function registerPdfRoutes(app: FastifyInstance, services: Services) {
       .header('cache-control', 'private, no-store')
       .header('x-content-type-options', 'nosniff')
       .send(result.data)
+  })
+
+  const sendPdf = (
+    reply: FastifyReply,
+    result: { data: Buffer; filename: string } | null,
+    what: string,
+  ) => {
+    if (!result) throw notFound(what)
+    return reply
+      .header('content-type', 'application/pdf')
+      .header('content-disposition', contentDisposition(result.filename))
+      .header('cache-control', 'private, no-store')
+      .header('x-content-type-options', 'nosniff')
+      .send(result.data)
+  }
+
+  app.get('/api/v1/measurement-sheets/:id/pdf', async (request, reply) => {
+    const auth = requireAuth(request)
+    const { id } = parse(documentParam, request.params)
+    return sendPdf(reply, await sheetPdf(services, auth, id), 'Das Aufmaßblatt')
+  })
+
+  app.get('/api/v1/reports/:id/pdf', async (request, reply) => {
+    const auth = requireAuth(request)
+    const { id } = parse(documentParam, request.params)
+    return sendPdf(reply, await reportPdf(services, auth, id), 'Der Bericht')
   })
 }

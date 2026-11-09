@@ -388,6 +388,19 @@ describe.skipIf(!process.env.DATABASE_URL)('measurements / Aufmaß (integration)
     ).rejects.toThrow(/signed/)
   })
 
+  it('prints the Aufmaßblatt as PDF/A in the letterhead', async () => {
+    const res = await admin.get(`${sheetUrl()}/pdf`)
+    expect(res.statusCode, res.body).toBe(200)
+    expect(res.headers['content-type']).toBe('application/pdf')
+    expect(res.headers['content-disposition']).toContain('Aufmass_')
+    expect(res.rawPayload.subarray(0, 5).toString()).toBe('%PDF-')
+    expect(res.rawPayload.toString('latin1')).toMatch(/pdfaid:part(>|=")3/)
+    expect(
+      (await admin.get('/api/v1/measurement-sheets/0190f4a0-0000-7000-8000-000000000000/pdf'))
+        .statusCode,
+    ).toBe(404)
+  })
+
   it('writes measurement changes to the audit log', async () => {
     const events = await withTenant(
       h.sql,

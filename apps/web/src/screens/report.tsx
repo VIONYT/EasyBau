@@ -195,6 +195,16 @@ export function ReportScreen({ me, id, navigate }: { me: Me; id: string; navigat
           {t(`d.status.${report.status}` as TextKey)}
         </span>
       </div>
+      <div className="button-row">
+        <a
+          className="button ghost"
+          href={`/api/v1/reports/${report.id}/pdf`}
+          target="_blank"
+          rel="noopener"
+        >
+          {t('d.pdf')}
+        </a>
+      </div>
       {report.status !== 'draft' ? (
         <p className="notice inline" role="status">
           {t('d.locked')}

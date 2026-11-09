@@ -128,6 +128,16 @@ export function MeasurementScreen({
       <p className="muted">
         {t(`m.kind.${sheet.kind}` as TextKey)} · {formatDateTime(sheet.measuredOn, 'date')}
       </p>
+      <div className="button-row">
+        <a
+          className="button ghost"
+          href={`/api/v1/measurement-sheets/${sheet.id}/pdf`}
+          target="_blank"
+          rel="noopener"
+        >
+          {t('m.pdf')}
+        </a>
+      </div>
       {sheet.status === 'signed' ? (
         <p className="notice inline" role="status">
           {t('m.signedBy')} {formatDateTime(sheet.signedAt)}: {sheet.signedByContractor} /{' '}

@@ -271,7 +271,7 @@ async function checkLocation(tx: Tx, sheetId: string, locationId: string | null 
 
 // ---- Loading the sheet --------------------------------------------------------------------------
 
-async function loadSheet(
+export async function loadSheet(
   tx: Tx,
   auth: AuthContext,
   id: string,

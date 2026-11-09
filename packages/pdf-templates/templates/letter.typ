@@ -97,7 +97,65 @@
 #if data.body.intro != none { block(above: 4mm, lines(data.body.intro)) }
 
 #let cell-stroke = (bottom: 0.5pt + luma(225))
-#{
+
+// ---- Building blocks (Aufmaßblatt, Berichte) ---------------------------------------------------
+#let align-of(a) = if a == "right" { right + top } else if a == "center" { center + top } else { left + top }
+#let width-of(w) = if w == "auto" { auto } else if w == "1fr" { 1fr } else { float(w) * 1mm }
+#for b in data.body.blocks {
+  if b.kind == "heading" {
+    block(above: 5mm, below: 2mm, sticky: true, text(size: 11pt, weight: "bold", fill: accent, b.text))
+  } else if b.kind == "text" {
+    block(above: 2mm, lines(b.text))
+  } else if b.kind == "facts" {
+    block(above: 2mm, grid(
+      columns: (45mm, 1fr),
+      row-gutter: 1.5mm,
+      column-gutter: 3mm,
+      ..b.rows.map(r => (text(fill: muted, r.label), lines(r.value))).flatten(),
+    ))
+  } else if b.kind == "table" {
+    let n = b.columns.len()
+    let cells = ()
+    for r in b.rows {
+      if r.group {
+        cells.push(table.cell(colspan: n, fill: luma(243), strong(r.cells.first())))
+      } else {
+        for c in r.cells { cells.push(if r.strong { strong(c) } else { c }) }
+      }
+    }
+    block(above: 2mm, text(size: 9pt, table(
+      columns: b.widths.map(width-of),
+      inset: (x: 1.2mm, y: 1.1mm),
+      stroke: (x, y) => if y == 0 { (bottom: 1.2pt + accent) } else { cell-stroke },
+      align: (x, y) => align-of(b.align.at(x)),
+      table.header(..b.columns.map(c => text(weight: "bold", fill: accent, c))),
+      ..cells,
+    )))
+  } else if b.kind == "images" {
+    block(above: 2mm, grid(
+      columns: (1fr, 1fr),
+      column-gutter: 4mm,
+      row-gutter: 4mm,
+      ..b.items.map(i => block(breakable: false, {
+        box(width: 100%, height: 60mm, image(i.path, width: 100%, height: 100%, fit: "contain"))
+        if i.caption != none { block(above: 1mm, text(size: 8.5pt, fill: muted, i.caption)) }
+      })),
+    ))
+  } else if b.kind == "signatures" {
+    block(above: 8mm, breakable: false, grid(
+      columns: (1fr,) * calc.max(b.items.len(), 2),
+      column-gutter: 10mm,
+      ..b.items.map(s => {
+        v(10mm)
+        line(length: 100%, stroke: 0.5pt)
+        text(size: 8.5pt, [#s.label: #s.name])
+        if s.date != none { linebreak() + text(size: 8.5pt, fill: muted, s.date) }
+      }),
+    ))
+  }
+}
+
+#if data.body.items.len() > 0 {
   set text(size: 9pt)
   let rows = ()
   for item in data.body.items {
@@ -146,7 +204,7 @@
   })
 }
 
-#align(right, block(width: 95mm, above: 4mm, breakable: false, table(
+#if data.body.totals.len() > 0 { align(right, block(width: 95mm, above: 4mm, breakable: false, table(
   columns: (1fr, auto),
   stroke: none,
   inset: (x: 0pt, y: 1.3mm),
@@ -164,7 +222,7 @@
       cells
     })
     .flatten(),
-)))
+))) }
 
 #for note in data.body.notes { block(above: 3mm, text(size: 9.5pt, note)) }
 #if data.body.closing != none { block(above: 4mm, lines(data.body.closing)) }

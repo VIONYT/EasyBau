@@ -392,6 +392,8 @@ const de = {
   'd.header.place': 'Leistungsort',
   'd.serviceFrom': 'Leistung von',
   'd.serviceTo': 'Leistung bis',
+  'd.pdf': 'PDF/A herunterladen',
+  'm.pdf': 'Aufmaßblatt als PDF/A',
   'd.section.weather': 'Wetter',
   'd.section.staff': 'Personal und Arbeitszeiten',
   'd.section.services': 'Ausgeführte Leistungen',

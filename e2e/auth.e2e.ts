@@ -630,6 +630,22 @@ test('Briefpapier: WYSIWYG-Editor nach DIN 5008 B und Druckansicht', async () =>
   const bytes = await pdf.body()
   expect(bytes.subarray(0, 5).toString()).toBe('%PDF-')
   expect(bytes.toString('latin1')).toMatch(/pdfaid:part(>|=")3/)
+
+  // Aufmaßblatt und Bautagesbericht des Projekts ebenfalls als PDF/A
+  const projects = await (await page.request.get('/api/v1/projects?q=Lindenweg')).json()
+  const projectId = (projects.items ?? projects)[0].id as string
+  const sheets = await (
+    await page.request.get(`/api/v1/projects/${projectId}/measurement-sheets`)
+  ).json()
+  const reports = await (await page.request.get(`/api/v1/projects/${projectId}/reports`)).json()
+  for (const url of [
+    `/api/v1/measurement-sheets/${sheets[0].id}/pdf`,
+    `/api/v1/reports/${reports[0].id}/pdf`,
+  ]) {
+    const res = await page.request.get(url)
+    expect(res.status(), url).toBe(200)
+    expect((await res.body()).toString('latin1')).toMatch(/pdfaid:part(>|=")3/)
+  }
   await expectNoHorizontalScroll(page)
   if (SCREENSHOTS)
     await page.screenshot({ path: `${SCREENSHOTS}/briefpapier-druck.png`, fullPage: true })

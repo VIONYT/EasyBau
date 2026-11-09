@@ -50,5 +50,28 @@ export interface LetterPdfInput {
     totals: { label: string; value: string; grand: boolean; note: string | null }[]
     notes: string[]
     closing: string | null
+    /** Building blocks of Aufmaßblatt and Berichte (rendered after the intro). */
+    blocks: LetterBlock[]
   }
+}
+
+export type LetterBlock =
+  | { kind: 'heading'; text: string }
+  | { kind: 'text'; text: string }
+  | { kind: 'facts'; rows: { label: string; value: string }[] }
+  | {
+      kind: 'table'
+      columns: string[]
+      /** Column widths: "auto", "1fr" or millimetres ("22"). */
+      widths: string[]
+      align: ('left' | 'right' | 'center')[]
+      rows: { cells: string[]; group: boolean; strong: boolean }[]
+    }
+  | { kind: 'images'; items: { path: string; caption: string | null }[] }
+  | { kind: 'signatures'; items: { label: string; name: string; date: string | null }[] }
+
+/** Image files referenced by blocks (path in the virtual file system of the template). */
+export interface LetterAsset {
+  path: string
+  data: Buffer
 }

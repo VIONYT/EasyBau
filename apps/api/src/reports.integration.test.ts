@@ -355,6 +355,15 @@ describe.skipIf(!process.env.DATABASE_URL)('Bautagebuch / reports (integration)'
     expect(unknown.statusCode).toBe(400)
   })
 
+  it('prints the report with its photos as PDF/A', async () => {
+    const res = await admin.get(`/api/v1/reports/${report.id}/pdf`)
+    expect(res.statusCode, res.body).toBe(200)
+    expect(res.headers['content-type']).toBe('application/pdf')
+    expect(res.headers['content-disposition']).toContain('Bautagesbericht_')
+    expect(res.rawPayload.subarray(0, 5).toString()).toBe('%PDF-')
+    expect(res.rawPayload.toString('latin1')).toMatch(/pdfaid:part(>|=")3/)
+  })
+
   it('records report changes in the audit log', async () => {
     const events = await withTenant(
       h.sql,
