@@ -38,6 +38,7 @@ Alle wesentlichen Änderungen, vor allem solche, die Betreiber betreffen (neue V
 - Datenbank-Migration `0010_site_diary`.
 
 ### Behoben
+- `docker compose build` bricht mit aktuellen Docker-Versionen (Bake) nicht mehr mit „additional privileges requested: --allow=fs.read=/dev/null“ ab: Ohne `EXTRA_CA_CERT` wird jetzt die leere Datei `docker/no-extra-ca.pem` im Projekt verwendet.
 - Mengen mit Einheit erscheinen in Oberfläche, Druckansicht und PDF einheitlich mit den Nachkommastellen der Einheit (Handwerksregel, z. B. 186,40 m² statt 186,4 m²). Im PDF wurden Prozentwerte wie 2,5 % Skonto auf ganze Zahlen gerundet; jetzt korrekt.
 - Speichern mit `If-Match` schlug hinter dem Proxy fehl, wenn die Antwort komprimiert ausgeliefert wurde (Caddy hängt `-zstd`/`-gzip` an das ETag).
 - Aufmaß im Projekt: Aufmaßblätter als Angebotsaufmaß oder Leistungsaufmaß, Bereiche und Räume (z. B. Haus A › EG › Bad) mit Maßen L/B/H als Variablen, Zeilen mit Formeln (deutsches Zahlenformat, Vorlagen wie Wandfläche, Rechteck, Abzug Öffnung), Ergebnis live beim Tippen und maßgeblich auf dem Server gerechnet, Abzüge, Zuordnung zu LV-Positionen aus Angebot, Auftrag und Nachträgen.

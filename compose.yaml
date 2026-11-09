@@ -149,4 +149,4 @@ volumes:
 secrets:
   # Optional CA certificate for TLS-inspecting proxies during image builds (see .env.example).
   extra_ca:
-    file: ${EXTRA_CA_CERT:-/dev/null}
+    file: ${EXTRA_CA_CERT:-./docker/no-extra-ca.pem}
