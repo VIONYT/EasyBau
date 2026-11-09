@@ -5,7 +5,51 @@ OpenPlancraft ist eine **Open-Source**-Betriebssoftware (ERP) für Bau- und Hand
 **Lies vor jeder größeren Änderung [`DESIGN.md`](DESIGN.md)** (Architektur, Datenmodell, UX). Hintergrund: [`docs/RESEARCH.md`](docs/RESEARCH.md). Dieses Projekt ist ein eigenständiges Produkt: übernimm keine Texte, Logos, Markennamen oder Screens von Plancraft oder anderen Anbietern.
 
 ## Projektstatus
-Grundgerüst steht, Datenbankschema für das MVP ist angelegt (Migrationen 0001–0015). Rechenlogik (`packages/domain`), Ersteinrichtung, Anmeldung (Sitzung, TOTP, WebAuthn/Sicherheitsschlüssel als zweiter Faktor und Passkey, Rate-Limit, erzwungene Admin-2FA), Benutzerverwaltung mit Einladungen, API für Kontakte und Projekte, Projektanlage, Projektablage (Ordner, Upload, ADR 0004) Dokumente mit Leistungsverzeichnis, Kalkulation je Position, Fertigstellen (Angebot/KV/AB/Nachtrag, ohne Rechnungen), Nachtrag-Schalter und Druckansicht (PDF/A über Typst folgt) Aufmaß (Blätter, Räume, Formelzeilen, Mengenübernahme, gemeinsames Aufmaß) Bautagebuch (Berichte aus Vorlagen, Fotos, Unterschrift) Stammdaten mit DATANORM-Katalogen, Einstellungen, optionaler E-Mail-Versand (SMTP, Postausgang) und Exporte (DATEV, GoBD Z3, Vollexport), Sicherung/Wiederherstellung mit Betriebs-Check sowie die Weboberfläche dazu sind fertig. Monorepo, Services (`server` = API + Worker per `APP_ROLE`), Web-Platzhalter, Docker-Stack (proxy, app, db, backup, Volumes `files`/`backups`; Profil `standard` mit separatem `worker`), Test-Stack und CI. Noch nicht im Stack: Archiv-Objektspeicher (S3/Object Lock), kosit. Fachmodule folgen in der Reihenfolge der MVP-Module in DESIGN.md §2.
+Grundgerüst steht, Datenbankschema für das MVP ist angelegt (Migrationen 0001–0015). Rechenlogik (`packages/domain`), Ersteinrichtung, Anmeldung (Sitzung, TOTP, WebAuthn/Sicherheitsschlüssel als zweiter Faktor und Passkey, Rate-Limit, erzwungene Admin-2FA), Benutzerverwaltung mit Einladungen, API für Kontakte und Projekte, Projektanlage, Projektablage (Ordner, Upload, ADR 0004) Dokumente mit Leistungsverzeichnis, Kalkulation je Position, Fertigstellen (Angebot/KV/AB/Nachtrag, ohne Rechnungen), Nachtrag-Schalter und Druckansicht (PDF/A über Typst folgt) Aufmaß (Blätter, Räume, Formelzeilen, Mengenübernahme, gemeinsames Aufmaß) Bautagebuch (Berichte aus Vorlagen, Fotos, Unterschrift) Stammdaten mit DATANORM-Katalogen, Einstellungen, optionaler E-Mail-Versand (SMTP, Postausgang) und Exporte (DATEV, GoBD Z3, Vollexport), Sicherung/Wiederherstellung mit Betriebs-Check sowie die Weboberfläche dazu sind fertig. Monorepo, Services (`server` = API + Worker per `APP_ROLE`), Web-Platzhalter, Docker-Stack (proxy, app, db, backup, Volumes `files`/`backups`; Profil `standard` mit separatem `worker`), Test-Stack und CI. Noch nicht im Stack: Archiv-Objektspeicher (S3/Object Lock), kosit. Was fehlt und in welcher Reihenfolge: Abschnitt **„Offene Punkte nach Priorität“** unten.
+
+## Offene Punkte nach Priorität (Stand 2026-11-09, Migration 0015)
+**Pflege:** Diese Liste ist das Gedächtnis zwischen Chats. Erledigtes hier streichen (und unter „Projektstatus“ ergänzen), neue Erkenntnisse eintragen, Datum/Migrationsstand oben aktualisieren. Reihenfolge innerhalb einer Stufe = empfohlene Bearbeitungsreihenfolge.
+
+**Zuletzt erledigt:** Einstellungen-UI, E-Mail-Postausgang (SMTP), Exporte (DATEV/GoBD/Vollexport), Backup-Dienst + `infra/restore.sh` + Betriebs-Check, Storno-Sperre in der DB (0015: stornierte Rechnung bleibt mit Nummer erhalten, gesperrt, ausgegraut; Nummern nie wiederverwendet).
+
+### P1 – Pflicht vor dem Echtbetrieb (Rechnungen, Recht, GoBD)
+1. **Rechnungen festschreiben** (`/documents/:id/finalize` lehnt `invoice`/`credit_note` heute mit 409 ab): Pflichtangaben-Check § 14 Abs. 4 UStG vor dem Festschreiben, Bestätigungsdialog (DESIGN.md §7.7); Abschlags-/Teil-/Schlussrechnung mit Mengen aus dem Leistungsaufmaß (kumuliert − bereits abgerechnet), nur Hauptauftrag + **beauftragte** Nachträge (Regel 12), Anrechnung der Abschläge (kumulativ/einzeln, Einstellung), Sicherheitseinbehalt/Bauumlage, Skonto + Fälligkeit, § 13b-Text; verwendete Aufmaßzeilen beim Festschreiben sperren.
+2. **Storno-Ablauf in API/UI**: `POST /documents/:id/cancel` (Pflicht-Grund, Positionen mit negativem Vorzeichen, eigene neue Nummer) und „Rechnung korrigieren“ = Storno + neuer Entwurf in einem Schritt. DB-Regeln dafür stehen bereits (0015); Status `cancelled` setzt nur der Trigger.
+3. **Nummernkreis je Jahr**: Bei „jährlich neu beginnen“ würde eine rückdatierte Rechnung (Dezember-Datum nach dem Jahreswechsel) eine schon vergebene Nummer ziehen → Unique-Index bricht das Festschreiben ab. Lösung: Zähler je (Art, Jahr), z. B. Tabelle `number_sequence_year`.
+4. **PDF/A-3 mit Typst** für alle Dokumente (heute nur Browser-Druck) → `packages/pdf-templates`; Briefpapier nach DIN 5008 mit Logo (Logo-Upload fehlt), Aufmaßblatt und Berichte als PDF-Anlage.
+5. **E-Rechnung**: ZUGFeRD 2.x EN 16931 (PDF/A-3 + XML) und XRechnung UBL in `packages/einvoice`; **KoSIT-Validator** als Container (ADR nötig) – Versand/Archiv nur nach bestandener Prüfung (Regel 8). Leitweg-ID/E-Rechnungs-Daten am Kontakt in der UI prüfen.
+6. **Revisionssicheres Archiv** (WORM, Object Lock; ADR 0004 Punkt 4): Original + SHA-256 je festgeschriebenem Beleg; Belegdateien in GoBD-/DATEV-Export aufnehmen.
+7. **Zahlungen & Forderungen** (Tabellen existieren seit 0004, API/UI fehlen): Zahlung/Teilzahlung, Abzüge, Kürzung, offene Forderung, GiroCode (`payment_qr`), **Rechnungsliste** mit Status (offen, teilbezahlt, bezahlt, überfällig, angemahnt, storniert) und Summen.
+8. **Mahnwesen**: Erinnerung → 1. → letzte Mahnung, Fristen, Verzugszinsen (§ 288 BGB, Basiszinstabelle), Gebühren, PDF + Versand.
+9. **Audit-Kette nachts prüfen** (pg-boss-Job mit `verify_audit_chain`, Warnung im Betriebs-Check); Prüferrolle `auditor` für Z1/Z2 zeitlich befristet freischalten.
+10. **Mit echten Daten verifizieren** (steht aus): DATEV-Import beim Steuerberater, `index.xml` gegen `gdpdu-01-09-2004.dtd`, DATANORM-Dateien eines Großhändlers.
+
+### P2 – Wichtig für den Alltag
+1. **Dokumente per E-Mail versenden** (Postausgang `kind = document` vorhanden) mit PDF-Anhang, Vorlagen, BCC; Status „versendet“ automatisch.
+2. **Offline/PWA für Baustelle** (vite-plugin-pwa + Dexie, Outbox mit Idempotency-Key): Aufmaß, Bautagebuch, Fotos (DESIGN.md §6 Offline-Sync).
+3. **Eingangsrechnungen Basisversion** (E-Rechnungs-Empfang ist seit 2025 Pflicht): Upload PDF/XML, lesbare Darstellung, Zuordnung Projekt/Betriebsbereich, Archiv.
+4. **Weitere Berichte in der UI**: Regie-/Einsatzbericht (abrechenbar → in Rechnung übernehmen), Abnahmeprotokoll, Bedenken-/Behinderungsanzeige (API vorhanden, nur Bautagebuch hat UI).
+5. **Nachträge ausbauen**: Anlegen aus Bautagebuch/Aufmaß-Mehrmengen, Nachweise verknüpfen, Übersicht offene/beauftragte Nachträge, Vertragssumme `/projects/:id/contract`.
+6. **Projektkennzahlen & Listenfilter**: Soll-Stunden, Auftragssumme, abgerechnet, offen; Filter Zeitraum/Status/Mitarbeitende.
+7. **Dashboard, globale Suche, Benachrichtigungen** (DESIGN.md §2).
+8. **Kontakte vervollständigen**: CSV-Import/-Export, Filter, kundenspezifische Zahlungs-/Steuervorgaben in der UI.
+9. **Konto**: Passwort vergessen und E-Mail-Bestätigung (braucht SMTP, sonst Admin-Reset).
+10. **Einstellungen ergänzen**: Feiertage nach Bundesland (Tabelle `holiday_calendar` existiert), Lohnkostenanteil § 35a, Abschlagsregeln, Mahnstufen, automatische Anhänge, Dateinamen-Muster, Hinweisleiste für fehlende Pflichtangaben.
+11. **Angebot**: Zielpreis („Preis anpassen“), Bilder als Positionstyp, Versionen, „in Stammdaten speichern“; Stammdaten CSV-Import/-Export.
+
+### P3 – Betrieb, Qualität, Release
+1. Upgrade-Test der Migrationen in CI, E2E für Einstellungen/Exporte/Storno/Backup, Nummernkreise unter Parallelität für Rechnungen.
+2. `packages/ui` mit Komponenten und Design-Tokens (DESIGN.md §7.2) statt Einzel-CSS; OpenAPI aus Zod generieren.
+3. Sicherung verschlüsselt außer Haus (z. B. restic als Option), Hinweis im Betriebs-Check.
+4. DSGVO-Löschkonzept (Sperren bis Fristende, danach automatisch löschen), Auskunft; Vorlage Verfahrensdokumentation in `docs/verfahrensdokumentation/`.
+5. Benutzerhandbuch (Deutsch) für Büro und Baustelle.
+6. Vor dem ersten Release: endgültigen Produktnamen festlegen und zentral umstellen (ADR 0001).
+
+### Phase 2/3 (nach dem MVP, DESIGN.md §2)
+Zeiterfassung · Plantafel · Nachkalkulation · GAEB DA XML / REB-Aufmaßaustausch · Mahnbescheid-Export · Kundenportal mit Online-Annahme · Projekt-Chat · Österreich (ebInterface) · Bankanbindung · KI-Funktionen (Angebotsentwurf, Sprach-Bautagebuch/-Aufmaß, Belegerkennung).
+
+### Offene Entscheidungen (beim Nutzer erfragen, nicht raten)
+Österreich im MVP? · GoBD-Testat (IDW PS 880)? · Eingangsrechnungen ins MVP (Vorschlag: ja, Basis)? · Schlussrechnung: alle gestellten oder nur bezahlte Abschläge abziehen (mit Steuerberater klären)? · Speicher für WORM-Archiv: MinIO im Stack oder externer S3?
 
 ## Stack (Kurzfassung)
 TypeScript strict · pnpm + Turborepo · Fastify · Zod · PostgreSQL 17 (SQL-Migrationen, ADR 0003) · pg-boss (Queue in PostgreSQL) · Typst (PDF/A-3) · S3 via MinIO (Object Lock) · Caddy · Docker Compose · React 19 + Vite + TanStack Router/Query · Tailwind 4 + Radix/shadcn · vite-plugin-pwa + Dexie · Vitest, Testcontainers, Playwright.
