@@ -229,13 +229,12 @@ describe.skipIf(!process.env.DATABASE_URL)('Exporte (integration)', () => {
     expect(members).toContain('chef@example.test')
     expect(members).not.toMatch(/password|argon/)
 
-    // The archive is a valid ZIP for standard tools.
+    // The archive is a valid ZIP for standard tools. Info-ZIP and BusyBox (Alpine test image)
+    // print different messages, but both exit non-zero on a damaged archive (execFileSync throws).
     const dir = await mkdtemp(join(tmpdir(), 'opc-export-'))
     await writeFile(join(dir, 'export.zip'), res.rawPayload)
     try {
-      expect(execFileSync('unzip', ['-tq', join(dir, 'export.zip')]).toString()).toContain(
-        'No errors',
-      )
+      execFileSync('unzip', ['-tq', join(dir, 'export.zip')], { stdio: 'pipe' })
     } catch (error) {
       if ((error as NodeJS.ErrnoException).code !== 'ENOENT') throw error
     }
