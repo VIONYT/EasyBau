@@ -7,6 +7,7 @@ export type Route =
   | { view: 'users' }
   | { view: 'security' }
   | { view: 'catalog' }
+  | { view: 'settings' }
   | { view: 'project'; id: string; section: ProjectSection }
   | { view: 'document'; id: string }
   | { view: 'print'; id: string }
@@ -44,6 +45,7 @@ export function parseRoute(path: string): Route {
   const report = new RegExp(`^/berichte/(${UUID})/?$`).exec(path)
   if (report) return { view: 'report', id: report[1] as string }
   if (path.startsWith('/stammdaten')) return { view: 'catalog' }
+  if (path.startsWith('/einstellungen')) return { view: 'settings' }
   if (path.startsWith('/kontakte')) return { view: 'contacts' }
   if (path.startsWith('/benutzer')) return { view: 'users' }
   if (path.startsWith('/sicherheit')) return { view: 'security' }
@@ -58,6 +60,8 @@ export function pathOf(route: Route): string {
       return '/kontakte'
     case 'catalog':
       return '/stammdaten'
+    case 'settings':
+      return '/einstellungen'
     case 'users':
       return '/benutzer'
     case 'security':

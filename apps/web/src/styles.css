@@ -1544,3 +1544,21 @@ legend.h2 + * {
 .picker .list {
   margin-bottom: var(--space-2);
 }
+
+/* --- Einstellungen ------------------------------------------------------------ */
+.settings-nav {
+  max-width: 360px;
+}
+
+.settings-body,
+fieldset.plain {
+  margin: 0;
+  padding: 0;
+  border: 0;
+  min-width: 0;
+}
+
+.row-card h3 {
+  margin: 0 0 var(--space-2);
+  font-size: 1rem;
+}

@@ -18,6 +18,7 @@ import { registerFileRoutes } from './routes/files.js'
 import { registerMeasurementRoutes } from './routes/measurements.js'
 import { registerProjectRoutes } from './routes/projects.js'
 import { registerReportRoutes } from './routes/reports.js'
+import { registerSettingsRoutes } from './routes/settings.js'
 import { registerUserRoutes } from './routes/users.js'
 import { registerWebauthnRoutes } from './routes/webauthn.js'
 import { FieldCipher } from './security/crypto.js'
@@ -170,6 +171,7 @@ export function buildApi({
   registerMeasurementRoutes(app, services)
   registerReportRoutes(app, services)
   registerCatalogRoutes(app, services)
+  registerSettingsRoutes(app, services)
   registerUserRoutes(app, services)
   registerWebauthnRoutes(app, services)
   return app

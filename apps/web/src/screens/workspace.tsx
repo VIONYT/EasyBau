@@ -12,9 +12,10 @@ import { ProjectScreen } from './project'
 import { Projects } from './projects'
 import { ReportScreen } from './report'
 import { Security } from './security'
+import { Settings } from './settings'
 import { Users } from './users'
 
-type Tab = 'projects' | 'contacts' | 'catalog' | 'users' | 'security'
+type Tab = 'projects' | 'contacts' | 'catalog' | 'users' | 'settings' | 'security'
 
 /** Working area after login. Admins without second factor only see the security settings. */
 export function Workspace({
@@ -60,6 +61,11 @@ export function Workspace({
       key: 'users',
       label: t('nav.users'),
       visible: !locked && me.permissions.includes('users.manage'),
+    },
+    {
+      key: 'settings',
+      label: t('nav.settings'),
+      visible: !locked && me.permissions.includes('settings.read'),
     },
     { key: 'security', label: t('nav.security'), visible: true },
   ]
@@ -124,6 +130,7 @@ export function Workspace({
           <ReportScreen me={me} id={current.id} navigate={navigate} />
         ) : null}
         {current.view === 'catalog' ? <Catalog me={me} /> : null}
+        {current.view === 'settings' ? <Settings me={me} /> : null}
         {current.view === 'contacts' ? <Contacts me={me} /> : null}
         {current.view === 'users' ? <Users /> : null}
         {current.view === 'security' ? <Security me={me} onChanged={refreshMe} /> : null}

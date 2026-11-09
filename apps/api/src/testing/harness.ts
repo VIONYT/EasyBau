@@ -72,7 +72,7 @@ export async function createHarness(
   }
 }
 
-export type Method = 'GET' | 'POST' | 'PATCH' | 'DELETE'
+export type Method = 'GET' | 'POST' | 'PUT' | 'PATCH' | 'DELETE'
 
 /** A browser-like client that keeps cookies (session and challenge) between requests. */
 export class Client {
@@ -99,6 +99,7 @@ export class Client {
   post = (url: string, body: unknown = {}, headers?: Record<string, string>) =>
     this.request('POST', url, body, headers)
   patch = (url: string, body: unknown) => this.request('PATCH', url, body)
+  put = (url: string, body: unknown) => this.request('PUT', url, body)
   delete = (url: string) => this.request('DELETE', url)
   /** Raw upload like the web app does it (application/octet-stream, metadata in the query). */
   upload = (url: string, content: Buffer, headers: Record<string, string> = {}) =>

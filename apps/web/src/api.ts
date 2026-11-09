@@ -17,7 +17,7 @@ export class ApiError extends Error {
  * POST requests carry an Idempotency-Key so double clicks do not create duplicates (rule 10).
  */
 export async function api<T>(
-  method: 'GET' | 'POST' | 'PATCH' | 'DELETE',
+  method: 'GET' | 'POST' | 'PUT' | 'PATCH' | 'DELETE',
   path: string,
   body?: unknown,
 ): Promise<T> {
@@ -29,7 +29,7 @@ export async function api<T>(
  * so concurrent edits are detected (412) instead of silently overwritten.
  */
 export async function apiWithEtag<T>(
-  method: 'GET' | 'POST' | 'PATCH' | 'DELETE',
+  method: 'GET' | 'POST' | 'PUT' | 'PATCH' | 'DELETE',
   path: string,
   body?: unknown,
   ifMatch?: string | null,
