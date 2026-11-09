@@ -1,4 +1,4 @@
-import { RESULT_DECIMALS, roundTo } from '@opc/domain'
+import { formatUnitQuantity, RESULT_DECIMALS, roundTo } from '@opc/domain'
 /** Date formatting that never throws on unexpected input (a crash would blank the whole app). */
 export function formatDateTime(
   iso: string | null | undefined,
@@ -61,6 +61,22 @@ export function formatQuantity(
     return quantity
   }
   return formatInputNumber(rounded)
+}
+
+/**
+ * Quantities with a unit (positions, Aufmaß, Mengen): always exactly the decimals of the unit
+ * (Handwerksregel, same as in the PDF): „186,40 m²“, „1,235 m³“, „3 Stk.“.
+ */
+export function formatUnitAmount(
+  quantity: string | null | undefined,
+  decimals: number = RESULT_DECIMALS,
+): string {
+  if (!quantity) return ''
+  try {
+    return formatUnitQuantity(quantity, decimals)
+  } catch {
+    return quantity
+  }
 }
 
 /** Numbers as entered (room dimensions like 0,885, form values): no rounding, comma, no trailing zeros. */

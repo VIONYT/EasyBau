@@ -3,6 +3,7 @@ import {
   defaultLetterhead,
   fillPlaceholders,
   formatEuro,
+  formatUnitQuantity,
   germanDate,
   type LetterheadValues,
 } from '@opc/domain'
@@ -45,19 +46,21 @@ export function documentTitle(
 const euro = (cents: number | null | undefined) => (cents == null ? '' : formatEuro(BigInt(cents)))
 const date = (iso: string) => germanDate(iso)
 
-/** "1234.5" → "1.234,50" with the decimals of the unit (Handwerksregel). */
+/** Quantity with the decimals of its unit (Handwerksregel): "186.4" m² → "186,40". */
 export function germanQuantity(value: string | null, decimals = 2): string {
-  if (value === null) return ''
-  const negative = value.startsWith('-')
-  const [whole = '0', fraction = ''] = value.replace('-', '').split('.')
-  const grouped = whole.replace(/\B(?=(\d{3})+(?!\d))/g, '.')
-  const digits = fraction
-    .padEnd(decimals, '0')
-    .slice(0, Math.max(decimals, fraction.replace(/0+$/, '').length))
-  return `${negative ? '-' : ''}${grouped}${digits ? `,${digits}` : ''}`
+  return value === null ? '' : formatUnitQuantity(value, decimals)
 }
 
-const percent = (value: string | null) => (value ? germanQuantity(value, 0) : '')
+/** Percent without trailing zeros: "2.5000" → "2,5", "19.00" → "19". */
+export function germanPercent(value: string | null): string {
+  if (!value) return ''
+  return (value.includes('.') ? value.replace(/0+$/, '').replace(/\.$/, '') : value).replace(
+    '.',
+    ',',
+  )
+}
+
+const percent = germanPercent
 
 /** Builds the template data of a document; logo bytes are added by the caller. */
 export function documentLetter(
@@ -137,7 +140,7 @@ export function documentLetter(
   }
   for (const line of t.taxLines) {
     totals.push({
-      label: `USt ${germanQuantity(line.ratePercent.replace(/\.?0+$/, ''), 0)} % (${euro(line.netCents)})`,
+      label: `USt ${germanPercent(line.ratePercent)} % (${euro(line.netCents)})`,
       value: euro(line.taxCents),
       grand: false,
       note: line.exemptionReason,

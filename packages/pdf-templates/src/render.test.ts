@@ -5,7 +5,7 @@ import { join } from 'node:path'
 import { defaultLetterhead } from '@opc/domain'
 import type { DocumentDetail } from '@opc/schemas'
 import { describe, expect, it } from 'vitest'
-import { documentLetter, documentTitle, germanQuantity } from './document.js'
+import { documentLetter, documentTitle, germanPercent, germanQuantity } from './document.js'
 import { renderLetterPdf } from './render.js'
 
 const PNG = Buffer.from(
@@ -168,7 +168,10 @@ describe('PDF/A mit Typst', () => {
     ).toBe('Nachtragsangebot N01')
     expect(germanQuantity('1234.5', 2)).toBe('1.234,50')
     expect(germanQuantity('-3', 0)).toBe('-3')
-    expect(germanQuantity('0.125', 2)).toBe('0,125')
+    expect(germanQuantity('0.125', 2)).toBe('0,13')
+    expect(germanPercent('2.5000')).toBe('2,5')
+    expect(germanPercent('19.00')).toBe('19')
+    expect(germanPercent(null)).toBe('')
     expect(germanQuantity(null)).toBe('')
   })
 

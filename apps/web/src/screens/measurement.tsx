@@ -10,7 +10,7 @@ import type {
 } from '@opc/schemas'
 import { type FormEvent, useCallback, useEffect, useMemo, useState } from 'react'
 import { ApiError, api, apiWithEtag } from '../api'
-import { formatDateTime, formatInputNumber, formatQuantity } from '../format'
+import { formatDateTime, formatInputNumber, formatQuantity, formatUnitAmount } from '../format'
 import { Field, FormError, optional, SelectField, useForm, value } from '../forms'
 import { type TextKey, t } from '../i18n'
 import type { Navigate } from '../router'
@@ -415,7 +415,7 @@ function Lines({
                       </span>
                     </span>
                     <span className="amount result">
-                      {formatQuantity(line.resultQty, line.unit?.decimals)} {line.unit?.symbol}
+                      {formatUnitAmount(line.resultQty, line.unit?.decimals)} {line.unit?.symbol}
                     </span>
                   </div>
                   {editable && !line.locked ? (
@@ -534,8 +534,8 @@ function LineForm({
   const decimals = itemId ? item?.unit?.decimals : units.find((u) => u.id === unitId)?.decimals
   const shown = preview?.ok
     ? isDeduction
-      ? `−${formatQuantity(preview.quantity.replace(/^-/, ''), decimals)}`
-      : formatQuantity(preview.quantity, decimals)
+      ? `−${formatUnitAmount(preview.quantity.replace(/^-/, ''), decimals)}`
+      : formatUnitAmount(preview.quantity, decimals)
     : null
 
   return (
@@ -708,21 +708,21 @@ function Quantities({ me, sheet }: { me: Me; sheet: Sheet }) {
               <dl className="q-facts">
                 <div>
                   <dt>{t('m.thisSheet')}</dt>
-                  <dd>{formatQuantity(sheetQuantity, item.unit?.decimals)}</dd>
+                  <dd>{formatUnitAmount(sheetQuantity, item.unit?.decimals)}</dd>
                 </div>
                 <div>
                   <dt>{t('m.measuredTotal')}</dt>
-                  <dd>{formatQuantity(item.measuredQuantity, item.unit?.decimals)}</dd>
+                  <dd>{formatUnitAmount(item.measuredQuantity, item.unit?.decimals)}</dd>
                 </div>
                 <div>
                   <dt>{t('m.lvQuantity')}</dt>
-                  <dd>{formatQuantity(item.quantity, item.unit?.decimals)}</dd>
+                  <dd>{formatUnitAmount(item.quantity, item.unit?.decimals)}</dd>
                 </div>
               </dl>
               {variance.direction !== 'equal' ? (
                 <p className={variance.exceedsThreshold ? 'warning' : 'muted'}>
                   {variance.direction === 'more' ? t('m.more') : t('m.less')}{' '}
-                  {formatQuantity(variance.difference.replace(/^-/, ''), item.unit?.decimals)}{' '}
+                  {formatUnitAmount(variance.difference.replace(/^-/, ''), item.unit?.decimals)}{' '}
                   {item.unit?.symbol}
                   {variance.percent ? ` (${formatQuantity(variance.percent)} %)` : ''}
                   {variance.exceedsThreshold ? ` – ${t('m.vobHint')}` : ''}
@@ -736,7 +736,7 @@ function Quantities({ me, sheet }: { me: Me; sheet: Sheet }) {
         <p className="muted">
           {t('m.unassigned')}:{' '}
           {sheet.unassigned
-            .map((u) => `${formatQuantity(u.quantity, u.decimals)} ${u.unit ?? ''} (${u.count})`)
+            .map((u) => `${formatUnitAmount(u.quantity, u.decimals)} ${u.unit ?? ''} (${u.count})`)
             .join(' · ')}
         </p>
       ) : null}

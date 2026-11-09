@@ -5,6 +5,7 @@ import {
   formatCents,
   formatInputNumber,
   formatQuantity,
+  formatUnitAmount,
   parseEuro,
 } from './format'
 
@@ -38,6 +39,12 @@ describe('money input and output', () => {
     expect(formatQuantity('kein')).toBe('kein')
     expect(formatQuantity('1.2345', 3)).toBe('1,235')
     expect(formatQuantity('2.5', 0)).toBe('3')
+    // Quantities with a unit always show the decimals of the unit, like the PDF.
+    expect(formatUnitAmount('186.4', 2)).toBe('186,40')
+    expect(formatUnitAmount('1234.5', 3)).toBe('1.234,500')
+    expect(formatUnitAmount('3', 0)).toBe('3')
+    expect(formatUnitAmount(null)).toBe('')
+    expect(formatUnitAmount('kein')).toBe('kein')
     expect(formatInputNumber('0.885')).toBe('0,885')
     expect(formatInputNumber('4.2500')).toBe('4,25')
     expect(formatInputNumber(null)).toBe('')

@@ -36,6 +36,7 @@ Alle wesentlichen Änderungen, vor allem solche, die Betreiber betreffen (neue V
 - Datenbank-Migration `0010_site_diary`.
 
 ### Behoben
+- Mengen mit Einheit erscheinen in Oberfläche, Druckansicht und PDF einheitlich mit den Nachkommastellen der Einheit (Handwerksregel, z. B. 186,40 m² statt 186,4 m²). Im PDF wurden Prozentwerte wie 2,5 % Skonto auf ganze Zahlen gerundet; jetzt korrekt.
 - Speichern mit `If-Match` schlug hinter dem Proxy fehl, wenn die Antwort komprimiert ausgeliefert wurde (Caddy hängt `-zstd`/`-gzip` an das ETag).
 - Aufmaß im Projekt: Aufmaßblätter als Angebotsaufmaß oder Leistungsaufmaß, Bereiche und Räume (z. B. Haus A › EG › Bad) mit Maßen L/B/H als Variablen, Zeilen mit Formeln (deutsches Zahlenformat, Vorlagen wie Wandfläche, Rechteck, Abzug Öffnung), Ergebnis live beim Tippen und maßgeblich auf dem Server gerechnet, Abzüge, Zuordnung zu LV-Positionen aus Angebot, Auftrag und Nachträgen.
 - Mengen je LV-Position mit Mehr-/Mindermengen und Hinweis ab 10 % Abweichung (VOB/B § 2 Abs. 3); „Mengen übernehmen“ setzt die Mengen in Entwürfen (Kennzeichen „aus Aufmaß“).

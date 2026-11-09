@@ -13,7 +13,7 @@ Grundgerüst steht, Datenbankschema für das MVP ist angelegt (Migrationen 0001�
 **Zuletzt erledigt:** Einstellungen-UI, E-Mail-Postausgang (SMTP), Exporte (DATEV/GoBD/Vollexport), Backup-Dienst + `infra/restore.sh` + Betriebs-Check, Storno-Sperre in der DB (0015: stornierte Rechnung bleibt mit Nummer erhalten, gesperrt, ausgegraut; Nummern nie wiederverwendet), Nummernkreis je Jahr + frei wählbares Schema `{Jahr}`/`{JJ}`/`{Monat}`/`{Nummer}` (0016, `packages/domain/src/numbering.ts`, `next_number` überspringt vergebene Nummern), Rechnungen festschreiben mit § 14-Prüfung, Abschlägen und Schlussrechnung (0017), Storno/„Rechnung korrigieren“, Briefpapier-Editor DIN 5008 B / A4 mit Logo (0018), PDF/A-3b mit Typst (ADR 0006).
 
 ### P1 – Pflicht vor dem Echtbetrieb (Rechnungen, Recht, GoBD)
-4. **PDF-Anlagen**: Aufmaßblatt und Berichte (Bautagebuch) als PDF/A über `packages/pdf-templates`; PDF/A-Konformität zusätzlich mit veraPDF prüfen (CI).
+4. **PDF-Anlagen**: Aufmaßblatt und Berichte (Bautagebuch) als PDF/A über `packages/pdf-templates`. PDF/A-Prüfung: Typst prüft beim Export selbst, der Test prüft die PDF/A-3b-Kennung; veraPDF **nicht** in den Betriebs-Stack aufnehmen (Java, kein Laufzeitnutzen). Höchstens später als optionaler CI-Schritt, wenn ZUGFeRD-PDFs entstehen.
 5. **E-Rechnung**: ZUGFeRD 2.x EN 16931 (PDF/A-3 + XML) und XRechnung UBL in `packages/einvoice`; **KoSIT-Validator** als Container (ADR nötig) – Versand/Archiv nur nach bestandener Prüfung (Regel 8). Leitweg-ID/E-Rechnungs-Daten am Kontakt in der UI prüfen.
 6. **Revisionssicheres Archiv** (WORM, Object Lock; ADR 0004 Punkt 4): Original + SHA-256 je festgeschriebenem Beleg; Belegdateien in GoBD-/DATEV-Export aufnehmen.
 7. **Zahlungen & Forderungen** (Tabellen existieren seit 0004, API/UI fehlen): Zahlung/Teilzahlung, Abzüge, Kürzung, offene Forderung, GiroCode (`payment_qr`), **Rechnungsliste** mit Status (offen, teilbezahlt, bezahlt, überfällig, angemahnt, storniert) und Summen.
@@ -35,6 +35,7 @@ Grundgerüst steht, Datenbankschema für das MVP ist angelegt (Migrationen 0001�
 11. **Angebot**: Zielpreis („Preis anpassen“), Bilder als Positionstyp, Versionen, „in Stammdaten speichern“; Stammdaten CSV-Import/-Export.
 
 ### P3 – Betrieb, Qualität, Release
+0. Beobachten: `apps/worker/src/email.integration.test.ts` schlug einmal direkt nach einem Docker-Neustart fehl (gemeinsame Test-DB), danach stabil. Falls es wieder auftritt: Test auf eigene Mandanten beschränken statt Postausgang aller Firmen zu zählen.
 1. Upgrade-Test der Migrationen in CI, E2E für Einstellungen/Exporte/Storno/Backup, Nummernkreise unter Parallelität für Rechnungen.
 2. `packages/ui` mit Komponenten und Design-Tokens (DESIGN.md §7.2) statt Einzel-CSS; OpenAPI aus Zod generieren.
 3. Sicherung verschlüsselt außer Haus (z. B. restic als Option), Hinweis im Betriebs-Check.

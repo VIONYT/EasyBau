@@ -26,6 +26,7 @@ import {
   formatDateTime,
   formatInputNumber,
   formatQuantity,
+  formatUnitAmount,
   parseEuro,
 } from '../format'
 import { Field, FormError, optional, SelectField, TextArea, useForm, value } from '../forms'
@@ -613,10 +614,10 @@ function PositionView({ item, subtotal }: { item: DocumentItem; subtotal: number
           <span className="hint block">
             {[
               item.cumulativeQuantity !== null
-                ? `${t('inv.measured')} ${formatQuantity(item.cumulativeQuantity, item.unit?.decimals)} ${item.unit?.symbol ?? ''}`
+                ? `${t('inv.measured')} ${formatUnitAmount(item.cumulativeQuantity, item.unit?.decimals)} ${item.unit?.symbol ?? ''}`
                 : null,
               item.previouslyBilledQuantity !== null
-                ? `${t('inv.billedBefore')} ${formatQuantity(item.previouslyBilledQuantity, item.unit?.decimals)} ${item.unit?.symbol ?? ''}`
+                ? `${t('inv.billedBefore')} ${formatUnitAmount(item.previouslyBilledQuantity, item.unit?.decimals)} ${item.unit?.symbol ?? ''}`
                 : null,
             ]
               .filter(Boolean)
@@ -624,7 +625,7 @@ function PositionView({ item, subtotal }: { item: DocumentItem; subtotal: number
           </span>
         ) : null}
         <span className="muted block calc">
-          {formatQuantity(item.quantity, item.unit?.decimals)} {item.unit?.symbol} ×{' '}
+          {formatUnitAmount(item.quantity, item.unit?.decimals)} {item.unit?.symbol} ×{' '}
           {formatCents(item.unitPriceCents)}
           {item.discountPercent ? ` − ${formatQuantity(item.discountPercent)} %` : ''}
           {item.taxRatePercent ? ` · ${formatQuantity(item.taxRatePercent)} % USt` : ''}

@@ -2,7 +2,7 @@ import { defaultLetterhead } from '@opc/domain'
 import type { DocumentDetail } from '@opc/schemas'
 import { useEffect, useState } from 'react'
 import { type ApiError, api } from '../api'
-import { formatCents, formatDateTime, formatQuantity } from '../format'
+import { formatCents, formatDateTime, formatQuantity, formatUnitAmount } from '../format'
 import { FormError } from '../forms'
 import { type TextKey, t, tf } from '../i18n'
 import { type InfoRow, LetterPage, ScaledPage } from '../letter'
@@ -174,7 +174,7 @@ export function PrintScreen({ id, navigate }: { id: string; navigate: Navigate }
                       ) : null}
                     </td>
                     <td className="num">
-                      {formatQuantity(item.quantity, item.unit?.decimals)} {item.unit?.symbol}
+                      {formatUnitAmount(item.quantity, item.unit?.decimals)} {item.unit?.symbol}
                     </td>
                     <td className="num">{formatCents(item.unitPriceCents)}</td>
                     <td className="num">

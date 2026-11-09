@@ -1,4 +1,4 @@
-import { Decimal, type NumericInput, toDecimal } from './decimal.js'
+import { Decimal, type NumericInput, roundTo, toDecimal } from './decimal.js'
 
 /** Dimensions of the unit table (DESIGN.md §4.2.1). */
 export type Dimension =
@@ -56,4 +56,18 @@ export function convertUnit(value: NumericInput, from: string, to: string): Deci
 /** Dimension a measurement formula template produces; used for the unit-mismatch hint. */
 export function dimensionOfUnit(symbol: string): Dimension | undefined {
   return FACTORS[symbol]?.dimension
+}
+
+/**
+ * Menge mit Einheit für Dokumente und Anzeige (Handwerksregel): kaufmännisch gerundet auf die
+ * Nachkommastellen der Einheit und immer mit genau so vielen Stellen, mit Tausenderpunkt:
+ * „186.4“ m² (2) → „186,40“, „1234.5“ m³ (3) → „1.234,500“, „3“ Stk. (0) → „3“.
+ */
+export function formatUnitQuantity(value: NumericInput, decimals: number): string {
+  const fixed = roundTo(value, decimals)
+  const negative = fixed.startsWith('-')
+  const [whole = '0', fraction] = fixed.replace('-', '').split('.')
+  const grouped = whole.replace(/\B(?=(\d{3})+(?!\d))/g, '.')
+  const text = fraction ? `${grouped},${fraction}` : grouped
+  return negative && /[1-9]/.test(text) ? `-${text}` : text
 }
