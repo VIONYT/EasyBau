@@ -16,6 +16,7 @@ In `.env` mindestens setzen:
 | `APP_DOMAIN` | Ihre Domain, z. B. `erp.meine-firma.de`. Der DNS-Eintrag muss auf den Server zeigen; Caddy holt das Zertifikat automatisch. |
 | `POSTGRES_PASSWORD` | Datenbankpasswort, z. B. `openssl rand -hex 24`. |
 | `APP_SECRET` | Hauptschlüssel für verschlüsselte Felder (2FA-Geheimnisse, IBAN), z. B. `openssl rand -hex 32`. **Sicher aufbewahren** (z. B. im Passwortmanager). Ohne ihn sind diese Felder nach einer Wiederherstellung nicht mehr lesbar. |
+| `ARCHIVE_S3_SECRET_KEY` | Passwort des Belegarchivs (MinIO), z. B. `openssl rand -hex 24`. Bei externem S3 der geheime Zugangsschlüssel (siehe Abschnitt 5b). |
 
 Statt Werten in `.env` können Docker-Secrets genutzt werden: `APP_SECRET_FILE=/run/secrets/app_secret`.
 
@@ -68,6 +69,27 @@ Danach `https://<APP_DOMAIN>` öffnen, den Code eingeben, die Firma und das erst
 - Der Dienst ist nur intern erreichbar (`KOSIT_URL=http://kosit:8080`) und braucht etwa 300 MB RAM. Er startet mit dem Stack, der erste Start dauert etwa 30 Sekunden.
 - Läuft `kosit` nicht, lassen sich keine Rechnungen festschreiben. Angebote, Aufträge und alles andere funktionieren weiter. Zustand: Einstellungen › Betrieb.
 - Leitweg-ID, E-Mail für E-Rechnungen und gewünschtes Format stehen am Kontakt (Kontakte › Kontakt öffnen › E-Rechnung). Für XRechnung braucht die Firma E-Mail, Telefon und IBAN (Einstellungen › Firma).
+
+## 5b. Revisionssicheres Belegarchiv (Dienst „storage“ oder externer S3)
+
+- **Was archiviert wird:** Originale festgeschriebener Belege, also PDF/A, ZUGFeRD-PDF, XRechnung-XML und KoSIT-Prüfbericht. Sie liegen zuerst im Volume `files`. Der Worker kopiert sie innerhalb von etwa 30 Sekunden in einen S3-Bucket mit **Object Lock (WORM)**, gesperrt bis zum Ende der Aufbewahrungsfrist (10 Jahre ab Ende des Belegjahres). Bis dahin kann niemand sie ändern oder löschen, auch kein Administrator.
+- **Standard (mitgelieferter MinIO):**
+  - Dienst `storage` mit Volume `archive-data`, nur intern erreichbar.
+  - In der `.env` nur `ARCHIVE_S3_SECRET_KEY` setzen (z. B. `openssl rand -hex 24`). Der Bucket `belegarchiv` mit Object Lock wird beim ersten Start angelegt.
+  - Das Image wird aus dem offiziellen MinIO-Quellcode gebaut. Das dauert beim ersten Mal einige Minuten und braucht kurzzeitig etwa 2 GB RAM.
+- **Externer S3** (empfohlen, wenn das Archiv unabhängig vom Server sein soll):
+  1. Beim Anbieter einen Bucket **mit aktiviertem Object Lock** anlegen. Das geht nur beim Anlegen. Dazu einen Zugang mit Schreib- und Leserecht auf diesen Bucket.
+  2. In der `.env` eintragen:
+     - `COMPOSE_FILE=compose.yaml:compose.external-s3.yaml`
+     - `ARCHIVE_S3_ENDPOINT`, `ARCHIVE_S3_REGION`, `ARCHIVE_S3_BUCKET`
+     - `ARCHIVE_S3_ACCESS_KEY`, `ARCHIVE_S3_SECRET_KEY`
+     - `ARCHIVE_S3_CREATE_BUCKET=false`
+     - bei Bedarf `ARCHIVE_S3_PATH_STYLE=false`
+  3. `docker compose up -d`. Der MinIO-Dienst läuft dann nicht.
+- **Zustand prüfen:** Einstellungen › Betrieb zeigt, ob der Bucket erreichbar ist und Object Lock hat, und wie viele Originale noch ausstehen oder fehlgeschlagen sind. Am Dokument steht „Original revisionssicher archiviert (unveränderbar bis …)“.
+- **Was der mitgelieferte MinIO schützt:** Er schützt gegen Änderungen über die Anwendung und gegen versehentliches Löschen. Er schützt nicht gegen den Ausfall der Festplatte. Dafür gibt es die tägliche Sicherung (sie enthält alle Arbeitskopien) und optional einen externen S3.
+- **Nach dem Wechsel auf externen S3:** Neue Originale gehen in den neuen Bucket. Was bereits im MinIO-Archiv liegt, bleibt dort, bis es per Hand übertragen wird (z. B. `mc mirror`). Das Volume `archive-data` erst nach Ablauf aller Fristen entfernen.
+- **Exporte:** Der GoBD-Export (Z3) enthält die Originale im Ordner `belege/` mit Prüfsummen. Der DATEV-Export liefert auf Wunsch ein ZIP mit PDF je Rechnung.
 
 ## 6. Sicherung und Wiederherstellung
 
@@ -122,4 +144,4 @@ Datenbank-Migrationen laufen beim Start automatisch (`MIGRATE_ON_START=true`). E
 BASE_URL=https://<APP_DOMAIN> sh infra/smoke-test.sh
 ```
 
-Noch nicht im Stack und in Arbeit: Archivspeicher mit Object Lock für festgeschriebene Belege.
+Alle Dienste der Planung sind jetzt im Stack: proxy, app, db, kosit, storage, backup (im Profil „standard“ zusätzlich worker).

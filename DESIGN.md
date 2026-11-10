@@ -134,7 +134,7 @@ openplancraft/
 ├─ compose.dev.yaml   # Overlay für Entwicklung (Hot Reload, Mailpit)
 ├─ compose.test.yaml  # Test-Stack für CI und lokale Testläufe
 ├─ .env.example       # alle Einstellungen dokumentiert
-├─ infra/             # Caddyfile, Backup-/Restore-Skripte, MinIO-Init (Object Lock)
+├─ infra/             # Caddyfile, Backup-/Restore-Skripte
 ├─ docs/              # Recherche, ADRs, Verfahrensdokumentation
 ├─ CLAUDE.md
 └─ DESIGN.md
@@ -157,7 +157,7 @@ Standardfall beim Self-Hosting ist **eine Firma pro Installation**. Die Mandante
 | `api` | `ghcr.io/<org>/openplancraft-api` | REST-API, führt beim Start Datenbank-Migrationen aus (mit Lock, idempotent) |
 | `worker` | `ghcr.io/<org>/openplancraft-worker` | PDF (Typst), E-Rechnung, E-Mail, Exporte, geplante Jobs; **entfällt im Profil kompakt** (läuft dann im `api`-Container) |
 | `db` | PostgreSQL 17 | Daten (Volume) |
-| `storage` | MinIO | WORM-Archiv festgeschriebener Belege (Object Lock wird beim ersten Start eingerichtet). Die Projektablage liegt im Volume `files` ([ADR 0004](docs/adr/0004-dateiablage.md)) |
+| `storage` | MinIO (aus dem Quellcode gebaut, `docker/storage.Dockerfile`) | WORM-Archiv festgeschriebener Belege: Bucket mit Object Lock wird beim ersten Start angelegt, der Worker kopiert jedes Original mit Sperrfrist dorthin ([ADR 0008](docs/adr/0008-belegarchiv-worm.md)). Alternativ externer S3 (`compose.external-s3.yaml`). Die Projektablage liegt im Volume `files` ([ADR 0004](docs/adr/0004-dateiablage.md)) |
 | `kosit` | KoSIT-Validator (Java) | Prüfung jeder E-Rechnung, nur intern erreichbar. Läuft mit begrenztem Heap (`-Xmx256m`, Serial GC) dauerhaft in beiden Profilen (ca. 300 MB; ein Start bei Bedarf bräuchte den Docker-Socket, [ADR 0007](docs/adr/0007-e-rechnung-kosit.md)) |
 | `backup` | pgBackRest + Cron | WAL-Archiv, tägliche Sicherung, optional Kopie auf externes Ziel (S3/SFTP) |
 
@@ -185,7 +185,7 @@ Ziel: **wenig Ressourcen, trotzdem schnell.** Gewählt über `PROFILE=compact|st
 | PostgreSQL-Tuning | `shared_buffers=128MB`, `work_mem=4MB`, `max_connections=30` | `shared_buffers=512MB`, `max_connections=60` |
 | KoSIT | dauerhaft, `-Xmx256m` | dauerhaft, `-Xmx256m` |
 
-Ungefähre Speicheraufteilung (kompakt): Caddy 30 MB · App (Node) 150–200 MB · PostgreSQL 150–250 MB · MinIO 150 MB · KoSIT ca. 300 MB · Backup 10 MB. Typst benötigt nur während der PDF-Erzeugung wenige MB.
+Ungefähre Speicheraufteilung (kompakt): Caddy 30 MB · App (Node) 150–200 MB · PostgreSQL 150–250 MB · MinIO 60–150 MB · KoSIT ca. 300 MB · Backup 10 MB. Typst benötigt nur während der PDF-Erzeugung wenige MB.
 
 **Warum PostgreSQL trotzdem die richtige Wahl ist**: Ein Betrieb mit 20 Mitarbeitenden erzeugt grob ein paar tausend Dokumente und einige hunderttausend Positionen pro Jahr. Das sind auch nach zehn Jahren meist unter 5 GB, denn Fotos und PDFs liegen im Objektspeicher. PostgreSQL ersetzt zusätzlich Queue, Cache und Suchserver und bietet als einzige Option RLS, Trigger für die Unveränderbarkeit und Point-in-Time-Recovery (siehe [ADR 0002](docs/adr/0002-schlanker-stack.md)). SQLite und MariaDB wurden geprüft und verworfen.
 

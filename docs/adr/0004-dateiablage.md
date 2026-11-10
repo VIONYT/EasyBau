@@ -11,7 +11,7 @@ Projekte brauchen eine Ablage für Pläne, Fotos, Verträge und Schriftverkehr. 
 1. Dateien der Projektablage liegen in einem **Docker-Volume `files`**, eingehängt unter `STORAGE_DIR` (Standard `/data/files`). Die Datenbank (Tabelle `file`) speichert Name, MIME-Typ, Größe, SHA-256 und den Schlüssel `<tenant>/files/<uuid>`.
 2. Zugriff nur über die Schnittstelle `ObjectStore` (`packages/storage`): `receive` (streamen, zählen, hashen, Kopf für die Typprüfung), `commit`, `read`, `delete`. Schlüssel erzeugt immer der Server; Pfade aus Nutzereingaben gibt es nicht.
 3. Uploads werden **gestreamt**, nie ganz in den Speicher geladen. Sie werden geprüft: Größe (`UPLOAD_MAX_MB`), erlaubte Endung und passender Inhalt (Magic Number). HTML, SVG und ausführbare Dateien sind nicht erlaubt. Ausgeliefert wird mit `nosniff`, eigener CSP und `Content-Disposition`.
-4. Für das **WORM-Archiv** festgeschriebener Rechnungen (PDF/A-3, XRechnung) kommt später ein S3-Treiber derselben Schnittstelle mit Object Lock hinzu (MinIO im Stack oder externer S3). Diese Entscheidung fällt mit dem Modul „Festschreiben“.
+4. Für das **WORM-Archiv** festgeschriebener Rechnungen (PDF/A-3, XRechnung) kommt später ein S3-Treiber derselben Schnittstelle mit Object Lock hinzu (MinIO im Stack oder externer S3). Diese Entscheidung fällt mit dem Modul „Festschreiben“. → Umgesetzt in [ADR 0008](0008-belegarchiv-worm.md): MinIO (aus dem Quellcode gebaut) oder externer S3, Archivierung durch den Worker.
 
 ## Konsequenzen
 - Kein zusätzlicher Container im kompakten Profil; etwa 150 MB RAM weniger.
