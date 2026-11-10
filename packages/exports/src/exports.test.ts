@@ -13,6 +13,7 @@ import {
   gobdTableCsv,
   revenueAccount,
   safeEntryName,
+  splitByWeights,
   zipStream,
 } from './index.js'
 
@@ -203,6 +204,39 @@ describe('DATEV', () => {
     expect(lines[5]).toBe(
       '1200,70;"S";"EUR";;;;1200;10001;;2011;"R-00101";"";;"Zahlung Wohnbau Nord eG"',
     )
+  })
+
+  it('books accepted Kürzungen against revenue, split by tax rate', () => {
+    const taxLines = [
+      { category: 'S', ratePercent: '19.00', netCents: 100_000n, taxCents: 19_000n },
+      { category: 'S', ratePercent: '7.00', netCents: 1_000n, taxCents: 70n },
+    ]
+    const base = {
+      invoiceNumber: 'R-00101',
+      date: '2026-11-21',
+      customerAccount: '10001',
+      customerName: 'Wohnbau Nord eG',
+    }
+    const bookings = datevBookings([], [], accounts, [
+      { ...base, amountCents: 1_001n, taxLines },
+      { ...base, amountCents: -1_001n, taxLines, reversal: true },
+      { ...base, amountCents: 500n, taxLines: [] },
+    ])
+    expect(bookings.map((b) => [b.amountCents, b.account, b.contraAccount, b.text])).toEqual([
+      [992n, '8400', '10001', 'Kürzung Wohnbau Nord eG'],
+      [9n, '8300', '10001', 'Kürzung Wohnbau Nord eG'],
+      [-992n, '8400', '10001', 'Storno Kürzung Wohnbau Nord eG'],
+      [-9n, '8300', '10001', 'Storno Kürzung Wohnbau Nord eG'],
+      [500n, '8400', '10001', 'Kürzung Wohnbau Nord eG'],
+    ])
+  })
+
+  it('splits amounts exactly by weight', () => {
+    expect(splitByWeights(100n, [1n, 1n, 1n])).toEqual([34n, 33n, 33n])
+    expect(splitByWeights(-100n, [1n, -1n, 1n])).toEqual([-34n, -33n, -33n])
+    expect(splitByWeights(7n, [0n, 0n])).toEqual([7n, 0n])
+    expect(splitByWeights(7n, [])).toEqual([])
+    expect(splitByWeights(10n, [3n, 1n])).toEqual([8n, 2n])
   })
 
   it('derives accounts and fiscal years', () => {

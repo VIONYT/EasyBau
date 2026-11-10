@@ -53,6 +53,24 @@ export interface ExportPayment {
   customerName: string
 }
 
+/**
+ * Accepted Kürzung (Rabatt, Minderung, sonstiger Abzug) on an invoice: reduces revenue and VAT
+ * (§ 17 UStG), so it goes to the advisor. Skonto, Einbehalt and Bauumlage are not exported.
+ * Positive = reduction, negative = its Gegenbuchung.
+ */
+export interface ExportAdjustment {
+  invoiceNumber: string
+  date: string
+  /** Gross amount in cents. */
+  amountCents: bigint
+  customerAccount: string
+  customerName: string
+  /** Gegenbuchung of an earlier Kürzung. */
+  reversal?: boolean
+  /** Tax lines of the invoice; the amount is split over them by gross share. */
+  taxLines: ExportInvoice['taxLines']
+}
+
 const COLUMNS = [
   'Umsatz (ohne Soll/Haben-Kz)',
   'Soll/Haben-Kennzeichen',
@@ -84,11 +102,39 @@ export function revenueAccount(
   return accounts.exempt
 }
 
-/** One booking per invoice and tax rate (Debitor an Erlöse), one per payment (Bank an Debitor). */
+/**
+ * Splits `amount` over `weights` proportionally (largest remainder), so the parts add up exactly.
+ * Without any weight the whole amount goes to the first part.
+ */
+export function splitByWeights(amount: bigint, weights: readonly bigint[]): bigint[] {
+  const abs = (v: bigint) => (v < 0n ? -v : v)
+  const total = weights.reduce((sum, w) => sum + abs(w), 0n)
+  if (!weights.length) return []
+  if (total === 0n) return weights.map((_, i) => (i === 0 ? amount : 0n))
+  const sign = amount < 0n ? -1n : 1n
+  const value = abs(amount)
+  const parts = weights.map((w) => (value * abs(w)) / total)
+  const order = weights
+    .map((w, i) => ({ i, rest: (value * abs(w)) % total }))
+    .sort((a, b) => (b.rest > a.rest ? 1 : b.rest < a.rest ? -1 : a.i - b.i))
+  let left = value - parts.reduce((sum, p) => sum + p, 0n)
+  for (const { i } of order) {
+    if (left === 0n) break
+    parts[i] = (parts[i] as bigint) + 1n
+    left -= 1n
+  }
+  return parts.map((p) => p * sign)
+}
+
+/**
+ * One booking per invoice and tax rate (Debitor an Erlöse), one per payment (Bank an Debitor) and
+ * one per Kürzung and tax rate (Erlöse an Debitor, on the Automatikkonto so the VAT is corrected).
+ */
 export function datevBookings(
   invoices: readonly ExportInvoice[],
   payments: readonly ExportPayment[],
   accounts: DatevAccounts,
+  adjustments: readonly ExportAdjustment[] = [],
 ): DatevBooking[] {
   const bookings: DatevBooking[] = []
   for (const invoice of invoices) {
@@ -111,6 +157,25 @@ export function datevBookings(
       date: payment.date,
       documentNo: payment.invoiceNumber,
       text: `Zahlung ${payment.customerName}`,
+    })
+  }
+  for (const adjustment of adjustments) {
+    const lines = adjustment.taxLines.length
+      ? adjustment.taxLines
+      : [{ category: 'S', ratePercent: '19.00', netCents: 0n, taxCents: 0n }]
+    const parts = splitByWeights(
+      adjustment.amountCents,
+      lines.map((l) => l.netCents + l.taxCents),
+    )
+    lines.forEach((line, i) => {
+      bookings.push({
+        amountCents: parts[i] as bigint,
+        account: revenueAccount(line, accounts),
+        contraAccount: adjustment.customerAccount,
+        date: adjustment.date,
+        documentNo: adjustment.invoiceNumber,
+        text: `${adjustment.reversal ? 'Storno Kürzung' : 'Kürzung'} ${adjustment.customerName}`,
+      })
     })
   }
   return bookings.filter((b) => b.amountCents !== 0n)

@@ -4,6 +4,7 @@ import {
   customerAccount,
   datevBookingBatch,
   datevBookings,
+  type ExportAdjustment,
   type ExportInvoice,
   type ExportPayment,
   encodeWindows1252,
@@ -185,7 +186,7 @@ export function registerExportRoutes(app: FastifyInstance, services: Services) {
   const logExport = (auth: AuthContext, kind: string) =>
     audit(services, auth.tenantId, auth.userId, `export:${kind}`)
 
-  /** DATEV Buchungsstapel (EXTF) for the tax advisor: invoices per tax rate and payments. */
+  /** DATEV Buchungsstapel (EXTF) for the tax advisor: invoices per tax rate, payments, Kürzungen. */
   app.get('/api/v1/exports/datev', async (request, reply) => {
     const auth = requirePermission(request, 'export.run')
     const { from, to, belege } = parse(periodQuery, request.query)
@@ -255,6 +256,59 @@ export function registerExportRoutes(app: FastifyInstance, services: Services) {
         customerAccount: customerAccount(p.customerNumber),
         customerName: p.customerName,
       }))
+      // Accepted Kürzungen (Rabatt/Minderung, sonstiger Abzug) reduce revenue; Skonto, Einbehalt,
+      // Bauumlage and Bankgebühr stay out. Bestrittene Kürzungen are still claimed, so not exported;
+      // a Gegenbuchung follows the flag of its original. Booking date = entry date (Berlin).
+      const adjustmentRows = await tx<
+        {
+          invoiceId: string
+          number: string
+          date: string
+          amount: string
+          sign: number
+          reversal: boolean
+          customerNumber: string | null
+          customerName: string
+        }[]
+      >`
+        select d.id as "invoiceId", d.number,
+               to_char(a.created_at at time zone 'Europe/Berlin', 'YYYY-MM-DD') as date,
+               a.amount_cents::text as amount,
+               case when d.type = 'credit_note' then -1 else 1 end as sign,
+               a.reverses_adjustment_id is not null as reversal,
+               c.number as "customerNumber", coalesce(d.recipient_snapshot ->> 'name', c.display_name, '') as "customerName"
+        from receivable_adjustment a
+        left join receivable_adjustment o on o.id = a.reverses_adjustment_id
+        join document d on d.id = a.invoice_id
+        left join contact c on c.id = d.contact_id
+        where a.kind in ('short_payment', 'other')
+          and not coalesce(o.disputed, a.disputed)
+          and (a.created_at at time zone 'Europe/Berlin')::date between ${from}::date and ${to}::date
+        order by a.created_at, d.number`
+      const adjustmentLines = adjustmentRows.length
+        ? await tx<
+            { documentId: string; category: string; rate: string; net: string; tax: string }[]
+          >`
+            select document_id as "documentId", tax_category as category, rate_percent::text as rate,
+                   net_cents::text as net, tax_cents::text as tax
+            from document_tax_line where document_id in ${tx([...new Set(adjustmentRows.map((a) => a.invoiceId))])}`
+        : []
+      const adjustments: ExportAdjustment[] = adjustmentRows.map((a) => ({
+        invoiceNumber: a.number,
+        date: a.date,
+        amountCents: BigInt(a.amount) * BigInt(a.sign),
+        customerAccount: customerAccount(a.customerNumber),
+        customerName: a.customerName,
+        reversal: a.reversal,
+        taxLines: adjustmentLines
+          .filter((l) => l.documentId === a.invoiceId)
+          .map((l) => ({
+            category: l.category,
+            ratePercent: l.rate,
+            netCents: BigInt(l.net),
+            taxCents: BigInt(l.tax),
+          })),
+      }))
       const csv = datevBookingBatch(
         {
           consultantNumber: settings.consultantNumber,
@@ -266,7 +320,7 @@ export function registerExportRoutes(app: FastifyInstance, services: Services) {
           description: `Ausgangsrechnungen ${germanDate(from)}-${germanDate(to)}`,
           createdAt: new Date(),
         },
-        datevBookings(exportInvoices, payments, accounts),
+        datevBookings(exportInvoices, payments, accounts, adjustments),
       )
       // Belege: only the PDF originals (Belegfeld 1 = file name), as DATEV expects images/PDFs.
       const originals = withBelege

@@ -117,6 +117,16 @@ describe.skipIf(!process.env.DATABASE_URL)('Exporte (integration)', () => {
       insert into payment (tenant_id, invoice_id, paid_on, amount_cents, method, reference)
       values (${tenantId}, ${invoice.id}, '2026-11-20', 30000, 'transfer', 'R-00101 Teil')`,
     )
+    // Accepted Kürzung goes to DATEV; Skonto and a bestrittene Kürzung do not.
+    await withTenant(
+      h.sql,
+      { tenantId },
+      (tx) => tx`
+      insert into receivable_adjustment (tenant_id, invoice_id, kind, amount_cents, reason, disputed, created_at)
+      values (${tenantId}, ${invoice.id}, 'other', 1070, 'Rabatt Mängel', false, '2026-11-21T10:00:00+01:00'),
+             (${tenantId}, ${invoice.id}, 'cash_discount', 500, null, false, '2026-11-21T10:00:00+01:00'),
+             (${tenantId}, ${invoice.id}, 'short_payment', 300, 'Kürzung strittig', true, '2026-11-21T10:00:00+01:00')`,
+    )
 
     const folders = (await admin.get(`/api/v1/projects/${projectId}/folders`)).json() as {
       id: string
@@ -155,7 +165,7 @@ describe.skipIf(!process.env.DATABASE_URL)('Exporte (integration)', () => {
     ).toBe(400)
   })
 
-  it('writes a DATEV Buchungsstapel with one booking per tax rate and the payment', async () => {
+  it('writes a DATEV Buchungsstapel per tax rate with the payment and accepted Kürzungen', async () => {
     const put = await admin.put('/api/v1/settings/datev', {
       consultantNumber: '1234567',
       clientNumber: '10001',
@@ -176,7 +186,7 @@ describe.skipIf(!process.env.DATABASE_URL)('Exporte (integration)', () => {
     expect(lines[0]).toMatch(/^"EXTF";700;21;"Buchungsstapel";/)
     expect(lines[0]).toContain(';1234567;10001;20260101;4;20261101;20261130;')
     const bookings = lines.slice(2)
-    expect(bookings).toHaveLength(3)
+    expect(bookings).toHaveLength(5)
     // 10 × 45,00 € net + 19 % = 535,50 €; 20,00 € + 7 % = 21,40 €; payment 300,00 €
     expect(bookings.join('\n')).toContain('535,50;"S"')
     expect(bookings.join('\n')).toContain('21,40;"S"')
@@ -185,6 +195,11 @@ describe.skipIf(!process.env.DATABASE_URL)('Exporte (integration)', () => {
     expect(bookings.join('\n')).toContain(';8400;')
     expect(bookings.join('\n')).toContain(';8300;')
     expect(bookings.join('\n')).toContain(';1200;')
+    // Kürzung 10,70 € split by gross share (535,50 : 21,40), Erlöse an Debitor; no Skonto.
+    expect(bookings.join('\n')).toContain('10,29;"S";"EUR";;;;8400;10001;;2111;"R-00101"')
+    expect(bookings.join('\n')).toContain('0,41;"S";"EUR";;;;8300;10001;;2111;"R-00101"')
+    expect(bookings.join('\n')).not.toContain('5,00;')
+    expect(bookings.join('\n')).not.toContain('3,00;')
   })
 
   it('writes the GoBD Datenträgerüberlassung with index.xml and CSV tables', async () => {

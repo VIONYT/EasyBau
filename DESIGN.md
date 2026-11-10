@@ -490,7 +490,7 @@ invoice ─┬─ payment (date, amount_cents, method, reference)
 | Zeitgerechte Erfassung | `finalized_at`, Server-Zeitstempel |
 | Maschinelle Auswertbarkeit / **Z3-Datenträgerüberlassung** | Export „Betriebsprüfung“: ZIP mit CSV-Dateien (Rechnungen, Positionen, Steuerzeilen, Zahlungen, Kunden, Audit-Log) + **`index.xml` nach GDPdU-Beschreibungsstandard (gdpdu-01-09-2004.dtd)**, Zeitraumfilter, plus Original-Belegdateien |
 | Z1/Z2-Zugriff | Prüferrolle „Nur lesen“, zeitlich befristet, nur steuerrelevante Bereiche, jede Aktion protokolliert |
-| Steuerberater | **DATEV-Buchungsstapel (EXTF, Format 700)** mit Erlöskonten nach SKR03/SKR04 (Mapping konfigurierbar), Debitorennummern, Belegfeld 1 = Rechnungsnummer; Belegbilder als ZIP; später DATEV-Connect-online-Anbindung |
+| Steuerberater | **DATEV-Buchungsstapel (EXTF, Format 700)** mit Erlöskonten nach SKR03/SKR04 (Mapping konfigurierbar), Debitorennummern, Belegfeld 1 = Rechnungsnummer; Zahlungseingänge (Bank an Debitor) und anerkannte Kürzungen/Rabatte (Erlöse an Debitor, je Steuersatz anteilig; kein Skonto, kein Einbehalt, keine Bauumlage, keine bestrittenen Kürzungen); Belegbilder als ZIP; später DATEV-Connect-online-Anbindung |
 | E-Rechnung | ZUGFeRD 2.x Profil EN 16931 (Standard) und XRechnung UBL (für öffentliche Auftraggeber mit Leitweg-ID); jede Datei wird vor dem Versand gegen KoSIT validiert, sonst blockiert der Versand mit einer verständlichen Meldung |
 | Verfahrensdokumentation | Vorlage in `docs/verfahrensdokumentation/`, die Kunden übernehmen und ergänzen können |
 | DSGVO | AVV-Vorlage, Löschkonzept: nicht steuerrelevante Daten löschbar; steuerrelevante werden bis Fristende **gesperrt** und danach automatisch gelöscht; Auskunfts- und Exportfunktion |
