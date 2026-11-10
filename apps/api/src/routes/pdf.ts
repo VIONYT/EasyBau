@@ -36,7 +36,7 @@ async function readAll(stream: Readable): Promise<Buffer> {
   return Buffer.concat(chunks)
 }
 
-async function logoFor(
+export async function logoFor(
   tx: Tx,
   services: Services,
   logoPosition: LogoPosition | null,
@@ -244,7 +244,7 @@ export async function archiveDocumentPdf(
 }
 
 /** RFC 6266 file name: ASCII fallback plus UTF-8 version. */
-function contentDisposition(filename: string): string {
+export function contentDisposition(filename: string): string {
   const ascii = filename
     .normalize('NFKD')
     .replace(/[^\x20-\x7e]/g, '')

@@ -11,6 +11,7 @@ export type ArtifactKind =
   | 'zugferd_xml'
   | 'xrechnung_xml'
   | 'validation_report'
+  | 'dunning_pdf'
 
 /**
  * Archives an original of a finalized document (insert-only, SHA-256, locked for the retention
@@ -30,6 +31,11 @@ export async function storeArtifact(
     validated?: boolean
     validatedAt?: string | null
     sourceArtifactId?: string | null
+    /** Mahnung: the notice the PDF belongs to. */
+    dunningNoticeId?: string | null
+    /** Start of the retention period (default: the document date) and its length in years. */
+    retentionFrom?: string
+    retentionYears?: number
   },
 ): Promise<string> {
   const pending = await services.storage.receive(Readable.from([artifact.data]), {
@@ -43,11 +49,13 @@ export async function storeArtifact(
       artifact.validatedAt ?? (artifact.validated ? new Date().toISOString() : null)
     await tx`
       insert into document_artifact (id, tenant_id, document_id, kind, storage_key, sha256, size_bytes,
-                                     mime_type, format, validated_at, source_artifact_id, locked_until)
+                                     mime_type, format, validated_at, source_artifact_id, dunning_notice_id,
+                                     locked_until)
       select ${artifactId}, tenant_id, id, ${artifact.kind}, ${key}, ${pending.sha256}, ${pending.sizeBytes},
              ${artifact.mime}, ${artifact.format ?? null}, ${validatedAt}::timestamptz,
-             ${artifact.sourceArtifactId ?? null},
-             (date_trunc('year', document_date) + interval '11 years' - interval '1 day')::date
+             ${artifact.sourceArtifactId ?? null}, ${artifact.dunningNoticeId ?? null},
+             (date_trunc('year', coalesce(${artifact.retentionFrom ?? null}::date, document_date))
+               + make_interval(years => ${(artifact.retentionYears ?? 10) + 1}) - interval '1 day')::date
       from document where id = ${documentId}`
     await pending.commit(key)
     return artifactId

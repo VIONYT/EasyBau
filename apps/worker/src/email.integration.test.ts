@@ -1,4 +1,12 @@
-import { createTenant, openTestDb, type TestDb, testDatabaseUrl } from '@opc/db/test-support'
+import {
+  createDraftInvoice,
+  createProject,
+  createTenant,
+  finalizeDocument,
+  openTestDb,
+  type TestDb,
+  testDatabaseUrl,
+} from '@opc/db/test-support'
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
 import { dispatchEmails, type OutgoingMail } from './email.js'
 
@@ -74,5 +82,40 @@ describe.skipIf(!testDatabaseUrl)('e-mail outbox dispatch (integration)', () => 
       error: 'Verbindung abgelehnt',
       body: null,
     })
+  })
+
+  it('attaches archived originals and fails while one is not readable', async () => {
+    const tenant = await createTenant(db, 'Firma D')
+    const messageId = await tenant.run(async (tx) => {
+      const { projectId } = await createProject(tx, tenant.tenantId)
+      const { documentId } = await createDraftInvoice(tx, tenant.tenantId, projectId)
+      await finalizeDocument(tx, documentId)
+      const [artifact] = await tx<{ id: string }[]>`
+        insert into document_artifact (tenant_id, document_id, kind, storage_key, sha256, size_bytes,
+                                       mime_type, locked_until)
+        values (${tenant.tenantId}, ${documentId}, 'pdf', 'key/mahnung', ${Buffer.alloc(32)}, 4,
+                'application/pdf', '2032-12-31')
+        returning id`
+      const [message] = await tx<{ id: string }[]>`
+        insert into email_message (tenant_id, kind, to_address, subject, body_text)
+        values (${tenant.tenantId}, 'dunning', 'd@example.test', 'Mahnung', 'Anbei')
+        returning id`
+      await tx`
+        insert into email_attachment (tenant_id, email_message_id, artifact_id, filename)
+        values (${tenant.tenantId}, ${message?.id as string}, ${artifact?.id as string}, 'Mahnung_R-1.pdf')`
+      return message?.id as string
+    })
+    const sent: OutgoingMail[] = []
+    const transport = { send: async (mail: OutgoingMail) => void sent.push(mail) }
+    // Not readable (e.g. working copy missing and no archive): retried later, nothing sent.
+    expect(await dispatchEmails(db.app, transport, 'x', silent, 10, async () => null)).toBe(0)
+    await db.admin`update email_message set next_attempt_at = now() where id = ${messageId}`
+    const reader = async (key: string): Promise<Buffer | null> =>
+      key === 'key/mahnung' ? Buffer.from('%PDF') : null
+    expect(await dispatchEmails(db.app, transport, 'x', silent, 10, reader)).toBe(1)
+    expect(sent).toHaveLength(1)
+    expect(sent[0]?.attachments).toEqual([
+      { filename: 'Mahnung_R-1.pdf', content: Buffer.from('%PDF'), contentType: 'application/pdf' },
+    ])
   })
 })

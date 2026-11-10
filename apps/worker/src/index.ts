@@ -8,7 +8,13 @@ import { dispatchEmails, smtpTransport } from './email.js'
 
 export { type ArchiveRun, archivePending } from './archive.js'
 
-export { dispatchEmails, type MailTransport, type OutgoingMail, smtpTransport } from './email.js'
+export {
+  type ArtifactReader,
+  dispatchEmails,
+  type MailTransport,
+  type OutgoingMail,
+  smtpTransport,
+} from './email.js'
 
 /**
  * Background jobs run on pg-boss, i.e. inside PostgreSQL (ADR 0002).
@@ -65,14 +71,25 @@ export async function startWorker(
   // E-mail outbox (optional): polled every 15 s, cheap thanks to a partial index.
   let mailTimer: NodeJS.Timeout | undefined
   const sql = smtpEnabled(config) ? createSql({ ...config, DATABASE_POOL_MAX: 1 }) : undefined
+  const archive = archiveStoreFromSettings(config)
   if (sql) {
     const transport = smtpTransport(config)
+    const mailFiles = new FsObjectStore(config.STORAGE_DIR)
+    // Attachments (e.g. Mahnung PDF): working copy, else the WORM archive (ADR 0008).
+    const readArtifact = async (key: string): Promise<Buffer | null> => {
+      if ((await mailFiles.size(key)) !== null) {
+        const chunks: Buffer[] = []
+        for await (const chunk of mailFiles.read(key)) chunks.push(chunk as Buffer)
+        return Buffer.concat(chunks)
+      }
+      return archive ? archive.get(key) : null
+    }
     let running = false
     const tick = async () => {
       if (running) return
       running = true
       try {
-        await dispatchEmails(sql, transport, config.SMTP_FROM as string, logger)
+        await dispatchEmails(sql, transport, config.SMTP_FROM as string, logger, 10, readArtifact)
       } catch (err) {
         logger.error({ err }, 'e-mail dispatch failed')
       } finally {
@@ -85,7 +102,6 @@ export async function startWorker(
   }
   // Belegarchiv (ADR 0008): copy finalized originals into the WORM bucket, every 30 s.
   let archiveTimer: NodeJS.Timeout | undefined
-  const archive = archiveStoreFromSettings(config)
   const archiveSql = archive ? createSql({ ...config, DATABASE_POOL_MAX: 1 }) : undefined
   if (archive && archiveSql) {
     const files = new FsObjectStore(config.STORAGE_DIR)

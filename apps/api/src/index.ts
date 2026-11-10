@@ -21,6 +21,7 @@ import { authHook, mfaEnforcementHook, registerAuthRoutes } from './routes/auth.
 import { registerCatalogRoutes } from './routes/catalog.js'
 import { registerContactRoutes } from './routes/contacts.js'
 import { registerDocumentRoutes } from './routes/documents.js'
+import { registerDunningRoutes } from './routes/dunning.js'
 import { registerEmailRoutes } from './routes/email.js'
 import { registerExportRoutes } from './routes/exports.js'
 import { registerFileRoutes } from './routes/files.js'
@@ -228,6 +229,7 @@ export function buildApi({
   registerPdfRoutes(app, services)
   registerEinvoiceRoutes(app, services)
   registerReceivableRoutes(app, services)
+  registerDunningRoutes(app, services)
   registerSignatureRoutes(app, services)
   registerMeasurementRoutes(app, services)
   registerReportRoutes(app, services)

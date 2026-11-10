@@ -659,6 +659,7 @@ export function registerExportRoutes(app: FastifyInstance, services: Services) {
       'payment',
       'receivable_adjustment',
       'dunning_notice',
+      'base_interest_rate',
       'file',
       'catalog_folder',
       'catalog_item',

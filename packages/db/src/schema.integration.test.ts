@@ -11,6 +11,9 @@ import {
   testDatabaseUrl,
 } from './test-support.js'
 
+/** Tables with rows for all companies (tenant_id null) next to company rows: Basiszinssätze. */
+const SHARED_REFERENCE_TABLES = ['base_interest_rate']
+
 describe.skipIf(!testDatabaseUrl)('database schema (integration)', () => {
   let db: TestDb
   let a: TestTenant
@@ -63,8 +66,12 @@ describe.skipIf(!testDatabaseUrl)('database schema (integration)', () => {
       for (const tenant of [a, b]) {
         await tenant.run(async (tx) => {
           for (const { table } of tables) {
+            // Reference data shipped with the release (tenant_id null) is shared on purpose.
+            const foreign = SHARED_REFERENCE_TABLES.includes(table)
+              ? 'tenant_id is not null and tenant_id <> current_tenant_id()'
+              : 'tenant_id is distinct from current_tenant_id()'
             const [row] = await tx.unsafe<{ foreign: number }[]>(
-              `select count(*)::int as foreign from ${table} where tenant_id is distinct from current_tenant_id()`,
+              `select count(*)::int as foreign from ${table} where ${foreign}`,
             )
             expect(row?.foreign, `table ${table}`).toBe(0)
           }

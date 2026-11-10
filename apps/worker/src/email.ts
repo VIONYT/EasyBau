@@ -9,7 +9,11 @@ export interface OutgoingMail {
   replyTo?: string
   subject: string
   text: string
+  attachments?: { filename: string; content: Buffer; contentType: string }[]
 }
+
+/** Reads an archived original: working copy in the files volume, else the WORM archive. */
+export type ArtifactReader = (storageKey: string) => Promise<Buffer | null>
 
 /** Sends one message; throws on failure (the outbox retries later). */
 export interface MailTransport {
@@ -55,17 +59,27 @@ export async function dispatchEmails(
   from: string,
   logger: Pick<Logger, 'warn' | 'debug'>,
   limit = 10,
+  readArtifact?: ArtifactReader,
 ): Promise<number> {
   const messages = await sql<ClaimedMessage[]>`select * from claim_email_messages(${limit})`
   let sent = 0
   for (const message of messages) {
     try {
+      const files = await sql<{ filename: string; storage_key: string; mime_type: string }[]>`
+        select * from email_message_attachments(${message.id})`
+      const attachments: NonNullable<OutgoingMail['attachments']> = []
+      for (const file of files) {
+        const content = readArtifact ? await readArtifact(file.storage_key) : null
+        if (!content) throw new Error(`attachment ${file.filename} is not readable`)
+        attachments.push({ filename: file.filename, content, contentType: file.mime_type })
+      }
       await transport.send({
         from,
         to: message.to_address,
         ...(message.reply_to ? { replyTo: message.reply_to } : {}),
         subject: message.subject,
         text: message.body_text ?? '',
+        ...(attachments.length ? { attachments } : {}),
       })
       await sql`select finish_email_message(${message.id}, true, null)`
       sent += 1
