@@ -4,6 +4,7 @@ import { useCallback, useEffect, useState } from 'react'
 export type Route =
   | { view: 'projects' }
   | { view: 'contacts' }
+  | { view: 'invoices' }
   | { view: 'users' }
   | { view: 'security' }
   | { view: 'catalog' }
@@ -47,6 +48,7 @@ export function parseRoute(path: string): Route {
   if (path.startsWith('/stammdaten')) return { view: 'catalog' }
   if (path.startsWith('/einstellungen')) return { view: 'settings' }
   if (path.startsWith('/kontakte')) return { view: 'contacts' }
+  if (path.startsWith('/rechnungen')) return { view: 'invoices' }
   if (path.startsWith('/benutzer')) return { view: 'users' }
   if (path.startsWith('/sicherheit')) return { view: 'security' }
   return { view: 'projects' }
@@ -66,6 +68,8 @@ export function pathOf(route: Route): string {
       return '/benutzer'
     case 'security':
       return '/sicherheit'
+    case 'invoices':
+      return '/rechnungen'
     case 'project': {
       const segment = {
         overview: '',

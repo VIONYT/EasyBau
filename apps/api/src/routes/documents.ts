@@ -55,6 +55,7 @@ import { checkIfMatch, etagOf, HttpError, notFound, parse } from '../http.js'
 import { finalizeInvoice } from './invoices.js'
 import { companyValues, loadLetterhead } from './letterhead.js'
 import { archiveDocumentPdf } from './pdf.js'
+import { loadReceivable, todayOf } from './receivables.js'
 
 const projectParam = z.object({ id: z.uuid('Ungültige ID.') })
 const documentParam = z.object({ id: z.uuid('Ungültige ID.') })
@@ -661,6 +662,7 @@ export async function loadDocument(
   }
   // Finalized: the frozen notes; drafts: a live preview.
   detail.legalNotes = storedNotes ?? (doc.status === 'draft' ? legalNotesOf(detail) : [])
+  detail.receivable = await loadReceivable(tx, detail, todayOf(tx))
   return { ...detail, etag: etagOf(updatedRaw) }
 }
 

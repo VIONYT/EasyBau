@@ -6,7 +6,7 @@ import { defaultLetterhead } from '@opc/domain'
 import type { DocumentDetail } from '@opc/schemas'
 import { describe, expect, it } from 'vitest'
 import { documentLetter, documentTitle, germanPercent, germanQuantity } from './document.js'
-import { renderLetterPdf } from './render.js'
+import { qrSvg, renderLetterPdf } from './render.js'
 
 const PNG = Buffer.from(
   'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==',
@@ -178,6 +178,30 @@ describe('PDF/A mit Typst', () => {
     expect(germanQuantity(null)).toBe('')
   })
 
+  it('adds the GiroCode (EPC-QR) only to finalized invoices', () => {
+    const doc = sampleDocument()
+    expect(documentLetter(doc, { watermark: null }).body.paymentQr).toEqual({
+      payload:
+        'BCD\n002\n1\nSCT\n\nMuster Bau GmbH\nDE89370400440532013000\nEUR22.61\n\n\nR2026-00103',
+      lines: [
+        'Bezahlen mit GiroCode',
+        'Mit der Banking-App scannen.',
+        'Betrag: 22,61 €',
+        'Verwendungszweck: R2026-00103',
+      ],
+    })
+    expect(documentLetter(doc, { watermark: 'ENTWURF' }).body.paymentQr).toBeNull()
+    expect(
+      documentLetter({ ...doc, invoiceKind: 'cancellation' }, { watermark: null }).body.paymentQr,
+    ).toBeNull()
+    expect(
+      documentLetter({ ...doc, issuer: { ...doc.issuer, values: {} } }, { watermark: null }).body
+        .paymentQr,
+    ).toBeNull()
+    const svg = qrSvg('BCD').toString()
+    expect(svg).toMatch(/^<svg xmlns="http:\/\/www.w3.org\/2000\/svg" viewBox="0 0 29 29"/)
+  })
+
   it('renders a PDF/A-3b letter on A4 with letterhead, address and legal notes', () => {
     const doc = sampleDocument()
     const { logoPosition, ...letter } = documentLetter(doc, { watermark: null })
@@ -207,6 +231,9 @@ describe('PDF/A mit Typst', () => {
       '1.234,50 m²',
       'Zahlbar ohne Abzug bis 05.12.2026.',
       'IBAN DE89 3704 0044 0532 0130 00',
+      // GiroCode with the Zahlbetrag (gross − Einbehalt).
+      'Bezahlen mit GiroCode',
+      'Verwendungszweck: R2026-00103',
       // Texts are never evaluated as Typst markup.
       '#set text(red) [x]',
     ]) {

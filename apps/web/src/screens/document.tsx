@@ -34,6 +34,7 @@ import { type TextKey, t, tf } from '../i18n'
 import type { Navigate } from '../router'
 import { articlePrice } from './catalog'
 import { documentLabel, StatusChip } from './documents'
+import { ReceivablePanel } from './payments'
 
 type Doc = DocumentDetail
 type Apply = (result: { data: Doc; etag: string | null }) => void
@@ -146,6 +147,13 @@ export function DocumentScreen({ me, id, navigate }: { me: Me; id: string; navig
         apply={apply}
         navigate={navigate}
       />
+      {doc.receivable ? (
+        <ReceivablePanel
+          doc={doc}
+          canWrite={me.permissions.includes('payment.write')}
+          onChange={(receivable) => setDoc({ ...doc, receivable })}
+        />
+      ) : null}
 
       <HeaderForm doc={doc} etag={etag} editable={editable} apply={apply} />
       <Positions

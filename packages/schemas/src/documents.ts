@@ -11,6 +11,7 @@ import {
   TAX_MODES,
 } from './constants.js'
 import type { LetterheadLayout } from './letterhead.js'
+import type { Receivable } from './receivables.js'
 
 export type DocumentType = (typeof DOCUMENT_TYPES)[number]
 
@@ -467,6 +468,8 @@ export interface DocumentDetail extends DocumentSummary {
   totals: DocumentTotals
   /** Finalized invoices: archived e-invoice files (ZUGFeRD, XRechnung), validated by KoSIT. */
   einvoice?: EinvoiceSummary | null
+  /** Finalized invoices and credit notes: payments, deductions, open amount, status. */
+  receivable?: Receivable | null
   /** Finalized documents: state of the revisionssichere Archiv. */
   archive?: DocumentArchive | null
 }

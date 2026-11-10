@@ -607,6 +607,31 @@ test('Rechnung: Pflichtangaben, Festschreiben und Korrigieren per Storno', async
       timeout: 2000,
     })
   }).toPass({ timeout: 60_000 })
+
+  // Zahlungen: Teilzahlung erfassen, Status und offene Forderung
+  const receivable = page.locator('.receivable')
+  await expect(receivable.locator('.chip')).toHaveText('offen')
+  await receivable.getByRole('button', { name: 'Zahlung erfassen' }).click()
+  await receivable.getByLabel('Betrag (€)').fill('100,00')
+  await receivable.getByLabel('Verwendungszweck / Notiz').fill('Anzahlung')
+  await expect(receivable.getByText(/Teilzahlung, danach noch offen/)).toBeVisible()
+  await expectNoHorizontalScroll(page)
+  if (SCREENSHOTS)
+    await page.screenshot({ path: `${SCREENSHOTS}/zahlung-erfassen.png`, fullPage: true })
+  await receivable.getByRole('button', { name: 'Speichern' }).click()
+  await expect(receivable.locator('.chip')).toHaveText('teilbezahlt')
+  await expect(receivable.getByText('Anzahlung')).toBeVisible()
+
+  // Rechnungsliste mit Status, Summen und Filter
+  await page.getByRole('button', { name: 'Rechnungen' }).click()
+  await expect(page.getByRole('heading', { name: 'Rechnungen' })).toBeVisible()
+  await expect(page.getByRole('link', { name: /R-00101/ })).toContainText('teilbezahlt')
+  await page.getByLabel('Status').selectOption('partially_paid')
+  await expect(page.getByText('Rechnungen: 1')).toBeVisible()
+  await expectNoHorizontalScroll(page)
+  if (SCREENSHOTS)
+    await page.screenshot({ path: `${SCREENSHOTS}/rechnungsliste.png`, fullPage: true })
+  await page.goto(invoiceUrl)
   await expectNoHorizontalScroll(page)
   if (SCREENSHOTS)
     await page.screenshot({ path: `${SCREENSHOTS}/rechnung-erechnung.png`, fullPage: true })

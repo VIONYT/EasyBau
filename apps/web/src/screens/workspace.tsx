@@ -7,6 +7,7 @@ import { type Route, useRoute } from '../router'
 import { Catalog } from './catalog'
 import { ContactEditor } from './contact-editor'
 import { DocumentScreen } from './document'
+import { Invoices } from './invoices'
 import { MeasurementScreen } from './measurement'
 import { PrintScreen } from './print'
 import { ProjectScreen } from './project'
@@ -16,7 +17,7 @@ import { Security } from './security'
 import { Settings } from './settings'
 import { Users } from './users'
 
-type Tab = 'projects' | 'contacts' | 'catalog' | 'users' | 'settings' | 'security'
+type Tab = 'projects' | 'invoices' | 'contacts' | 'catalog' | 'users' | 'settings' | 'security'
 
 /** Working area after login. Admins without second factor only see the security settings. */
 export function Workspace({
@@ -48,6 +49,11 @@ export function Workspace({
       : current.view
   const tabs: { key: Tab; label: string; visible: boolean }[] = [
     { key: 'projects', label: t('nav.projects'), visible: !locked },
+    {
+      key: 'invoices',
+      label: t('nav.invoices'),
+      visible: !locked && me.permissions.includes('document.read'),
+    },
     {
       key: 'contacts',
       label: t('nav.contacts'),
@@ -133,6 +139,7 @@ export function Workspace({
         {current.view === 'catalog' ? <Catalog me={me} /> : null}
         {current.view === 'settings' ? <Settings me={me} /> : null}
         {current.view === 'contacts' ? <Contacts me={me} /> : null}
+        {current.view === 'invoices' ? <Invoices navigate={navigate} /> : null}
         {current.view === 'users' ? <Users /> : null}
         {current.view === 'security' ? <Security me={me} onChanged={refreshMe} /> : null}
       </main>

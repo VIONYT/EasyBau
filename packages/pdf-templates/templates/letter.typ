@@ -238,4 +238,17 @@
 ))) }
 
 #for note in data.body.notes { block(above: 3mm, text(size: 9.5pt, note)) }
+// Bezahlcode (GiroCode / EPC-QR) for banking apps.
+#let payment-qr = data.body.at("paymentQr", default: none)
+#if payment-qr != none {
+  block(above: 6mm, breakable: false, grid(
+    columns: (26mm, 1fr),
+    column-gutter: 4mm,
+    image("/girocode.svg", width: 26mm),
+    align(horizon, text(size: 8.5pt, {
+      strong(payment-qr.lines.at(0))
+      for line in payment-qr.lines.slice(1) { linebreak() + line }
+    })),
+  ))
+}
 #if data.body.closing != none { block(above: 4mm, lines(data.body.closing)) }

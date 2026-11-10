@@ -30,6 +30,7 @@ import { registerMeasurementRoutes } from './routes/measurements.js'
 import { registerOperationsRoutes } from './routes/operations.js'
 import { registerPdfRoutes } from './routes/pdf.js'
 import { registerProjectRoutes } from './routes/projects.js'
+import { registerReceivableRoutes } from './routes/receivables.js'
 import { registerReportRoutes } from './routes/reports.js'
 import { registerSettingsRoutes } from './routes/settings.js'
 import { registerSignatureRoutes } from './routes/signatures.js'
@@ -226,6 +227,7 @@ export function buildApi({
   registerLetterheadRoutes(app, services)
   registerPdfRoutes(app, services)
   registerEinvoiceRoutes(app, services)
+  registerReceivableRoutes(app, services)
   registerSignatureRoutes(app, services)
   registerMeasurementRoutes(app, services)
   registerReportRoutes(app, services)
