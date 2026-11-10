@@ -1,7 +1,10 @@
 import { checkNumberPattern, formatNumber } from '@opc/domain'
 import type {
+  BaseInterestRate,
   Company,
   DatevSettings,
+  DunningLevel,
+  DunningSettings,
   Me,
   NumberSequence,
   PaymentTerm,
@@ -17,7 +20,7 @@ import { type ReactNode, useCallback, useEffect, useId, useRef, useState } from 
 import { ApiError, api } from '../api'
 import { formatCents, formatInputNumber, parseEuro } from '../format'
 import { FormError } from '../forms'
-import { type TextKey, t } from '../i18n'
+import { type TextKey, t, tf } from '../i18n'
 import { LetterheadEditor } from './letterhead'
 import { SystemSettings } from './system'
 
@@ -34,6 +37,7 @@ type Section =
   | 'letterhead'
   | 'filing'
   | 'datev'
+  | 'dunning'
   | 'system'
 
 const SECTIONS: { key: Section; label: TextKey }[] = [
@@ -49,6 +53,7 @@ const SECTIONS: { key: Section; label: TextKey }[] = [
   { key: 'letterhead', label: 'lh.title' },
   { key: 'filing', label: 's.filing' },
   { key: 'datev', label: 's.datev' },
+  { key: 'dunning', label: 'sys.dunning' },
   { key: 'system', label: 'sys.title' },
 ]
 
@@ -93,6 +98,7 @@ export function Settings({ me }: { me: Me }) {
         {section === 'letterhead' ? <LetterheadEditor canEdit={canWrite} /> : null}
         {section === 'filing' ? <FilingSettings /> : null}
         {section === 'datev' ? <DatevSettingsForm /> : null}
+        {section === 'dunning' ? <DunningSettingsForm /> : null}
         {section === 'system' ? <SystemSettings me={me} /> : null}
       </fieldset>
     </section>
@@ -1203,3 +1209,177 @@ function DatevSettingsForm() {
     </Panel>
   )
 }
+
+// ---- Mahnungen --------------------------------------------------------------------------------
+
+const DUNNING_STEPS: DunningLevel[] = ['reminder', 'first', 'final']
+
+function DunningSettingsForm() {
+  const { data, setData, error } = useResource<DunningSettings>('/api/v1/settings/dunning')
+  const save = useSave()
+  if (error) return <FormError>{error}</FormError>
+  if (!data) return <p className="muted">{t('common.loading')}</p>
+  const update = (level: DunningLevel, patch: Partial<DunningSettings[DunningLevel]>) =>
+    setData({ ...data, [level]: { ...data[level], ...patch } })
+  return (
+    <>
+      <Panel title={t('sys.dunning')}>
+        <p className="hint">{t('sys.dunningHint')}</p>
+        {DUNNING_STEPS.map((level) => (
+          <DunningStep key={level} level={level} rule={data[level]} onChange={update} />
+        ))}
+        <Check
+          label={t('sys.dunningFlatFee')}
+          checked={data.flatFeeBusiness}
+          onChange={(v) => setData({ ...data, flatFeeBusiness: v })}
+        />
+        <div className="button-row">
+          <button
+            type="button"
+            className="button primary auto"
+            disabled={save.busy}
+            onClick={() =>
+              save.run(async () =>
+                setData(await api<DunningSettings>('PUT', '/api/v1/settings/dunning', data)),
+              )
+            }
+          >
+            {t('common.save')}
+          </button>
+          {save.message}
+        </div>
+      </Panel>
+      <BaseRateSettings />
+    </>
+  )
+}
+
+function DunningStep({
+  level,
+  rule,
+  onChange,
+}: {
+  level: DunningLevel
+  rule: DunningSettings[DunningLevel]
+  onChange: (level: DunningLevel, patch: Partial<DunningSettings[DunningLevel]>) => void
+}) {
+  const id = useId()
+  const [fee, setFee] = useState(formatInputNumber((rule.feeCents / 100).toFixed(2)))
+  return (
+    <fieldset className="dunning-step">
+      <legend>{t(`dun.level.${level}` as TextKey)}</legend>
+      <div className="row">
+        <Input
+          label={t('dun.days')}
+          inputMode="numeric"
+          value={String(rule.days)}
+          onChange={(v) => onChange(level, { days: Number(v) || 0 })}
+        />
+        <Input
+          label={t('dun.fee')}
+          inputMode="decimal"
+          value={fee}
+          onChange={(v) => {
+            setFee(v)
+            const cents = parseEuro(v)
+            if (cents !== null) onChange(level, { feeCents: cents })
+          }}
+        />
+      </div>
+      <Check
+        label={tf('dun.interest', { points: '5/9' })}
+        checked={rule.interest}
+        onChange={(v) => onChange(level, { interest: v })}
+      />
+      <div className="field">
+        <label htmlFor={`${id}-text`}>{t('dun.text')}</label>
+        <textarea
+          id={`${id}-text`}
+          rows={4}
+          value={rule.text}
+          onChange={(e) => onChange(level, { text: e.target.value })}
+        />
+      </div>
+    </fieldset>
+  )
+}
+
+function BaseRateSettings() {
+  const { data, setData, error } = useResource<BaseInterestRate[]>(
+    '/api/v1/settings/base-interest-rates',
+  )
+  const save = useSave()
+  const [validFrom, setValidFrom] = useState('')
+  const [rate, setRate] = useState('')
+  if (error) return <FormError>{error}</FormError>
+  if (!data) return null
+  return (
+    <Panel title={t('sys.baseRates')}>
+      <p className="hint">{t('sys.baseRatesHint')}</p>
+      <ul className="list entries">
+        {data.slice(0, 8).map((r) => (
+          <li key={r.id}>
+            <span>
+              {tf('sys.baseRateLine', {
+                date: formatDate(r.validFrom),
+                rate: r.ratePercent.replace('.', ','),
+              })}
+              {r.own ? <span className="muted"> · {t('sys.baseRateOwn')}</span> : null}
+            </span>
+            {r.own ? (
+              <button
+                type="button"
+                className="button ghost auto"
+                onClick={() =>
+                  save.run(async () =>
+                    setData(
+                      await api<BaseInterestRate[]>(
+                        'DELETE',
+                        `/api/v1/settings/base-interest-rates/${r.id}`,
+                      ),
+                    ),
+                  )
+                }
+              >
+                {t('common.delete')}
+              </button>
+            ) : null}
+          </li>
+        ))}
+      </ul>
+      <div className="row">
+        <Input
+          label={t('sys.baseRateFrom')}
+          type="date"
+          value={validFrom}
+          onChange={setValidFrom}
+        />
+        <Input label={t('sys.baseRateValue')} inputMode="decimal" value={rate} onChange={setRate} />
+      </div>
+      <div className="button-row">
+        <button
+          type="button"
+          className="button ghost auto"
+          disabled={save.busy || !validFrom || !rate}
+          onClick={() =>
+            save.run(async () => {
+              setData(
+                await api<BaseInterestRate[]>('POST', '/api/v1/settings/base-interest-rates', {
+                  validFrom,
+                  ratePercent: rate,
+                }),
+              )
+              setValidFrom('')
+              setRate('')
+            })
+          }
+        >
+          {t('sys.baseRateAdd')}
+        </button>
+        {save.message}
+      </div>
+    </Panel>
+  )
+}
+
+const formatDate = (iso: string) => iso.split('-').reverse().join('.')

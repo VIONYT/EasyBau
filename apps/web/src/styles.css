@@ -2144,3 +2144,32 @@ fieldset.plain {
 .invoice-list .is-cancelled {
   opacity: 0.6;
 }
+
+/* Mahnwesen */
+.dunning .list.entries li > form {
+  flex-basis: 100%;
+}
+.chip--mail-queued,
+.chip--mail-sending {
+  color: var(--color-primary);
+}
+.chip--mail-sent {
+  color: var(--color-success);
+}
+.chip--mail-failed {
+  color: var(--color-error);
+}
+.dunning-form h3 {
+  margin: var(--space-4) 0 var(--space-2);
+}
+.dunning-step {
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius);
+  padding: var(--space-3);
+  margin: 0 0 var(--space-3);
+  min-width: 0;
+}
+.dunning-step legend {
+  font-weight: 600;
+  padding: 0 var(--space-1);
+}

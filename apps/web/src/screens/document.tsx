@@ -34,6 +34,7 @@ import { type TextKey, t, tf } from '../i18n'
 import type { Navigate } from '../router'
 import { articlePrice } from './catalog'
 import { documentLabel, StatusChip } from './documents'
+import { DunningPanel } from './dunning'
 import { ReceivablePanel } from './payments'
 
 type Doc = DocumentDetail
@@ -152,6 +153,17 @@ export function DocumentScreen({ me, id, navigate }: { me: Me; id: string; navig
           doc={doc}
           canWrite={me.permissions.includes('payment.write')}
           onChange={(receivable) => setDoc({ ...doc, receivable })}
+        />
+      ) : null}
+      {doc.receivable && doc.type === 'invoice' && doc.invoiceKind !== 'cancellation' ? (
+        <DunningPanel
+          doc={doc}
+          canWrite={me.permissions.includes('dunning.write')}
+          onIssued={() =>
+            apiWithEtag<Doc>('GET', `/api/v1/documents/${id}`)
+              .then(apply)
+              .catch((err: ApiError) => setError(err.message))
+          }
         />
       ) : null}
 
