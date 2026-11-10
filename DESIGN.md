@@ -431,7 +431,8 @@ invoice ─┬─ payment (date, amount_cents, method, reference)
                             interest_rate, interest_cents, letter_snapshot, pdf → document_artifact)
 ```
 - `open_amount = gross_total − Σ payment − Σ receivable_adjustment` (nie negativ; Überzahlung wird als Guthaben markiert).
-- Zahlungen und Abzüge ändern **nicht** die festgeschriebene Rechnung, sie sind eigene, protokollierte Datensätze (Audit-Log). Löschen einer Zahlung ist bis zum DATEV-Export möglich, danach nur per Gegenbuchung.
+- Zahlungen und Abzüge ändern **nicht** die festgeschriebene Rechnung, sie sind eigene, protokollierte Datensätze (Audit-Log). Sie werden **nie gelöscht** (Regel 7); ein Fehler wird per Gegenbuchung („Stornieren“, Betrag gespiegelt, je Eintrag einmal) ausgeglichen, beide bleiben sichtbar (Migration 0022).
+- Bewusst **keine Buchhaltung**: keine Konten, kein Journal, kein Bankabruf. Abzüge (Skonto, Einbehalt, Bauumlage, Kürzung) wirken nur auf die offene Forderung; ihre Verbuchung bleibt beim Steuerberater. Beim Zahlungseingang schlägt das System vor, einen Rest in Höhe von Einbehalt, Bauumlage und erlaubtem Skonto auszubuchen (`settlementSuggestion`).
 - Status `overdue` ergibt sich aus Fälligkeit (Rechnungsdatum + Zahlungsziel) und offener Forderung; `dunned` sobald eine Mahnstufe versendet ist.
 - Mahnungen sind keine Rechnungen (keine USt, kein Rechnungsnummernkreis), werden aber als PDF archiviert und am Rechnungsdatensatz geführt.
 
