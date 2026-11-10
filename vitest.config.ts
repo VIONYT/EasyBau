@@ -1,0 +1,20 @@
+import { defineConfig } from 'vitest/config'
+
+export default defineConfig({
+  resolve: { conditions: ['source'] },
+  ssr: { resolve: { conditions: ['source'], externalConditions: ['source'] } },
+  test: {
+    include: ['apps/*/src/**/*.test.ts', 'packages/*/src/**/*.test.ts'],
+    environment: 'node',
+    // Workspace packages are executed from TypeScript sources (condition "source"), never from dist/.
+    server: { deps: { inline: [/^@opc\//] } },
+    coverage: {
+      provider: 'v8',
+      // CLAUDE.md: packages/domain (pure business logic) requires 100 % coverage.
+      include: ['packages/domain/src/**/*.ts'],
+      exclude: ['**/*.test.ts', 'packages/domain/src/index.ts'],
+      thresholds: { lines: 100, functions: 100, branches: 100, statements: 100 },
+      reporter: ['text', 'text-summary'],
+    },
+  },
+})
