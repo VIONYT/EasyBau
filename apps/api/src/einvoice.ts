@@ -8,7 +8,7 @@ import {
 import type { DocumentDetail, EinvoiceFormat, EinvoiceSummary } from '@opc/schemas'
 import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify'
 import { z } from 'zod'
-import { storeArtifact } from './artifacts.js'
+import { openArtifact, storeArtifact } from './artifacts.js'
 import {
   type AuthContext,
   inTenant,
@@ -168,12 +168,14 @@ export function registerEinvoiceRoutes(app: FastifyInstance, services: Services)
       return key ? { key, name: downloadName(doc.number, format, report) } : null
     })
     if (!file) throw notFound(report ? 'Der Prüfbericht' : 'Die E-Rechnung')
+    const original = await openArtifact(services, file.key)
+    if (!original) throw notFound(report ? 'Der Prüfbericht' : 'Die E-Rechnung')
     return reply
       .header('content-type', 'application/xml; charset=utf-8')
       .header('content-disposition', `attachment; filename="${file.name}"`)
       .header('cache-control', 'private, no-store')
       .header('x-content-type-options', 'nosniff')
-      .send(services.storage.read(file.key))
+      .send(original)
   }
   // The archived original, byte for byte as validated by KoSIT (GoBD).
   app.get('/api/v1/documents/:id/einvoice/:format', serve(false))

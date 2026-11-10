@@ -15,7 +15,7 @@ import {
 import type { DocumentDetail } from '@opc/schemas'
 import type { FastifyInstance, FastifyReply } from 'fastify'
 import { z } from 'zod'
-import { readArtifact, storeArtifact } from '../artifacts.js'
+import { openArtifact, readArtifact, storeArtifact } from '../artifacts.js'
 import {
   type AuthContext,
   inTenant,
@@ -211,7 +211,10 @@ export async function documentPdf(
     const [archived] = await tx<{ key: string }[]>`
       select storage_key as key from document_artifact
       where document_id = ${id} and kind in ('pdf', 'zugferd_pdf') order by created_at limit 1`
-    if (archived) return { data: services.storage.read(archived.key), filename }
+    if (archived) {
+      const original = await openArtifact(services, archived.key)
+      if (original) return { data: original, filename }
+    }
 
     // Invoices: the KoSIT-validated ZUGFeRD XML (archived at Festschreiben) goes into the PDF/A-3.
     const [xml] = await tx<{ key: string; validatedAt: string }[]>`

@@ -74,6 +74,10 @@ importers:
       zod:
         specifier: 4.6.7
         version: 4.6.7
+    devDependencies:
+      '@opc/worker':
+        specifier: workspace:*
+        version: link:../worker
 
   apps/server:
     dependencies:
@@ -138,6 +142,9 @@ importers:
       '@opc/db':
         specifier: workspace:*
         version: link:../../packages/db
+      '@opc/storage':
+        specifier: workspace:*
+        version: link:../../packages/storage
       nodemailer:
         specifier: 10.2.1
         version: 10.2.1

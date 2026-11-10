@@ -43,6 +43,17 @@ describe.skipIf(!process.env.DATABASE_URL)('Betriebs-Check (integration)', () =>
       email: { enabled: false, queued: 0, failed: 0 },
       security: { requireAdminMfa: false, https: true },
       einvoice: { configured: true, reachable: true },
+      archive: {
+        configured: false,
+        bucket: null,
+        reachable: false,
+        objectLock: false,
+        mode: null,
+        pending: 0,
+        oldestPendingAt: null,
+        failing: 0,
+        lastError: null,
+      },
     })
   })
 

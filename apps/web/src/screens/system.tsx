@@ -9,7 +9,7 @@ import { useCallback, useEffect, useId, useState } from 'react'
 import { type ApiError, api, downloadFile } from '../api'
 import { formatDateTime } from '../format'
 import { FormError } from '../forms'
-import { type TextKey, t } from '../i18n'
+import { type TextKey, t, tf } from '../i18n'
 
 interface Meta {
   name: string
@@ -133,6 +133,7 @@ function lastMonth(): { from: string; to: string } {
 function ExportPanel() {
   const id = useId()
   const [period, setPeriod] = useState(lastMonth)
+  const [withBelege, setWithBelege] = useState(true)
   const [busy, setBusy] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
   const run = async (kind: 'datev' | 'gobd') => {
@@ -140,7 +141,7 @@ function ExportPanel() {
     setBusy(kind)
     try {
       await downloadFile(
-        `/api/v1/exports/${kind}?from=${encodeURIComponent(period.from)}&to=${encodeURIComponent(period.to)}`,
+        `/api/v1/exports/${kind}?from=${encodeURIComponent(period.from)}&to=${encodeURIComponent(period.to)}${kind === 'datev' && withBelege ? '&belege=true' : ''}`,
       )
     } catch (err) {
       setError((err as ApiError).message)
@@ -172,6 +173,14 @@ function ExportPanel() {
           />
         </div>
       </div>
+      <label className="check">
+        <input
+          type="checkbox"
+          checked={withBelege}
+          onChange={(e) => setWithBelege(e.target.checked)}
+        />
+        <span>{t('sys.exportDatevBelege')}</span>
+      </label>
       <div className="actions">
         <button
           type="button"
@@ -279,6 +288,9 @@ function OperationsPanel() {
               ? t('sys.einvoiceOk')
               : t('sys.einvoiceDown')}
         </Check>
+        <Check state={archiveState(status.archive)} title={t('sys.archive')}>
+          {archiveText(status.archive)}
+        </Check>
         <Check state={status.security.https ? 'ok' : 'warning'} title={t('sys.https')}>
           {status.security.https ? t('sys.httpsOk') : t('sys.httpsOff')}
         </Check>
@@ -304,4 +316,26 @@ function OperationsPanel() {
       <p className="muted">{t('sys.backupHint')}</p>
     </div>
   )
+}
+
+type ArchiveOps = OperationsStatus['archive']
+
+/** Pending originals older than one hour mean the archive does not keep up. */
+const archiveStuck = (a: ArchiveOps) =>
+  a.oldestPendingAt !== null && Date.now() - new Date(a.oldestPendingAt).getTime() > 60 * 60 * 1000
+
+function archiveState(a: ArchiveOps): 'ok' | 'warning' {
+  if (!a.configured || !a.reachable || !a.objectLock) return 'warning'
+  return a.failing || archiveStuck(a) ? 'warning' : 'ok'
+}
+
+function archiveText(a: ArchiveOps): string {
+  if (!a.configured) return t('sys.archiveOff')
+  if (!a.reachable) return t('sys.archiveDown')
+  if (!a.objectLock) return tf('sys.archiveNoLock', { bucket: a.bucket ?? '' })
+  const base = tf('sys.archiveOk', { bucket: a.bucket ?? '', mode: a.mode ?? '' })
+  if (a.failing)
+    return `${base} ${tf('sys.archiveFailing', { n: String(a.failing), error: a.lastError ?? '' })}`
+  if (a.pending) return `${base} ${tf('sys.archivePending', { n: String(a.pending) })}`
+  return base
 }

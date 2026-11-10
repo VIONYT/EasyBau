@@ -317,4 +317,17 @@ export interface OperationsStatus {
   security: { requireAdminMfa: boolean; https: boolean }
   /** KoSIT validator (ADR 0007): without it no invoice can be finalized (rule 8). */
   einvoice: { configured: boolean; reachable: boolean }
+  /** Revisionssicheres Belegarchiv (ADR 0008, S3 with Object Lock). */
+  archive: {
+    configured: boolean
+    bucket: string | null
+    reachable: boolean
+    objectLock: boolean
+    mode: 'COMPLIANCE' | 'GOVERNANCE' | null
+    /** Originals not yet in the WORM bucket; the oldest one; those that failed at least once. */
+    pending: number
+    oldestPendingAt: string | null
+    failing: number
+    lastError: string | null
+  }
 }

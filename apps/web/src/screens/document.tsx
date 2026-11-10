@@ -1220,6 +1220,13 @@ function DocumentActions({
           </a>
         </p>
       ) : null}
+      {doc.archive?.enabled ? (
+        <p className="hint archive-status" role="status">
+          {doc.archive.archivedAt
+            ? tf('arch.archived', { date: formatDateTime(doc.archive.retainUntil ?? '', 'date') })
+            : t('arch.pending')}
+        </p>
+      ) : null}
       {doc.status === 'draft' && !billed ? <p className="hint">{t('q.finalizeHint')}</p> : null}
       {billed && doc.status === 'draft' && !canFinalize ? (
         <p className="hint">{t('inv.noPermission')}</p>

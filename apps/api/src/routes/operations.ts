@@ -19,7 +19,30 @@ export function registerOperationsRoutes(app: FastifyInstance, services: Service
         select count(*) filter (where status in ('queued', 'sending'))::int as queued,
                count(*) filter (where status = 'failed')::int as failed
         from email_message`
+      const [pending] = await tx<
+        { pending: number; oldest: string | null; failing: number; lastError: string | null }[]
+      >`
+        select count(*)::int as pending,
+               to_char(min(a.created_at) at time zone 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS.MS"Z"') as oldest,
+               count(t.artifact_id)::int as failing,
+               (array_agg(t.last_error order by t.updated_at desc) filter (where t.last_error is not null))[1]
+                 as "lastError"
+        from document_artifact a
+        left join artifact_archive_attempt t on t.artifact_id = a.id
+        where not exists (select 1 from artifact_archive r where r.artifact_id = a.id)`
+      const archiveStatus = services.archive ? await services.archive.status() : null
       return {
+        archive: {
+          configured: services.archive !== null,
+          bucket: services.archive?.bucket ?? null,
+          reachable: archiveStatus?.reachable ?? false,
+          objectLock: archiveStatus?.objectLock ?? false,
+          mode: services.archive?.mode ?? null,
+          pending: pending?.pending ?? 0,
+          oldestPendingAt: pending?.oldest ?? null,
+          failing: pending?.failing ?? 0,
+          lastError: pending?.lastError ?? null,
+        },
         backup: { lastSuccess: lastSuccess ?? null, recent },
         email: {
           enabled: services.config.SMTP_ENABLED,

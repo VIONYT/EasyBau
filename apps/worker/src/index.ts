@@ -1,8 +1,12 @@
 import { type Config, smtpEnabled } from '@opc/config'
 import { createSql } from '@opc/db'
+import { archiveStoreFromSettings, FsObjectStore } from '@opc/storage'
 import { PgBoss } from 'pg-boss'
 import type { Logger } from 'pino'
+import { archivePending } from './archive.js'
 import { dispatchEmails, smtpTransport } from './email.js'
+
+export { type ArchiveRun, archivePending } from './archive.js'
 
 export { dispatchEmails, type MailTransport, type OutgoingMail, smtpTransport } from './email.js'
 
@@ -31,6 +35,15 @@ export async function startWorker(
     | 'SMTP_USER'
     | 'SMTP_PASSWORD'
     | 'SMTP_FROM'
+    | 'STORAGE_DIR'
+    | 'ARCHIVE_S3_ENDPOINT'
+    | 'ARCHIVE_S3_REGION'
+    | 'ARCHIVE_S3_BUCKET'
+    | 'ARCHIVE_S3_ACCESS_KEY'
+    | 'ARCHIVE_S3_SECRET_KEY'
+    | 'ARCHIVE_S3_PATH_STYLE'
+    | 'ARCHIVE_S3_CREATE_BUCKET'
+    | 'ARCHIVE_RETENTION_MODE'
   >,
   logger: Logger,
 ): Promise<Worker> {
@@ -70,13 +83,47 @@ export async function startWorker(
     void tick()
     logger.info('e-mail sending enabled')
   }
+  // Belegarchiv (ADR 0008): copy finalized originals into the WORM bucket, every 30 s.
+  let archiveTimer: NodeJS.Timeout | undefined
+  const archive = archiveStoreFromSettings(config)
+  const archiveSql = archive ? createSql({ ...config, DATABASE_POOL_MAX: 1 }) : undefined
+  if (archive && archiveSql) {
+    const files = new FsObjectStore(config.STORAGE_DIR)
+    let bucketReady = !config.ARCHIVE_S3_CREATE_BUCKET
+    let running = false
+    const tick = async () => {
+      if (running) return
+      running = true
+      try {
+        if (!bucketReady) {
+          await archive.ensureBucket()
+          bucketReady = true
+          logger.info({ bucket: archive.bucket }, 'archive bucket with Object Lock ready')
+        }
+        await archivePending(archiveSql, files, archive, logger)
+      } catch (err) {
+        logger.error({ err }, 'archiving failed')
+      } finally {
+        running = false
+      }
+    }
+    archiveTimer = setInterval(tick, 30_000)
+    void tick()
+    logger.info({ bucket: archive.bucket, mode: archive.mode }, 'document archive enabled')
+  } else {
+    logger.warn(
+      'no document archive configured (ARCHIVE_S3_ENDPOINT): originals stay in the files volume only',
+    )
+  }
   logger.info('worker started')
 
   return {
     stop: async () => {
       if (mailTimer) clearInterval(mailTimer)
+      if (archiveTimer) clearInterval(archiveTimer)
       await boss.stop({ graceful: true, timeout: 10_000 })
       await sql?.end({ timeout: 5 })
+      await archiveSql?.end({ timeout: 5 })
       logger.info('worker stopped')
     },
   }

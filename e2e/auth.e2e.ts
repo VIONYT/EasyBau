@@ -598,6 +598,15 @@ test('Rechnung: Pflichtangaben, Festschreiben und Korrigieren per Storno', async
   expect(await xrechnung.text()).toContain('<cbc:ID>R-00101</cbc:ID>')
   const pdf = await page.request.get(`/api/v1/documents/${invoiceId}/pdf`)
   expect((await pdf.body()).toString('latin1')).toContain('/F (factur-x.xml)')
+  // Revisionssicheres Archiv: the worker copies the originals into MinIO with Object Lock.
+  await expect(async () => {
+    await page.reload()
+    await expect(
+      page.getByText(/Original revisionssicher archiviert \(unveränderbar bis 31\.12\.2036\)/),
+    ).toBeVisible({
+      timeout: 2000,
+    })
+  }).toPass({ timeout: 60_000 })
   await expectNoHorizontalScroll(page)
   if (SCREENSHOTS)
     await page.screenshot({ path: `${SCREENSHOTS}/rechnung-erechnung.png`, fullPage: true })

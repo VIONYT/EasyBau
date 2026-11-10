@@ -1,4 +1,5 @@
 import { execFileSync } from 'node:child_process'
+import { createHash } from 'node:crypto'
 import { mkdtemp, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -45,7 +46,8 @@ describe.skipIf(!process.env.DATABASE_URL)('Exporte (integration)', () => {
       (tx) => tx`
       update document set status = 'finalized', finalized_at = now(), number = ${number},
              document_date = ${date}::date, content_hash = sha256(${number}::bytea),
-             recipient_snapshot = '{"name":"Wohnbau Nord eG","lines":[]}', issuer_snapshot = '{}'
+             recipient_snapshot = '{"name":"Wohnbau Nord eG","lines":["Lindenweg 4","30159 Hannover"]}',
+             issuer_snapshot = '{"name":"Export Bau GmbH","lines":["Werkstraße 2","30169 Hannover"],"contact":[],"legal":[]}'
       where id = ${id}`,
     )
 
@@ -198,6 +200,8 @@ describe.skipIf(!process.env.DATABASE_URL)('Exporte (integration)', () => {
       'zahlungen.csv',
       'kunden.csv',
       'protokoll.csv',
+      'belege.csv',
+      'belege/R-00101.pdf',
     ])
     const index = zip.get('index.xml')?.toString('utf8') ?? ''
     expect(index).toContain('<!DOCTYPE DataSet SYSTEM "gdpdu-01-09-2004.dtd">')
@@ -209,6 +213,31 @@ describe.skipIf(!process.env.DATABASE_URL)('Exporte (integration)', () => {
     expect(invoices).toContain('556,90')
     expect(zip.get('zahlungen.csv')?.toString('latin1')).toContain('300,00')
     expect(zip.get('kunden.csv')?.toString('latin1')).toContain('Wohnbau Nord eG')
+    // Belege: the unchanged PDF/A original (created and archived on demand) with its SHA-256.
+    const original = zip.get('belege/R-00101.pdf') as Buffer
+    expect(original.subarray(0, 5).toString()).toBe('%PDF-')
+    const belege = zip.get('belege.csv')?.toString('latin1') ?? ''
+    expect(belege).toContain('"belege/R-00101.pdf"')
+    expect(belege).toContain(createHash('sha256').update(original).digest('hex'))
+    expect(index).toContain('<URL>belege.csv</URL>')
+    // The same original on the second export (archived once, never rendered again).
+    const again = zipEntries((await admin.get(`/api/v1/exports/gobd${period}`)).rawPayload)
+    expect(again.get('belege/R-00101.pdf')?.equals(original)).toBe(true)
+  })
+
+  it('adds the PDF originals to the DATEV export on request', async () => {
+    const res = await admin.get(`/api/v1/exports/datev${period}&belege=true`)
+    expect(res.statusCode, res.body).toBe(200)
+    expect(res.headers['content-type']).toBe('application/zip')
+    expect(res.headers['content-disposition']).toContain('DATEV_2026-11-01_2026-11-30.zip')
+    const zip = zipEntries(res.rawPayload)
+    expect([...zip.keys()]).toEqual([
+      'EXTF_Buchungsstapel_2026-11-01_2026-11-30.csv',
+      'Belege/R-00101.pdf',
+    ])
+    expect(zip.get('EXTF_Buchungsstapel_2026-11-01_2026-11-30.csv')?.toString('latin1')).toMatch(
+      /^"EXTF"/,
+    )
   })
 
   it('exports all company data with the Ablage, but without secrets', async () => {
@@ -219,6 +248,8 @@ describe.skipIf(!process.env.DATABASE_URL)('Exporte (integration)', () => {
     expect(manifest).toMatchObject({ format: 'openplancraft-export', version: 1 })
     expect(manifest.tables.document).toBe(2)
     expect(manifest.files).toHaveLength(1)
+    expect(manifest.belege).toEqual([{ path: 'belege/R-00101.pdf', sha256: expect.any(String) }])
+    expect(zip.get('belege/R-00101.pdf')?.subarray(0, 5).toString()).toBe('%PDF-')
     const filePath = manifest.files[0].path as string
     expect(filePath).toMatch(/^ablage\/.+\/.+_Plan EG\.pdf$/)
     expect(zip.get(filePath)?.equals(PDF)).toBe(true)
@@ -250,6 +281,12 @@ describe.skipIf(!process.env.DATABASE_URL)('Exporte (integration)', () => {
       (tx) => tx<{ action: string }[]>`
       select action from audit_event where action like 'export:%' order by seq`,
     )
-    expect(actions.map((a) => a.action)).toEqual(['export:datev', 'export:gobd', 'export:full'])
+    expect(actions.map((a) => a.action)).toEqual([
+      'export:datev',
+      'export:gobd',
+      'export:gobd',
+      'export:datev+belege',
+      'export:full',
+    ])
   })
 })

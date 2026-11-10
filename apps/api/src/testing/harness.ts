@@ -2,7 +2,7 @@ import { mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { createSql, migrate, type Sql } from '@opc/db'
-import { FsObjectStore } from '@opc/storage'
+import { type ArchiveStore, FsObjectStore } from '@opc/storage'
 import type { FastifyInstance, LightMyRequestResponse } from 'fastify'
 import { buildApi } from '../index.js'
 import { type EinvoiceValidator, kositValidator } from '../kosit.js'
@@ -26,6 +26,8 @@ export async function createHarness(
     smtp?: boolean
     /** E-invoice validator; default: real KoSIT at KOSIT_URL, otherwise a stub that accepts. */
     einvoiceValidator?: EinvoiceValidator | null
+    /** WORM archive; default none (originals only in the files volume). */
+    archive?: ArchiveStore | null
   } = {},
 ): Promise<Harness> {
   const baseUrl = process.env.DATABASE_URL as string
@@ -65,6 +67,7 @@ export async function createHarness(
         : process.env.KOSIT_URL
           ? kositValidator(process.env.KOSIT_URL, 60_000)
           : acceptingValidator,
+    archive: options.archive ?? null,
     sql,
     setupToken,
     now: () => clock.now,

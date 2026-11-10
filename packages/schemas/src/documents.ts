@@ -395,6 +395,20 @@ export interface EinvoiceSummary {
   files: { format: EinvoiceFormat; validatedAt: string; sizeBytes: number; sha256: string }[]
 }
 
+/** Revisionssicheres Archiv (ADR 0008): originals of a finalized document and their WORM copies. */
+export interface DocumentArchive {
+  /** A WORM archive is configured (otherwise originals are only in the files volume). */
+  enabled: boolean
+  /** Archived originals (PDF, e-invoice XML, validation report). */
+  files: number
+  /** Of those already copied into the WORM bucket. */
+  archived: number
+  /** End of the retention period (§ 147 AO). */
+  retainUntil: string | null
+  /** All originals archived: time of the last copy; otherwise null (pending). */
+  archivedAt: string | null
+}
+
 /** Firma data the e-invoice needs beyond the letter (frozen with the document since 0020). */
 export interface IssuerEinvoiceData {
   vatId: string | null
@@ -453,6 +467,8 @@ export interface DocumentDetail extends DocumentSummary {
   totals: DocumentTotals
   /** Finalized invoices: archived e-invoice files (ZUGFeRD, XRechnung), validated by KoSIT. */
   einvoice?: EinvoiceSummary | null
+  /** Finalized documents: state of the revisionssichere Archiv. */
+  archive?: DocumentArchive | null
 }
 
 /** Unit with its decimal places (Handwerksregel: m/m² 2, m³ und t 3, Stück/Pauschal 0). */

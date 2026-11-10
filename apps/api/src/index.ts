@@ -1,7 +1,12 @@
 import cookie from '@fastify/cookie'
 import type { Config } from '@opc/config'
 import type { Sql } from '@opc/db'
-import { FsObjectStore, type ObjectStore } from '@opc/storage'
+import {
+  type ArchiveStore,
+  archiveStoreFromSettings,
+  FsObjectStore,
+  type ObjectStore,
+} from '@opc/storage'
 import Fastify, {
   type FastifyError,
   type FastifyInstance,
@@ -52,6 +57,13 @@ export interface ApiDeps {
         | 'SMTP_FROM'
         | 'KOSIT_URL'
         | 'KOSIT_TIMEOUT_MS'
+        | 'ARCHIVE_S3_ENDPOINT'
+        | 'ARCHIVE_S3_REGION'
+        | 'ARCHIVE_S3_BUCKET'
+        | 'ARCHIVE_S3_ACCESS_KEY'
+        | 'ARCHIVE_S3_SECRET_KEY'
+        | 'ARCHIVE_S3_PATH_STYLE'
+        | 'ARCHIVE_RETENTION_MODE'
       >
     >
   /** Returns true when all hard dependencies (database) are reachable. */
@@ -67,6 +79,8 @@ export interface ApiDeps {
   now?: () => number
   /** E-invoice validation; defaults to the KoSIT daemon at KOSIT_URL (none without it). */
   einvoiceValidator?: EinvoiceValidator | null
+  /** WORM archive (ADR 0008); defaults to the S3 bucket from ARCHIVE_S3_* (none without it). */
+  archive?: ArchiveStore | null
 }
 
 const MUTATING = new Set(['POST', 'PUT', 'PATCH', 'DELETE'])
@@ -80,6 +94,7 @@ export function buildApi({
   storage,
   now = Date.now,
   einvoiceValidator,
+  archive,
 }: ApiDeps): FastifyInstance {
   const app = Fastify({ logger, trustProxy: true, bodyLimit: 1024 * 1024 })
 
@@ -154,6 +169,20 @@ export function buildApi({
         ? einvoiceValidator
         : config.KOSIT_URL
           ? kositValidator(config.KOSIT_URL, config.KOSIT_TIMEOUT_MS ?? 20000)
+          : null,
+    archive:
+      archive !== undefined
+        ? archive
+        : config.ARCHIVE_S3_ENDPOINT
+          ? archiveStoreFromSettings({
+              ARCHIVE_S3_ENDPOINT: config.ARCHIVE_S3_ENDPOINT,
+              ARCHIVE_S3_REGION: config.ARCHIVE_S3_REGION ?? 'us-east-1',
+              ARCHIVE_S3_BUCKET: config.ARCHIVE_S3_BUCKET ?? 'belegarchiv',
+              ARCHIVE_S3_ACCESS_KEY: config.ARCHIVE_S3_ACCESS_KEY,
+              ARCHIVE_S3_SECRET_KEY: config.ARCHIVE_S3_SECRET_KEY,
+              ARCHIVE_S3_PATH_STYLE: config.ARCHIVE_S3_PATH_STYLE ?? true,
+              ARCHIVE_RETENTION_MODE: config.ARCHIVE_RETENTION_MODE ?? 'COMPLIANCE',
+            })
           : null,
     setupToken,
     now,

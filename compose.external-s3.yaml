@@ -1,0 +1,14 @@
+# Externer S3-Speicher als Belegarchiv statt des mitgelieferten MinIO (ADR 0008).
+# Aktivieren in der .env:
+#   COMPOSE_FILE=compose.yaml:compose.external-s3.yaml
+#   ARCHIVE_S3_ENDPOINT=https://s3.eu-central-1.amazonaws.com   (oder Endpunkt des Anbieters)
+#   ARCHIVE_S3_REGION=eu-central-1
+#   ARCHIVE_S3_BUCKET=<Bucket mit aktiviertem Object Lock>
+#   ARCHIVE_S3_ACCESS_KEY=… / ARCHIVE_S3_SECRET_KEY=… (oder ARCHIVE_S3_SECRET_KEY_FILE)
+#   ARCHIVE_S3_CREATE_BUCKET=false
+# Der Bucket muss Object Lock haben (nur beim Anlegen einschaltbar); ohne wird nichts archiviert
+# und der Betriebs-Check warnt.
+services:
+  storage:
+    # Disabled: the profile is never activated.
+    profiles: [bundled-minio]

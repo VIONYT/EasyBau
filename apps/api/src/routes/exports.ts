@@ -16,17 +16,21 @@ import {
   type ZipEntry,
   zipStream,
 } from '@opc/exports'
-import type { FastifyInstance, FastifyReply } from 'fastify'
+import type { FastifyBaseLogger, FastifyInstance, FastifyReply } from 'fastify'
 import { z } from 'zod'
+import { openArtifact } from '../artifacts.js'
 import { type AuthContext, inTenant, requirePermission, type Services } from '../context.js'
 import { HttpError, parse } from '../http.js'
 import { audit } from './auth-common.js'
+import { archiveDocumentPdf } from './pdf.js'
 import { DATEV_DEFAULTS, datevSettings } from './settings.js'
 
 const periodQuery = z
   .object({
     from: z.iso.date('Datum im Format JJJJ-MM-TT erwartet.'),
     to: z.iso.date('Datum im Format JJJJ-MM-TT erwartet.'),
+    /** DATEV: ZIP with the document originals (Belege) next to the Buchungsstapel. */
+    belege: z.enum(['true', 'false']).default('false'),
   })
   .refine((p) => p.to >= p.from, {
     path: ['to'],
@@ -85,6 +89,98 @@ function sendFile(
 
 const isoNow = () => new Date().toISOString().slice(0, 10)
 
+// ---- Belege: archived originals (ADR 0008) for exports --------------------------------------------
+
+interface BelegRow {
+  documentId: string
+  number: string
+  kind: 'pdf' | 'zugferd_pdf' | 'zugferd_xml' | 'xrechnung_xml' | 'validation_report'
+  format: string | null
+  key: string
+  sha256: string
+  sizeBytes: string
+  lockedUntil: string
+  archivedAt: string | null
+}
+
+const BELEG_KIND: Record<BelegRow['kind'], string> = {
+  pdf: 'Beleg PDF/A',
+  zugferd_pdf: 'Rechnung PDF/A-3 mit ZUGFeRD',
+  zugferd_xml: 'E-Rechnung ZUGFeRD (CII)',
+  xrechnung_xml: 'E-Rechnung XRechnung',
+  validation_report: 'Prüfbericht KoSIT',
+}
+
+/** File name inside the export, e.g. R-00101.pdf, R-00101_zugferd.xml, R-00101_pruefbericht_zugferd.xml. */
+function belegFile(row: BelegRow): string {
+  const number = row.number.replace(/[^A-Za-z0-9._-]+/g, '_')
+  switch (row.kind) {
+    case 'pdf':
+    case 'zugferd_pdf':
+      return `${number}.pdf`
+    case 'zugferd_xml':
+      return `${number}_zugferd.xml`
+    case 'xrechnung_xml':
+      return `${number}_${row.format === 'xrechnung_cii' ? 'xrechnung_cii' : 'xrechnung'}.xml`
+    case 'validation_report':
+      return `${number}_pruefbericht_${row.format ?? 'einvoice'}.xml`
+  }
+}
+
+/** Archived originals of finalized documents (PDF, e-invoice XML, KoSIT report). */
+async function belegeOf(tx: Tx, documentIds: string[]): Promise<BelegRow[]> {
+  if (!documentIds.length) return []
+  return tx<BelegRow[]>`
+    select a.document_id as "documentId", d.number, a.kind, a.format, a.storage_key as key,
+           encode(a.sha256, 'hex') as sha256, a.size_bytes::text as "sizeBytes",
+           to_char(a.locked_until, 'YYYY-MM-DD') as "lockedUntil",
+           to_char(r.archived_at at time zone 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS"Z"') as "archivedAt"
+    from document_artifact a
+    join document d on d.id = a.document_id
+    left join artifact_archive r on r.artifact_id = a.id
+    where a.document_id in ${tx(documentIds)}
+      and a.kind in ('pdf', 'zugferd_pdf', 'zugferd_xml', 'xrechnung_xml', 'validation_report')
+    order by d.document_date, d.number, a.created_at`
+}
+
+/** Renders and archives the PDF original of documents that have none yet (e.g. render failed once). */
+async function ensureOriginals(
+  services: Services,
+  auth: AuthContext,
+  documentIds: string[],
+  log?: FastifyBaseLogger,
+) {
+  if (!documentIds.length) return
+  const missing = await inTenant(
+    services,
+    auth,
+    (tx) =>
+      tx<{ id: string }[]>`
+      select d.id from document d
+      where d.id in ${tx(documentIds)}
+        and not exists (select 1 from document_artifact a
+                        where a.document_id = d.id and a.kind in ('pdf', 'zugferd_pdf'))`,
+  )
+  for (const { id } of missing) {
+    // Best effort: a document that cannot be rendered is listed without original, not fatal.
+    await archiveDocumentPdf(services, auth, id).catch((error: unknown) =>
+      log?.warn({ err: error, document: id }, 'PDF original could not be created for export'),
+    )
+  }
+}
+
+/** ZIP entries for the originals, streamed from the files volume or the WORM archive. */
+function belegEntries(services: Services, rows: BelegRow[], folder: string): ZipEntry[] {
+  return rows.map((row) => ({
+    name: `${folder}/${belegFile(row)}`,
+    data: (async function* () {
+      const original = await openArtifact(services, row.key)
+      if (!original) throw new Error(`original ${row.key} missing`)
+      yield* original
+    })(),
+  }))
+}
+
 export function registerExportRoutes(app: FastifyInstance, services: Services) {
   const logExport = (auth: AuthContext, kind: string) =>
     audit(services, auth.tenantId, auth.userId, `export:${kind}`)
@@ -92,8 +188,15 @@ export function registerExportRoutes(app: FastifyInstance, services: Services) {
   /** DATEV Buchungsstapel (EXTF) for the tax advisor: invoices per tax rate and payments. */
   app.get('/api/v1/exports/datev', async (request, reply) => {
     const auth = requirePermission(request, 'export.run')
-    const { from, to } = parse(periodQuery, request.query)
-    const file = await inTenant(services, auth, async (tx) => {
+    const { from, to, belege } = parse(periodQuery, request.query)
+    const withBelege = belege === 'true'
+    if (withBelege) {
+      const ids = await inTenant(services, auth, async (tx) =>
+        (await invoicesOf(tx, from, to)).map((i) => i.id),
+      )
+      await ensureOriginals(services, auth, ids, request.log)
+    }
+    const { file, originals } = await inTenant(services, auth, async (tx) => {
       const settings = await datevSettings(tx)
       if (!settings.consultantNumber || !settings.clientNumber) {
         throw new HttpError(
@@ -152,7 +255,7 @@ export function registerExportRoutes(app: FastifyInstance, services: Services) {
         customerAccount: customerAccount(p.customerNumber),
         customerName: p.customerName,
       }))
-      return datevBookingBatch(
+      const csv = datevBookingBatch(
         {
           consultantNumber: settings.consultantNumber,
           clientNumber: settings.clientNumber,
@@ -165,13 +268,32 @@ export function registerExportRoutes(app: FastifyInstance, services: Services) {
         },
         datevBookings(exportInvoices, payments, accounts),
       )
+      // Belege: only the PDF originals (Belegfeld 1 = file name), as DATEV expects images/PDFs.
+      const originals = withBelege
+        ? (
+            await belegeOf(
+              tx,
+              invoices.map((i) => i.id),
+            )
+          ).filter((b) => b.kind === 'pdf' || b.kind === 'zugferd_pdf')
+        : []
+      return { file: csv, originals }
     })
-    await logExport(auth, 'datev')
+    await logExport(auth, withBelege ? 'datev+belege' : 'datev')
+    const csvName = `EXTF_Buchungsstapel_${from}_${to}.csv`
+    if (!withBelege) {
+      return sendFile(reply, csvName, 'text/csv; charset=windows-1252', encodeWindows1252(file))
+    }
     return sendFile(
       reply,
-      `EXTF_Buchungsstapel_${from}_${to}.csv`,
-      'text/csv; charset=windows-1252',
-      encodeWindows1252(file),
+      `DATEV_${from}_${to}.zip`,
+      'application/zip',
+      Readable.from(
+        zipStream([
+          { name: csvName, data: encodeWindows1252(file) },
+          ...belegEntries(services, originals, 'Belege'),
+        ]),
+      ),
     )
   })
 
@@ -179,10 +301,21 @@ export function registerExportRoutes(app: FastifyInstance, services: Services) {
   app.get('/api/v1/exports/gobd', async (request, reply) => {
     const auth = requirePermission(request, 'export.run')
     const { from, to } = parse(periodQuery, request.query)
-    const { tables, company } = await inTenant(services, auth, async (tx) => {
+    await ensureOriginals(
+      services,
+      auth,
+      await inTenant(services, auth, async (tx) =>
+        (await invoicesOf(tx, from, to)).map((i) => i.id),
+      ),
+    )
+    const { tables, company, originals } = await inTenant(services, auth, async (tx) => {
       const [company] = await tx<{ name: string; city: string | null }[]>`
         select name, city from tenant where id = current_tenant_id()`
       const invoices = await invoicesOf(tx, from, to)
+      const originals = await belegeOf(
+        tx,
+        invoices.map((i) => i.id),
+      )
       const ids = invoices.length
         ? invoices.map((i) => i.id)
         : ['00000000-0000-0000-0000-000000000000']
@@ -389,8 +522,32 @@ export function registerExportRoutes(app: FastifyInstance, services: Services) {
           ],
           rows: log.map((l) => [l.seq, l.at, l.action, l.entity, l.entityId ?? '', l.hash]),
         },
+        {
+          file: 'belege.csv',
+          name: 'Belege',
+          description:
+            'Unveränderte Originale der Rechnungen (PDF/A, E-Rechnung, Prüfbericht) im Ordner belege, mit SHA-256',
+          columns: [
+            { name: 'Rechnungsnummer', type: 'text' },
+            { name: 'Datei', type: 'text', primaryKey: true },
+            { name: 'Art', type: 'text' },
+            { name: 'SHA256', type: 'text' },
+            { name: 'Groesse_Bytes', type: 'numeric', accuracy: 0 },
+            { name: 'Aufbewahrung_bis', type: 'date' },
+            { name: 'Revisionssicher_archiviert_UTC', type: 'text' },
+          ],
+          rows: originals.map((b) => [
+            b.number,
+            `belege/${belegFile(b)}`,
+            BELEG_KIND[b.kind],
+            b.sha256,
+            b.sizeBytes,
+            germanDate(b.lockedUntil),
+            b.archivedAt ?? '',
+          ]),
+        },
       ]
-      return { tables, company: company as { name: string; city: string | null } }
+      return { tables, company: company as { name: string; city: string | null }, originals }
     })
     await logExport(auth, 'gobd')
     const entries: ZipEntry[] = [
@@ -407,6 +564,7 @@ export function registerExportRoutes(app: FastifyInstance, services: Services) {
         ),
       },
       ...tables.map((table) => ({ name: table.file, data: gobdTableCsv(table) })),
+      ...belegEntries(services, originals, 'belege'),
     ]
     return sendFile(
       reply,
@@ -434,6 +592,7 @@ export function registerExportRoutes(app: FastifyInstance, services: Services) {
       'document_tax_line',
       'document_deduction',
       'document_artifact',
+      'artifact_archive',
       'change_order_meta',
       'change_order_item_decision',
       'measurement_sheet',
@@ -486,7 +645,13 @@ export function registerExportRoutes(app: FastifyInstance, services: Services) {
                encode(f.sha256, 'hex') as sha256
         from file f join project p on p.id = f.project_id left join project_folder d on d.id = f.folder_id
         order by f.created_at`
-      return { tables, files }
+      const documents = await tx<{ id: string }[]>`
+        select id from document where finalized_at is not null`
+      const originals = await belegeOf(
+        tx,
+        documents.map((d) => d.id),
+      )
+      return { tables, files, originals }
     })
     await logExport(auth, 'full')
     const storage = services.storage
@@ -501,6 +666,10 @@ export function registerExportRoutes(app: FastifyInstance, services: Services) {
             application: { name: services.config.APP_NAME },
             tables: Object.fromEntries(Object.entries(data.tables).map(([k, v]) => [k, v.length])),
             files: data.files.map((f) => ({ path: `ablage/${f.path}`, sha256: f.sha256 })),
+            belege: data.originals.map((b) => ({
+              path: `belege/${belegFile(b)}`,
+              sha256: b.sha256,
+            })),
           },
           null,
           2,
@@ -513,6 +682,7 @@ export function registerExportRoutes(app: FastifyInstance, services: Services) {
         if ((await storage.size(file.key)) === null) continue
         yield { name: `ablage/${file.path}`, data: storage.read(file.key) }
       }
+      yield* belegEntries(services, data.originals, 'belege')
     }
     return sendFile(
       reply,

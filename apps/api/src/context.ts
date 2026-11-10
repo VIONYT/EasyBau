@@ -1,7 +1,7 @@
 import type { Config } from '@opc/config'
 import type { Sql, Tx } from '@opc/db'
 import { withTenant } from '@opc/db'
-import type { ObjectStore } from '@opc/storage'
+import type { ArchiveStore, ObjectStore } from '@opc/storage'
 import type { FastifyReply, FastifyRequest } from 'fastify'
 import { forbidden, HttpError } from './http.js'
 import type { EinvoiceValidator } from './kosit.js'
@@ -53,6 +53,8 @@ export interface Services {
   storage: ObjectStore
   /** Checks every e-invoice before an invoice is finalized (rule 8); null = not configured. */
   einvoiceValidator: EinvoiceValidator | null
+  /** WORM archive of document originals (ADR 0008); null = only the files volume. */
+  archive: ArchiveStore | null
   /** One-time code required for the initial setup. */
   setupToken: string
   now: () => number

@@ -698,6 +698,20 @@ const de = {
   'sys.emailOk': 'Eingerichtet, keine Fehler.',
   'sys.emailFailed': '{n} E-Mail(s) konnten nicht versendet werden, siehe Postausgang.',
   'sys.einvoice': 'E-Rechnungs-Prüfung (KoSIT)',
+  'sys.archive': 'Revisionssicheres Belegarchiv',
+  'sys.archiveOk':
+    'Bucket „{bucket}“ mit Object Lock ({mode}): Originale sind bis zum Ende der Aufbewahrungsfrist unveränderbar.',
+  'sys.archivePending': '{n} Original(e) werden gerade archiviert.',
+  'sys.archiveFailing':
+    '{n} Original(e) konnten noch nicht archiviert werden ({error}); neuer Versuch läuft automatisch.',
+  'sys.archiveDown':
+    'Der Archivspeicher (S3) ist nicht erreichbar. Originale bleiben in der Ablage und werden nachgeholt.',
+  'sys.archiveNoLock':
+    'Der Bucket „{bucket}“ fehlt oder hat kein Object Lock. Es wird nichts archiviert, bis ein Bucket mit Object Lock eingerichtet ist.',
+  'sys.archiveOff':
+    'Nicht eingerichtet (ARCHIVE_S3_ENDPOINT fehlt): Originale liegen nur in der Ablage, nicht revisionssicher.',
+  'arch.archived': 'Original revisionssicher archiviert (unveränderbar bis {date}).',
+  'arch.pending': 'Original wird revisionssicher archiviert …',
   'einv.validated': 'E-Rechnung geprüft ({formats}) am {date}.',
   'einv.report': 'Prüfbericht',
   'einv.format.zugferd': 'ZUGFeRD',
@@ -721,7 +735,8 @@ const de = {
   'sys.mfaOff': 'Nicht verpflichtend (REQUIRE_ADMIN_MFA=false).',
   'sys.exports': 'Exporte',
   'sys.exportsHint':
-    'Für Steuerberater und Betriebsprüfung. Es werden nur festgeschriebene Rechnungen und Gutschriften des Zeitraums berücksichtigt.',
+    'Für Steuerberater und Betriebsprüfung. Es werden nur festgeschriebene Rechnungen und Gutschriften des Zeitraums berücksichtigt. Der GoBD-Export enthält die unveränderten Originale (PDF/A, E-Rechnung, Prüfbericht) mit SHA-256.',
+  'sys.exportDatevBelege': 'DATEV mit Belegen (ZIP mit PDF je Rechnung)',
   'sys.from': 'Von',
   'sys.to': 'Bis',
   'sys.exportDatev': 'DATEV-Buchungsstapel',

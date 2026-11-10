@@ -39,6 +39,7 @@ import {
 } from '@opc/schemas'
 import type { FastifyInstance, FastifyReply } from 'fastify'
 import { z } from 'zod'
+import { archiveSummary } from '../artifacts.js'
 import { billingDoc, legalNotesOf, loadDeductions, refreshDeductions } from '../billing.js'
 import {
   type AuthContext,
@@ -656,6 +657,7 @@ export async function loadDocument(
     totals: totalsOf(rows, costs, doc, await loadDeductions(tx, id)),
     legalNotes: [],
     einvoice: doc.status === 'draft' ? null : await einvoiceSummary(tx, id),
+    archive: doc.status === 'draft' ? null : await archiveSummary(tx, id),
   }
   // Finalized: the frozen notes; drafts: a live preview.
   detail.legalNotes = storedNotes ?? (doc.status === 'draft' ? legalNotesOf(detail) : [])

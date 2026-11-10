@@ -1,6 +1,7 @@
 import { Readable } from 'node:stream'
 import type { Tx } from '@opc/db'
-import type { AuthContext, Services } from './context.js'
+import type { DocumentArchive } from '@opc/schemas'
+import { type AuthContext, type Services, servicesOf } from './context.js'
 
 const MAX_ARTIFACT_BYTES = 50 * 1024 * 1024
 
@@ -55,9 +56,41 @@ export async function storeArtifact(
   }
 }
 
+/**
+ * Opens an archived original: the working copy in the files volume, or – if that is gone (e.g.
+ * after restoring only the database) – the WORM copy from the archive (ADR 0008).
+ */
+export async function openArtifact(services: Services, key: string): Promise<Readable | null> {
+  if ((await services.storage.size(key)) !== null) return services.storage.read(key)
+  const archived = services.archive ? await services.archive.get(key) : null
+  return archived ? Readable.from([archived]) : null
+}
+
 /** Reads a stored artifact completely (XML, report). */
 export async function readArtifact(services: Services, key: string): Promise<Buffer> {
+  const stream = await openArtifact(services, key)
+  if (!stream) throw new Error(`artifact ${key} is missing in the files volume and the archive`)
   const chunks: Buffer[] = []
-  for await (const chunk of services.storage.read(key)) chunks.push(chunk as Buffer)
+  for await (const chunk of stream) chunks.push(chunk as Buffer)
   return Buffer.concat(chunks)
+}
+
+/** Archive state of a finalized document's originals (for the detail view). */
+export async function archiveSummary(tx: Tx, documentId: string): Promise<DocumentArchive | null> {
+  const [row] = await tx<
+    { total: number; archived: number; retainUntil: string | null; archivedAt: string | null }[]
+  >`
+    select count(*)::int as total, count(r.artifact_id)::int as archived,
+           to_char(min(a.locked_until), 'YYYY-MM-DD') as "retainUntil",
+           to_char(max(r.archived_at) at time zone 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS.MS"Z"') as "archivedAt"
+    from document_artifact a left join artifact_archive r on r.artifact_id = a.id
+    where a.document_id = ${documentId}`
+  if (!row?.total) return null
+  return {
+    enabled: Boolean(servicesOf(tx)?.archive),
+    files: row.total,
+    archived: row.archived,
+    retainUntil: row.retainUntil,
+    archivedAt: row.archived === row.total ? row.archivedAt : null,
+  }
 }
