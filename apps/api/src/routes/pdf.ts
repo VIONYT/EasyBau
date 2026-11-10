@@ -1,6 +1,7 @@
 import { Readable } from 'node:stream'
 import type { Tx } from '@opc/db'
 import type { LetterheadValues } from '@opc/domain'
+import { addFacturXMetadata } from '@opc/einvoice'
 import {
   documentLetter,
   documentTitle,
@@ -14,6 +15,7 @@ import {
 import type { DocumentDetail } from '@opc/schemas'
 import type { FastifyInstance, FastifyReply } from 'fastify'
 import { z } from 'zod'
+import { readArtifact, storeArtifact } from '../artifacts.js'
 import {
   type AuthContext,
   inTenant,
@@ -27,7 +29,6 @@ import { loadSheet } from './measurements.js'
 import { loadReport } from './reports.js'
 
 const documentParam = z.object({ id: z.uuid('Ungültige ID.') })
-const MAX_PDF_BYTES = 50 * 1024 * 1024
 
 async function readAll(stream: Readable): Promise<Buffer> {
   const chunks: Buffer[] = []
@@ -50,18 +51,26 @@ async function logoFor(
 
 type LetterLogo = NonNullable<Parameters<typeof renderLetterPdf>[0]['logo']>
 
-/** Renders a document as PDF/A-3b (letter per DIN 5008 Form B, A4, letterhead of the snapshot). */
+/**
+ * Renders a document as PDF/A-3b (letter per DIN 5008 Form B, A4, letterhead of the snapshot).
+ * With `einvoiceXml` it becomes a ZUGFeRD/Factur-X invoice: XML attached, Factur-X XMP added.
+ */
 async function render(
   tx: Tx,
   services: Services,
   doc: DocumentDetail,
   watermark: string | null,
+  einvoiceXml?: Buffer,
 ): Promise<Buffer> {
   const { logoPosition, ...letter } = documentLetter(doc, { watermark })
-  return renderLetterPdf(
+  const pdf = renderLetterPdf(
     { ...letter, logo: await logoFor(tx, services, logoPosition) },
-    doc.finalizedAt ? { createdAt: new Date(doc.finalizedAt) } : {},
+    {
+      ...(doc.finalizedAt ? { createdAt: new Date(doc.finalizedAt) } : {}),
+      ...(einvoiceXml ? { einvoiceXml } : {}),
+    },
   )
+  return einvoiceXml ? addFacturXMetadata(pdf, 'EN 16931') : pdf
 }
 
 /** Company frame of Aufmaßblatt and Berichte: live letterhead, customer of the project. */
@@ -201,29 +210,22 @@ export async function documentPdf(
     await tx`select id from document where id = ${id} for update`
     const [archived] = await tx<{ key: string }[]>`
       select storage_key as key from document_artifact
-      where document_id = ${id} and kind = 'pdf' order by created_at limit 1`
+      where document_id = ${id} and kind in ('pdf', 'zugferd_pdf') order by created_at limit 1`
     if (archived) return { data: services.storage.read(archived.key), filename }
 
-    const pdf = await render(tx, services, doc, null)
-    const pending = await services.storage.receive(Readable.from([pdf]), {
-      maxBytes: MAX_PDF_BYTES,
+    // Invoices: the KoSIT-validated ZUGFeRD XML (archived at Festschreiben) goes into the PDF/A-3.
+    const [xml] = await tx<{ key: string; validatedAt: string }[]>`
+      select storage_key as key, validated_at::text as "validatedAt" from document_artifact
+      where document_id = ${id} and kind = 'zugferd_xml' and validated_at is not null
+      order by created_at limit 1`
+    const einvoiceXml = xml ? await readArtifact(services, xml.key) : undefined
+    const pdf = await render(tx, services, doc, null, einvoiceXml)
+    await storeArtifact(tx, services, auth, id, {
+      kind: xml ? 'zugferd_pdf' : 'pdf',
+      data: pdf,
+      mime: 'application/pdf',
+      ...(xml ? { format: 'zugferd', validatedAt: xml.validatedAt } : {}),
     })
-    try {
-      const [ids] = await tx<{ id: string }[]>`select uuid_v7() as id`
-      const artifactId = (ids as { id: string }).id
-      const key = `${auth.tenantId}/documents/${id}/${artifactId}`
-      // Aufbewahrung: 10 Jahre ab Ende des Kalenderjahres des Belegs (§ 147 AO).
-      await tx`
-        insert into document_artifact (id, tenant_id, document_id, kind, storage_key, sha256, size_bytes,
-                                       mime_type, locked_until)
-        select ${artifactId}, tenant_id, id, 'pdf', ${key}, ${pending.sha256}, ${pending.sizeBytes},
-               'application/pdf',
-               (date_trunc('year', document_date) + interval '11 years' - interval '1 day')::date
-        from document where id = ${id}`
-      await pending.commit(key)
-    } finally {
-      await pending.discard()
-    }
     return { data: pdf, filename }
   })
 }

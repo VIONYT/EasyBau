@@ -76,6 +76,14 @@ export interface TaxLine {
   taxCents: bigint
   /** Required text for VAT-exempt categories (BT-120), German. */
   exemptionReason?: string
+  /**
+   * How the base comes about (EN 16931 document-level allowances per category):
+   * netCents = itemsNetCents − discountCents − deductedNetCents.
+   */
+  itemsNetCents: bigint
+  discountCents: bigint
+  /** Net of earlier invoices deducted in this category (Schlussrechnung, kumulative Abschläge). */
+  deductedNetCents: bigint
 }
 
 export interface DocumentTotals {
@@ -232,6 +240,9 @@ export function calculateDocumentTotals(input: DocumentTotalsInput): DocumentTot
       netCents: net,
       taxCents: tax,
       ...(reason ? { exemptionReason: reason } : {}),
+      itemsNetCents: group.net,
+      discountCents: groupDiscount,
+      deductedNetCents: minus.net,
     })
     const labor = toCents(new Decimal(group.labor.toString()).mul(new Decimal(1).minus(discount)))
     laborNet += labor

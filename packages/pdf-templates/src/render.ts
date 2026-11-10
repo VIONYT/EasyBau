@@ -62,7 +62,12 @@ export function renderLetterPdf(
       | (Omit<NonNullable<LetterPdfInput['logo']>, 'path'> & { data: Buffer; mime: string })
       | null
   },
-  options: { createdAt?: Date; assets?: LetterAsset[] } = {},
+  options: {
+    createdAt?: Date
+    assets?: LetterAsset[]
+    /** E-Rechnung attached as /factur-x.xml (AFRelationship Alternative, PDF/A-3). */
+    einvoiceXml?: Buffer
+  } = {},
 ): Buffer {
   const typst = getCompiler()
   for (const asset of options.assets ?? []) typst.mapShadow(asset.path, asset.data)
@@ -75,6 +80,13 @@ export function renderLetterPdf(
     typst.mapShadow(path, logo.data)
     const { data: _, mime: __, ...position } = logo
     data = { ...data, logo: { ...position, path } }
+  }
+  if (options.einvoiceXml) {
+    typst.mapShadow('/factur-x.xml', options.einvoiceXml)
+    data = {
+      ...data,
+      attachment: { path: '/factur-x.xml', description: 'Rechnungsdaten (ZUGFeRD / Factur-X)' },
+    }
   }
   typst.mapShadow('/data.json', Buffer.from(JSON.stringify(data)))
   try {

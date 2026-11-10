@@ -269,6 +269,16 @@ function OperationsPanel() {
               ? t('sys.emailFailed').replace('{n}', String(status.email.failed))
               : t('sys.emailOk')}
         </Check>
+        <Check
+          state={status.einvoice.configured && status.einvoice.reachable ? 'ok' : 'warning'}
+          title={t('sys.einvoice')}
+        >
+          {!status.einvoice.configured
+            ? t('sys.einvoiceOff')
+            : status.einvoice.reachable
+              ? t('sys.einvoiceOk')
+              : t('sys.einvoiceDown')}
+        </Check>
         <Check state={status.security.https ? 'ok' : 'warning'} title={t('sys.https')}>
           {status.security.https ? t('sys.httpsOk') : t('sys.httpsOff')}
         </Check>

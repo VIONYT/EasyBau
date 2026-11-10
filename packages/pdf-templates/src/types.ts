@@ -53,6 +53,8 @@ export interface LetterPdfInput {
     /** Building blocks of Aufmaßblatt and Berichte (rendered after the intro). */
     blocks: LetterBlock[]
   }
+  /** Attached file, e.g. the ZUGFeRD XML (/factur-x.xml); its content is passed as asset. */
+  attachment?: { path: string; description: string } | null
 }
 
 export type LetterBlock =

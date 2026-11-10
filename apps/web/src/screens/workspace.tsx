@@ -5,6 +5,7 @@ import { Field, FormError, optional, useForm } from '../forms'
 import { t } from '../i18n'
 import { type Route, useRoute } from '../router'
 import { Catalog } from './catalog'
+import { ContactEditor } from './contact-editor'
 import { DocumentScreen } from './document'
 import { MeasurementScreen } from './measurement'
 import { PrintScreen } from './print'
@@ -155,6 +156,7 @@ function Contacts({ me }: { me: Me }) {
   const [query, setQuery] = useState('')
   const list = useList<ContactSummary>(`/api/v1/contacts?q=${encodeURIComponent(query)}`)
   const [kind, setKind] = useState<'organization' | 'person'>('organization')
+  const [selected, setSelected] = useState<string | null>(null)
   const form = useForm(
     (data) =>
       api<ContactDetail>('POST', '/api/v1/contacts', {
@@ -163,7 +165,11 @@ function Contacts({ me }: { me: Me }) {
         firstName: optional(data, 'firstName'),
         lastName: optional(data, 'lastName'),
       }),
-    () => list.reload(),
+    (created) => {
+      list.reload()
+      // Continue with address and e-invoice data of the new contact.
+      setSelected(created.id)
+    },
   )
   return (
     <section aria-labelledby="contacts-title">
@@ -221,16 +227,29 @@ function Contacts({ me }: { me: Me }) {
           </button>
         </form>
       ) : null}
+      {selected ? (
+        <ContactEditor
+          id={selected}
+          canWrite={me.permissions.includes('contacts.write')}
+          onSaved={() => list.reload()}
+          onClose={() => setSelected(null)}
+        />
+      ) : null}
       <List
         items={list.items}
         error={list.error}
         render={(c) => (
-          <>
+          <button
+            type="button"
+            className="list-button"
+            aria-current={selected === c.id ? 'true' : undefined}
+            onClick={() => setSelected(c.id)}
+          >
             <strong>{c.displayName}</strong>
             <span className="muted">
               {[c.number, c.city, c.primaryEmail].filter(Boolean).join(' · ')}
             </span>
-          </>
+          </button>
         )}
       />
     </section>

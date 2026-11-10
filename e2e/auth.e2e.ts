@@ -355,7 +355,9 @@ test('Angebot: Kalkulation, Fertigstellen, Druckansicht und Nachtrag-Schalter', 
   await page.getByRole('button', { name: 'Kontakte' }).click()
   await page.getByLabel('Name der Organisation').fill('Wohnbau Nord eG')
   await page.getByRole('button', { name: 'Speichern' }).click()
-  await expect(page.getByText('Wohnbau Nord eG')).toBeVisible()
+  // The new contact opens in the editor (address, e-invoice data) and appears in the list.
+  await expect(page.getByRole('heading', { name: /^Wohnbau Nord eG · K-/ })).toBeVisible()
+  await expect(page.getByRole('button', { name: /^Wohnbau Nord eG/ })).toBeVisible()
 
   // Angebot öffnen
   await page.getByRole('button', { name: 'Projekte' }).click()
@@ -550,23 +552,27 @@ test('Rechnung: Pflichtangaben, Festschreiben und Korrigieren per Storno', async
           postalCode: '30169',
           city: 'Hannover',
           taxNumber: '25/123/45678',
+          email: 'buero@muster-bau.example',
+          phone: '0511 123456',
+          iban: 'DE89370400440532013000',
         },
       })
     ).status(),
   ).toBe(200)
-  const contacts = await (await page.request.get('/api/v1/contacts?q=Wohnbau')).json()
-  const customer = contacts.items[0] as { id: string }
-  expect(
-    (
-      await page.request.patch(`/api/v1/contacts/${customer.id}`, {
-        data: {
-          addresses: [
-            { kind: 'main', street: 'Lindenweg 4', postalCode: '30159', city: 'Hannover' },
-          ],
-        },
-      })
-    ).status(),
-  ).toBe(200)
+  // Kundenanschrift und E-Rechnungsdaten im Kontakt (XRechnung an die E-Rechnungs-Adresse)
+  await page.getByRole('button', { name: 'Kontakte' }).click()
+  await page.getByRole('button', { name: /Wohnbau Nord eG/ }).click()
+  const editor = page.locator('.contact-editor')
+  await editor.getByLabel('Straße und Hausnummer').fill('Lindenweg 4')
+  await editor.getByLabel('PLZ').fill('30159')
+  await editor.getByLabel('Ort').fill('Hannover')
+  await editor.getByLabel('Format').selectOption('xrechnung_ubl')
+  await editor.getByLabel('E-Mail für E-Rechnungen').fill('rechnung@wohnbau-nord.example')
+  await expectNoHorizontalScroll(page)
+  if (SCREENSHOTS)
+    await page.screenshot({ path: `${SCREENSHOTS}/kontakt-erechnung.png`, fullPage: true })
+  await editor.getByRole('button', { name: 'Speichern' }).click()
+  await expect(page.getByText('Kontakt gespeichert.')).toBeVisible()
   await page.goto(invoiceUrl)
   await page.getByLabel('Leistung von').fill('2026-10-01')
   await page.getByLabel('Leistung bis').fill('2026-10-31')
@@ -580,9 +586,21 @@ test('Rechnung: Pflichtangaben, Festschreiben und Korrigieren per Storno', async
   await expectNoHorizontalScroll(page)
   if (SCREENSHOTS)
     await page.screenshot({ path: `${SCREENSHOTS}/rechnung-festschreiben.png`, fullPage: true })
+  await expect(page.getByText(/E-Rechnung .* KoSIT-Validator geprüft/)).toBeVisible()
   await page.getByRole('button', { name: 'Jetzt festschreiben' }).click()
   await expect(page.getByText(/^R-00101/)).toBeVisible()
   await expect(page.getByText('Fertiggestellt', { exact: true })).toBeVisible()
+  // E-Rechnung: ZUGFeRD im PDF und XRechnung, beide vom KoSIT-Validator geprüft
+  await expect(page.getByText(/E-Rechnung geprüft \(ZUGFeRD, XRechnung UBL\)/)).toBeVisible()
+  const invoiceId = invoiceUrl.split('/').pop() as string
+  const xrechnung = await page.request.get(`/api/v1/documents/${invoiceId}/einvoice/xrechnung_ubl`)
+  expect(xrechnung.status()).toBe(200)
+  expect(await xrechnung.text()).toContain('<cbc:ID>R-00101</cbc:ID>')
+  const pdf = await page.request.get(`/api/v1/documents/${invoiceId}/pdf`)
+  expect((await pdf.body()).toString('latin1')).toContain('/F (factur-x.xml)')
+  await expectNoHorizontalScroll(page)
+  if (SCREENSHOTS)
+    await page.screenshot({ path: `${SCREENSHOTS}/rechnung-erechnung.png`, fullPage: true })
   await expect(page.locator('.legal-notes')).toContainText('Zahlbar ohne Abzug bis')
 
   // Rechnung korrigieren: Storno mit eigener Nummer + neuer Entwurf

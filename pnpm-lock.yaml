@@ -50,6 +50,9 @@ importers:
       '@opc/domain':
         specifier: workspace:*
         version: link:../../packages/domain
+      '@opc/einvoice':
+        specifier: workspace:*
+        version: link:../../packages/einvoice
       '@opc/exports':
         specifier: workspace:*
         version: link:../../packages/exports
@@ -169,6 +172,22 @@ importers:
       fast-check:
         specifier: 4.10.2
         version: 4.10.2
+
+  packages/einvoice:
+    dependencies:
+      '@opc/schemas':
+        specifier: workspace:*
+        version: link:../schemas
+      decimal.js:
+        specifier: 10.6.0
+        version: 10.6.0
+    devDependencies:
+      '@opc/domain':
+        specifier: workspace:*
+        version: link:../domain
+      '@opc/pdf-templates':
+        specifier: workspace:*
+        version: link:../pdf-templates
 
   packages/exports: {}
 

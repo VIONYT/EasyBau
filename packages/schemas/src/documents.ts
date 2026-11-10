@@ -319,6 +319,10 @@ export interface DocumentTaxLine {
   netCents: number
   taxCents: number
   exemptionReason: string | null
+  /** netCents = itemsNetCents − discountCents − deductedNetCents (allowances in the e-invoice). */
+  itemsNetCents: number
+  discountCents: number
+  deductedNetCents: number
 }
 
 /** An earlier invoice deducted by a Schlussrechnung / kumulative Abschlagsrechnung. */
@@ -358,6 +362,18 @@ export interface DocumentTotals {
   uncalculatedCount: number
 }
 
+/** Structured address for the e-invoice (EN 16931 BG-5 / BG-8). */
+export interface PostalAddress {
+  street: string | null
+  streetExtra: string | null
+  postalCode: string | null
+  city: string | null
+  /** ISO 3166-1 alpha-2 */
+  countryCode: string
+}
+
+export type EinvoiceFormat = 'zugferd' | 'xrechnung_ubl' | 'xrechnung_cii'
+
 export interface PartyAddress {
   name: string
   lines: string[]
@@ -365,6 +381,31 @@ export interface PartyAddress {
   private?: boolean
   /** USt-IdNr. of the recipient. */
   vatId?: string | null
+  /** Structured address for the e-invoice; frozen with the document (since migration 0020). */
+  address?: PostalAddress | null
+  /** Recipient: Kundennummer (BT-46), Leitweg-ID (BT-10/BT-49), e-invoice address and format. */
+  customerNumber?: string | null
+  buyerReference?: string | null
+  einvoiceEmail?: string | null
+  einvoiceFormat?: EinvoiceFormat | null
+}
+
+/** E-Rechnung of a finalized invoice: the archived XML files, each validated by KoSIT. */
+export interface EinvoiceSummary {
+  files: { format: EinvoiceFormat; validatedAt: string; sizeBytes: number; sha256: string }[]
+}
+
+/** Firma data the e-invoice needs beyond the letter (frozen with the document since 0020). */
+export interface IssuerEinvoiceData {
+  vatId: string | null
+  taxNumber: string | null
+  email: string | null
+  phone: string | null
+  /** BT-41 contact point, e.g. the Geschäftsführung. */
+  contactName: string | null
+  /** IBAN without spaces (BT-84), BIC (BT-86), bank (account name is the company). */
+  iban: string | null
+  bic: string | null
 }
 
 export interface DocumentDetail extends DocumentSummary {
@@ -398,6 +439,7 @@ export interface DocumentDetail extends DocumentSummary {
   issuer: PartyAddress & {
     contact: string[]
     legal: string[]
+    einvoice?: IssuerEinvoiceData
     letterhead?: LetterheadLayout
     values?: Record<string, string | null>
   }
@@ -409,6 +451,8 @@ export interface DocumentDetail extends DocumentSummary {
   canConvertToChangeOrder: boolean
   items: DocumentItem[]
   totals: DocumentTotals
+  /** Finalized invoices: archived e-invoice files (ZUGFeRD, XRechnung), validated by KoSIT. */
+  einvoice?: EinvoiceSummary | null
 }
 
 /** Unit with its decimal places (Handwerksregel: m/m² 2, m³ und t 3, Stück/Pauschal 0). */

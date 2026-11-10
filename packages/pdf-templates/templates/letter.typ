@@ -10,6 +10,16 @@
 #let alignment-of(a) = if a == "right" { right } else if a == "center" { center } else { left }
 
 #set document(title: data.title, author: data.author)
+// E-Rechnung: the XML is attached as associated file (PDF/A-3, ZUGFeRD/Factur-X: factur-x.xml).
+#let attachment = data.at("attachment", default: none)
+#if attachment != none {
+  pdf.attach(
+    attachment.path,
+    relationship: "alternative",
+    mime-type: "text/xml",
+    description: attachment.description,
+  )
+}
 #set text(font: font, size: 10pt, lang: "de", region: "DE", fill: rgb("#111827"))
 #set par(leading: 0.5em, spacing: 0.9em)
 

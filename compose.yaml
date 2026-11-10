@@ -5,7 +5,8 @@
 # Profile "compact" (default): proxy, app (API + worker), db.
 # Profile "standard": additionally a separate worker -> COMPOSE_PROFILES=standard and APP_ROLE=api.
 # backup: daily database + Ablage backup into BACKUP_DIR (ADR 0005), restore with infra/restore.sh.
-# Planned services (see DESIGN.md §3.5): storage (S3 + Object Lock), kosit.
+# kosit: e-invoice validator (ADR 0007), internal only; invoices are finalized only after it accepted them.
+# Planned services (see DESIGN.md §3.5): storage (S3 + Object Lock).
 
 name: openplancraft
 
@@ -25,6 +26,8 @@ x-app: &app
   depends_on:
     db:
       condition: service_healthy
+    kosit:
+      condition: service_started
 
 x-app-env: &app-env
   APP_NAME: ${APP_NAME:-OpenPlancraft}
@@ -50,6 +53,7 @@ x-app-env: &app-env
   SMTP_PASSWORD: ${SMTP_PASSWORD:-}
   SMTP_PASSWORD_FILE: ${SMTP_PASSWORD_FILE:-}
   SMTP_FROM: ${SMTP_FROM:-}
+  KOSIT_URL: ${KOSIT_URL:-http://kosit:8080}
 
 services:
   proxy:
@@ -110,6 +114,17 @@ services:
       interval: 5s
       timeout: 3s
       retries: 20
+
+  # E-invoice validator (ADR 0007): XRechnung UBL and ZUGFeRD/Factur-X CII against EN 16931 and the
+  # XRechnung rules of KoSIT. Only reachable inside the stack; about 300 MB RAM (heap 256 MB).
+  kosit:
+    image: ${IMAGE_PREFIX:-ghcr.io/vionyt/openplancraft}-kosit:${KOSIT_IMAGE_VERSION:-latest}
+    build:
+      context: .
+      dockerfile: docker/kosit.Dockerfile
+    restart: unless-stopped
+    read_only: true
+    tmpfs: [/tmp]
 
   # Daily backup of database and Ablage (ADR 0005). Same image as db, idles in a sleep loop.
   backup:

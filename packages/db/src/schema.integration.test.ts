@@ -262,11 +262,23 @@ describe.skipIf(!testDatabaseUrl)('database schema (integration)', () => {
     })
 
     it('keeps archived artifacts insert-only', async () => {
+      // Rule 8: an e-invoice is archived only with a passed validation.
+      await expectDbError(
+        a.run(
+          (
+            tx,
+          ) => tx`insert into document_artifact (tenant_id, document_id, kind, format, storage_key,
+            sha256, size_bytes, mime_type, locked_until)
+          values (${a.tenantId}, ${documentId}, 'zugferd_pdf', 'zugferd', ${`archive/${documentId}.pdf`},
+            sha256('pdf'::bytea), 1234, 'application/pdf', '2037-12-31')`,
+        ),
+        /document_artifact_einvoice_validated/,
+      )
       await a.run(
-        (tx) => tx`insert into document_artifact (tenant_id, document_id, kind, storage_key, sha256,
-          size_bytes, mime_type, locked_until)
-        values (${a.tenantId}, ${documentId}, 'zugferd_pdf', ${`archive/${documentId}.pdf`},
-          sha256('pdf'::bytea), 1234, 'application/pdf', '2037-12-31')`,
+        (tx) => tx`insert into document_artifact (tenant_id, document_id, kind, format, storage_key,
+          sha256, size_bytes, mime_type, validated_at, locked_until)
+        values (${a.tenantId}, ${documentId}, 'zugferd_pdf', 'zugferd', ${`archive/${documentId}.pdf`},
+          sha256('pdf'::bytea), 1234, 'application/pdf', now(), '2037-12-31')`,
       )
       await expectDbError(
         a.run((tx) => tx`delete from document_artifact where document_id = ${documentId}`),

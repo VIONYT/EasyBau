@@ -12,9 +12,20 @@ services:
     environment:
       NODE_ENV: test
       DATABASE_URL: postgres://test:test@db:5432/test
+      # Real KoSIT validator: e-invoice tests check the generated XML against it (rule 8).
+      KOSIT_URL: http://kosit:8080
     depends_on:
       db:
         condition: service_healthy
+      kosit:
+        condition: service_healthy
+
+  kosit:
+    build:
+      context: .
+      dockerfile: docker/kosit.Dockerfile
+    read_only: true
+    tmpfs: [/tmp]
 
   db:
     image: postgres:17-alpine

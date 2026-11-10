@@ -1,7 +1,11 @@
-# Development overlay: only the database runs in Docker, services run on the host with hot reload.
-#   docker compose -f compose.yaml -f compose.dev.yaml up -d db
-#   pnpm dev   (API + worker on :3000, web on :5173)
+# Development overlay: only the database (and the e-invoice validator) run in Docker, services run on
+# the host with hot reload.
+#   docker compose -f compose.yaml -f compose.dev.yaml up -d db kosit
+#   KOSIT_URL=http://localhost:8081 pnpm dev   (API + worker on :3000, web on :5173)
 services:
   db:
     ports:
       - "127.0.0.1:5432:5432"
+  kosit:
+    ports:
+      - "127.0.0.1:8081:8080"

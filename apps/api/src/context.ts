@@ -4,6 +4,7 @@ import { withTenant } from '@opc/db'
 import type { ObjectStore } from '@opc/storage'
 import type { FastifyReply, FastifyRequest } from 'fastify'
 import { forbidden, HttpError } from './http.js'
+import type { EinvoiceValidator } from './kosit.js'
 import type { FieldCipher } from './security/crypto.js'
 
 export interface AuthContext {
@@ -45,9 +46,13 @@ export interface Services {
     /** SMTP configured: e-mails are queued in the outbox and sent by the worker. */
     SMTP_ENABLED: boolean
     SMTP_FROM?: string | undefined
+    /** KoSIT validator (ADR 0007), for the Betriebs-Check. */
+    KOSIT_URL?: string | undefined
   }
   /** Uploaded files (project filing, ADR 0004). */
   storage: ObjectStore
+  /** Checks every e-invoice before an invoice is finalized (rule 8); null = not configured. */
+  einvoiceValidator: EinvoiceValidator | null
   /** One-time code required for the initial setup. */
   setupToken: string
   now: () => number

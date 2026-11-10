@@ -28,6 +28,7 @@ import {
   type DocumentSummary,
   type DocumentTotals,
   documentStatusRequest,
+  type EinvoiceFormat,
   finalizeRequest,
   moveItemRequest,
   PRICED_POSITION_TYPES,
@@ -46,7 +47,9 @@ import {
   requirePermission,
   requireVisibleProject,
   type Services,
+  servicesOf,
 } from '../context.js'
+import { einvoiceSummary } from '../einvoice.js'
 import { checkIfMatch, etagOf, HttpError, notFound, parse } from '../http.js'
 import { finalizeInvoice } from './invoices.js'
 import { companyValues, loadLetterhead } from './letterhead.js'
@@ -386,6 +389,9 @@ function totalsOf(
       netCents: Number(t.netCents),
       taxCents: Number(t.taxCents),
       exemptionReason: t.exemptionReason ?? null,
+      itemsNetCents: Number(t.itemsNetCents),
+      discountCents: Number(t.discountCents),
+      deductedNetCents: Number(t.deductedNetCents),
     })),
     titleSubtotals: Object.fromEntries(
       [...totals.titleSubtotals].map(([id, cents]) => [id, Number(cents)]),
@@ -417,13 +423,20 @@ export async function liveIssuer(tx: Tx): Promise<Issuer> {
       registerNumber: string | null
       managerTitle: string | null
       managerName: string | null
+      ibanEnc: Buffer | null
+      bic: string | null
+      countryCode: string
     }[]
   >`
     select name, street, postal_code as "postalCode", city, email, phone, website, vat_id as "vatId",
            tax_number as "taxNumber", register_court as "registerCourt", register_number as "registerNumber",
-           manager_title as "managerTitle", manager_name as "managerName"
+           manager_title as "managerTitle", manager_name as "managerName", iban_enc as "ibanEnc", bic,
+           country_code as "countryCode"
     from tenant where id = current_tenant_id()`
   if (!t) return { name: '', lines: [], contact: [], legal: [] }
+  const cipher = servicesOf(tx)?.cipher
+  const iban =
+    t.ibanEnc && cipher ? cipher.decrypt(t.ibanEnc).replace(/\s+/g, '').toUpperCase() : null
   const place = [t.postalCode, t.city].filter(Boolean).join(' ')
   return {
     // Briefpapier and its placeholder values; frozen with the document (rule 4).
@@ -440,6 +453,23 @@ export async function liveIssuer(tx: Tx): Promise<Issuer> {
       t.vatId ? `USt-IdNr. ${t.vatId}` : null,
       t.taxNumber ? `Steuernummer ${t.taxNumber}` : null,
     ].filter((v): v is string => !!v),
+    // Structured data for the e-invoice (EN 16931), frozen with the document (rule 4).
+    address: {
+      street: t.street,
+      streetExtra: null,
+      postalCode: t.postalCode,
+      city: t.city,
+      countryCode: t.countryCode.trim().toUpperCase(),
+    },
+    einvoice: {
+      vatId: t.vatId,
+      taxNumber: t.taxNumber,
+      email: t.email,
+      phone: t.phone,
+      contactName: t.managerName,
+      iban,
+      bic: t.bic,
+    },
   }
 }
 
@@ -449,11 +479,31 @@ export async function liveRecipient(
   contactId: string | null,
 ): Promise<DocumentDetail['recipient']> {
   if (!contactId) return null
-  const [c] = await tx<{ name: string; private: boolean; vatId: string | null }[]>`
-    select display_name as name, kind = 'person' as private, vat_id as "vatId"
+  const [c] = await tx<
+    {
+      name: string
+      private: boolean
+      vatId: string | null
+      customerNumber: string | null
+      buyerReference: string | null
+      einvoiceEmail: string | null
+      einvoiceFormat: EinvoiceFormat | null
+    }[]
+  >`
+    select display_name as name, kind = 'person' as private, vat_id as "vatId", number as "customerNumber",
+           buyer_reference as "buyerReference", einvoice_email as "einvoiceEmail",
+           einvoice_format as "einvoiceFormat"
     from contact where id = ${contactId}`
   if (!c) return null
-  const extra = { private: c.private, vatId: c.vatId }
+  const extra = {
+    private: c.private,
+    vatId: c.vatId,
+    // E-Rechnung: Kundennummer, Leitweg-ID, address and format (frozen with the document).
+    customerNumber: c.customerNumber,
+    buyerReference: c.buyerReference,
+    einvoiceEmail: c.einvoiceEmail,
+    einvoiceFormat: c.einvoiceFormat,
+  }
   const [a] = await tx<
     {
       recipientBlock: string | null
@@ -484,6 +534,13 @@ export async function liveRecipient(
       a.countryCode !== 'DE' ? a.countryCode : null,
     ].filter((v): v is string => !!v),
     ...extra,
+    address: {
+      street: a.street,
+      streetExtra: a.streetExtra,
+      postalCode: a.postalCode,
+      city: a.city,
+      countryCode: a.countryCode.trim().toUpperCase(),
+    },
   }
 }
 
@@ -598,6 +655,7 @@ export async function loadDocument(
     items,
     totals: totalsOf(rows, costs, doc, await loadDeductions(tx, id)),
     legalNotes: [],
+    einvoice: doc.status === 'draft' ? null : await einvoiceSummary(tx, id),
   }
   // Finalized: the frozen notes; drafts: a live preview.
   detail.legalNotes = storedNotes ?? (doc.status === 'draft' ? legalNotesOf(detail) : [])

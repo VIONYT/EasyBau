@@ -1,6 +1,7 @@
 import type { BackupRunSummary, OperationsStatus } from '@opc/schemas'
 import type { FastifyInstance } from 'fastify'
 import { inTenant, requirePermission, type Services } from '../context.js'
+import { kositHealthy } from '../kosit.js'
 
 /** Betriebs-Check: backup log (written by the backup service, ADR 0005), e-mail, security. */
 export function registerOperationsRoutes(app: FastifyInstance, services: Services) {
@@ -28,6 +29,12 @@ export function registerOperationsRoutes(app: FastifyInstance, services: Service
         security: {
           requireAdminMfa: services.config.REQUIRE_ADMIN_MFA,
           https: (services.config.PUBLIC_URL ?? 'https://').startsWith('https://'),
+        },
+        einvoice: {
+          configured: services.einvoiceValidator !== null,
+          reachable: services.config.KOSIT_URL
+            ? await kositHealthy(services.config.KOSIT_URL)
+            : services.einvoiceValidator !== null,
         },
       }
     })

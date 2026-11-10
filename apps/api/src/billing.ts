@@ -12,7 +12,9 @@ import {
   type TaxCategory,
   type TaxMode,
 } from '@opc/domain'
+import { einvoiceProblems } from '@opc/einvoice'
 import type { DeductionSummary, DocumentDetail, FinalizeCheck } from '@opc/schemas'
+import { einvoiceContext } from './einvoice.js'
 
 /**
  * Rechnungsstellung: data access for deductions (Abschläge), Mengenfortschreibung from the
@@ -264,6 +266,10 @@ export async function invoiceFinalizeCheck(
     pricedItemCount: priced.length,
     taxMode: detail.taxMode as TaxMode,
   })) {
+    errors.push(problem)
+  }
+  // E-Rechnung (EN 16931, XRechnung): data the XML needs; KoSIT checks the file at Festschreiben.
+  for (const problem of einvoiceProblems(detail, await einvoiceContext(tx, detail))) {
     errors.push(problem)
   }
 

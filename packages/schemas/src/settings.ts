@@ -315,4 +315,6 @@ export interface OperationsStatus {
   }
   email: { enabled: boolean; queued: number; failed: number }
   security: { requireAdminMfa: boolean; https: boolean }
+  /** KoSIT validator (ADR 0007): without it no invoice can be finalized (rule 8). */
+  einvoice: { configured: boolean; reachable: boolean }
 }

@@ -73,6 +73,17 @@ const envSchema = z.object({
   SMTP_PASSWORD: z.string().min(1).optional(),
   /** Sender, e.g. "Muster Bau GmbH <buero@muster-bau.de>". Required with SMTP_HOST. */
   SMTP_FROM: z.string().min(3).optional(),
+  /**
+   * KoSIT validator daemon (ADR 0007), e.g. http://kosit:8080 in the Docker stack. Every e-invoice
+   * (ZUGFeRD/Factur-X CII, XRechnung UBL) must pass it before an invoice is finalized (rule 8).
+   * Without it, invoices cannot be finalized.
+   */
+  KOSIT_URL: z
+    .url({ protocol: /^https?$/ })
+    .transform((v) => v.replace(/\/+$/, ''))
+    .optional(),
+  /** Timeout for one validation in milliseconds. */
+  KOSIT_TIMEOUT_MS: z.coerce.number().int().min(1000).max(120000).default(20000),
   /** Maximum size of one uploaded file in megabytes. */
   UPLOAD_MAX_MB: z.coerce.number().int().min(1).max(2048).default(50),
 })

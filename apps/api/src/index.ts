@@ -8,8 +8,10 @@ import Fastify, {
   type FastifyServerOptions,
 } from 'fastify'
 import type { Services } from './context.js'
+import { registerEinvoiceRoutes } from './einvoice.js'
 import { HttpError, problem, sendProblem } from './http.js'
 import { idempotencyHooks } from './idempotency.js'
+import { type EinvoiceValidator, kositValidator } from './kosit.js'
 import { authHook, mfaEnforcementHook, registerAuthRoutes } from './routes/auth.js'
 import { registerCatalogRoutes } from './routes/catalog.js'
 import { registerContactRoutes } from './routes/contacts.js'
@@ -48,6 +50,8 @@ export interface ApiDeps {
         | 'UPLOAD_MAX_MB'
         | 'SMTP_HOST'
         | 'SMTP_FROM'
+        | 'KOSIT_URL'
+        | 'KOSIT_TIMEOUT_MS'
       >
     >
   /** Returns true when all hard dependencies (database) are reachable. */
@@ -61,6 +65,8 @@ export interface ApiDeps {
   storage?: ObjectStore
   /** Clock for TOTP; injectable for tests. */
   now?: () => number
+  /** E-invoice validation; defaults to the KoSIT daemon at KOSIT_URL (none without it). */
+  einvoiceValidator?: EinvoiceValidator | null
 }
 
 const MUTATING = new Set(['POST', 'PUT', 'PATCH', 'DELETE'])
@@ -73,6 +79,7 @@ export function buildApi({
   setupToken,
   storage,
   now = Date.now,
+  einvoiceValidator,
 }: ApiDeps): FastifyInstance {
   const app = Fastify({ logger, trustProxy: true, bodyLimit: 1024 * 1024 })
 
@@ -139,8 +146,15 @@ export function buildApi({
       UPLOAD_MAX_MB: config.UPLOAD_MAX_MB ?? 50,
       SMTP_ENABLED: Boolean(config.SMTP_HOST && config.SMTP_FROM),
       SMTP_FROM: config.SMTP_FROM,
+      KOSIT_URL: config.KOSIT_URL,
     },
     storage: storage ?? new FsObjectStore(config.STORAGE_DIR ?? '/data/files'),
+    einvoiceValidator:
+      einvoiceValidator !== undefined
+        ? einvoiceValidator
+        : config.KOSIT_URL
+          ? kositValidator(config.KOSIT_URL, config.KOSIT_TIMEOUT_MS ?? 20000)
+          : null,
     setupToken,
     now,
   }
@@ -182,6 +196,7 @@ export function buildApi({
   registerInvoiceRoutes(app, services)
   registerLetterheadRoutes(app, services)
   registerPdfRoutes(app, services)
+  registerEinvoiceRoutes(app, services)
   registerSignatureRoutes(app, services)
   registerMeasurementRoutes(app, services)
   registerReportRoutes(app, services)

@@ -20,6 +20,7 @@
     "@opc/config": "workspace:*",
     "@opc/db": "workspace:*",
     "@opc/domain": "workspace:*",
+    "@opc/einvoice": "workspace:*",
     "@opc/exports": "workspace:*",
     "@opc/pdf-templates": "workspace:*",
     "@opc/schemas": "workspace:*",
