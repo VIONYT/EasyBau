@@ -24,8 +24,8 @@ Voraussetzungen: Node 22, pnpm (über `corepack enable`), Docker.
 
 ```bash
 pnpm install
-docker compose -f compose.yaml -f compose.dev.yaml up -d db
-DATABASE_URL=postgres://openplancraft:<passwort>@localhost:5432/openplancraft pnpm dev
+docker compose -f compose.yaml -f compose.dev.yaml up -d db kosit
+DATABASE_URL=postgres://openplancraft:<passwort>@localhost:5432/openplancraft KOSIT_URL=http://localhost:8081 pnpm dev
 ```
 
 Tests: `pnpm check` (Lint, Typen, Tests) oder komplett in Docker: `docker compose -f compose.test.yaml run --rm --build test`.

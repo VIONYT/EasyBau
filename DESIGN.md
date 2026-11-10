@@ -102,7 +102,7 @@ Alle Kästen laufen als Container im selben `docker compose`-Stack beim Betreibe
 | Migrationen / Zugriff | **Versionierte SQL-Migrationen** mit eigenem Runner (Prüfsummen, Advisory Lock), Zugriff über `postgres` (parametrisierte Tagged Templates) | RLS, Trigger und Hash-Kette liegen vollständig im SQL; siehe [ADR 0003](docs/adr/0003-sql-migrationen.md) |
 | Jobs | **pg-boss** (Warteschlange in PostgreSQL) | Kein eigener Queue-Container. Jobs werden **in derselben Transaktion** wie die fachliche Änderung angelegt (z. B. Festschreiben → „PDF/E-Rechnung erzeugen“) und können nicht verloren gehen. Wiederholungen, Zeitpläne (Cron) und Singleton-Jobs sind eingebaut |
 | PDF | **Typst**: Vorlagen in `packages/pdf-templates` (Typst-Markup + JSON-Daten), Erzeugung über die Typst-CLI im Worker-Image; Ausgabe **PDF/A-3b** mit eingebetteter E-Rechnungs-XML (`pdf.embed`); Schriften im Image gebündelt | Ein PDF dauert typischerweise Millisekunden statt Sekunden, und der Speicherbedarf liegt bei wenigen MB statt 300–500 MB für Chromium. Dieselben Vorlagen können per WebAssembly auch für die Live-Vorschau im Browser genutzt werden. Fallback: Nachbearbeitung mit der E-Rechnungs-Bibliothek, falls eine PDF/A-Prüfung (veraPDF in CI) fehlschlägt |
-| E-Rechnung | **`@e-invoice-eu/core`** (Factur-X/ZUGFeRD, XRechnung UBL/CII); Validierung mit **KoSIT-Validator** (Docker-Sidecar, CI) | Bewährte Bibliothek + offizieller Prüfer |
+| E-Rechnung | Eigenes Paket **`packages/einvoice`** (EN 16931 → ZUGFeRD/Factur-X CII, XRechnung UBL/CII, Factur-X-XMP); Validierung jeder Datei mit dem **KoSIT-Validator** (Container `kosit`) beim Festschreiben, siehe [ADR 0007](docs/adr/0007-e-rechnung-kosit.md) | Keine Abhängigkeit mit nicht OSI-anerkannter Lizenz; offizieller Prüfer |
 | Dateien | **S3-kompatibel**: standardmäßig **MinIO** im Stack, alternativ jeder externe S3-Speicher des Betreibers; **Object Lock (Compliance-Modus)** für Archivbuckets | WORM-Speicherung für GoBD ohne Cloud-Zwang |
 | Frontend | **React 19 + Vite**, **TanStack Router + Query**, **Tailwind CSS 4**, **Radix UI / shadcn-Komponenten** | Schnell, zugänglich, eigenes Designsystem möglich |
 | Formulare | React Hook Form + Zod | Gleiche Schemas wie API |
@@ -158,7 +158,7 @@ Standardfall beim Self-Hosting ist **eine Firma pro Installation**. Die Mandante
 | `worker` | `ghcr.io/<org>/openplancraft-worker` | PDF (Typst), E-Rechnung, E-Mail, Exporte, geplante Jobs; **entfällt im Profil kompakt** (läuft dann im `api`-Container) |
 | `db` | PostgreSQL 17 | Daten (Volume) |
 | `storage` | MinIO | WORM-Archiv festgeschriebener Belege (Object Lock wird beim ersten Start eingerichtet). Die Projektablage liegt im Volume `files` ([ADR 0004](docs/adr/0004-dateiablage.md)) |
-| `kosit` | KoSIT-Validator (Java) | Prüfung jeder E-Rechnung, nur intern erreichbar. Läuft mit begrenztem Heap (`-Xmx256m`, Serial GC). Im Profil kompakt wird er **bei Bedarf** gestartet und nach Leerlauf wieder beendet |
+| `kosit` | KoSIT-Validator (Java) | Prüfung jeder E-Rechnung, nur intern erreichbar. Läuft mit begrenztem Heap (`-Xmx256m`, Serial GC) dauerhaft in beiden Profilen (ca. 300 MB; ein Start bei Bedarf bräuchte den Docker-Socket, [ADR 0007](docs/adr/0007-e-rechnung-kosit.md)) |
 | `backup` | pgBackRest + Cron | WAL-Archiv, tägliche Sicherung, optional Kopie auf externes Ziel (S3/SFTP) |
 
 **Grundsätze**
@@ -179,13 +179,13 @@ Ziel: **wenig Ressourcen, trotzdem schnell.** Gewählt über `PROFILE=compact|st
 
 | | **Kompakt** (1–10 Nutzer) | **Standard** (10–50 Nutzer) |
 |---|---|---|
-| Container | `proxy`, `app` (API + Worker in einem Prozess), `db`, `storage`, `kosit` (bei Bedarf), `backup` | `proxy`, `api`, `worker`, `db`, `storage`, `kosit`, `backup` |
+| Container | `proxy`, `app` (API + Worker in einem Prozess), `db`, `storage`, `kosit`, `backup` | `proxy`, `api`, `worker`, `db`, `storage`, `kosit`, `backup` |
 | RAM im Betrieb (Richtwert) | **ca. 1 GB** | ca. 1,5 GB |
 | Empfohlener Server | 1–2 vCPU, **2 GB RAM**, 20–40 GB SSD | 2–4 vCPU, 4 GB RAM, 40+ GB SSD |
 | PostgreSQL-Tuning | `shared_buffers=128MB`, `work_mem=4MB`, `max_connections=30` | `shared_buffers=512MB`, `max_connections=60` |
-| KoSIT | bei Bedarf gestartet, `-Xmx256m` | dauerhaft, `-Xmx256m` |
+| KoSIT | dauerhaft, `-Xmx256m` | dauerhaft, `-Xmx256m` |
 
-Ungefähre Speicheraufteilung (kompakt): Caddy 30 MB · App (Node) 150–200 MB · PostgreSQL 150–250 MB · MinIO 150 MB · KoSIT 0 bzw. 300 MB beim Prüfen · Backup 10 MB. Typst benötigt nur während der PDF-Erzeugung wenige MB.
+Ungefähre Speicheraufteilung (kompakt): Caddy 30 MB · App (Node) 150–200 MB · PostgreSQL 150–250 MB · MinIO 150 MB · KoSIT ca. 300 MB · Backup 10 MB. Typst benötigt nur während der PDF-Erzeugung wenige MB.
 
 **Warum PostgreSQL trotzdem die richtige Wahl ist**: Ein Betrieb mit 20 Mitarbeitenden erzeugt grob ein paar tausend Dokumente und einige hunderttausend Positionen pro Jahr. Das sind auch nach zehn Jahren meist unter 5 GB, denn Fotos und PDFs liegen im Objektspeicher. PostgreSQL ersetzt zusätzlich Queue, Cache und Suchserver und bietet als einzige Option RLS, Trigger für die Unveränderbarkeit und Point-in-Time-Recovery (siehe [ADR 0002](docs/adr/0002-schlanker-stack.md)). SQLite und MariaDB wurden geprüft und verworfen.
 

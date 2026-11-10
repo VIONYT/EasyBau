@@ -59,6 +59,16 @@ Danach `https://<APP_DOMAIN>` öffnen, den Code eingeben, die Firma und das erst
 - E-Mails gehen zuerst in einen Postausgang in der Datenbank und werden vom Worker versendet (bis zu 5 Versuche mit wachsender Pause). Status und Fehler: Einstellungen › Betrieb. Inhalte (z. B. Einladungslinks) werden nach dem Versand gelöscht.
 - Antworten gehen an die E-Mail-Adresse der Firma (Einstellungen › Firma).
 
+## 5a. E-Rechnung (Dienst „kosit“)
+
+- Jede Rechnung und Gutschrift wird beim Festschreiben als E-Rechnung erzeugt:
+  - ZUGFeRD 2.x (Profil EN 16931) eingebettet im PDF/A-3
+  - für öffentliche Auftraggeber mit Leitweg-ID bzw. auf Wunsch des Kunden zusätzlich als XRechnung (UBL oder CII)
+- Der Container `kosit` (KoSIT-Validator mit XRechnung-Regeln, ADR 0007) prüft jede Datei. Nur geprüfte Rechnungen erhalten eine Nummer. XML und Prüfbericht werden mit SHA-256 archiviert.
+- Der Dienst ist nur intern erreichbar (`KOSIT_URL=http://kosit:8080`) und braucht etwa 300 MB RAM. Er startet mit dem Stack, der erste Start dauert etwa 30 Sekunden.
+- Läuft `kosit` nicht, lassen sich keine Rechnungen festschreiben. Angebote, Aufträge und alles andere funktionieren weiter. Zustand: Einstellungen › Betrieb.
+- Leitweg-ID, E-Mail für E-Rechnungen und gewünschtes Format stehen am Kontakt (Kontakte › Kontakt öffnen › E-Rechnung). Für XRechnung braucht die Firma E-Mail, Telefon und IBAN (Einstellungen › Firma).
+
 ## 6. Sicherung und Wiederherstellung
 
 Der Dienst `backup` ([ADR 0005](../adr/0005-backup-dienst.md)) sichert **täglich um `BACKUP_TIME`** (Standard 02:30, Zeitzone `TZ`) die Datenbank und die Ablage. Jede Sicherung ist ein Verzeichnis `JJJJ-MM-TT_HHMMSS` mit `db.dump`, `files.tar.gz` und `SHA256SUMS` und wird direkt nach dem Schreiben geprüft. Sicherungen älter als `BACKUP_KEEP_DAYS` (Standard 14) werden gelöscht, aber nur nach einer erfolgreichen neuen Sicherung.
@@ -112,4 +122,4 @@ Datenbank-Migrationen laufen beim Start automatisch (`MIGRATE_ON_START=true`). E
 BASE_URL=https://<APP_DOMAIN> sh infra/smoke-test.sh
 ```
 
-Noch nicht im Stack und in Arbeit: Archivspeicher mit Object Lock für festgeschriebene Belege, KoSIT-Prüfer.
+Noch nicht im Stack und in Arbeit: Archivspeicher mit Object Lock für festgeschriebene Belege.
