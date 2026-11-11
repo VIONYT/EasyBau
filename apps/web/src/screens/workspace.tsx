@@ -4,8 +4,11 @@ import { api } from '../api'
 import { Field, FormError, optional, useForm } from '../forms'
 import { t } from '../i18n'
 import { type Route, useRoute } from '../router'
+import { AuditScreen } from './audit'
 import { Catalog } from './catalog'
+import { ContactEditor } from './contact-editor'
 import { DocumentScreen } from './document'
+import { Invoices } from './invoices'
 import { MeasurementScreen } from './measurement'
 import { PrintScreen } from './print'
 import { ProjectScreen } from './project'
@@ -15,7 +18,15 @@ import { Security } from './security'
 import { Settings } from './settings'
 import { Users } from './users'
 
-type Tab = 'projects' | 'contacts' | 'catalog' | 'users' | 'settings' | 'security'
+type Tab =
+  | 'projects'
+  | 'invoices'
+  | 'contacts'
+  | 'catalog'
+  | 'audit'
+  | 'users'
+  | 'settings'
+  | 'security'
 
 /** Working area after login. Admins without second factor only see the security settings. */
 export function Workspace({
@@ -48,6 +59,11 @@ export function Workspace({
   const tabs: { key: Tab; label: string; visible: boolean }[] = [
     { key: 'projects', label: t('nav.projects'), visible: !locked },
     {
+      key: 'invoices',
+      label: t('nav.invoices'),
+      visible: !locked && me.permissions.includes('document.read'),
+    },
+    {
       key: 'contacts',
       label: t('nav.contacts'),
       visible: !locked && me.permissions.includes('contacts.read'),
@@ -56,6 +72,11 @@ export function Workspace({
       key: 'catalog',
       label: t('nav.catalog'),
       visible: !locked && me.permissions.includes('catalog.read'),
+    },
+    {
+      key: 'audit',
+      label: t('nav.audit'),
+      visible: !locked && me.permissions.includes('audit.read'),
     },
     {
       key: 'users',
@@ -132,7 +153,9 @@ export function Workspace({
         {current.view === 'catalog' ? <Catalog me={me} /> : null}
         {current.view === 'settings' ? <Settings me={me} /> : null}
         {current.view === 'contacts' ? <Contacts me={me} /> : null}
+        {current.view === 'invoices' ? <Invoices navigate={navigate} /> : null}
         {current.view === 'users' ? <Users /> : null}
+        {current.view === 'audit' ? <AuditScreen me={me} /> : null}
         {current.view === 'security' ? <Security me={me} onChanged={refreshMe} /> : null}
       </main>
     </div>
@@ -155,6 +178,7 @@ function Contacts({ me }: { me: Me }) {
   const [query, setQuery] = useState('')
   const list = useList<ContactSummary>(`/api/v1/contacts?q=${encodeURIComponent(query)}`)
   const [kind, setKind] = useState<'organization' | 'person'>('organization')
+  const [selected, setSelected] = useState<string | null>(null)
   const form = useForm(
     (data) =>
       api<ContactDetail>('POST', '/api/v1/contacts', {
@@ -163,7 +187,11 @@ function Contacts({ me }: { me: Me }) {
         firstName: optional(data, 'firstName'),
         lastName: optional(data, 'lastName'),
       }),
-    () => list.reload(),
+    (created) => {
+      list.reload()
+      // Continue with address and e-invoice data of the new contact.
+      setSelected(created.id)
+    },
   )
   return (
     <section aria-labelledby="contacts-title">
@@ -221,16 +249,29 @@ function Contacts({ me }: { me: Me }) {
           </button>
         </form>
       ) : null}
+      {selected ? (
+        <ContactEditor
+          id={selected}
+          canWrite={me.permissions.includes('contacts.write')}
+          onSaved={() => list.reload()}
+          onClose={() => setSelected(null)}
+        />
+      ) : null}
       <List
         items={list.items}
         error={list.error}
         render={(c) => (
-          <>
+          <button
+            type="button"
+            className="list-button"
+            aria-current={selected === c.id ? 'true' : undefined}
+            onClick={() => setSelected(c.id)}
+          >
             <strong>{c.displayName}</strong>
             <span className="muted">
               {[c.number, c.city, c.primaryEmail].filter(Boolean).join(' · ')}
             </span>
-          </>
+          </button>
         )}
       />
     </section>

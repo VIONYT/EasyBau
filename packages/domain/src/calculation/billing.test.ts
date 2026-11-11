@@ -54,7 +54,15 @@ describe('Abschläge und Schlussrechnung (§ 14 Abs. 5 UStG)', () => {
       357_000n,
     ])
     expect(totals.taxLines).toEqual([
-      { category: 'S', ratePercent: '19.00', netCents: 300_000n, taxCents: 57_000n },
+      {
+        category: 'S',
+        ratePercent: '19.00',
+        netCents: 300_000n,
+        taxCents: 57_000n,
+        itemsNetCents: 1_000_000n,
+        discountCents: 0n,
+        deductedNetCents: 700_000n,
+      },
     ])
     // 5 % Sicherheitseinbehalt vom Restbetrag brutto.
     expect(totals.retentionCents).toBe(17_850n)
@@ -73,6 +81,12 @@ describe('Abschläge und Schlussrechnung (§ 14 Abs. 5 UStG)', () => {
     })
     // 333,35 € × 19 % = 63,3365 € → 63,34 € (BR-CO-17); Gesamtleistung = Rest + Abzug.
     expect(totals.taxLines[0]).toMatchObject({ netCents: 33_335n, taxCents: 6_334n })
+    // EN 16931: base = positions − document discount − deducted net (document-level allowances).
+    expect(totals.taxLines[0]).toMatchObject({
+      itemsNetCents: 100_005n,
+      discountCents: 0n,
+      deductedNetCents: 66_670n,
+    })
     expect(totals.performance.taxCents).toBe(6_334n + 12_667n)
     expect(totals.performance.grossCents).toBe(totals.grossCents + 66_670n + 12_667n)
   })

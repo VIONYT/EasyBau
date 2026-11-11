@@ -40,9 +40,35 @@ describe.skipIf(!process.env.DATABASE_URL)('Betriebs-Check (integration)', () =>
     expect(res.statusCode, res.body).toBe(200)
     expect(res.json()).toEqual({
       backup: { lastSuccess: null, recent: [] },
+      // No check of the audit chain yet: the nightly job has not run.
+      audit: { lastCheckAt: null, problem: null, brokenSeq: null, events: 0, stale: true },
       email: { enabled: false, queued: 0, failed: 0 },
       security: { requireAdminMfa: false, https: true },
+      einvoice: { configured: true, reachable: true },
+      archive: {
+        configured: false,
+        bucket: null,
+        reachable: false,
+        objectLock: false,
+        mode: null,
+        pending: 0,
+        oldestPendingAt: null,
+        failing: 0,
+        lastError: null,
+        verify: {
+          lastCheckAt: null,
+          checked30d: 0,
+          restored30d: 0,
+          lost: 0,
+          unchecked: 0,
+          request: null,
+        },
+      },
     })
+    // Without an archive there is nothing to reconcile.
+    expect((await admin.post('/api/v1/settings/operations/archive-verify', {})).statusCode).toBe(
+      409,
+    )
   })
 
   it('shows the runs written by the backup service', async () => {

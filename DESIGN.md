@@ -77,7 +77,7 @@ KI-Angebotsentwurf aus Freitext, Sprach-Bautagebuch (Diktat → strukturierter E
 │          audit                                            │
 ├───────────────────┬──────────────────┬───────────────────┤
 │  Worker (pg-boss) │ PostgreSQL 17    │ S3 Object Storage │
-│  PDF (Typst),     │ RLS je Mandant   │ MinIO, Object Lock│
+│  PDF (Typst),     │ RLS je Mandant   │ RustFS, Object Lk │
 │  E-Rechnung,      │ Append-only-Log  │ für Archiv (WORM) │
 │  Mails, Exporte   │ Job-Queue        │                   │
 └───────────────────┴──────────────────┴───────────────────┘
@@ -102,8 +102,8 @@ Alle Kästen laufen als Container im selben `docker compose`-Stack beim Betreibe
 | Migrationen / Zugriff | **Versionierte SQL-Migrationen** mit eigenem Runner (Prüfsummen, Advisory Lock), Zugriff über `postgres` (parametrisierte Tagged Templates) | RLS, Trigger und Hash-Kette liegen vollständig im SQL; siehe [ADR 0003](docs/adr/0003-sql-migrationen.md) |
 | Jobs | **pg-boss** (Warteschlange in PostgreSQL) | Kein eigener Queue-Container. Jobs werden **in derselben Transaktion** wie die fachliche Änderung angelegt (z. B. Festschreiben → „PDF/E-Rechnung erzeugen“) und können nicht verloren gehen. Wiederholungen, Zeitpläne (Cron) und Singleton-Jobs sind eingebaut |
 | PDF | **Typst**: Vorlagen in `packages/pdf-templates` (Typst-Markup + JSON-Daten), Erzeugung über die Typst-CLI im Worker-Image; Ausgabe **PDF/A-3b** mit eingebetteter E-Rechnungs-XML (`pdf.embed`); Schriften im Image gebündelt | Ein PDF dauert typischerweise Millisekunden statt Sekunden, und der Speicherbedarf liegt bei wenigen MB statt 300–500 MB für Chromium. Dieselben Vorlagen können per WebAssembly auch für die Live-Vorschau im Browser genutzt werden. Fallback: Nachbearbeitung mit der E-Rechnungs-Bibliothek, falls eine PDF/A-Prüfung (veraPDF in CI) fehlschlägt |
-| E-Rechnung | **`@e-invoice-eu/core`** (Factur-X/ZUGFeRD, XRechnung UBL/CII); Validierung mit **KoSIT-Validator** (Docker-Sidecar, CI) | Bewährte Bibliothek + offizieller Prüfer |
-| Dateien | **S3-kompatibel**: standardmäßig **MinIO** im Stack, alternativ jeder externe S3-Speicher des Betreibers; **Object Lock (Compliance-Modus)** für Archivbuckets | WORM-Speicherung für GoBD ohne Cloud-Zwang |
+| E-Rechnung | Eigenes Paket **`packages/einvoice`** (EN 16931 → ZUGFeRD/Factur-X CII, XRechnung UBL/CII, Factur-X-XMP); Validierung jeder Datei mit dem **KoSIT-Validator** (Container `kosit`) beim Festschreiben, siehe [ADR 0007](docs/adr/0007-e-rechnung-kosit.md) | Keine Abhängigkeit mit nicht OSI-anerkannter Lizenz; offizieller Prüfer |
+| Dateien | **S3-kompatibel**: standardmäßig **RustFS** im Stack (ADR 0009; bis 11/2026 MinIO, eingestellt), alternativ jeder externe S3-Speicher des Betreibers; **Object Lock (Compliance-Modus)** für Archivbuckets | WORM-Speicherung für GoBD ohne Cloud-Zwang |
 | Frontend | **React 19 + Vite**, **TanStack Router + Query**, **Tailwind CSS 4**, **Radix UI / shadcn-Komponenten** | Schnell, zugänglich, eigenes Designsystem möglich |
 | Formulare | React Hook Form + Zod | Gleiche Schemas wie API |
 | Offline | **vite-plugin-pwa** (Workbox) + **Dexie** (IndexedDB) + Outbox-Sync | Bautagebuch und Fotos ohne Netz |
@@ -134,7 +134,7 @@ openplancraft/
 ├─ compose.dev.yaml   # Overlay für Entwicklung (Hot Reload, Mailpit)
 ├─ compose.test.yaml  # Test-Stack für CI und lokale Testläufe
 ├─ .env.example       # alle Einstellungen dokumentiert
-├─ infra/             # Caddyfile, Backup-/Restore-Skripte, MinIO-Init (Object Lock)
+├─ infra/             # Caddyfile, Backup-/Restore-Skripte
 ├─ docs/              # Recherche, ADRs, Verfahrensdokumentation
 ├─ CLAUDE.md
 └─ DESIGN.md
@@ -157,8 +157,8 @@ Standardfall beim Self-Hosting ist **eine Firma pro Installation**. Die Mandante
 | `api` | `ghcr.io/<org>/openplancraft-api` | REST-API, führt beim Start Datenbank-Migrationen aus (mit Lock, idempotent) |
 | `worker` | `ghcr.io/<org>/openplancraft-worker` | PDF (Typst), E-Rechnung, E-Mail, Exporte, geplante Jobs; **entfällt im Profil kompakt** (läuft dann im `api`-Container) |
 | `db` | PostgreSQL 17 | Daten (Volume) |
-| `storage` | MinIO | WORM-Archiv festgeschriebener Belege (Object Lock wird beim ersten Start eingerichtet). Die Projektablage liegt im Volume `files` ([ADR 0004](docs/adr/0004-dateiablage.md)) |
-| `kosit` | KoSIT-Validator (Java) | Prüfung jeder E-Rechnung, nur intern erreichbar. Läuft mit begrenztem Heap (`-Xmx256m`, Serial GC). Im Profil kompakt wird er **bei Bedarf** gestartet und nach Leerlauf wieder beendet |
+| `storage` | RustFS (gepinntes Herstellerimage, [ADR 0009](docs/adr/0009-belegarchiv-rustfs.md)); Einmal-Dienste `storage-keys` (Root-Schlüssel im Volume `archive-keys`) und `storage-setup` (Bucket mit Object Lock, eingeschränkter App-Zugang ohne Löschrecht) | WORM-Archiv festgeschriebener Belege: der Worker kopiert jedes Original mit Sperrfrist dorthin ([ADR 0008](docs/adr/0008-belegarchiv-worm.md)). Alternativ externer S3 (`compose.external-s3.yaml`). Die Projektablage liegt im Volume `files` ([ADR 0004](docs/adr/0004-dateiablage.md)) |
+| `kosit` | KoSIT-Validator (Java) | Prüfung jeder E-Rechnung, nur intern erreichbar. Läuft mit begrenztem Heap (`-Xmx256m`, Serial GC) dauerhaft in beiden Profilen (ca. 300 MB; ein Start bei Bedarf bräuchte den Docker-Socket, [ADR 0007](docs/adr/0007-e-rechnung-kosit.md)) |
 | `backup` | pgBackRest + Cron | WAL-Archiv, tägliche Sicherung, optional Kopie auf externes Ziel (S3/SFTP) |
 
 **Grundsätze**
@@ -179,13 +179,13 @@ Ziel: **wenig Ressourcen, trotzdem schnell.** Gewählt über `PROFILE=compact|st
 
 | | **Kompakt** (1–10 Nutzer) | **Standard** (10–50 Nutzer) |
 |---|---|---|
-| Container | `proxy`, `app` (API + Worker in einem Prozess), `db`, `storage`, `kosit` (bei Bedarf), `backup` | `proxy`, `api`, `worker`, `db`, `storage`, `kosit`, `backup` |
+| Container | `proxy`, `app` (API + Worker in einem Prozess), `db`, `storage`, `kosit`, `backup` | `proxy`, `api`, `worker`, `db`, `storage`, `kosit`, `backup` |
 | RAM im Betrieb (Richtwert) | **ca. 1 GB** | ca. 1,5 GB |
 | Empfohlener Server | 1–2 vCPU, **2 GB RAM**, 20–40 GB SSD | 2–4 vCPU, 4 GB RAM, 40+ GB SSD |
 | PostgreSQL-Tuning | `shared_buffers=128MB`, `work_mem=4MB`, `max_connections=30` | `shared_buffers=512MB`, `max_connections=60` |
-| KoSIT | bei Bedarf gestartet, `-Xmx256m` | dauerhaft, `-Xmx256m` |
+| KoSIT | dauerhaft, `-Xmx256m` | dauerhaft, `-Xmx256m` |
 
-Ungefähre Speicheraufteilung (kompakt): Caddy 30 MB · App (Node) 150–200 MB · PostgreSQL 150–250 MB · MinIO 150 MB · KoSIT 0 bzw. 300 MB beim Prüfen · Backup 10 MB. Typst benötigt nur während der PDF-Erzeugung wenige MB.
+Ungefähre Speicheraufteilung (kompakt): Caddy 30 MB · App (Node) 150–200 MB · PostgreSQL 150–250 MB · RustFS 25–220 MB · KoSIT ca. 300 MB · Backup 10 MB. Typst benötigt nur während der PDF-Erzeugung wenige MB.
 
 **Warum PostgreSQL trotzdem die richtige Wahl ist**: Ein Betrieb mit 20 Mitarbeitenden erzeugt grob ein paar tausend Dokumente und einige hunderttausend Positionen pro Jahr. Das sind auch nach zehn Jahren meist unter 5 GB, denn Fotos und PDFs liegen im Objektspeicher. PostgreSQL ersetzt zusätzlich Queue, Cache und Suchserver und bietet als einzige Option RLS, Trigger für die Unveränderbarkeit und Point-in-Time-Recovery (siehe [ADR 0002](docs/adr/0002-schlanker-stack.md)). SQLite und MariaDB wurden geprüft und verworfen.
 
@@ -431,14 +431,21 @@ invoice ─┬─ payment (date, amount_cents, method, reference)
                             interest_rate, interest_cents, letter_snapshot, pdf → document_artifact)
 ```
 - `open_amount = gross_total − Σ payment − Σ receivable_adjustment` (nie negativ; Überzahlung wird als Guthaben markiert).
-- Zahlungen und Abzüge ändern **nicht** die festgeschriebene Rechnung, sie sind eigene, protokollierte Datensätze (Audit-Log). Löschen einer Zahlung ist bis zum DATEV-Export möglich, danach nur per Gegenbuchung.
+- Zahlungen und Abzüge ändern **nicht** die festgeschriebene Rechnung, sie sind eigene, protokollierte Datensätze (Audit-Log). Sie werden **nie gelöscht** (Regel 7); ein Fehler wird per Gegenbuchung („Stornieren“, Betrag gespiegelt, je Eintrag einmal) ausgeglichen, beide bleiben sichtbar (Migration 0022).
+- Bewusst **keine Buchhaltung**: keine Konten, kein Journal, kein Bankabruf. Abzüge (Skonto, Einbehalt, Bauumlage, Kürzung) wirken nur auf die offene Forderung; ihre Verbuchung bleibt beim Steuerberater. Beim Zahlungseingang schlägt das System vor, einen Rest in Höhe von Einbehalt, Bauumlage und erlaubtem Skonto auszubuchen (`settlementSuggestion`).
 - Status `overdue` ergibt sich aus Fälligkeit (Rechnungsdatum + Zahlungsziel) und offener Forderung; `dunned` sobald eine Mahnstufe versendet ist.
 - Mahnungen sind keine Rechnungen (keine USt, kein Rechnungsnummernkreis), werden aber als PDF archiviert und am Rechnungsdatensatz geführt.
+- Umsetzung (Migration 0023): Eine Mahnung wird beim Erstellen sofort ausgestellt und ist danach unveränderlich (`dunning_notice` ohne UPDATE/DELETE; Beträge, Briefpapier und Text in `letter_snapshot`). Das PDF/A ist ein `document_artifact` der Rechnung (Art `dunning_pdf`, Verweis `dunning_notice_id`, Aufbewahrung 6 Jahre als Handelsbrief) und geht damit ins WORM-Archiv. Stufen nur nacheinander, die nächste erst nach Ablauf der Frist der vorigen. Rechenlogik in `packages/domain/src/dunning.ts` (`dunningAmounts`, `defaultInterest`): Zinsen tagesgenau act/365 auf die offene Forderung aus `receivableState`, getrennt nach Basiszinssatz und Zahlungen während des Verzugs, einmal auf Cent gerundet; Zinsbeginn standardmäßig der Tag nach Ablauf der Frist der Zahlungserinnerung (im Dialog änderbar). Frühere Mahnkosten (Gebühren, Pauschale) werden weiter gefordert, Zinsen jeweils vom Zinsbeginn neu berechnet (keine Doppelberechnung).
+- Basiszinssatz: Tabelle `base_interest_rate`; Zeilen ohne Mandant kommen mit dem Release (Bundesbank), eigene Zeilen eines Mandanten ergänzen oder überschreiben ein Datum.
+- Versand per E-Mail über den Postausgang mit Anhang (`email_attachment` → `document_artifact`); der Worker liest den Anhang aus der Arbeitskopie oder dem Archiv.
 
 ### 4.7 Audit-Log
 `audit_event(id, tenant_id, actor_user_id, action, entity, entity_id, before jsonb, after jsonb, ip, user_agent, created_at, prev_hash, hash)`.
 - **Append-only**: Der App-User hat auf dieser Tabelle nur `INSERT`/`SELECT`; Trigger blockiert `UPDATE`/`DELETE`.
 - **Hash-Kette** je Mandant (`hash = sha256(prev_hash || canonical(event))`) macht Manipulation erkennbar. Ein nächtlicher Job prüft die Kette.
+- Umsetzung (Migration 0024): Der Worker prüft jede Nacht (02:17 Uhr, pg-boss) die Kette aller Mandanten (`check_all_audit_chains()`), das Ergebnis steht in `audit_chain_check` (nur einfügen). Jede Prüfung verankert den neuesten Eintrag (Nummer + Hash); so fallen neben veränderten Einträgen auch am Ende gelöschte (`truncated`) und komplett neu berechnete Ketten (`rewritten`) auf. Betriebs-Check zeigt das Ergebnis, Warnung nach 26 Stunden ohne Prüfung; unter „Prüfung“ lässt sie sich sofort starten.
+- Protokolliert werden auch Firmendaten und Einstellungen (`tenant`), Steuersätze und Zahlungsziele.
+- Lesen: Bereich **Prüfung** (Recht `audit.read`) mit Änderungsprotokoll (Filter nach Bereich und Zeitraum, geänderte Felder vorher/nachher, Geheimnisse maskiert), Prüfung der Kette und Exporten (Z3).
 - Protokolliert werden alle Änderungen an steuerrelevanten Daten, Logins, Rechteänderungen und Exporte.
 
 ---
@@ -449,7 +456,7 @@ invoice ─┬─ payment (date, amount_cents, method, reference)
 - **Hosting** liegt beim Betreiber (Self-Hosting). Die Doku empfiehlt Standorte in EU/Deutschland und einen Hoster mit ISO 27001 und AVV. Für Betreiber, die für andere Firmen hosten, gibt es eine AVV-Vorlage.
 - **Verschlüsselung**: TLS 1.2+ (HSTS), Verschlüsselung at rest (Volume + S3 SSE). Besonders sensible Felder (IBAN, API-Schlüssel) zusätzlich anwendungsseitig verschlüsselt (AES-256-GCM, Schlüssel im Secret-Store, rotierbar).
 - **Backups**: pgBackRest, kontinuierliche WAL-Archivierung (Point-in-Time-Recovery), tägliche Vollsicherung, verschlüsselt, auf ein zweites, vom Betreiber konfiguriertes Ziel (externes S3, SFTP oder NAS), 35 Tage Retention (einstellbar); **automatischer monatlicher Restore-Test** im `backup`-Container in eine Wegwerf-Datenbank, Ergebnis im Betriebs-Check.
-- **Archiv**: festgeschriebene Belege als Originaldatei im Bucket mit **Object Lock Compliance-Modus**, Sperrfrist = Aufbewahrungsfrist (Standard 10 Jahre ab Ende des Kalenderjahres). Hash zusätzlich in der DB.
+- **Archiv**: festgeschriebene Belege als Originaldatei im Bucket mit **Object Lock Compliance-Modus**, Sperrfrist = Aufbewahrungsfrist (Standard 10 Jahre ab Ende des Kalenderjahres). Hash zusätzlich in der DB. Nächtlicher Archiv-Abgleich (HEAD + SHA-256, Stichprobe per Download) schreibt fehlende oder beschädigte Originale aus der Arbeitskopie neu; vollständiger Abgleich nach einer Wiederherstellung und beim Umzug auf einen anderen S3 (ADR 0008, Migration 0025).
 
 ### 5.2 Anwendungssicherheit
 - Passwörter: argon2id; Login-Rate-Limit; Sperre nach Fehlversuchen; Benachrichtigung bei neuem Gerät.
@@ -488,8 +495,8 @@ invoice ─┬─ payment (date, amount_cents, method, reference)
 | Vollständigkeit | Lückenlose Nummernkreise; Lücken technisch unmöglich (Nummer erst beim Festschreiben) |
 | Zeitgerechte Erfassung | `finalized_at`, Server-Zeitstempel |
 | Maschinelle Auswertbarkeit / **Z3-Datenträgerüberlassung** | Export „Betriebsprüfung“: ZIP mit CSV-Dateien (Rechnungen, Positionen, Steuerzeilen, Zahlungen, Kunden, Audit-Log) + **`index.xml` nach GDPdU-Beschreibungsstandard (gdpdu-01-09-2004.dtd)**, Zeitraumfilter, plus Original-Belegdateien |
-| Z1/Z2-Zugriff | Prüferrolle „Nur lesen“, zeitlich befristet, nur steuerrelevante Bereiche, jede Aktion protokolliert |
-| Steuerberater | **DATEV-Buchungsstapel (EXTF, Format 700)** mit Erlöskonten nach SKR03/SKR04 (Mapping konfigurierbar), Debitorennummern, Belegfeld 1 = Rechnungsnummer; Belegbilder als ZIP; später DATEV-Connect-online-Anbindung |
+| Z1/Z2-Zugriff | Prüferrolle „Nur lesen“, zeitlich befristet (Enddatum Pflicht, höchstens ein Jahr im Voraus, DB-Trigger 0024; danach keine Anmeldung mehr), nur steuerrelevante Bereiche, Bereich „Prüfung“ mit Änderungsprotokoll und Exporten; Anmeldungen und Exporte werden protokolliert |
+| Steuerberater | **DATEV-Buchungsstapel (EXTF, Format 700)** mit Erlöskonten nach SKR03/SKR04 (Mapping konfigurierbar), Debitorennummern, Belegfeld 1 = Rechnungsnummer; Zahlungseingänge (Bank an Debitor) und anerkannte Kürzungen/Rabatte (Erlöse an Debitor, je Steuersatz anteilig; kein Skonto, kein Einbehalt, keine Bauumlage, keine bestrittenen Kürzungen); Belegbilder als ZIP; später DATEV-Connect-online-Anbindung |
 | E-Rechnung | ZUGFeRD 2.x Profil EN 16931 (Standard) und XRechnung UBL (für öffentliche Auftraggeber mit Leitweg-ID); jede Datei wird vor dem Versand gegen KoSIT validiert, sonst blockiert der Versand mit einer verständlichen Meldung |
 | Verfahrensdokumentation | Vorlage in `docs/verfahrensdokumentation/`, die Kunden übernehmen und ergänzen können |
 | DSGVO | AVV-Vorlage, Löschkonzept: nicht steuerrelevante Daten löschbar; steuerrelevante werden bis Fristende **gesperrt** und danach automatisch gelöscht; Auskunfts- und Exportfunktion |
@@ -602,7 +609,7 @@ Suchen · Benachrichtigungen · Übersicht · Projekte · Angebote · Ausgangsre
 - **CI-Pipeline** (GitHub Actions, bei jedem Push und Pull Request):
   1. Lint, Formatierung, Typecheck
   2. Unit-Tests (`packages/domain` mit 100 % Abdeckung als Pflicht)
-  3. Integrationstests gegen echte Container (PostgreSQL, MinIO, KoSIT): RLS, Trigger, Nummernkreise unter Parallelität, Job-Queue (Job entsteht nur bei Commit), Object Lock
+  3. Integrationstests gegen echte Container (PostgreSQL, RustFS, KoSIT): RLS, Trigger, Nummernkreise unter Parallelität, Job-Queue (Job entsteht nur bei Commit), Object Lock inkl. WORM-Angriffs-Suite und eingeschränktem App-Zugang
   3a. PDF-Prüfung: alle Beispiel-PDFs mit **veraPDF** auf PDF/A-3b, eingebettete XML mit KoSIT
   4. E-Rechnungs-Validierung aller Beispieldokumente mit KoSIT
   5. Docker-Images bauen (amd64 + arm64)

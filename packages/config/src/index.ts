@@ -73,6 +73,68 @@ const envSchema = z.object({
   SMTP_PASSWORD: z.string().min(1).optional(),
   /** Sender, e.g. "Muster Bau GmbH <buero@muster-bau.de>". Required with SMTP_HOST. */
   SMTP_FROM: z.string().min(3).optional(),
+  /**
+   * KoSIT validator daemon (ADR 0007), e.g. http://kosit:8080 in the Docker stack. Every e-invoice
+   * (ZUGFeRD/Factur-X CII, XRechnung UBL) must pass it before an invoice is finalized (rule 8).
+   * Without it, invoices cannot be finalized.
+   */
+  KOSIT_URL: z
+    .url({ protocol: /^https?$/ })
+    .transform((v) => v.replace(/\/+$/, ''))
+    .optional(),
+  /** Timeout for one validation in milliseconds. */
+  KOSIT_TIMEOUT_MS: z.coerce.number().int().min(1000).max(120000).default(20000),
+  /**
+   * Revisionssicheres Belegarchiv (ADR 0008): S3 bucket with Object Lock. Default in the Docker
+   * stack: the bundled RustFS (http://storage:9000, ADR 0009); any S3-compatible service with Object Lock
+   * works. Without an endpoint the originals stay only in the "files" volume (no WORM).
+   */
+  ARCHIVE_S3_ENDPOINT: z
+    .url({ protocol: /^https?$/ })
+    .transform((v) => v.replace(/\/+$/, ''))
+    .optional(),
+  ARCHIVE_S3_REGION: z.string().min(1).default('us-east-1'),
+  ARCHIVE_S3_BUCKET: z
+    .string()
+    .regex(
+      /^[a-z0-9][a-z0-9.-]{1,61}[a-z0-9]$/,
+      'Ungültiger Bucket-Name (3–63 Zeichen, a–z, 0–9, Punkt, Bindestrich).',
+    )
+    .default('belegarchiv'),
+  ARCHIVE_S3_ACCESS_KEY: z.string().min(1).optional(),
+  ARCHIVE_S3_SECRET_KEY: z.string().min(1).optional(),
+  /** Path-style URLs (endpoint/bucket/key): RustFS, MinIO and most providers. */
+  ARCHIVE_S3_PATH_STYLE: z
+    .enum(['true', 'false'])
+    .default('true')
+    .transform((v) => v === 'true'),
+  /** Create the bucket with Object Lock on start (development); in the stack storage-setup creates it, external buckets are prepared by the operator. */
+  ARCHIVE_S3_CREATE_BUCKET: z
+    .enum(['true', 'false'])
+    .default('false')
+    .transform((v) => v === 'true'),
+  /** COMPLIANCE: nobody can delete before the end of the retention period (GoBD); GOVERNANCE only for tests. */
+  ARCHIVE_RETENTION_MODE: z.enum(['COMPLIANCE', 'GOVERNANCE']).default('COMPLIANCE'),
+  /**
+   * Previous archive while moving to another S3 (e.g. former MinIO → RustFS, or → external provider): the
+   * archive reconciliation copies originals from here when the working copy is missing. Optional,
+   * only during the move; reading only.
+   */
+  ARCHIVE_PREVIOUS_S3_ENDPOINT: z
+    .url({ protocol: /^https?$/ })
+    .transform((v) => v.replace(/\/+$/, ''))
+    .optional(),
+  ARCHIVE_PREVIOUS_S3_REGION: z.string().min(1).default('us-east-1'),
+  ARCHIVE_PREVIOUS_S3_BUCKET: z
+    .string()
+    .regex(/^[a-z0-9][a-z0-9.-]{1,61}[a-z0-9]$/, 'Ungültiger Bucket-Name.')
+    .default('belegarchiv'),
+  ARCHIVE_PREVIOUS_S3_ACCESS_KEY: z.string().min(1).optional(),
+  ARCHIVE_PREVIOUS_S3_SECRET_KEY: z.string().min(1).optional(),
+  ARCHIVE_PREVIOUS_S3_PATH_STYLE: z
+    .enum(['true', 'false'])
+    .default('true')
+    .transform((v) => v === 'true'),
   /** Maximum size of one uploaded file in megabytes. */
   UPLOAD_MAX_MB: z.coerce.number().int().min(1).max(2048).default(50),
 })
@@ -95,6 +157,22 @@ export function loadConfig(env: Record<string, string | undefined> = process.env
       .map((issue) => `  - ${issue.path.join('.')}: ${issue.message}`)
       .join('\n')
     throw new ConfigError(`Invalid configuration:\n${details}`)
+  }
+  if (
+    parsed.data.ARCHIVE_S3_ENDPOINT &&
+    (!parsed.data.ARCHIVE_S3_ACCESS_KEY || !parsed.data.ARCHIVE_S3_SECRET_KEY)
+  ) {
+    throw new ConfigError(
+      'Invalid configuration:\n  - ARCHIVE_S3_ACCESS_KEY/ARCHIVE_S3_SECRET_KEY: Zugangsdaten für das Belegarchiv fehlen',
+    )
+  }
+  if (
+    parsed.data.ARCHIVE_PREVIOUS_S3_ENDPOINT &&
+    (!parsed.data.ARCHIVE_PREVIOUS_S3_ACCESS_KEY || !parsed.data.ARCHIVE_PREVIOUS_S3_SECRET_KEY)
+  ) {
+    throw new ConfigError(
+      'Invalid configuration:\n  - ARCHIVE_PREVIOUS_S3_ACCESS_KEY/ARCHIVE_PREVIOUS_S3_SECRET_KEY: Zugangsdaten für das bisherige Belegarchiv fehlen',
+    )
   }
   if (parsed.data.SMTP_HOST && !parsed.data.SMTP_FROM) {
     throw new ConfigError(

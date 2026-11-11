@@ -2,9 +2,10 @@ import { mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { createSql, migrate, type Sql } from '@opc/db'
-import { FsObjectStore } from '@opc/storage'
+import { type ArchiveStore, FsObjectStore } from '@opc/storage'
 import type { FastifyInstance, LightMyRequestResponse } from 'fastify'
 import { buildApi } from '../index.js'
+import { type EinvoiceValidator, kositValidator } from '../kosit.js'
 
 /** Test harness: a fresh database per test file and an API instance talking to it. */
 export interface Harness {
@@ -19,7 +20,15 @@ export interface Harness {
 }
 
 export async function createHarness(
-  options: { requireAdminMfa?: boolean; uploadMaxMb?: number; smtp?: boolean } = {},
+  options: {
+    requireAdminMfa?: boolean
+    uploadMaxMb?: number
+    smtp?: boolean
+    /** E-invoice validator; default: real KoSIT at KOSIT_URL, otherwise a stub that accepts. */
+    einvoiceValidator?: EinvoiceValidator | null
+    /** WORM archive; default none (originals only in the files volume). */
+    archive?: ArchiveStore | null
+  } = {},
 ): Promise<Harness> {
   const baseUrl = process.env.DATABASE_URL as string
   const root = createSql({ DATABASE_URL: baseUrl, DATABASE_POOL_MAX: 1 }, { mode: 'admin' })
@@ -52,6 +61,13 @@ export async function createHarness(
     },
     storage: new FsObjectStore(storageDir),
     isReady: async () => true,
+    einvoiceValidator:
+      options.einvoiceValidator !== undefined
+        ? options.einvoiceValidator
+        : process.env.KOSIT_URL
+          ? kositValidator(process.env.KOSIT_URL, 60_000)
+          : acceptingValidator,
+    archive: options.archive ?? null,
     sql,
     setupToken,
     now: () => clock.now,
@@ -111,4 +127,36 @@ export class Client {
   has(cookie: string): boolean {
     return this.cookies.has(cookie)
   }
+}
+
+/**
+ * Stand-in for KoSIT where no validator runs (CI job without Docker): accepts every file. The
+ * Docker test pipeline and CI's Docker job set KOSIT_URL, so the real validator is used there.
+ */
+export const acceptingValidator: EinvoiceValidator = {
+  async validate() {
+    const report =
+      '<rep:report valid="true"><rep:engine><rep:name>Test stub</rep:name></rep:engine><rep:assessment><rep:accept/></rep:assessment></rep:report>'
+    return {
+      valid: true,
+      report,
+      result: { valid: true, scenario: null, engine: 'Test stub', messages: [] },
+    }
+  },
+}
+
+/** Rejects every file with one error message, for tests of the failure path. */
+export const rejectingValidator: EinvoiceValidator = {
+  async validate() {
+    return {
+      valid: false,
+      report: '<rep:report valid="false"/>',
+      result: {
+        valid: false,
+        scenario: null,
+        engine: 'Test stub',
+        messages: [{ level: 'error', code: 'BR-DE-15', text: 'Buyer reference fehlt.' }],
+      },
+    }
+  },
 }

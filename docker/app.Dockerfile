@@ -17,6 +17,7 @@ COPY apps/web/package.json apps/web/
 COPY packages/config/package.json packages/config/
 COPY packages/db/package.json packages/db/
 COPY packages/domain/package.json packages/domain/
+COPY packages/einvoice/package.json packages/einvoice/
 COPY packages/exports/package.json packages/exports/
 COPY packages/pdf-templates/package.json packages/pdf-templates/
 COPY packages/schemas/package.json packages/schemas/

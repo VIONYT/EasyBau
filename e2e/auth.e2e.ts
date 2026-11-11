@@ -132,6 +132,7 @@ test('setup, security key, user management and passwordless login', async ({ bro
 
   // Password + key as second factor.
   await page.getByRole('button', { name: 'Abmelden' }).click()
+  await expect(page.getByRole('heading', { name: 'Anmelden' })).toBeVisible()
   await page.getByLabel('E-Mail-Adresse').fill(ADMIN.email)
   await page.locator('input[name=password]').fill(ADMIN.password)
   await page.getByRole('button', { name: 'Anmelden', exact: true }).click()
@@ -355,7 +356,9 @@ test('Angebot: Kalkulation, Fertigstellen, Druckansicht und Nachtrag-Schalter', 
   await page.getByRole('button', { name: 'Kontakte' }).click()
   await page.getByLabel('Name der Organisation').fill('Wohnbau Nord eG')
   await page.getByRole('button', { name: 'Speichern' }).click()
-  await expect(page.getByText('Wohnbau Nord eG')).toBeVisible()
+  // The new contact opens in the editor (address, e-invoice data) and appears in the list.
+  await expect(page.getByRole('heading', { name: /^Wohnbau Nord eG · K-/ })).toBeVisible()
+  await expect(page.getByRole('button', { name: /^Wohnbau Nord eG/ })).toBeVisible()
 
   // Angebot öffnen
   await page.getByRole('button', { name: 'Projekte' }).click()
@@ -550,24 +553,31 @@ test('Rechnung: Pflichtangaben, Festschreiben und Korrigieren per Storno', async
           postalCode: '30169',
           city: 'Hannover',
           taxNumber: '25/123/45678',
+          email: 'buero@muster-bau.example',
+          phone: '0511 123456',
+          iban: 'DE89370400440532013000',
         },
       })
     ).status(),
   ).toBe(200)
-  const contacts = await (await page.request.get('/api/v1/contacts?q=Wohnbau')).json()
-  const customer = contacts.items[0] as { id: string }
-  expect(
-    (
-      await page.request.patch(`/api/v1/contacts/${customer.id}`, {
-        data: {
-          addresses: [
-            { kind: 'main', street: 'Lindenweg 4', postalCode: '30159', city: 'Hannover' },
-          ],
-        },
-      })
-    ).status(),
-  ).toBe(200)
+  // Kundenanschrift und E-Rechnungsdaten im Kontakt (XRechnung an die E-Rechnungs-Adresse)
+  await page.getByRole('button', { name: 'Kontakte' }).click()
+  await page.getByRole('button', { name: /Wohnbau Nord eG/ }).click()
+  const editor = page.locator('.contact-editor')
+  await editor.getByLabel('Straße und Hausnummer').fill('Lindenweg 4')
+  await editor.getByLabel('PLZ').fill('30159')
+  await editor.getByLabel('Ort').fill('Hannover')
+  await editor.getByLabel('Format').selectOption('xrechnung_ubl')
+  await editor.getByLabel('E-Mail für E-Rechnungen').fill('rechnung@wohnbau-nord.example')
+  await expectNoHorizontalScroll(page)
+  if (SCREENSHOTS)
+    await page.screenshot({ path: `${SCREENSHOTS}/kontakt-erechnung.png`, fullPage: true })
+  await editor.getByRole('button', { name: 'Speichern' }).click()
+  await expect(page.getByText('Kontakt gespeichert.')).toBeVisible()
   await page.goto(invoiceUrl)
+  // Rechnungsdatum 30 Tage zurück: bei 14 Tagen Zahlungsziel ist die Rechnung überfällig (Mahnung).
+  const invoiceDate = new Date(Date.now() - 30 * 86_400_000).toISOString().slice(0, 10)
+  await page.getByLabel('Datum', { exact: true }).fill(invoiceDate)
   await page.getByLabel('Leistung von').fill('2026-10-01')
   await page.getByLabel('Leistung bis').fill('2026-10-31')
   await page.getByRole('button', { name: 'Speichern', exact: true }).first().click()
@@ -580,9 +590,73 @@ test('Rechnung: Pflichtangaben, Festschreiben und Korrigieren per Storno', async
   await expectNoHorizontalScroll(page)
   if (SCREENSHOTS)
     await page.screenshot({ path: `${SCREENSHOTS}/rechnung-festschreiben.png`, fullPage: true })
+  await expect(page.getByText(/E-Rechnung .* KoSIT-Validator geprüft/)).toBeVisible()
   await page.getByRole('button', { name: 'Jetzt festschreiben' }).click()
   await expect(page.getByText(/^R-00101/)).toBeVisible()
   await expect(page.getByText('Fertiggestellt', { exact: true })).toBeVisible()
+  // E-Rechnung: ZUGFeRD im PDF und XRechnung, beide vom KoSIT-Validator geprüft
+  await expect(page.getByText(/E-Rechnung geprüft \(ZUGFeRD, XRechnung UBL\)/)).toBeVisible()
+  const invoiceId = invoiceUrl.split('/').pop() as string
+  const xrechnung = await page.request.get(`/api/v1/documents/${invoiceId}/einvoice/xrechnung_ubl`)
+  expect(xrechnung.status()).toBe(200)
+  expect(await xrechnung.text()).toContain('<cbc:ID>R-00101</cbc:ID>')
+  const pdf = await page.request.get(`/api/v1/documents/${invoiceId}/pdf`)
+  expect((await pdf.body()).toString('latin1')).toContain('/F (factur-x.xml)')
+  // Revisionssicheres Archiv: the worker copies the originals into the archive (RustFS) with Object Lock.
+  await expect(async () => {
+    await page.reload()
+    await expect(
+      page.getByText(/Original revisionssicher archiviert \(unveränderbar bis 31\.12\.2036\)/),
+    ).toBeVisible({
+      timeout: 2000,
+    })
+  }).toPass({ timeout: 60_000 })
+
+  // Zahlungen: Teilzahlung erfassen, Status und offene Forderung
+  const receivable = page.locator('.receivable')
+  await expect(receivable.locator('.chip')).toHaveText('überfällig')
+  await receivable.getByRole('button', { name: 'Zahlung erfassen' }).click()
+  await receivable.getByLabel('Betrag (€)').fill('100,00')
+  await receivable.getByLabel('Verwendungszweck / Notiz').fill('Anzahlung')
+  await expect(receivable.getByText(/Teilzahlung, danach noch offen/)).toBeVisible()
+  await expectNoHorizontalScroll(page)
+  if (SCREENSHOTS)
+    await page.screenshot({ path: `${SCREENSHOTS}/zahlung-erfassen.png`, fullPage: true })
+  await receivable.getByRole('button', { name: 'Speichern' }).click()
+  await expect(receivable.getByText('Anzahlung')).toBeVisible()
+  await expect(receivable.locator('.chip')).toHaveText('überfällig')
+
+  // Mahnwesen: Zahlungserinnerung mit Vorschau, festgeschrieben als PDF/A
+  const dunning = page.locator('.dunning')
+  await expect(dunning.getByText(/Nächste Stufe: Zahlungserinnerung/)).toBeVisible()
+  await dunning.getByRole('button', { name: 'Zahlungserinnerung erstellen' }).click()
+  await dunning.getByLabel('Mahngebühr (€)').fill('2,50')
+  await expect(dunning.getByText('Mahngebühr', { exact: true })).toBeVisible()
+  await expectNoHorizontalScroll(page)
+  if (SCREENSHOTS)
+    await page.screenshot({ path: `${SCREENSHOTS}/mahnung-erstellen.png`, fullPage: true })
+  await dunning.getByRole('button', { name: 'Zahlungserinnerung ausstellen' }).click()
+  await expect(dunning.getByText(/^Zahlungserinnerung$/)).toBeVisible()
+  await expect(receivable.locator('.chip')).toHaveText('angemahnt')
+  await expect(dunning.getByText(/Die Frist der Zahlungserinnerung läuft noch/)).toBeVisible()
+  const noticePdf = await dunning.getByRole('link', { name: 'PDF' }).getAttribute('href')
+  const noticeFile = await page.request.get(noticePdf as string)
+  expect(noticeFile.status()).toBe(200)
+  expect((await noticeFile.body()).subarray(0, 5).toString()).toBe('%PDF-')
+
+  // Rechnungsliste mit Status, Summen und Filter
+  await page.getByRole('button', { name: 'Rechnungen' }).click()
+  await expect(page.getByRole('heading', { name: 'Rechnungen' })).toBeVisible()
+  await expect(page.getByRole('link', { name: /R-00101/ })).toContainText('angemahnt')
+  await page.getByLabel('Status').selectOption('dunned')
+  await expect(page.getByText('Rechnungen: 1')).toBeVisible()
+  await expectNoHorizontalScroll(page)
+  if (SCREENSHOTS)
+    await page.screenshot({ path: `${SCREENSHOTS}/rechnungsliste.png`, fullPage: true })
+  await page.goto(invoiceUrl)
+  await expectNoHorizontalScroll(page)
+  if (SCREENSHOTS)
+    await page.screenshot({ path: `${SCREENSHOTS}/rechnung-erechnung.png`, fullPage: true })
   await expect(page.locator('.legal-notes')).toContainText('Zahlbar ohne Abzug bis')
 
   // Rechnung korrigieren: Storno mit eigener Nummer + neuer Entwurf
@@ -676,6 +750,46 @@ test('Briefpapier: WYSIWYG-Editor nach DIN 5008 B und Druckansicht', async () =>
     await page.screenshot({ path: `${SCREENSHOTS}/briefpapier-druck.png`, fullPage: true })
 })
 
+test('Prüfung: Änderungsprotokoll, Hash-Kette und befristeter Prüferzugang', async ({
+  browser,
+}) => {
+  test.skip(!SETUP_TOKEN, 'SETUP_TOKEN must be set for a fresh stack')
+  await page.getByRole('button', { name: 'Prüfung' }).click()
+  await expect(page.getByRole('heading', { name: 'Prüfung', level: 1 })).toBeVisible()
+  await page.getByRole('button', { name: 'Kette jetzt prüfen' }).click()
+  await expect(page.getByText(/Kette vollständig und unverändert/)).toBeVisible()
+  // Änderungsprotokoll: the payment recorded earlier, with its fields.
+  await page.getByLabel('Bereich', { exact: true }).selectOption('payment')
+  const entry = page.locator('.audit-events li').filter({ hasText: 'Angelegt · Zahlungen' }).first()
+  await entry.locator('summary').click()
+  await expect(entry.getByRole('row', { name: /amount_cents/ })).toContainText('10000')
+  await expectNoHorizontalScroll(page)
+  if (SCREENSHOTS) await page.screenshot({ path: `${SCREENSHOTS}/pruefung.png`, fullPage: true })
+
+  // Prüfer (Steuerberatung/Betriebsprüfung): only with an end date, read-only.
+  await page.getByRole('button', { name: 'Benutzer' }).click()
+  await page.getByLabel('E-Mail-Adresse').fill('pruefer@finanzamt.example')
+  await page.getByLabel('Rolle', { exact: true }).selectOption('auditor')
+  await expect(page.getByLabel(/Zugang bis/)).toBeVisible()
+  await page.getByRole('button', { name: 'Einladung erstellen' }).click()
+  const link = (await page.locator('code.secret').textContent()) ?? ''
+  await expect(page.getByText(/Zugang bis/).first()).toBeVisible()
+  const auditor = await browser.newContext()
+  const auditorPage = await auditor.newPage()
+  await auditorPage.goto(new URL(link).pathname + new URL(link).hash)
+  await auditorPage.locator('input[name=displayName]').fill('Paula Prüferin')
+  await auditorPage.locator('input[name=password]').fill('pruefer-passwort-1')
+  await auditorPage.getByRole('button', { name: 'Einladung annehmen' }).click()
+  await expect(auditorPage.getByRole('button', { name: 'Prüfung' })).toBeVisible()
+  await expect(auditorPage.getByRole('button', { name: 'Einstellungen' })).toHaveCount(0)
+  await expect(auditorPage.getByRole('button', { name: 'Benutzer' })).toHaveCount(0)
+  await auditorPage.getByRole('button', { name: 'Prüfung' }).click()
+  await expect(auditorPage.getByText(/Ihr Zugang ist befristet/)).toBeVisible()
+  await expect(auditorPage.getByRole('heading', { name: 'Exporte' })).toBeVisible()
+  await expectNoHorizontalScroll(auditorPage)
+  await auditor.close()
+})
+
 test('second factor fails without the security key', async () => {
   test.skip(!SETUP_TOKEN, 'SETUP_TOKEN must be set for a fresh stack')
   // Without the key the second step of the login fails with a readable message.
@@ -683,6 +797,7 @@ test('second factor fails without the security key', async () => {
     authenticatorId: key.authenticatorId,
   })
   await page.getByRole('button', { name: 'Abmelden' }).click()
+  await expect(page.getByRole('heading', { name: 'Anmelden' })).toBeVisible()
   await page.getByLabel('E-Mail-Adresse').fill(ADMIN.email)
   await page.locator('input[name=password]').fill(ADMIN.password)
   await page.getByRole('button', { name: 'Anmelden', exact: true }).click()

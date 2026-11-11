@@ -5,24 +5,36 @@ import { type AuthContext, inTenant, requirePermission, type Services } from '..
 import { HttpError, parse } from '../http.js'
 
 export interface QueuedEmail {
-  kind: 'invitation' | 'test' | 'document'
+  kind: 'invitation' | 'test' | 'document' | 'dunning'
   to: string
   subject: string
   text: string
+  /** Archived originals sent as attachments (read by the worker when sending). */
+  attachments?: { artifactId: string; filename: string }[]
+  dunningNoticeId?: string | null
 }
 
 /**
  * Puts a message into the outbox in the caller's transaction: it is sent only if the change
  * commits (same rule as for jobs). Replies go to the company's e-mail address if set.
  */
-export async function queueEmail(tx: Tx, auth: AuthContext, mail: QueuedEmail): Promise<void> {
+export async function queueEmail(tx: Tx, auth: AuthContext, mail: QueuedEmail): Promise<string> {
   const [company] = await tx<
     { email: string | null }[]
   >`select email from tenant where id = current_tenant_id()`
-  await tx`
-    insert into email_message (tenant_id, kind, to_address, reply_to, subject, body_text, created_by)
+  const [row] = await tx<{ id: string }[]>`
+    insert into email_message (tenant_id, kind, to_address, reply_to, subject, body_text, created_by,
+                               dunning_notice_id)
     values (${auth.tenantId}, ${mail.kind}, ${mail.to}, ${company?.email ?? null}, ${mail.subject}, ${mail.text},
-            ${auth.userId})`
+            ${auth.userId}, ${mail.dunningNoticeId ?? null})
+    returning id`
+  const id = (row as { id: string }).id
+  for (const attachment of mail.attachments ?? []) {
+    await tx`
+      insert into email_attachment (tenant_id, email_message_id, artifact_id, filename)
+      values (${auth.tenantId}, ${id}, ${attachment.artifactId}, ${attachment.filename})`
+  }
+  return id
 }
 
 export function registerEmailRoutes(app: FastifyInstance, services: Services) {

@@ -1,6 +1,6 @@
 import { z } from 'zod'
 import { password } from './auth.js'
-import { email, optionalText, text } from './common.js'
+import { email, isoDate, optionalText, text } from './common.js'
 
 export interface RoleSummary {
   id: string
@@ -20,6 +20,10 @@ export interface MemberSummary {
   webauthnCount: number
   lastLoginAt: string | null
   isSelf: boolean
+  /** Access ends after this day (required for the auditor role); null = unlimited. */
+  validUntil: string | null
+  /** The access has ended (the person can no longer sign in to this company). */
+  expired: boolean
 }
 
 export interface InvitationSummary {
@@ -29,6 +33,8 @@ export interface InvitationSummary {
   role: Pick<RoleSummary, 'key' | 'name'>
   expiresAt: string
   createdAt: string
+  /** Access of the invited person ends after this day. */
+  accessUntil: string | null
 }
 
 export const inviteRequest = z.object({
@@ -37,6 +43,8 @@ export const inviteRequest = z.object({
   roleKey: z.string().min(1, 'Bitte eine Rolle wählen.').max(50),
   /** Also send the link by e-mail (only when SMTP is configured). */
   sendEmail: z.boolean().optional(),
+  /** Last day of access; required for the auditor role (Prüfer), at most one year ahead. */
+  accessUntil: isoDate.optional(),
 })
 export type InviteRequest = z.infer<typeof inviteRequest>
 
@@ -48,7 +56,13 @@ export interface InviteResponse {
   emailQueued: boolean
 }
 
-export const updateMemberRequest = z.object({ roleKey: z.string().min(1).max(50) })
+export const updateMemberRequest = z
+  .object({
+    roleKey: z.string().min(1).max(50).optional(),
+    /** Last day of access (null = unlimited, not allowed for auditors). */
+    validUntil: isoDate.nullable().optional(),
+  })
+  .refine((v) => v.roleKey !== undefined || v.validUntil !== undefined, 'Keine Änderung angegeben.')
 
 /** Public view of an invitation for the acceptance page. */
 export interface InvitationInfo {

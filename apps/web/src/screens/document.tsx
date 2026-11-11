@@ -34,6 +34,8 @@ import { type TextKey, t, tf } from '../i18n'
 import type { Navigate } from '../router'
 import { articlePrice } from './catalog'
 import { documentLabel, StatusChip } from './documents'
+import { DunningPanel } from './dunning'
+import { ReceivablePanel } from './payments'
 
 type Doc = DocumentDetail
 type Apply = (result: { data: Doc; etag: string | null }) => void
@@ -146,6 +148,24 @@ export function DocumentScreen({ me, id, navigate }: { me: Me; id: string; navig
         apply={apply}
         navigate={navigate}
       />
+      {doc.receivable ? (
+        <ReceivablePanel
+          doc={doc}
+          canWrite={me.permissions.includes('payment.write')}
+          onChange={(receivable) => setDoc({ ...doc, receivable })}
+        />
+      ) : null}
+      {doc.receivable && doc.type === 'invoice' && doc.invoiceKind !== 'cancellation' ? (
+        <DunningPanel
+          doc={doc}
+          canWrite={me.permissions.includes('dunning.write')}
+          onIssued={() =>
+            apiWithEtag<Doc>('GET', `/api/v1/documents/${id}`)
+              .then(apply)
+              .catch((err: ApiError) => setError(err.message))
+          }
+        />
+      ) : null}
 
       <HeaderForm doc={doc} etag={etag} editable={editable} apply={apply} />
       <Positions
@@ -1136,6 +1156,16 @@ function DocumentActions({
       >
         {t('doc.pdf')}
       </a>
+      {doc.einvoice?.files.map((file) => (
+        <a
+          key={file.format}
+          className="button ghost"
+          href={`/api/v1/documents/${doc.id}/einvoice/${file.format}`}
+          download
+        >
+          {t(`einv.download.${file.format}` as TextKey)}
+        </a>
+      ))}
       {canWrite && doc.status === 'draft' && !billed ? (
         <button
           type="button"
@@ -1194,6 +1224,28 @@ function DocumentActions({
             {t('inv.cancel')}
           </button>
         </>
+      ) : null}
+      {doc.einvoice?.files.length ? (
+        <p className="hint einvoice-status" role="status">
+          <span>
+            {tf('einv.validated', {
+              formats: doc.einvoice.files
+                .map((f) => t(`einv.format.${f.format}` as TextKey))
+                .join(', '),
+              date: formatDateTime(doc.einvoice.files[0]?.validatedAt ?? ''),
+            })}
+          </span>
+          <a href={`/api/v1/documents/${doc.id}/einvoice/zugferd/report`} download>
+            {t('einv.report')}
+          </a>
+        </p>
+      ) : null}
+      {doc.archive?.enabled ? (
+        <p className="hint archive-status" role="status">
+          {doc.archive.archivedAt
+            ? tf('arch.archived', { date: formatDateTime(doc.archive.retainUntil ?? '', 'date') })
+            : t('arch.pending')}
+        </p>
       ) : null}
       {doc.status === 'draft' && !billed ? <p className="hint">{t('q.finalizeHint')}</p> : null}
       {billed && doc.status === 'draft' && !canFinalize ? (
@@ -1382,6 +1434,7 @@ function FinalizeInvoice({
           <p>
             {t('inv.numberPreview')} <strong>{check.numberPreview}</strong>
           </p>
+          <p className="hint">{t('inv.einvoiceHint')}</p>
           <p className="notice inline">{t('inv.finalizeWarning')}</p>
         </>
       ) : null}

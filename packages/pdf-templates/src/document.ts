@@ -1,4 +1,10 @@
-import { formatEuro, formatUnitQuantity, germanDate, type LetterheadValues } from '@opc/domain'
+import {
+  formatEuro,
+  formatUnitQuantity,
+  germanDate,
+  giroCodePayload,
+  type LetterheadValues,
+} from '@opc/domain'
 import type { DocumentDetail } from '@opc/schemas'
 import { type LogoPosition, letterFrame } from './frame.js'
 import type { LetterPdfInput } from './types.js'
@@ -220,8 +226,41 @@ export function documentLetter(
         : null,
       totals,
       notes,
+      paymentQr: paymentQrOf(doc, options.watermark),
       closing: doc.closingText,
       blocks: [],
     },
+  }
+}
+
+/**
+ * GiroCode on finalized invoices (not on drafts, Stornorechnungen or credit notes): company, IBAN,
+ * Zahlbetrag without Skonto (gross − Einbehalt − Bauumlage) and the invoice number.
+ */
+function paymentQrOf(
+  doc: DocumentDetail,
+  watermark: string | null,
+): { payload: string; lines: string[] } | null {
+  if (watermark || !doc.number || doc.type !== 'invoice' || doc.invoiceKind === 'cancellation') {
+    return null
+  }
+  const iban = doc.issuer.einvoice?.iban ?? doc.issuer.values?.IBAN ?? null
+  const amountCents = BigInt(doc.totals.payableCents)
+  const payload = giroCodePayload({
+    name: doc.issuer.name,
+    iban,
+    bic: doc.issuer.einvoice?.bic ?? doc.issuer.values?.BIC ?? null,
+    amountCents,
+    reference: doc.number,
+  })
+  if (!payload) return null
+  return {
+    payload,
+    lines: [
+      'Bezahlen mit GiroCode',
+      'Mit der Banking-App scannen.',
+      `Betrag: ${euro(Number(amountCents))}`,
+      `Verwendungszweck: ${doc.number}`,
+    ],
   }
 }

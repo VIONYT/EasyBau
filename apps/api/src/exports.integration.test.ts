@@ -1,4 +1,5 @@
 import { execFileSync } from 'node:child_process'
+import { createHash } from 'node:crypto'
 import { mkdtemp, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -45,7 +46,8 @@ describe.skipIf(!process.env.DATABASE_URL)('Exporte (integration)', () => {
       (tx) => tx`
       update document set status = 'finalized', finalized_at = now(), number = ${number},
              document_date = ${date}::date, content_hash = sha256(${number}::bytea),
-             recipient_snapshot = '{"name":"Wohnbau Nord eG","lines":[]}', issuer_snapshot = '{}'
+             recipient_snapshot = '{"name":"Wohnbau Nord eG","lines":["Lindenweg 4","30159 Hannover"]}',
+             issuer_snapshot = '{"name":"Export Bau GmbH","lines":["Werkstraße 2","30169 Hannover"],"contact":[],"legal":[]}'
       where id = ${id}`,
     )
 
@@ -115,6 +117,16 @@ describe.skipIf(!process.env.DATABASE_URL)('Exporte (integration)', () => {
       insert into payment (tenant_id, invoice_id, paid_on, amount_cents, method, reference)
       values (${tenantId}, ${invoice.id}, '2026-11-20', 30000, 'transfer', 'R-00101 Teil')`,
     )
+    // Accepted Kürzung goes to DATEV; Skonto and a bestrittene Kürzung do not.
+    await withTenant(
+      h.sql,
+      { tenantId },
+      (tx) => tx`
+      insert into receivable_adjustment (tenant_id, invoice_id, kind, amount_cents, reason, disputed, created_at)
+      values (${tenantId}, ${invoice.id}, 'other', 1070, 'Rabatt Mängel', false, '2026-11-21T10:00:00+01:00'),
+             (${tenantId}, ${invoice.id}, 'cash_discount', 500, null, false, '2026-11-21T10:00:00+01:00'),
+             (${tenantId}, ${invoice.id}, 'short_payment', 300, 'Kürzung strittig', true, '2026-11-21T10:00:00+01:00')`,
+    )
 
     const folders = (await admin.get(`/api/v1/projects/${projectId}/folders`)).json() as {
       id: string
@@ -153,7 +165,7 @@ describe.skipIf(!process.env.DATABASE_URL)('Exporte (integration)', () => {
     ).toBe(400)
   })
 
-  it('writes a DATEV Buchungsstapel with one booking per tax rate and the payment', async () => {
+  it('writes a DATEV Buchungsstapel per tax rate with the payment and accepted Kürzungen', async () => {
     const put = await admin.put('/api/v1/settings/datev', {
       consultantNumber: '1234567',
       clientNumber: '10001',
@@ -174,7 +186,7 @@ describe.skipIf(!process.env.DATABASE_URL)('Exporte (integration)', () => {
     expect(lines[0]).toMatch(/^"EXTF";700;21;"Buchungsstapel";/)
     expect(lines[0]).toContain(';1234567;10001;20260101;4;20261101;20261130;')
     const bookings = lines.slice(2)
-    expect(bookings).toHaveLength(3)
+    expect(bookings).toHaveLength(5)
     // 10 × 45,00 € net + 19 % = 535,50 €; 20,00 € + 7 % = 21,40 €; payment 300,00 €
     expect(bookings.join('\n')).toContain('535,50;"S"')
     expect(bookings.join('\n')).toContain('21,40;"S"')
@@ -183,6 +195,11 @@ describe.skipIf(!process.env.DATABASE_URL)('Exporte (integration)', () => {
     expect(bookings.join('\n')).toContain(';8400;')
     expect(bookings.join('\n')).toContain(';8300;')
     expect(bookings.join('\n')).toContain(';1200;')
+    // Kürzung 10,70 € split by gross share (535,50 : 21,40), Erlöse an Debitor; no Skonto.
+    expect(bookings.join('\n')).toContain('10,29;"S";"EUR";;;;8400;10001;;2111;"R-00101"')
+    expect(bookings.join('\n')).toContain('0,41;"S";"EUR";;;;8300;10001;;2111;"R-00101"')
+    expect(bookings.join('\n')).not.toContain('5,00;')
+    expect(bookings.join('\n')).not.toContain('3,00;')
   })
 
   it('writes the GoBD Datenträgerüberlassung with index.xml and CSV tables', async () => {
@@ -198,6 +215,8 @@ describe.skipIf(!process.env.DATABASE_URL)('Exporte (integration)', () => {
       'zahlungen.csv',
       'kunden.csv',
       'protokoll.csv',
+      'belege.csv',
+      'belege/R-00101.pdf',
     ])
     const index = zip.get('index.xml')?.toString('utf8') ?? ''
     expect(index).toContain('<!DOCTYPE DataSet SYSTEM "gdpdu-01-09-2004.dtd">')
@@ -209,6 +228,31 @@ describe.skipIf(!process.env.DATABASE_URL)('Exporte (integration)', () => {
     expect(invoices).toContain('556,90')
     expect(zip.get('zahlungen.csv')?.toString('latin1')).toContain('300,00')
     expect(zip.get('kunden.csv')?.toString('latin1')).toContain('Wohnbau Nord eG')
+    // Belege: the unchanged PDF/A original (created and archived on demand) with its SHA-256.
+    const original = zip.get('belege/R-00101.pdf') as Buffer
+    expect(original.subarray(0, 5).toString()).toBe('%PDF-')
+    const belege = zip.get('belege.csv')?.toString('latin1') ?? ''
+    expect(belege).toContain('"belege/R-00101.pdf"')
+    expect(belege).toContain(createHash('sha256').update(original).digest('hex'))
+    expect(index).toContain('<URL>belege.csv</URL>')
+    // The same original on the second export (archived once, never rendered again).
+    const again = zipEntries((await admin.get(`/api/v1/exports/gobd${period}`)).rawPayload)
+    expect(again.get('belege/R-00101.pdf')?.equals(original)).toBe(true)
+  })
+
+  it('adds the PDF originals to the DATEV export on request', async () => {
+    const res = await admin.get(`/api/v1/exports/datev${period}&belege=true`)
+    expect(res.statusCode, res.body).toBe(200)
+    expect(res.headers['content-type']).toBe('application/zip')
+    expect(res.headers['content-disposition']).toContain('DATEV_2026-11-01_2026-11-30.zip')
+    const zip = zipEntries(res.rawPayload)
+    expect([...zip.keys()]).toEqual([
+      'EXTF_Buchungsstapel_2026-11-01_2026-11-30.csv',
+      'Belege/R-00101.pdf',
+    ])
+    expect(zip.get('EXTF_Buchungsstapel_2026-11-01_2026-11-30.csv')?.toString('latin1')).toMatch(
+      /^"EXTF"/,
+    )
   })
 
   it('exports all company data with the Ablage, but without secrets', async () => {
@@ -219,6 +263,8 @@ describe.skipIf(!process.env.DATABASE_URL)('Exporte (integration)', () => {
     expect(manifest).toMatchObject({ format: 'openplancraft-export', version: 1 })
     expect(manifest.tables.document).toBe(2)
     expect(manifest.files).toHaveLength(1)
+    expect(manifest.belege).toEqual([{ path: 'belege/R-00101.pdf', sha256: expect.any(String) }])
+    expect(zip.get('belege/R-00101.pdf')?.subarray(0, 5).toString()).toBe('%PDF-')
     const filePath = manifest.files[0].path as string
     expect(filePath).toMatch(/^ablage\/.+\/.+_Plan EG\.pdf$/)
     expect(zip.get(filePath)?.equals(PDF)).toBe(true)
@@ -250,6 +296,12 @@ describe.skipIf(!process.env.DATABASE_URL)('Exporte (integration)', () => {
       (tx) => tx<{ action: string }[]>`
       select action from audit_event where action like 'export:%' order by seq`,
     )
-    expect(actions.map((a) => a.action)).toEqual(['export:datev', 'export:gobd', 'export:full'])
+    expect(actions.map((a) => a.action)).toEqual([
+      'export:datev',
+      'export:gobd',
+      'export:gobd',
+      'export:datev+belege',
+      'export:full',
+    ])
   })
 })

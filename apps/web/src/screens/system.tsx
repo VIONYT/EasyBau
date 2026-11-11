@@ -9,7 +9,7 @@ import { useCallback, useEffect, useId, useState } from 'react'
 import { type ApiError, api, downloadFile } from '../api'
 import { formatDateTime } from '../format'
 import { FormError } from '../forms'
-import { type TextKey, t } from '../i18n'
+import { type TextKey, t, tf } from '../i18n'
 
 interface Meta {
   name: string
@@ -41,7 +41,7 @@ export function SystemSettings({ me }: { me: Me }) {
           </dl>
         ) : null}
       </div>
-      <OperationsPanel />
+      <OperationsPanel canWrite={me.permissions.includes('settings.write')} />
       <EmailPanel canWrite={me.permissions.includes('settings.write')} />
       {me.permissions.includes('export.run') ? <ExportPanel /> : null}
     </>
@@ -130,9 +130,10 @@ function lastMonth(): { from: string; to: string } {
   return { from: first.toISOString().slice(0, 10), to: last.toISOString().slice(0, 10) }
 }
 
-function ExportPanel() {
+export function ExportPanel() {
   const id = useId()
   const [period, setPeriod] = useState(lastMonth)
+  const [withBelege, setWithBelege] = useState(true)
   const [busy, setBusy] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
   const run = async (kind: 'datev' | 'gobd') => {
@@ -140,7 +141,7 @@ function ExportPanel() {
     setBusy(kind)
     try {
       await downloadFile(
-        `/api/v1/exports/${kind}?from=${encodeURIComponent(period.from)}&to=${encodeURIComponent(period.to)}`,
+        `/api/v1/exports/${kind}?from=${encodeURIComponent(period.from)}&to=${encodeURIComponent(period.to)}${kind === 'datev' && withBelege ? '&belege=true' : ''}`,
       )
     } catch (err) {
       setError((err as ApiError).message)
@@ -172,6 +173,14 @@ function ExportPanel() {
           />
         </div>
       </div>
+      <label className="check">
+        <input
+          type="checkbox"
+          checked={withBelege}
+          onChange={(e) => setWithBelege(e.target.checked)}
+        />
+        <span>{t('sys.exportDatevBelege')}</span>
+      </label>
       <div className="actions">
         <button
           type="button"
@@ -215,7 +224,7 @@ function formatBytes(bytes: number | null): string {
   return `${new Intl.NumberFormat('de-DE', { maximumFractionDigits: unit ? 1 : 0 }).format(value)} ${units[unit]}`
 }
 
-type CheckState = 'ok' | 'warning' | 'off'
+type CheckState = 'ok' | 'warning' | 'error' | 'off'
 
 function Check({ state, title, children }: { state: CheckState; title: string; children: string }) {
   return (
@@ -230,14 +239,15 @@ function Check({ state, title, children }: { state: CheckState; title: string; c
 }
 
 /** Betriebs-Check: is the installation backed up, can it send e-mails, is it secure? */
-function OperationsPanel() {
+function OperationsPanel({ canWrite }: { canWrite: boolean }) {
   const [status, setStatus] = useState<OperationsStatus | null>(null)
   const [error, setError] = useState<string | null>(null)
-  useEffect(() => {
+  const reload = useCallback(() => {
     api<OperationsStatus>('GET', '/api/v1/settings/operations')
       .then(setStatus)
       .catch((err: ApiError) => setError(err.message))
   }, [])
+  useEffect(reload, [reload])
   if (!status) return error ? <FormError>{error}</FormError> : null
   const last = status.backup.lastSuccess
   const backupFresh = last !== null && Date.now() - new Date(last.finishedAt).getTime() < DAY_MS
@@ -269,6 +279,30 @@ function OperationsPanel() {
               ? t('sys.emailFailed').replace('{n}', String(status.email.failed))
               : t('sys.emailOk')}
         </Check>
+        <Check
+          state={status.einvoice.configured && status.einvoice.reachable ? 'ok' : 'warning'}
+          title={t('sys.einvoice')}
+        >
+          {!status.einvoice.configured
+            ? t('sys.einvoiceOff')
+            : status.einvoice.reachable
+              ? t('sys.einvoiceOk')
+              : t('sys.einvoiceDown')}
+        </Check>
+        <Check
+          state={status.audit.problem ? 'error' : status.audit.stale ? 'warning' : 'ok'}
+          title={t('sys.auditChain')}
+        >
+          {auditText(status.audit)}
+        </Check>
+        <Check state={archiveState(status.archive)} title={t('sys.archive')}>
+          {archiveText(status.archive)}
+        </Check>
+        {status.archive.configured ? (
+          <Check state={verifyState(status.archive.verify)} title={t('sys.archiveVerify')}>
+            {verifyText(status.archive.verify)}
+          </Check>
+        ) : null}
         <Check state={status.security.https ? 'ok' : 'warning'} title={t('sys.https')}>
           {status.security.https ? t('sys.httpsOk') : t('sys.httpsOff')}
         </Check>
@@ -276,6 +310,14 @@ function OperationsPanel() {
           {status.security.requireAdminMfa ? t('sys.mfaOk') : t('sys.mfaOff')}
         </Check>
       </ul>
+      {status.archive.configured && canWrite ? (
+        <ArchiveVerifyButton
+          running={Boolean(
+            status.archive.verify.request && !status.archive.verify.request.finishedAt,
+          )}
+          onStarted={reload}
+        />
+      ) : null}
       {status.backup.recent.length ? (
         <>
           <h3>{t('sys.backupRecent')}</h3>
@@ -294,4 +336,92 @@ function OperationsPanel() {
       <p className="muted">{t('sys.backupHint')}</p>
     </div>
   )
+}
+
+/** Audit-Kette (rule 6): result of the newest check. */
+export function auditText(a: {
+  lastCheckAt: string | null
+  problem: string | null
+  brokenSeq: number | null
+  events: number
+}): string {
+  if (!a.lastCheckAt) return t('sys.auditNever')
+  const when = formatDateTime(a.lastCheckAt)
+  if (a.problem) {
+    return tf(`sys.audit.${a.problem}` as TextKey, { when, seq: String(a.brokenSeq ?? '') })
+  }
+  return tf('sys.auditOk', { when, n: String(a.events) })
+}
+
+type VerifyOps = OperationsStatus['archive']['verify']
+
+function verifyState(v: VerifyOps): 'ok' | 'warning' | 'error' {
+  if (v.lost) return 'error'
+  if (!v.lastCheckAt || v.unchecked) return 'warning'
+  return 'ok'
+}
+
+function verifyText(v: VerifyOps): string {
+  const parts: string[] = []
+  if (v.lost) parts.push(tf('sys.verifyLost', { n: String(v.lost) }))
+  if (v.request && !v.request.finishedAt) {
+    parts.push(tf('sys.verifyRunning', { n: String(v.request.checked) }))
+  } else if (v.lastCheckAt) {
+    parts.push(
+      tf('sys.verifyOk', {
+        when: formatDateTime(v.lastCheckAt),
+        n: String(v.checked30d),
+        restored: String(v.restored30d),
+      }),
+    )
+  } else {
+    parts.push(t('sys.verifyNever'))
+  }
+  if (v.unchecked && !(v.request && !v.request.finishedAt)) {
+    parts.push(tf('sys.verifyUnchecked', { n: String(v.unchecked) }))
+  }
+  return parts.join(' ')
+}
+
+function ArchiveVerifyButton({ running, onStarted }: { running: boolean; onStarted: () => void }) {
+  const [error, setError] = useState<string | null>(null)
+  const start = async () => {
+    setError(null)
+    try {
+      await api('POST', '/api/v1/settings/operations/archive-verify', {})
+      onStarted()
+    } catch (err) {
+      setError((err as ApiError).message)
+    }
+  }
+  return (
+    <div className="actions start">
+      <button type="button" className="button ghost auto" disabled={running} onClick={start}>
+        {running ? t('sys.verifyBusy') : t('sys.verifyStart')}
+      </button>
+      <FormError>{error}</FormError>
+    </div>
+  )
+}
+
+type ArchiveOps = OperationsStatus['archive']
+
+/** Pending originals older than one hour mean the archive does not keep up. */
+const archiveStuck = (a: ArchiveOps) =>
+  a.oldestPendingAt !== null && Date.now() - new Date(a.oldestPendingAt).getTime() > 60 * 60 * 1000
+
+function archiveState(a: ArchiveOps): 'ok' | 'warning' {
+  if (!a.configured || !a.reachable || !a.objectLock) return 'warning'
+  return a.failing || archiveStuck(a) ? 'warning' : 'ok'
+}
+
+function archiveText(a: ArchiveOps): string {
+  if (!a.configured) return t('sys.archiveOff')
+  if (!a.reachable) return t('sys.archiveDown')
+  if (!a.objectLock) return tf('sys.archiveNoLock', { bucket: a.bucket ?? '' })
+  const base = tf('sys.archiveOk', { bucket: a.bucket ?? '', mode: a.mode ?? '' })
+  if (a.failing)
+    return `${base} ${tf('sys.archiveFailing', { n: String(a.failing), error: a.lastError ?? '' })}`
+  if (a.pending) return `${base} ${tf('sys.archivePending', { n: String(a.pending) })}`
+  return base
 }

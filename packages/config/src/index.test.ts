@@ -35,6 +35,28 @@ describe('loadConfig', () => {
   })
 })
 
+describe('archive move', () => {
+  it('needs credentials for the previous archive and ignores empty values', () => {
+    expect(
+      loadConfig({ ...base, ARCHIVE_PREVIOUS_S3_ENDPOINT: '' }).ARCHIVE_PREVIOUS_S3_ENDPOINT,
+    ).toBe(undefined)
+    expect(() =>
+      loadConfig({ ...base, ARCHIVE_PREVIOUS_S3_ENDPOINT: 'http://storage:9000' }),
+    ).toThrow(/ARCHIVE_PREVIOUS_S3_ACCESS_KEY/)
+    const config = loadConfig({
+      ...base,
+      ARCHIVE_PREVIOUS_S3_ENDPOINT: 'http://storage:9000/',
+      ARCHIVE_PREVIOUS_S3_ACCESS_KEY: 'archiv',
+      ARCHIVE_PREVIOUS_S3_SECRET_KEY: 'geheim',
+    })
+    expect(config).toMatchObject({
+      ARCHIVE_PREVIOUS_S3_ENDPOINT: 'http://storage:9000',
+      ARCHIVE_PREVIOUS_S3_BUCKET: 'belegarchiv',
+      ARCHIVE_PREVIOUS_S3_PATH_STYLE: true,
+    })
+  })
+})
+
 describe('roles', () => {
   it('maps roles to processes', () => {
     expect([runsApi('all'), runsWorker('all')]).toEqual([true, true])

@@ -1714,6 +1714,9 @@ fieldset.plain {
 .op-check--warning .op-check__state {
   color: var(--color-warning);
 }
+.op-check--error .op-check__state {
+  color: var(--color-error);
+}
 .op-check--off .op-check__state {
   color: var(--color-muted);
 }
@@ -1983,4 +1986,224 @@ fieldset.plain {
   .signature-row {
     grid-template-columns: 1fr 1fr;
   }
+}
+
+/* Contacts: whole row selectable, opens the editor (touch target ≥ 56 px). */
+.list li:has(> .list-button) {
+  padding: 0;
+}
+
+.list-button {
+  display: grid;
+  gap: var(--space-1);
+  width: 100%;
+  min-height: 56px;
+  padding: var(--space-2) var(--space-4);
+  border: 0;
+  background: none;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.list-button:hover,
+.list-button[aria-current="true"] {
+  background: color-mix(in srgb, var(--color-primary) 8%, transparent);
+}
+
+.list-button:focus-visible {
+  outline: 2px solid var(--color-primary);
+  outline-offset: -2px;
+}
+
+.contact-editor .panel-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-2);
+}
+
+.contact-editor .panel-head h2 {
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+
+.contact-editor fieldset {
+  min-width: 0;
+  margin: 0;
+  padding: 0;
+  border: 0;
+}
+
+.contact-editor h3 {
+  margin: var(--space-6) 0 var(--space-2);
+}
+
+/* E-Rechnung status below the document actions. */
+.einvoice-status {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-2);
+  width: 100%;
+}
+
+/* Zahlungen & Forderungen */
+.chip--pay-draft {
+  color: var(--color-muted);
+}
+.chip--pay-open,
+.chip--pay-partially_paid {
+  color: var(--color-primary);
+}
+.chip--pay-paid {
+  color: var(--color-success);
+}
+.chip--pay-overdue,
+.chip--pay-dunned {
+  color: var(--color-warning);
+}
+.chip--pay-cancelled {
+  color: var(--color-error);
+}
+
+.receivable .panel-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-2);
+}
+
+.receivable-sums,
+.invoice-sums {
+  display: grid;
+  gap: var(--space-1);
+  margin: var(--space-2) 0;
+}
+
+.receivable-sums div,
+.invoice-sums div {
+  display: flex;
+  justify-content: space-between;
+  gap: var(--space-4);
+}
+
+.receivable-sums dd,
+.invoice-sums dd {
+  margin: 0;
+}
+
+.receivable-sums .is-strong,
+.invoice-sums .is-strong {
+  font-weight: 700;
+  border-top: 1px solid var(--color-border);
+  padding-top: var(--space-1);
+}
+
+.invoice-sums .is-warning dd {
+  color: var(--color-warning);
+}
+
+.list.entries li {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-2);
+}
+
+.list.entries li.is-reversed > span:first-child {
+  color: var(--color-muted);
+  text-decoration: line-through;
+}
+
+.entry-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+}
+
+.inline-form h3 {
+  margin: var(--space-4) 0 var(--space-2);
+}
+
+.invoice-list .list-link a {
+  display: grid;
+  gap: var(--space-1);
+}
+
+.invoice-head,
+.invoice-amounts {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-2);
+}
+
+.invoice-list .is-cancelled {
+  opacity: 0.6;
+}
+
+/* Mahnwesen */
+.dunning .list.entries li > form {
+  flex-basis: 100%;
+}
+.chip--mail-queued,
+.chip--mail-sending {
+  color: var(--color-primary);
+}
+.chip--mail-sent {
+  color: var(--color-success);
+}
+.chip--mail-failed {
+  color: var(--color-error);
+}
+.dunning-form h3 {
+  margin: var(--space-4) 0 var(--space-2);
+}
+.dunning-step {
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius);
+  padding: var(--space-3);
+  margin: 0 0 var(--space-3);
+  min-width: 0;
+}
+.dunning-step legend {
+  font-weight: 600;
+  padding: 0 var(--space-1);
+}
+
+/* Prüfung: Änderungsprotokoll */
+.warning-text {
+  color: var(--color-warning);
+}
+.audit-summary {
+  cursor: pointer;
+  min-height: 44px;
+  display: flex;
+  align-items: center;
+}
+.audit-head {
+  display: grid;
+  gap: var(--space-1);
+}
+.table-scroll {
+  overflow-x: auto;
+  max-width: 100%;
+}
+.audit-changes {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.875rem;
+}
+.audit-cell {
+  text-align: left;
+  vertical-align: top;
+  padding: var(--space-1) var(--space-2);
+  border-bottom: 1px solid var(--color-border);
+  overflow-wrap: anywhere;
 }

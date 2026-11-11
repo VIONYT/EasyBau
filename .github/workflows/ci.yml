@@ -36,6 +36,8 @@ jobs:
           node-version-file: .nvmrc
           cache: pnpm
       - run: pnpm install --frozen-lockfile
+      - name: Archive image pinned consistently (ADR 0009, Dependabot)
+        run: sh infra/check-pinned-images.sh
       - run: pnpm lint
       - run: pnpm typecheck
       - run: pnpm test:coverage
@@ -60,7 +62,7 @@ jobs:
 
       - name: Build images
         run: |
-          printf 'POSTGRES_PASSWORD=ci-%s\nAPP_SECRET=%s\nHTTP_PORT=8080\nHTTPS_PORT=8443\nPUBLIC_URL=https://localhost:8443\nSETUP_TOKEN=ci-e2e-%s\n' "$GITHUB_RUN_ID" "$(openssl rand -hex 32)" "$GITHUB_RUN_ID" > .env
+          printf 'POSTGRES_PASSWORD=ci-%s\nAPP_SECRET=%s\nARCHIVE_S3_SECRET_KEY=%s\nHTTP_PORT=8080\nHTTPS_PORT=8443\nPUBLIC_URL=https://localhost:8443\nSETUP_TOKEN=ci-e2e-%s\n' "$GITHUB_RUN_ID" "$(openssl rand -hex 32)" "$(openssl rand -hex 24)" "$GITHUB_RUN_ID" > .env
           docker compose build
 
       - name: Start compact profile

@@ -1,0 +1,26 @@
+{
+  "name": "@opc/einvoice",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "description": "E-Rechnung: EN 16931 from finalized documents, ZUGFeRD/Factur-X (CII) and XRechnung (UBL, CII), Factur-X XMP for PDF/A-3, KoSIT report parsing. Pure, no I/O.",
+  "exports": {
+    ".": {
+      "source": "./src/index.ts",
+      "types": "./src/index.ts",
+      "default": "./dist/index.js"
+    }
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.build.json",
+    "typecheck": "tsc -p tsconfig.json --noEmit"
+  },
+  "dependencies": {
+    "@opc/schemas": "workspace:*",
+    "decimal.js": "10.6.0"
+  },
+  "devDependencies": {
+    "@opc/domain": "workspace:*",
+    "@opc/pdf-templates": "workspace:*"
+  }
+}

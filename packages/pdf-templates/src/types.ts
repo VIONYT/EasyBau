@@ -49,10 +49,14 @@ export interface LetterPdfInput {
     } | null
     totals: { label: string; value: string; grand: boolean; note: string | null }[]
     notes: string[]
+    /** Bezahlcode (GiroCode / EPC-QR): payload to encode and the lines printed next to it. */
+    paymentQr?: { payload: string; lines: string[] } | null
     closing: string | null
     /** Building blocks of Aufmaßblatt and Berichte (rendered after the intro). */
     blocks: LetterBlock[]
   }
+  /** Attached file, e.g. the ZUGFeRD XML (/factur-x.xml); its content is passed as asset. */
+  attachment?: { path: string; description: string } | null
 }
 
 export type LetterBlock =

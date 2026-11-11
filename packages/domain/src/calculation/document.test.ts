@@ -31,7 +31,15 @@ describe('document totals', () => {
     })
     expect(totals.itemsNetCents).toBe(77500n)
     expect(totals.taxLines).toEqual([
-      { category: 'S', ratePercent: '19.00', netCents: 77500n, taxCents: 14725n },
+      {
+        category: 'S',
+        ratePercent: '19.00',
+        netCents: 77500n,
+        taxCents: 14725n,
+        itemsNetCents: 77500n,
+        discountCents: 0n,
+        deductedNetCents: 0n,
+      },
     ])
     expect(totals.grossCents).toBe(92225n)
     expect(Object.fromEntries(totals.titleSubtotals)).toEqual({
@@ -74,6 +82,10 @@ describe('document totals', () => {
       discountPercent: '2,5',
     })
     expect(totals.discountCents).toBe(250n + 500n) // round(250,025) + 500
+    expect(totals.taxLines.map((t) => [t.itemsNetCents, t.discountCents, t.netCents])).toEqual([
+      [10001n, 250n, 9751n],
+      [20000n, 500n, 19500n],
+    ])
     expect(totals.netCents).toBe(30001n - 750n)
     expect(totals.taxLines[0]).toMatchObject({ netCents: 9751n, taxCents: 1853n })
     expect(totals.taxLines[1]).toMatchObject({ netCents: 19500n, taxCents: 1365n })
@@ -91,6 +103,9 @@ describe('document totals', () => {
         netCents: 432500n,
         taxCents: 0n,
         exemptionReason: 'Steuerschuldnerschaft des Leistungsempfängers (§ 13b UStG).',
+        itemsNetCents: 432500n,
+        discountCents: 0n,
+        deductedNetCents: 0n,
       },
     ])
     expect(totals.grossCents).toBe(432500n)

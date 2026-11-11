@@ -315,4 +315,48 @@ export interface OperationsStatus {
   }
   email: { enabled: boolean; queued: number; failed: number }
   security: { requireAdminMfa: boolean; https: boolean }
+  /** Audit-Kette (rule 6): newest check of the hash chain; stale = older than 26 hours. */
+  audit: {
+    lastCheckAt: string | null
+    problem: 'broken' | 'truncated' | 'rewritten' | null
+    brokenSeq: number | null
+    events: number
+    stale: boolean
+  }
+  /** KoSIT validator (ADR 0007): without it no invoice can be finalized (rule 8). */
+  einvoice: { configured: boolean; reachable: boolean }
+  /** Revisionssicheres Belegarchiv (ADR 0008, S3 with Object Lock). */
+  archive: {
+    configured: boolean
+    bucket: string | null
+    reachable: boolean
+    objectLock: boolean
+    mode: 'COMPLIANCE' | 'GOVERNANCE' | null
+    /** Originals not yet in the WORM bucket; the oldest one; those that failed at least once. */
+    pending: number
+    oldestPendingAt: string | null
+    failing: number
+    lastError: string | null
+    /** Archiv-Abgleich: checks of archived originals in the bucket (ADR 0008). */
+    verify: {
+      lastCheckAt: string | null
+      /** Checks in the last 30 days and how many objects were written again. */
+      checked30d: number
+      restored30d: number
+      /** Originals whose newest check found neither the object nor an intact copy. */
+      lost: number
+      /** Archived originals never checked yet. */
+      unchecked: number
+      /** Complete reconciliation (after a restore or on request); null = none open or recent. */
+      request: {
+        reason: 'manual' | 'restore' | 'move'
+        requestedAt: string
+        startedAt: string | null
+        finishedAt: string | null
+        checked: number
+        restored: number
+        lost: number
+      } | null
+    }
+  }
 }

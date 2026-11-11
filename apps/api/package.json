@@ -20,6 +20,7 @@
     "@opc/config": "workspace:*",
     "@opc/db": "workspace:*",
     "@opc/domain": "workspace:*",
+    "@opc/einvoice": "workspace:*",
     "@opc/exports": "workspace:*",
     "@opc/pdf-templates": "workspace:*",
     "@opc/schemas": "workspace:*",
@@ -27,5 +28,8 @@
     "@simplewebauthn/server": "14.1.0",
     "fastify": "5.12.8",
     "zod": "4.6.7"
+  },
+  "devDependencies": {
+    "@opc/worker": "workspace:*"
   }
 }

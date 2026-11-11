@@ -2,6 +2,7 @@ import { readFileSync } from 'node:fs'
 import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { NodeCompiler } from '@myriaddreamin/typst-ts-node-compiler'
+import { encode } from 'uqr'
 import type { LetterAsset, LetterPdfInput } from './types.js'
 
 /** Package root (works from src/ during development and dist/ when built). */
@@ -42,6 +43,20 @@ export function isUsableImage(path: string, data: Buffer): boolean {
   }
 }
 
+/** QR code as vector SVG (error correction M as required for the EPC-QR, quiet zone 4). */
+export function qrSvg(value: string): Buffer {
+  const { data, size } = encode(value, { ecc: 'M', border: 4 })
+  let path = ''
+  data.forEach((row, y) => {
+    row.forEach((dark, x) => {
+      if (dark) path += `M${x} ${y}h1v1h-1z`
+    })
+  })
+  return Buffer.from(
+    `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${size} ${size}" shape-rendering="crispEdges"><rect width="${size}" height="${size}" fill="#fff"/><path d="${path}" fill="#000"/></svg>`,
+  )
+}
+
 export class PdfRenderError extends Error {
   override name = 'PdfRenderError'
 }
@@ -62,7 +77,12 @@ export function renderLetterPdf(
       | (Omit<NonNullable<LetterPdfInput['logo']>, 'path'> & { data: Buffer; mime: string })
       | null
   },
-  options: { createdAt?: Date; assets?: LetterAsset[] } = {},
+  options: {
+    createdAt?: Date
+    assets?: LetterAsset[]
+    /** E-Rechnung attached as /factur-x.xml (AFRelationship Alternative, PDF/A-3). */
+    einvoiceXml?: Buffer
+  } = {},
 ): Buffer {
   const typst = getCompiler()
   for (const asset of options.assets ?? []) typst.mapShadow(asset.path, asset.data)
@@ -76,6 +96,14 @@ export function renderLetterPdf(
     const { data: _, mime: __, ...position } = logo
     data = { ...data, logo: { ...position, path } }
   }
+  if (options.einvoiceXml) {
+    typst.mapShadow('/factur-x.xml', options.einvoiceXml)
+    data = {
+      ...data,
+      attachment: { path: '/factur-x.xml', description: 'Rechnungsdaten (ZUGFeRD / Factur-X)' },
+    }
+  }
+  if (data.body.paymentQr) typst.mapShadow('/girocode.svg', qrSvg(data.body.paymentQr.payload))
   typst.mapShadow('/data.json', Buffer.from(JSON.stringify(data)))
   try {
     const compiled = typst.compile({ mainFileContent: template as string })

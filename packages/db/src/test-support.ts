@@ -40,7 +40,7 @@ export async function createTenant(db: TestDb, name = 'Testbetrieb'): Promise<Te
   const tenantId = ids?.tenant as string
   const userId = ids?.user as string
   await db.app`insert into app_user (id, email, display_name)
-    values (${userId}, ${`user-${Date.now()}-${counter}@example.test`}, 'Test User')`
+    values (${userId}, ${`user-${Date.now()}-${counter}-${Math.random().toString(36).slice(2, 8)}@example.test`}, 'Test User')`
   const run = <T>(fn: (tx: Tx) => Promise<T>) => withTenant(db.app, { tenantId, userId }, fn)
   await run(async (tx) => {
     await tx`insert into tenant (id, name) values (${tenantId}, ${`${name} ${counter}`})`

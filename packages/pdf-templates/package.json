@@ -23,6 +23,7 @@
   "dependencies": {
     "@myriaddreamin/typst-ts-node-compiler": "0.7.0",
     "@opc/domain": "workspace:*",
-    "@opc/schemas": "workspace:*"
+    "@opc/schemas": "workspace:*",
+    "uqr": "0.1.3"
   }
 }

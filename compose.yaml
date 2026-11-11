@@ -5,7 +5,9 @@
 # Profile "compact" (default): proxy, app (API + worker), db.
 # Profile "standard": additionally a separate worker -> COMPOSE_PROFILES=standard and APP_ROLE=api.
 # backup: daily database + Ablage backup into BACKUP_DIR (ADR 0005), restore with infra/restore.sh.
-# Planned services (see DESIGN.md §3.5): storage (S3 + Object Lock), kosit.
+# kosit: e-invoice validator (ADR 0007), internal only; invoices are finalized only after it accepted them.
+# storage: Belegarchiv (ADR 0009), RustFS with Object Lock (WORM), internal only. External S3 instead:
+#   COMPOSE_FILE=compose.yaml:compose.external-s3.yaml and ARCHIVE_S3_* in .env (see .env.example).
 
 name: openplancraft
 
@@ -25,6 +27,13 @@ x-app: &app
   depends_on:
     db:
       condition: service_healthy
+    kosit:
+      condition: service_started
+    # Bundled RustFS with bucket and restricted key; absent with an external S3
+    # (compose.external-s3.yaml).
+    storage-setup:
+      condition: service_completed_successfully
+      required: false
 
 x-app-env: &app-env
   APP_NAME: ${APP_NAME:-OpenPlancraft}
@@ -50,6 +59,23 @@ x-app-env: &app-env
   SMTP_PASSWORD: ${SMTP_PASSWORD:-}
   SMTP_PASSWORD_FILE: ${SMTP_PASSWORD_FILE:-}
   SMTP_FROM: ${SMTP_FROM:-}
+  KOSIT_URL: ${KOSIT_URL:-http://kosit:8080}
+  ARCHIVE_S3_ENDPOINT: ${ARCHIVE_S3_ENDPOINT:-http://storage:9000}
+  ARCHIVE_S3_REGION: ${ARCHIVE_S3_REGION:-us-east-1}
+  ARCHIVE_S3_BUCKET: ${ARCHIVE_S3_BUCKET:-belegarchiv}
+  ARCHIVE_S3_ACCESS_KEY: ${ARCHIVE_S3_ACCESS_KEY:-archiv}
+  ARCHIVE_S3_SECRET_KEY: ${ARCHIVE_S3_SECRET_KEY:?ARCHIVE_S3_SECRET_KEY fehlt in .env (openssl rand -hex 24)}
+  ARCHIVE_S3_PATH_STYLE: ${ARCHIVE_S3_PATH_STYLE:-true}
+  # The bucket is created by storage-setup (bundled) or by the operator (external S3).
+  ARCHIVE_S3_CREATE_BUCKET: ${ARCHIVE_S3_CREATE_BUCKET:-false}
+  # Only while moving the archive to another S3 (docs/self-hosting, „Belegarchiv umziehen“).
+  ARCHIVE_PREVIOUS_S3_ENDPOINT: ${ARCHIVE_PREVIOUS_S3_ENDPOINT:-}
+  ARCHIVE_PREVIOUS_S3_REGION: ${ARCHIVE_PREVIOUS_S3_REGION:-us-east-1}
+  ARCHIVE_PREVIOUS_S3_BUCKET: ${ARCHIVE_PREVIOUS_S3_BUCKET:-belegarchiv}
+  ARCHIVE_PREVIOUS_S3_ACCESS_KEY: ${ARCHIVE_PREVIOUS_S3_ACCESS_KEY:-}
+  ARCHIVE_PREVIOUS_S3_SECRET_KEY: ${ARCHIVE_PREVIOUS_S3_SECRET_KEY:-}
+  ARCHIVE_PREVIOUS_S3_PATH_STYLE: ${ARCHIVE_PREVIOUS_S3_PATH_STYLE:-true}
+  ARCHIVE_RETENTION_MODE: ${ARCHIVE_RETENTION_MODE:-COMPLIANCE}
 
 services:
   proxy:
@@ -111,6 +137,90 @@ services:
       timeout: 3s
       retries: 20
 
+  # E-invoice validator (ADR 0007): XRechnung UBL and ZUGFeRD/Factur-X CII against EN 16931 and the
+  # XRechnung rules of KoSIT. Only reachable inside the stack; about 300 MB RAM (heap 256 MB).
+  kosit:
+    image: ${IMAGE_PREFIX:-ghcr.io/vionyt/openplancraft}-kosit:${KOSIT_IMAGE_VERSION:-latest}
+    build:
+      context: .
+      dockerfile: docker/kosit.Dockerfile
+    restart: unless-stopped
+    read_only: true
+    tmpfs: [/tmp]
+
+  # Belegarchiv (ADR 0009): RustFS with Object Lock (WORM), internal only; originals are locked
+  # (COMPLIANCE) until the end of the retention period. About 25–220 MB RAM. The root key is created
+  # once into the volume "archive-keys" and never reaches the app; the app uses a restricted key
+  # (ARCHIVE_S3_ACCESS_KEY/SECRET_KEY) that can write and read but never delete (storage-setup).
+  storage-keys:
+    image: rustfs/rustfs:1.0.5@sha256:b81d16a90ee25bd9511280127ca1471788c6e874cf0f0da759645f46b2dc1d74
+    user: "0"
+    entrypoint: ["sh", "/opt/storage/keys.sh"]
+    network_mode: none
+    read_only: true
+    restart: "no"
+    volumes:
+      - archive-keys:/keys
+      - ./infra/storage:/opt/storage:ro
+
+  storage:
+    image: rustfs/rustfs:1.0.5@sha256:b81d16a90ee25bd9511280127ca1471788c6e874cf0f0da759645f46b2dc1d74
+    restart: unless-stopped
+    read_only: true
+    tmpfs: [/tmp]
+    environment:
+      RUSTFS_ACCESS_KEY_FILE: /keys/root-user
+      RUSTFS_SECRET_KEY_FILE: /keys/root-secret
+      # Logs to stdout (docker compose logs storage).
+      RUSTFS_OBS_LOG_DIRECTORY: ""
+    volumes:
+      - archive:/data
+      - archive-keys:/keys:ro
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "http://127.0.0.1:9000/health/ready"]
+      interval: 10s
+      timeout: 5s
+      start_period: 30s
+      retries: 10
+    depends_on:
+      storage-keys:
+        condition: service_completed_successfully
+
+  storage-setup:
+    image: rustfs/rustfs:1.0.5@sha256:b81d16a90ee25bd9511280127ca1471788c6e874cf0f0da759645f46b2dc1d74
+    entrypoint: ["sh", "/opt/storage/setup.sh"]
+    read_only: true
+    tmpfs: [/tmp]
+    restart: "no"
+    environment:
+      ARCHIVE_S3_BUCKET: ${ARCHIVE_S3_BUCKET:-belegarchiv}
+      ARCHIVE_S3_ACCESS_KEY: ${ARCHIVE_S3_ACCESS_KEY:-archiv}
+      ARCHIVE_S3_SECRET_KEY: ${ARCHIVE_S3_SECRET_KEY:?ARCHIVE_S3_SECRET_KEY fehlt in .env (openssl rand -hex 24)}
+    volumes:
+      - archive-keys:/keys:ro
+      - ./infra/storage:/opt/storage:ro
+    depends_on:
+      storage:
+        condition: service_healthy
+
+  # Only while moving from the former bundled MinIO (ADR 0008 → 0009): COMPOSE_PROFILES=legacy-minio
+  # and ARCHIVE_PREVIOUS_S3_ENDPOINT=http://storage-minio:9000 (docs/self-hosting, „Umstieg“).
+  storage-minio:
+    profiles: [legacy-minio]
+    image: ${IMAGE_PREFIX:-ghcr.io/vionyt/openplancraft}-storage:${STORAGE_IMAGE_VERSION:-latest}
+    build:
+      context: .
+      dockerfile: docker/minio-legacy.Dockerfile
+      secrets: [extra_ca]
+    restart: unless-stopped
+    read_only: true
+    tmpfs: [/tmp]
+    environment:
+      MINIO_ROOT_USER: ${ARCHIVE_S3_ACCESS_KEY:-archiv}
+      MINIO_ROOT_PASSWORD: ${ARCHIVE_S3_SECRET_KEY:?ARCHIVE_S3_SECRET_KEY fehlt in .env}
+    volumes:
+      - archive-data:/data
+
   # Daily backup of database and Ablage (ADR 0005). Same image as db, idles in a sleep loop.
   backup:
     image: postgres:17-alpine
@@ -142,6 +252,12 @@ services:
 volumes:
   db-data:
   files:
+  # Belegarchiv (RustFS data, ADR 0009). WORM: objects cannot be deleted before their retention date.
+  archive:
+  # Root key of the bundled RustFS (only storage-keys/storage/storage-setup mount it).
+  archive-keys:
+  # Former bundled MinIO (ADR 0008). Keep it until all its retention periods have ended.
+  archive-data:
   backups:
   caddy-data:
   caddy-config:

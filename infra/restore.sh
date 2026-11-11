@@ -34,3 +34,4 @@ $DC exec -T backup sh /opt/backup/backup.sh restore "$name"
 echo "Anwendung wird gestartet (Migrationen laufen automatisch) …"
 $DC up -d
 echo "Fertig. Bitte anmelden und Stichproben prüfen (Projekte, Dokumente, Dateien)."
+echo "Das Belegarchiv wird jetzt im Hintergrund vollständig abgeglichen (Betriebs-Check zeigt den Fortschritt)."

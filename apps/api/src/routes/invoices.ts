@@ -6,6 +6,7 @@ import type { FastifyInstance } from 'fastify'
 import { z } from 'zod'
 import { billingDoc, invoiceFinalizeCheck, legalNotesOf } from '../billing.js'
 import { type AuthContext, inTenant, requirePermission, type Services } from '../context.js'
+import { issueEinvoices } from '../einvoice.js'
 import { HttpError, notFound, parse } from '../http.js'
 import { copyItems, liveIssuer, loadDocument, lockDraft, recalculate } from './documents.js'
 import { archiveDocumentPdf } from './pdf.js'
@@ -123,6 +124,12 @@ export async function finalizeInvoice(
            recipient_snapshot = ${tx.json(detail.recipient as never)},
            legal_notes = ${tx.json(legalNotes)}
     where id = ${id} and project_id = ${current.projectId}`
+
+  // Rule 8: ZUGFeRD/XRechnung from the frozen document, validated by KoSIT, archived. A failed
+  // check rolls the whole transaction back: no number is consumed, the invoice stays a draft.
+  const finalized = await loadDocument(tx, auth, id)
+  if (!finalized) throw notFound('Das Dokument')
+  await issueEinvoices(tx, finalized, auth)
 }
 
 /**
@@ -219,6 +226,10 @@ export async function cancelInvoice(
            recipient_snapshot = ${tx.json(original.recipient as never)},
            legal_notes = ${tx.json(legalNotes)}
     where id = ${cancellationId}`
+  // The Stornorechnung is an e-invoice as well (type 384 with reference to the invoice, rule 8).
+  const cancellation = await loadDocument(tx, auth, cancellationId)
+  if (!cancellation) throw notFound('Die Stornorechnung')
+  await issueEinvoices(tx, cancellation, auth)
 
   // 3. „Rechnung korrigieren“: the original as a new draft (same kind and Abschlag number).
   let reissue: CancelInvoiceResult['reissue'] = null
