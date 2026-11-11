@@ -111,6 +111,7 @@ export function Users() {
                 <span className="actions">
                   <RoleSelect
                     roles={roles}
+                    label={tf('users.roleOf', { name: m.displayName })}
                     value={m.role.key}
                     onChange={(roleKey) =>
                       act(() =>
@@ -257,17 +258,19 @@ export function Users() {
 
 function RoleSelect({
   roles,
+  label,
   value,
   onChange,
 }: {
   roles: RoleSummary[]
+  label: string
   value: string
   onChange: (key: string) => void
 }) {
   return (
     <select
       className="select"
-      aria-label={t('users.role')}
+      aria-label={label}
       value={value}
       onChange={(e) => onChange(e.target.value)}
     >

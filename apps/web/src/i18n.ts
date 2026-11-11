@@ -298,6 +298,7 @@ const de = {
   'users.accessLine': 'Zugang bis {date}',
   'users.title': 'Benutzer',
   'users.role': 'Rolle',
+  'users.roleOf': 'Rolle von {name}',
   'users.remove': 'Entfernen',
   'users.removeConfirm': 'Diese Person aus der Firma entfernen?',
   'users.resetMfa': '2FA zurücksetzen',
