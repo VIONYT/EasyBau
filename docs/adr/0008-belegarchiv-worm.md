@@ -1,6 +1,6 @@
 # ADR 0008: Revisionssicheres Belegarchiv mit S3 Object Lock (MinIO im Stack, externer S3 optional)
 
-- Status: angenommen
+- Status: angenommen; **Punkt „MinIO im Stack“ ersetzt durch [ADR 0009](0009-belegarchiv-rustfs.md)** (RustFS). Alles andere (Object Lock, Outbox, Nachweis, Abgleich, externer S3) gilt weiter.
 - Datum: 2026-11-10
 - Ergänzt: ADR 0004 (Dateiablage, Punkt 4), ADR 0007 (E-Rechnung); setzt Regel 8 (WORM) und Regel 7 (keine Löschung vor Fristende) um
 

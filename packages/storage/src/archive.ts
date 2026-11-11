@@ -28,7 +28,7 @@ export interface ArchiveStore {
   readonly bucket: string
   readonly mode: RetentionMode
   status(): Promise<ArchiveStatus>
-  /** Creates the bucket with Object Lock if missing (bundled MinIO); never changes an existing one. */
+  /** Creates the bucket with Object Lock if missing (development, tests); never changes an existing one. */
   ensureBucket(): Promise<void>
   put(
     key: string,

@@ -16,20 +16,20 @@ In `.env` mindestens setzen:
 | `APP_DOMAIN` | Ihre Domain, z. B. `erp.meine-firma.de`. Der DNS-Eintrag muss auf den Server zeigen; Caddy holt das Zertifikat automatisch. |
 | `POSTGRES_PASSWORD` | Datenbankpasswort, z. B. `openssl rand -hex 24`. |
 | `APP_SECRET` | Hauptschlüssel für verschlüsselte Felder (2FA-Geheimnisse, IBAN), z. B. `openssl rand -hex 32`. **Sicher aufbewahren** (z. B. im Passwortmanager). Ohne ihn sind diese Felder nach einer Wiederherstellung nicht mehr lesbar. |
-| `ARCHIVE_S3_SECRET_KEY` | Passwort des Belegarchivs (MinIO), z. B. `openssl rand -hex 24`. Bei externem S3 der geheime Zugangsschlüssel (siehe Abschnitt 5b). |
+| `ARCHIVE_S3_SECRET_KEY` | Passwort des App-Zugangs zum Belegarchiv (RustFS), z. B. `openssl rand -hex 24`. Bei externem S3 der geheime Zugangsschlüssel (siehe Abschnitt 5b). |
 
 Statt Werten in `.env` können Docker-Secrets genutzt werden: `APP_SECRET_FILE=/run/secrets/app_secret`.
 
-**Variante A – vorgebaute Images (empfohlen, auch für kleine Server):** Die Images `app`, `web`, `kosit` und `storage` liegen für amd64 und arm64 in der GitHub Container Registry. Es muss nichts gebaut werden, auch nicht MinIO.
+**Variante A – vorgebaute Images (empfohlen, auch für kleine Server):** Die Images `app`, `web` und `kosit` liegen für amd64 und arm64 in der GitHub Container Registry; das Belegarchiv (RustFS) kommt als fest gepinntes Image des Herstellers. Es muss nichts gebaut werden.
 
 ```bash
 # in .env: APP_VERSION=1.2.3 (eine Release-Version) oder für den Entwicklungsstand
-#   APP_VERSION=edge, KOSIT_IMAGE_VERSION=edge, STORAGE_IMAGE_VERSION=edge
+#   APP_VERSION=edge und KOSIT_IMAGE_VERSION=edge
 docker compose pull
 docker compose up -d --no-build
 ```
 
-**Variante B – selbst bauen** (z. B. für eigene Änderungen; MinIO wird aus dem Quellcode kompiliert, das braucht beim ersten Mal einige Minuten und kurzzeitig etwa 2 GB RAM):
+**Variante B – selbst bauen** (z. B. für eigene Änderungen):
 
 ```bash
 docker compose up -d --build
@@ -84,10 +84,11 @@ Danach `https://<APP_DOMAIN>` öffnen, den Code eingeben, die Firma und das erst
 ## 5b. Revisionssicheres Belegarchiv (Dienst „storage“ oder externer S3)
 
 - **Was archiviert wird:** Originale festgeschriebener Belege, also PDF/A, ZUGFeRD-PDF, XRechnung-XML und KoSIT-Prüfbericht. Sie liegen zuerst im Volume `files`. Der Worker kopiert sie innerhalb von etwa 30 Sekunden in einen S3-Bucket mit **Object Lock (WORM)**, gesperrt bis zum Ende der Aufbewahrungsfrist (10 Jahre ab Ende des Belegjahres). Bis dahin kann niemand sie ändern oder löschen, auch kein Administrator.
-- **Standard (mitgelieferter MinIO):**
-  - Dienst `storage` mit Volume `archive-data`, nur intern erreichbar.
-  - In der `.env` nur `ARCHIVE_S3_SECRET_KEY` setzen (z. B. `openssl rand -hex 24`). Der Bucket `belegarchiv` mit Object Lock wird beim ersten Start angelegt.
-  - Das Image ist aus dem offiziellen MinIO-Quellcode gebaut; mit vorgebauten Images (Abschnitt 1, Variante A) muss nichts kompiliert werden.
+- **Standard (mitgelieferter RustFS, [ADR 0009](../adr/0009-belegarchiv-rustfs.md)):**
+  - Dienst `storage` mit Volume `archive`, nur intern erreichbar; Version fest vorgegeben (`RUSTFS_IMAGE`), Updates kommen mit dem Projekt nach bestandenen WORM-Tests.
+  - In der `.env` nur `ARCHIVE_S3_SECRET_KEY` setzen (z. B. `openssl rand -hex 24`). Beim Start legt `storage-setup` den Bucket `belegarchiv` mit Object Lock an und einen **eingeschränkten Zugang für die App**: schreiben und lesen ja, löschen oder Bucket ändern nein.
+  - Der Root-Schlüssel von RustFS wird beim ersten Start zufällig erzeugt und liegt nur im Volume `archive-keys` (nicht in der `.env`, nicht in der App). Anzeigen bei Bedarf: `docker compose exec storage cat /keys/root-secret`.
+  - **Umstieg vom früheren MinIO:** geschieht beim Update automatisch. Der Worker schreibt alle bereits archivierten Originale aus der Arbeitskopie mit ihrer ursprünglichen Sperrfrist in RustFS (Fortschritt im Betriebs-Check). Das alte Volume `archive-data` bleibt unangetastet. Meldet der Betriebs-Check danach Originale als **fehlend** (keine Arbeitskopie mehr, z. B. nach einer Wiederherstellung nur der Datenbank), den alten MinIO als Quelle einschalten: in der `.env` `COMPOSE_PROFILES=legacy-minio`, `ARCHIVE_PREVIOUS_S3_ENDPOINT=http://storage-minio:9000`, `ARCHIVE_PREVIOUS_S3_ACCESS_KEY=archiv`, `ARCHIVE_PREVIOUS_S3_SECRET_KEY=<ARCHIVE_S3_SECRET_KEY>`, dann `docker compose up -d --build` und `sh infra/archive-reconcile.sh`. Danach beides wieder entfernen.
 - **Externer S3** (empfohlen, wenn das Archiv unabhängig vom Server sein soll):
   1. Beim Anbieter einen Bucket **mit aktiviertem Object Lock** anlegen. Das geht nur beim Anlegen. Dazu einen Zugang mit Schreib- und Leserecht auf diesen Bucket.
   2. In der `.env` eintragen:
@@ -96,20 +97,20 @@ Danach `https://<APP_DOMAIN>` öffnen, den Code eingeben, die Firma und das erst
      - `ARCHIVE_S3_ACCESS_KEY`, `ARCHIVE_S3_SECRET_KEY`
      - `ARCHIVE_S3_CREATE_BUCKET=false`
      - bei Bedarf `ARCHIVE_S3_PATH_STYLE=false`
-  3. `docker compose up -d`. Der MinIO-Dienst läuft dann nicht.
+  3. `docker compose up -d`. Der mitgelieferte RustFS läuft dann nicht.
 - **Zustand prüfen:** Einstellungen › Betrieb zeigt, ob der Bucket erreichbar ist und Object Lock hat, und wie viele Originale noch ausstehen oder fehlgeschlagen sind. Am Dokument steht „Original revisionssicher archiviert (unveränderbar bis …)“.
-- **Was der mitgelieferte MinIO schützt:** Er schützt gegen Änderungen über die Anwendung und gegen versehentliches Löschen. Er schützt nicht gegen den Ausfall der Festplatte. Dafür gibt es die tägliche Sicherung (sie enthält alle Arbeitskopien) und optional einen externen S3.
+- **Was der mitgelieferte RustFS schützt:** Er schützt gegen Änderungen über die Anwendung (auch wenn App oder Datenbank übernommen werden: der App-Zugang kann nichts löschen) und gegen versehentliches Löschen. Er schützt nicht gegen den Ausfall der Festplatte. Dafür gibt es die tägliche Sicherung (sie enthält alle Arbeitskopien) und optional einen externen S3.
 - **Archiv-Abgleich:** Der Worker prüft jede Nacht (03:47 Uhr) die 500 am längsten nicht geprüften Originale im Bucket: vorhanden, SHA-256, Größe und Sperrfrist (jedes zehnte zusätzlich durch Herunterladen und Nachrechnen). Fehlt ein Original oder ist es beschädigt, wird es aus der Arbeitskopie neu geschrieben, mit der ursprünglichen Sperrfrist (als neue Version; die alte bleibt gesperrt). Gibt es keine unveränderte Kopie mehr, meldet der Betriebs-Check das Original als **fehlend** (rot). Einen vollständigen Abgleich startet „Belegarchiv jetzt vollständig abgleichen“ im Betriebs-Check bzw. für alle Firmen `sh infra/archive-reconcile.sh`; nach einer Wiederherstellung (`infra/restore.sh`) läuft er automatisch.
-- **Belegarchiv umziehen (z. B. mitgelieferter MinIO → externer S3):**
+- **Belegarchiv umziehen (z. B. mitgelieferter RustFS → externer S3):**
   1. Beim Anbieter einen Bucket **mit Object Lock** anlegen (siehe oben) und den Zugang bereithalten.
-  2. In der `.env` das bisherige Archiv als Quelle eintragen; der MinIO-Dienst läuft dabei weiter (noch **kein** `COMPOSE_FILE` mit `compose.external-s3.yaml`):
+  2. In der `.env` das bisherige Archiv als Quelle eintragen; der RustFS-Dienst läuft dabei weiter (noch **kein** `COMPOSE_FILE` mit `compose.external-s3.yaml`):
      - `ARCHIVE_PREVIOUS_S3_ENDPOINT=http://storage:9000`
-     - `ARCHIVE_PREVIOUS_S3_ACCESS_KEY=archiv` (der bisherige `ARCHIVE_S3_ACCESS_KEY`)
+     - `ARCHIVE_PREVIOUS_S3_ACCESS_KEY=archiv` (der bisherige `ARCHIVE_S3_ACCESS_KEY`; er darf lesen)
      - `ARCHIVE_PREVIOUS_S3_SECRET_KEY=<bisheriger ARCHIVE_S3_SECRET_KEY>`
      - `ARCHIVE_PREVIOUS_S3_BUCKET=belegarchiv`
   3. Den neuen Bucket als `ARCHIVE_S3_ENDPOINT`, `ARCHIVE_S3_REGION`, `ARCHIVE_S3_BUCKET`, `ARCHIVE_S3_ACCESS_KEY`, `ARCHIVE_S3_SECRET_KEY` eintragen, dazu `ARCHIVE_S3_CREATE_BUCKET=false`. Dann `docker compose up -d`. Neue Originale gehen ab jetzt in den neuen Bucket.
-  4. `sh infra/archive-reconcile.sh` starten. Der Worker schreibt jedes archivierte Original mit seiner ursprünglichen Sperrfrist in den neuen Bucket, aus der Arbeitskopie oder, falls diese fehlt, aus dem bisherigen MinIO (nur wenn die SHA-256 stimmt). Den Fortschritt zeigt der Betriebs-Check jeder Firma.
-  5. Wenn der Abgleich fertig ist und **kein Original als fehlend** gemeldet wird: `ARCHIVE_PREVIOUS_S3_*` entfernen, `COMPOSE_FILE=compose.yaml:compose.external-s3.yaml` setzen und `docker compose up -d`. Das Volume `archive-data` aufheben (am besten bis zum Ende der letzten Frist); gelöscht werden kann es wegen Object Lock ohnehin nicht vorzeitig.
+  4. `sh infra/archive-reconcile.sh` starten. Der Worker schreibt jedes archivierte Original mit seiner ursprünglichen Sperrfrist in den neuen Bucket, aus der Arbeitskopie oder, falls diese fehlt, aus dem bisherigen Archiv (nur wenn die SHA-256 stimmt). Den Fortschritt zeigt der Betriebs-Check jeder Firma.
+  5. Wenn der Abgleich fertig ist und **kein Original als fehlend** gemeldet wird: `ARCHIVE_PREVIOUS_S3_*` entfernen, `COMPOSE_FILE=compose.yaml:compose.external-s3.yaml` setzen und `docker compose up -d`. Das Volume `archive` aufheben (am besten bis zum Ende der letzten Frist).
   Andersherum (externer S3 → anderer Anbieter) geht es genauso: den bisherigen Bucket als `ARCHIVE_PREVIOUS_S3_*` eintragen.
 - **Exporte:** Der GoBD-Export (Z3) enthält die Originale im Ordner `belege/` mit Prüfsummen. Der DATEV-Export liefert auf Wunsch ein ZIP mit PDF je Rechnung.
 
@@ -142,7 +143,7 @@ sh infra/restore.sh                # vorhandene Sicherungen anzeigen
 sh infra/restore.sh <Name>         # Sicherung prüfen, Rückfrage, Datenbank + Ablage ersetzen, Stack starten
 ```
 
-Auf einem neuen Server zuerst Repository und `.env` einrichten und die Sicherungsverzeichnisse nach `BACKUP_DIR` (bzw. in das Volume `backups`) kopieren. Nach dem Wiederherstellen gleicht der Worker das Belegarchiv vollständig ab: Liegt auf dem neuen Server ein leerer MinIO, werden alle Originale aus der wiederhergestellten Ablage mit ihrer ursprünglichen Sperrfrist neu archiviert. Alles, was nach der Sicherung eingegeben wurde, ist danach verloren. Wiederherstellen regelmäßig üben, z. B. auf einem Testrechner.
+Auf einem neuen Server zuerst Repository und `.env` einrichten und die Sicherungsverzeichnisse nach `BACKUP_DIR` (bzw. in das Volume `backups`) kopieren. Nach dem Wiederherstellen gleicht der Worker das Belegarchiv vollständig ab: Liegt auf dem neuen Server ein leeres Archiv, werden alle Originale aus der wiederhergestellten Ablage mit ihrer ursprünglichen Sperrfrist neu archiviert. Alles, was nach der Sicherung eingegeben wurde, ist danach verloren. Wiederherstellen regelmäßig üben, z. B. auf einem Testrechner.
 
 ## 7. Exporte
 
@@ -171,4 +172,4 @@ Datenbank-Migrationen laufen beim Start automatisch (`MIGRATE_ON_START=true`). E
 BASE_URL=https://<APP_DOMAIN> sh infra/smoke-test.sh
 ```
 
-Alle Dienste der Planung sind jetzt im Stack: proxy, app, db, kosit, storage, backup (im Profil „standard“ zusätzlich worker).
+Alle Dienste der Planung sind jetzt im Stack: proxy, app, db, kosit, storage (mit den Einmal-Diensten storage-keys und storage-setup), backup (im Profil „standard“ zusätzlich worker).

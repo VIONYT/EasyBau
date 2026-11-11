@@ -75,7 +75,7 @@ export function registerOperationsRoutes(app: FastifyInstance, services: Service
                 where not exists (select 1 from artifact_archive_check c where c.artifact_id = r.artifact_id)) as unchecked`
       const [request] = await tx<
         {
-          reason: 'manual' | 'restore'
+          reason: 'manual' | 'restore' | 'move'
           requestedAt: string
           startedAt: string | null
           finishedAt: string | null

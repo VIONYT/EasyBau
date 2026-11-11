@@ -602,7 +602,7 @@ test('Rechnung: Pflichtangaben, Festschreiben und Korrigieren per Storno', async
   expect(await xrechnung.text()).toContain('<cbc:ID>R-00101</cbc:ID>')
   const pdf = await page.request.get(`/api/v1/documents/${invoiceId}/pdf`)
   expect((await pdf.body()).toString('latin1')).toContain('/F (factur-x.xml)')
-  // Revisionssicheres Archiv: the worker copies the originals into MinIO with Object Lock.
+  // Revisionssicheres Archiv: the worker copies the originals into the archive (RustFS) with Object Lock.
   await expect(async () => {
     await page.reload()
     await expect(

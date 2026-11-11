@@ -86,7 +86,7 @@ const envSchema = z.object({
   KOSIT_TIMEOUT_MS: z.coerce.number().int().min(1000).max(120000).default(20000),
   /**
    * Revisionssicheres Belegarchiv (ADR 0008): S3 bucket with Object Lock. Default in the Docker
-   * stack: the bundled MinIO (http://storage:9000); any S3-compatible service with Object Lock
+   * stack: the bundled RustFS (http://storage:9000, ADR 0009); any S3-compatible service with Object Lock
    * works. Without an endpoint the originals stay only in the "files" volume (no WORM).
    */
   ARCHIVE_S3_ENDPOINT: z
@@ -103,12 +103,12 @@ const envSchema = z.object({
     .default('belegarchiv'),
   ARCHIVE_S3_ACCESS_KEY: z.string().min(1).optional(),
   ARCHIVE_S3_SECRET_KEY: z.string().min(1).optional(),
-  /** Path-style URLs (endpoint/bucket/key): MinIO and most providers. */
+  /** Path-style URLs (endpoint/bucket/key): RustFS, MinIO and most providers. */
   ARCHIVE_S3_PATH_STYLE: z
     .enum(['true', 'false'])
     .default('true')
     .transform((v) => v === 'true'),
-  /** Create the bucket with Object Lock on start (bundled MinIO); external buckets are prepared by the operator. */
+  /** Create the bucket with Object Lock on start (development); in the stack storage-setup creates it, external buckets are prepared by the operator. */
   ARCHIVE_S3_CREATE_BUCKET: z
     .enum(['true', 'false'])
     .default('false')
@@ -116,7 +116,7 @@ const envSchema = z.object({
   /** COMPLIANCE: nobody can delete before the end of the retention period (GoBD); GOVERNANCE only for tests. */
   ARCHIVE_RETENTION_MODE: z.enum(['COMPLIANCE', 'GOVERNANCE']).default('COMPLIANCE'),
   /**
-   * Previous archive while moving to another S3 (e.g. bundled MinIO → external provider): the
+   * Previous archive while moving to another S3 (e.g. former MinIO → RustFS, or → external provider): the
    * archive reconciliation copies originals from here when the working copy is missing. Optional,
    * only during the move; reading only.
    */

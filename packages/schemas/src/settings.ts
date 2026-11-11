@@ -349,7 +349,7 @@ export interface OperationsStatus {
       unchecked: number
       /** Complete reconciliation (after a restore or on request); null = none open or recent. */
       request: {
-        reason: 'manual' | 'restore'
+        reason: 'manual' | 'restore' | 'move'
         requestedAt: string
         startedAt: string | null
         finishedAt: string | null

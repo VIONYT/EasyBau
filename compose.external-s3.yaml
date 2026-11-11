@@ -1,4 +1,4 @@
-# Externer S3-Speicher als Belegarchiv statt des mitgelieferten MinIO (ADR 0008).
+# Externer S3-Speicher als Belegarchiv statt des mitgelieferten RustFS (ADR 0009).
 # Aktivieren in der .env:
 #   COMPOSE_FILE=compose.yaml:compose.external-s3.yaml
 #   ARCHIVE_S3_ENDPOINT=https://s3.eu-central-1.amazonaws.com   (oder Endpunkt des Anbieters)
@@ -9,6 +9,10 @@
 # Der Bucket muss Object Lock haben (nur beim Anlegen einschaltbar); ohne wird nichts archiviert
 # und der Betriebs-Check warnt.
 services:
+  # The bundled RustFS (storage, its key and setup) is disabled: the profile is never activated.
+  storage-keys:
+    profiles: [bundled-archive]
   storage:
-    # Disabled: the profile is never activated.
-    profiles: [bundled-minio]
+    profiles: [bundled-archive]
+  storage-setup:
+    profiles: [bundled-archive]

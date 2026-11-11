@@ -77,7 +77,7 @@ KI-Angebotsentwurf aus Freitext, Sprach-Bautagebuch (Diktat → strukturierter E
 │          audit                                            │
 ├───────────────────┬──────────────────┬───────────────────┤
 │  Worker (pg-boss) │ PostgreSQL 17    │ S3 Object Storage │
-│  PDF (Typst),     │ RLS je Mandant   │ MinIO, Object Lock│
+│  PDF (Typst),     │ RLS je Mandant   │ RustFS, Object Lk │
 │  E-Rechnung,      │ Append-only-Log  │ für Archiv (WORM) │
 │  Mails, Exporte   │ Job-Queue        │                   │
 └───────────────────┴──────────────────┴───────────────────┘
@@ -103,7 +103,7 @@ Alle Kästen laufen als Container im selben `docker compose`-Stack beim Betreibe
 | Jobs | **pg-boss** (Warteschlange in PostgreSQL) | Kein eigener Queue-Container. Jobs werden **in derselben Transaktion** wie die fachliche Änderung angelegt (z. B. Festschreiben → „PDF/E-Rechnung erzeugen“) und können nicht verloren gehen. Wiederholungen, Zeitpläne (Cron) und Singleton-Jobs sind eingebaut |
 | PDF | **Typst**: Vorlagen in `packages/pdf-templates` (Typst-Markup + JSON-Daten), Erzeugung über die Typst-CLI im Worker-Image; Ausgabe **PDF/A-3b** mit eingebetteter E-Rechnungs-XML (`pdf.embed`); Schriften im Image gebündelt | Ein PDF dauert typischerweise Millisekunden statt Sekunden, und der Speicherbedarf liegt bei wenigen MB statt 300–500 MB für Chromium. Dieselben Vorlagen können per WebAssembly auch für die Live-Vorschau im Browser genutzt werden. Fallback: Nachbearbeitung mit der E-Rechnungs-Bibliothek, falls eine PDF/A-Prüfung (veraPDF in CI) fehlschlägt |
 | E-Rechnung | Eigenes Paket **`packages/einvoice`** (EN 16931 → ZUGFeRD/Factur-X CII, XRechnung UBL/CII, Factur-X-XMP); Validierung jeder Datei mit dem **KoSIT-Validator** (Container `kosit`) beim Festschreiben, siehe [ADR 0007](docs/adr/0007-e-rechnung-kosit.md) | Keine Abhängigkeit mit nicht OSI-anerkannter Lizenz; offizieller Prüfer |
-| Dateien | **S3-kompatibel**: standardmäßig **MinIO** im Stack, alternativ jeder externe S3-Speicher des Betreibers; **Object Lock (Compliance-Modus)** für Archivbuckets | WORM-Speicherung für GoBD ohne Cloud-Zwang |
+| Dateien | **S3-kompatibel**: standardmäßig **RustFS** im Stack (ADR 0009; bis 11/2026 MinIO, eingestellt), alternativ jeder externe S3-Speicher des Betreibers; **Object Lock (Compliance-Modus)** für Archivbuckets | WORM-Speicherung für GoBD ohne Cloud-Zwang |
 | Frontend | **React 19 + Vite**, **TanStack Router + Query**, **Tailwind CSS 4**, **Radix UI / shadcn-Komponenten** | Schnell, zugänglich, eigenes Designsystem möglich |
 | Formulare | React Hook Form + Zod | Gleiche Schemas wie API |
 | Offline | **vite-plugin-pwa** (Workbox) + **Dexie** (IndexedDB) + Outbox-Sync | Bautagebuch und Fotos ohne Netz |
@@ -157,7 +157,7 @@ Standardfall beim Self-Hosting ist **eine Firma pro Installation**. Die Mandante
 | `api` | `ghcr.io/<org>/openplancraft-api` | REST-API, führt beim Start Datenbank-Migrationen aus (mit Lock, idempotent) |
 | `worker` | `ghcr.io/<org>/openplancraft-worker` | PDF (Typst), E-Rechnung, E-Mail, Exporte, geplante Jobs; **entfällt im Profil kompakt** (läuft dann im `api`-Container) |
 | `db` | PostgreSQL 17 | Daten (Volume) |
-| `storage` | MinIO (aus dem Quellcode gebaut, `docker/storage.Dockerfile`) | WORM-Archiv festgeschriebener Belege: Bucket mit Object Lock wird beim ersten Start angelegt, der Worker kopiert jedes Original mit Sperrfrist dorthin ([ADR 0008](docs/adr/0008-belegarchiv-worm.md)). Alternativ externer S3 (`compose.external-s3.yaml`). Die Projektablage liegt im Volume `files` ([ADR 0004](docs/adr/0004-dateiablage.md)) |
+| `storage` | RustFS (gepinntes Herstellerimage, [ADR 0009](docs/adr/0009-belegarchiv-rustfs.md)); Einmal-Dienste `storage-keys` (Root-Schlüssel im Volume `archive-keys`) und `storage-setup` (Bucket mit Object Lock, eingeschränkter App-Zugang ohne Löschrecht) | WORM-Archiv festgeschriebener Belege: der Worker kopiert jedes Original mit Sperrfrist dorthin ([ADR 0008](docs/adr/0008-belegarchiv-worm.md)). Alternativ externer S3 (`compose.external-s3.yaml`). Die Projektablage liegt im Volume `files` ([ADR 0004](docs/adr/0004-dateiablage.md)) |
 | `kosit` | KoSIT-Validator (Java) | Prüfung jeder E-Rechnung, nur intern erreichbar. Läuft mit begrenztem Heap (`-Xmx256m`, Serial GC) dauerhaft in beiden Profilen (ca. 300 MB; ein Start bei Bedarf bräuchte den Docker-Socket, [ADR 0007](docs/adr/0007-e-rechnung-kosit.md)) |
 | `backup` | pgBackRest + Cron | WAL-Archiv, tägliche Sicherung, optional Kopie auf externes Ziel (S3/SFTP) |
 
@@ -185,7 +185,7 @@ Ziel: **wenig Ressourcen, trotzdem schnell.** Gewählt über `PROFILE=compact|st
 | PostgreSQL-Tuning | `shared_buffers=128MB`, `work_mem=4MB`, `max_connections=30` | `shared_buffers=512MB`, `max_connections=60` |
 | KoSIT | dauerhaft, `-Xmx256m` | dauerhaft, `-Xmx256m` |
 
-Ungefähre Speicheraufteilung (kompakt): Caddy 30 MB · App (Node) 150–200 MB · PostgreSQL 150–250 MB · MinIO 60–150 MB · KoSIT ca. 300 MB · Backup 10 MB. Typst benötigt nur während der PDF-Erzeugung wenige MB.
+Ungefähre Speicheraufteilung (kompakt): Caddy 30 MB · App (Node) 150–200 MB · PostgreSQL 150–250 MB · RustFS 25–220 MB · KoSIT ca. 300 MB · Backup 10 MB. Typst benötigt nur während der PDF-Erzeugung wenige MB.
 
 **Warum PostgreSQL trotzdem die richtige Wahl ist**: Ein Betrieb mit 20 Mitarbeitenden erzeugt grob ein paar tausend Dokumente und einige hunderttausend Positionen pro Jahr. Das sind auch nach zehn Jahren meist unter 5 GB, denn Fotos und PDFs liegen im Objektspeicher. PostgreSQL ersetzt zusätzlich Queue, Cache und Suchserver und bietet als einzige Option RLS, Trigger für die Unveränderbarkeit und Point-in-Time-Recovery (siehe [ADR 0002](docs/adr/0002-schlanker-stack.md)). SQLite und MariaDB wurden geprüft und verworfen.
 
@@ -609,7 +609,7 @@ Suchen · Benachrichtigungen · Übersicht · Projekte · Angebote · Ausgangsre
 - **CI-Pipeline** (GitHub Actions, bei jedem Push und Pull Request):
   1. Lint, Formatierung, Typecheck
   2. Unit-Tests (`packages/domain` mit 100 % Abdeckung als Pflicht)
-  3. Integrationstests gegen echte Container (PostgreSQL, MinIO, KoSIT): RLS, Trigger, Nummernkreise unter Parallelität, Job-Queue (Job entsteht nur bei Commit), Object Lock
+  3. Integrationstests gegen echte Container (PostgreSQL, RustFS, KoSIT): RLS, Trigger, Nummernkreise unter Parallelität, Job-Queue (Job entsteht nur bei Commit), Object Lock inkl. WORM-Angriffs-Suite und eingeschränktem App-Zugang
   3a. PDF-Prüfung: alle Beispiel-PDFs mit **veraPDF** auf PDF/A-3b, eingebettete XML mit KoSIT
   4. E-Rechnungs-Validierung aller Beispieldokumente mit KoSIT
   5. Docker-Images bauen (amd64 + arm64)

@@ -2,7 +2,7 @@ import { createHash, createHmac } from 'node:crypto'
 
 /**
  * Minimal S3 client (AWS Signature Version 4) for the Belegarchiv (ADR 0008): only the operations
- * the archive needs, for MinIO in the stack and any S3-compatible service with Object Lock
+ * the archive needs, for RustFS in the stack and any S3-compatible service with Object Lock
  * (AWS S3, Wasabi, Hetzner, IONOS, Backblaze B2 …). No SDK: fetch + node:crypto.
  */
 export interface S3Config {
@@ -12,7 +12,7 @@ export interface S3Config {
   bucket: string
   accessKeyId: string
   secretAccessKey: string
-  /** Path style (http://host/bucket/key): MinIO and most providers; false = bucket.host. */
+  /** Path style (http://host/bucket/key): RustFS, MinIO and most providers; false = bucket.host. */
   forcePathStyle: boolean
   timeoutMs?: number
 }

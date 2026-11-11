@@ -1,8 +1,8 @@
 # syntax=docker/dockerfile:1.7
-# Belegarchiv (ADR 0008): MinIO, S3-compatible object storage with Object Lock (WORM). MinIO no
-# longer publishes community images, so it is built from the official source (AGPL-3.0): the
-# commit of the release tag is fetched by its hash, Go modules are verified against go.sum.
-# Only reachable inside the stack. Update MINIO_RELEASE and MINIO_COMMIT together.
+# FORMER Belegarchiv (ADR 0008, replaced by RustFS in ADR 0009): MinIO Community is archived since
+# 25.04.2026 and gets no security fixes. Only for moving existing archives (compose profile
+# "legacy-minio", read as ARCHIVE_PREVIOUS_S3_*), never as the active archive. Built from the
+# official source (AGPL-3.0) of the last community release.
 ARG MINIO_RELEASE=RELEASE.2025-10-15T17-29-55Z
 ARG MINIO_COMMIT=9e49d5e7a648f00e26f2246f4dc28e6b07f8c84a
 

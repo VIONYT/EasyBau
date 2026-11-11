@@ -18,7 +18,7 @@ const silent = {
 /**
  * Revisionssicheres Archiv (ADR 0008): finalized originals reach the WORM bucket via the worker,
  * the document shows the state, and the originals stay available even without the files volume.
- * With ARCHIVE_S3_ENDPOINT (Docker pipeline, CI) the real MinIO is used.
+ * With ARCHIVE_S3_ENDPOINT (Docker pipeline, CI) the real S3 (RustFS) is used.
  */
 describe.skipIf(!process.env.DATABASE_URL)('Belegarchiv (integration)', () => {
   let h: Harness

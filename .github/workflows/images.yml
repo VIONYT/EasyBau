@@ -1,7 +1,8 @@
 name: Images
 
-# Prebuilt images in the GitHub Container Registry, so small servers do not have to build (above
-# all MinIO from source, ADR 0008). Operators pull them with `docker compose pull`.
+# Prebuilt images in the GitHub Container Registry, so small servers do not have to build.
+# Operators pull them with `docker compose pull`. The archive (RustFS, ADR 0009) comes as the
+# vendor's multi-arch image, pinned by digest in compose.yaml.
 #   main (after a green CI run) → tag "edge" and the commit SHA
 #   release tag v1.2.3          → tags "1.2.3", "1.2" and "latest"
 on:
@@ -38,9 +39,6 @@ jobs:
             target: runtime
           - image: kosit
             dockerfile: docker/kosit.Dockerfile
-            target: runtime
-          - image: storage
-            dockerfile: docker/storage.Dockerfile
             target: runtime
     steps:
       - uses: actions/checkout@v5
