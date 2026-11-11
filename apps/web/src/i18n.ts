@@ -878,6 +878,17 @@ const de = {
   'sys.emailFailed': '{n} E-Mail(s) konnten nicht versendet werden, siehe Postausgang.',
   'sys.einvoice': 'E-Rechnungs-Prüfung (KoSIT)',
   'sys.archive': 'Revisionssicheres Belegarchiv',
+  'sys.archiveVerify': 'Abgleich des Belegarchivs',
+  'sys.verifyOk':
+    'Zuletzt geprüft {when}. In 30 Tagen {n} Prüfungen, davon {restored} Original(e) aus der Arbeitskopie neu geschrieben.',
+  'sys.verifyNever':
+    'Noch nicht geprüft. Der Abgleich läuft jede Nacht (Stichprobe der am längsten nicht geprüften Originale).',
+  'sys.verifyRunning': 'Vollständiger Abgleich läuft: {n} Original(e) geprüft.',
+  'sys.verifyUnchecked': '{n} archivierte Original(e) noch nie geprüft.',
+  'sys.verifyLost':
+    '{n} Original(e) fehlen im Archiv und es gibt keine unveränderte Kopie mehr. Bitte die Sicherung der Ablage einspielen oder das bisherige Archiv angeben (ARCHIVE_PREVIOUS_S3_*).',
+  'sys.verifyStart': 'Belegarchiv jetzt vollständig abgleichen',
+  'sys.verifyBusy': 'Abgleich läuft …',
   'sys.archiveOk':
     'Bucket „{bucket}“ mit Object Lock ({mode}): Originale sind bis zum Ende der Aufbewahrungsfrist unveränderbar.',
   'sys.archivePending': '{n} Original(e) werden gerade archiviert.',

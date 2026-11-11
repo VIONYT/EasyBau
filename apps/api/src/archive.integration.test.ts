@@ -4,11 +4,16 @@ import { join } from 'node:path'
 import { withTenant } from '@opc/db'
 import type { DocumentDetail, OperationsStatus } from '@opc/schemas'
 import { type ArchiveStore, FsObjectStore, MemoryArchiveStore, S3ArchiveStore } from '@opc/storage'
-import { archivePending } from '@opc/worker'
+import { archivePending, verifyRequested } from '@opc/worker'
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
 import { Client, createHarness, type Harness } from './testing/harness.js'
 
-const silent = { warn: () => undefined, info: () => undefined, debug: () => undefined }
+const silent = {
+  warn: () => undefined,
+  info: () => undefined,
+  debug: () => undefined,
+  error: () => undefined,
+}
 
 /**
  * Revisionssicheres Archiv (ADR 0008): finalized originals reach the WORM bucket via the worker,
@@ -132,6 +137,30 @@ describe.skipIf(!process.env.DATABASE_URL)('Belegarchiv (integration)', () => {
     }
     const ops = (await admin.get('/api/v1/settings/operations')).json() as OperationsStatus
     expect(ops.archive).toMatchObject({ pending: 0, failing: 0, oldestPendingAt: null })
+  })
+
+  it('reconciles the archive completely on request (Betriebs-Check)', async () => {
+    const res = await admin.post('/api/v1/settings/operations/archive-verify', {})
+    expect(res.statusCode, res.body).toBe(202)
+    expect((await admin.post('/api/v1/settings/operations/archive-verify', {})).statusCode).toBe(
+      409,
+    )
+    let ops = (await admin.get('/api/v1/settings/operations')).json() as OperationsStatus
+    expect(ops.archive.verify).toMatchObject({
+      unchecked: 3,
+      request: { reason: 'manual', startedAt: null, finishedAt: null },
+    })
+    const files = new FsObjectStore(h.storageDir)
+    for (let i = 0; i < 5; i++) await verifyRequested(h.sql, files, archive, null, silent, 2)
+    ops = (await admin.get('/api/v1/settings/operations')).json() as OperationsStatus
+    expect(ops.archive.verify).toMatchObject({
+      checked30d: 3,
+      restored30d: 0,
+      lost: 0,
+      unchecked: 0,
+      lastCheckAt: expect.stringMatching(/Z$/),
+      request: { checked: 3, restored: 0, lost: 0, finishedAt: expect.stringMatching(/Z$/) },
+    })
   })
 
   it('serves the originals from the archive when the working copy is lost', async () => {

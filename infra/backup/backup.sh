@@ -85,6 +85,17 @@ SQL
   log "Stelle die Ablage wieder her."
   find "$FILES" -mindepth 1 -maxdepth 1 -exec rm -rf {} +
   tar -xzf "$dir/files.tar.gz" -C "$FILES"
+  # Archiv-Abgleich (ADR 0008): after a restore (possibly on a new server with an empty archive)
+  # every archived original is checked and, if missing, written again from the Ablage.
+  psql -qX -v ON_ERROR_STOP=1 -d "$db" <<'SQL'
+DO $$ BEGIN
+  IF to_regclass('public.archive_verify_request') IS NOT NULL THEN
+    INSERT INTO archive_verify_request (tenant_id, reason)
+    SELECT id, 'restore' FROM tenant
+    ON CONFLICT (tenant_id) WHERE finished_at IS NULL DO NOTHING;
+  END IF;
+END $$;
+SQL
   # The restored log ends before this backup; note it so the Betriebs-Check knows it exists.
   record ok "$name" "$(date -Iseconds)" "$(size_of "$dir/db.dump")" "$(size_of "$dir/files.tar.gz")" \
     "Wiederhergestellt am $(date '+%d.%m.%Y %H:%M')"

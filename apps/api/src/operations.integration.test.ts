@@ -55,8 +55,20 @@ describe.skipIf(!process.env.DATABASE_URL)('Betriebs-Check (integration)', () =>
         oldestPendingAt: null,
         failing: 0,
         lastError: null,
+        verify: {
+          lastCheckAt: null,
+          checked30d: 0,
+          restored30d: 0,
+          lost: 0,
+          unchecked: 0,
+          request: null,
+        },
       },
     })
+    // Without an archive there is nothing to reconcile.
+    expect((await admin.post('/api/v1/settings/operations/archive-verify', {})).statusCode).toBe(
+      409,
+    )
   })
 
   it('shows the runs written by the backup service', async () => {

@@ -115,6 +115,26 @@ const envSchema = z.object({
     .transform((v) => v === 'true'),
   /** COMPLIANCE: nobody can delete before the end of the retention period (GoBD); GOVERNANCE only for tests. */
   ARCHIVE_RETENTION_MODE: z.enum(['COMPLIANCE', 'GOVERNANCE']).default('COMPLIANCE'),
+  /**
+   * Previous archive while moving to another S3 (e.g. bundled MinIO → external provider): the
+   * archive reconciliation copies originals from here when the working copy is missing. Optional,
+   * only during the move; reading only.
+   */
+  ARCHIVE_PREVIOUS_S3_ENDPOINT: z
+    .url({ protocol: /^https?$/ })
+    .transform((v) => v.replace(/\/+$/, ''))
+    .optional(),
+  ARCHIVE_PREVIOUS_S3_REGION: z.string().min(1).default('us-east-1'),
+  ARCHIVE_PREVIOUS_S3_BUCKET: z
+    .string()
+    .regex(/^[a-z0-9][a-z0-9.-]{1,61}[a-z0-9]$/, 'Ungültiger Bucket-Name.')
+    .default('belegarchiv'),
+  ARCHIVE_PREVIOUS_S3_ACCESS_KEY: z.string().min(1).optional(),
+  ARCHIVE_PREVIOUS_S3_SECRET_KEY: z.string().min(1).optional(),
+  ARCHIVE_PREVIOUS_S3_PATH_STYLE: z
+    .enum(['true', 'false'])
+    .default('true')
+    .transform((v) => v === 'true'),
   /** Maximum size of one uploaded file in megabytes. */
   UPLOAD_MAX_MB: z.coerce.number().int().min(1).max(2048).default(50),
 })
@@ -144,6 +164,14 @@ export function loadConfig(env: Record<string, string | undefined> = process.env
   ) {
     throw new ConfigError(
       'Invalid configuration:\n  - ARCHIVE_S3_ACCESS_KEY/ARCHIVE_S3_SECRET_KEY: Zugangsdaten für das Belegarchiv fehlen',
+    )
+  }
+  if (
+    parsed.data.ARCHIVE_PREVIOUS_S3_ENDPOINT &&
+    (!parsed.data.ARCHIVE_PREVIOUS_S3_ACCESS_KEY || !parsed.data.ARCHIVE_PREVIOUS_S3_SECRET_KEY)
+  ) {
+    throw new ConfigError(
+      'Invalid configuration:\n  - ARCHIVE_PREVIOUS_S3_ACCESS_KEY/ARCHIVE_PREVIOUS_S3_SECRET_KEY: Zugangsdaten für das bisherige Belegarchiv fehlen',
     )
   }
   if (parsed.data.SMTP_HOST && !parsed.data.SMTP_FROM) {

@@ -337,5 +337,26 @@ export interface OperationsStatus {
     oldestPendingAt: string | null
     failing: number
     lastError: string | null
+    /** Archiv-Abgleich: checks of archived originals in the bucket (ADR 0008). */
+    verify: {
+      lastCheckAt: string | null
+      /** Checks in the last 30 days and how many objects were written again. */
+      checked30d: number
+      restored30d: number
+      /** Originals whose newest check found neither the object nor an intact copy. */
+      lost: number
+      /** Archived originals never checked yet. */
+      unchecked: number
+      /** Complete reconciliation (after a restore or on request); null = none open or recent. */
+      request: {
+        reason: 'manual' | 'restore'
+        requestedAt: string
+        startedAt: string | null
+        finishedAt: string | null
+        checked: number
+        restored: number
+        lost: number
+      } | null
+    }
   }
 }

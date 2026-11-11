@@ -195,3 +195,27 @@ export function archiveStoreFromSettings(settings: ArchiveSettings): ArchiveStor
     settings.ARCHIVE_RETENTION_MODE,
   )
 }
+
+/** Previous archive while moving to another S3 (read-only fallback of the reconciliation). */
+export interface PreviousArchiveSettings {
+  ARCHIVE_PREVIOUS_S3_ENDPOINT?: string | undefined
+  ARCHIVE_PREVIOUS_S3_REGION: string
+  ARCHIVE_PREVIOUS_S3_BUCKET: string
+  ARCHIVE_PREVIOUS_S3_ACCESS_KEY?: string | undefined
+  ARCHIVE_PREVIOUS_S3_SECRET_KEY?: string | undefined
+  ARCHIVE_PREVIOUS_S3_PATH_STYLE: boolean
+}
+
+export function previousArchiveFromSettings(
+  settings: PreviousArchiveSettings,
+): Pick<ArchiveStore, 'get' | 'bucket'> | null {
+  if (!settings.ARCHIVE_PREVIOUS_S3_ENDPOINT) return null
+  return new S3ArchiveStore({
+    endpoint: settings.ARCHIVE_PREVIOUS_S3_ENDPOINT,
+    region: settings.ARCHIVE_PREVIOUS_S3_REGION,
+    bucket: settings.ARCHIVE_PREVIOUS_S3_BUCKET,
+    accessKeyId: settings.ARCHIVE_PREVIOUS_S3_ACCESS_KEY ?? '',
+    secretAccessKey: settings.ARCHIVE_PREVIOUS_S3_SECRET_KEY ?? '',
+    forcePathStyle: settings.ARCHIVE_PREVIOUS_S3_PATH_STYLE,
+  })
+}

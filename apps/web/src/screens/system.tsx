@@ -41,7 +41,7 @@ export function SystemSettings({ me }: { me: Me }) {
           </dl>
         ) : null}
       </div>
-      <OperationsPanel />
+      <OperationsPanel canWrite={me.permissions.includes('settings.write')} />
       <EmailPanel canWrite={me.permissions.includes('settings.write')} />
       {me.permissions.includes('export.run') ? <ExportPanel /> : null}
     </>
@@ -239,14 +239,15 @@ function Check({ state, title, children }: { state: CheckState; title: string; c
 }
 
 /** Betriebs-Check: is the installation backed up, can it send e-mails, is it secure? */
-function OperationsPanel() {
+function OperationsPanel({ canWrite }: { canWrite: boolean }) {
   const [status, setStatus] = useState<OperationsStatus | null>(null)
   const [error, setError] = useState<string | null>(null)
-  useEffect(() => {
+  const reload = useCallback(() => {
     api<OperationsStatus>('GET', '/api/v1/settings/operations')
       .then(setStatus)
       .catch((err: ApiError) => setError(err.message))
   }, [])
+  useEffect(reload, [reload])
   if (!status) return error ? <FormError>{error}</FormError> : null
   const last = status.backup.lastSuccess
   const backupFresh = last !== null && Date.now() - new Date(last.finishedAt).getTime() < DAY_MS
@@ -297,6 +298,11 @@ function OperationsPanel() {
         <Check state={archiveState(status.archive)} title={t('sys.archive')}>
           {archiveText(status.archive)}
         </Check>
+        {status.archive.configured ? (
+          <Check state={verifyState(status.archive.verify)} title={t('sys.archiveVerify')}>
+            {verifyText(status.archive.verify)}
+          </Check>
+        ) : null}
         <Check state={status.security.https ? 'ok' : 'warning'} title={t('sys.https')}>
           {status.security.https ? t('sys.httpsOk') : t('sys.httpsOff')}
         </Check>
@@ -304,6 +310,14 @@ function OperationsPanel() {
           {status.security.requireAdminMfa ? t('sys.mfaOk') : t('sys.mfaOff')}
         </Check>
       </ul>
+      {status.archive.configured && canWrite ? (
+        <ArchiveVerifyButton
+          running={Boolean(
+            status.archive.verify.request && !status.archive.verify.request.finishedAt,
+          )}
+          onStarted={reload}
+        />
+      ) : null}
       {status.backup.recent.length ? (
         <>
           <h3>{t('sys.backupRecent')}</h3>
@@ -337,6 +351,57 @@ export function auditText(a: {
     return tf(`sys.audit.${a.problem}` as TextKey, { when, seq: String(a.brokenSeq ?? '') })
   }
   return tf('sys.auditOk', { when, n: String(a.events) })
+}
+
+type VerifyOps = OperationsStatus['archive']['verify']
+
+function verifyState(v: VerifyOps): 'ok' | 'warning' | 'error' {
+  if (v.lost) return 'error'
+  if (!v.lastCheckAt || v.unchecked) return 'warning'
+  return 'ok'
+}
+
+function verifyText(v: VerifyOps): string {
+  const parts: string[] = []
+  if (v.lost) parts.push(tf('sys.verifyLost', { n: String(v.lost) }))
+  if (v.request && !v.request.finishedAt) {
+    parts.push(tf('sys.verifyRunning', { n: String(v.request.checked) }))
+  } else if (v.lastCheckAt) {
+    parts.push(
+      tf('sys.verifyOk', {
+        when: formatDateTime(v.lastCheckAt),
+        n: String(v.checked30d),
+        restored: String(v.restored30d),
+      }),
+    )
+  } else {
+    parts.push(t('sys.verifyNever'))
+  }
+  if (v.unchecked && !(v.request && !v.request.finishedAt)) {
+    parts.push(tf('sys.verifyUnchecked', { n: String(v.unchecked) }))
+  }
+  return parts.join(' ')
+}
+
+function ArchiveVerifyButton({ running, onStarted }: { running: boolean; onStarted: () => void }) {
+  const [error, setError] = useState<string | null>(null)
+  const start = async () => {
+    setError(null)
+    try {
+      await api('POST', '/api/v1/settings/operations/archive-verify', {})
+      onStarted()
+    } catch (err) {
+      setError((err as ApiError).message)
+    }
+  }
+  return (
+    <div className="actions start">
+      <button type="button" className="button ghost auto" disabled={running} onClick={start}>
+        {running ? t('sys.verifyBusy') : t('sys.verifyStart')}
+      </button>
+      <FormError>{error}</FormError>
+    </div>
+  )
 }
 
 type ArchiveOps = OperationsStatus['archive']

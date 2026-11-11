@@ -1,13 +1,20 @@
 import { type Config, smtpEnabled } from '@opc/config'
 import { createSql } from '@opc/db'
-import { archiveStoreFromSettings, FsObjectStore } from '@opc/storage'
+import { archiveStoreFromSettings, FsObjectStore, previousArchiveFromSettings } from '@opc/storage'
 import { PgBoss } from 'pg-boss'
 import type { Logger } from 'pino'
 import { archivePending } from './archive.js'
+import { verifyArchive, verifyRequested } from './archive-verify.js'
 import { checkAuditChains } from './audit.js'
 import { dispatchEmails, smtpTransport } from './email.js'
 
 export { type ArchiveRun, archivePending } from './archive.js'
+export {
+  type ArchiveProblem,
+  type VerifyRun,
+  verifyArchive,
+  verifyRequested,
+} from './archive-verify.js'
 export { type AuditCheckResult, checkAuditChains } from './audit.js'
 
 export {
@@ -26,6 +33,7 @@ export {
 export const queues = {
   heartbeat: 'system.heartbeat',
   auditCheck: 'audit.check-chain',
+  archiveVerify: 'archive.verify',
 } as const
 
 export interface Worker {
@@ -53,6 +61,12 @@ export async function startWorker(
     | 'ARCHIVE_S3_PATH_STYLE'
     | 'ARCHIVE_S3_CREATE_BUCKET'
     | 'ARCHIVE_RETENTION_MODE'
+    | 'ARCHIVE_PREVIOUS_S3_ENDPOINT'
+    | 'ARCHIVE_PREVIOUS_S3_REGION'
+    | 'ARCHIVE_PREVIOUS_S3_BUCKET'
+    | 'ARCHIVE_PREVIOUS_S3_ACCESS_KEY'
+    | 'ARCHIVE_PREVIOUS_S3_SECRET_KEY'
+    | 'ARCHIVE_PREVIOUS_S3_PATH_STYLE'
   >,
   logger: Logger,
 ): Promise<Worker> {
@@ -115,6 +129,8 @@ export async function startWorker(
   const archiveSql = archive ? createSql({ ...config, DATABASE_POOL_MAX: 1 }) : undefined
   if (archive && archiveSql) {
     const files = new FsObjectStore(config.STORAGE_DIR)
+    const previous = previousArchiveFromSettings(config)
+    if (previous) logger.info({ bucket: previous.bucket }, 'previous archive configured (move)')
     let bucketReady = !config.ARCHIVE_S3_CREATE_BUCKET
     let running = false
     const tick = async () => {
@@ -127,12 +143,23 @@ export async function startWorker(
           logger.info({ bucket: archive.bucket }, 'archive bucket with Object Lock ready')
         }
         await archivePending(archiveSql, files, archive, logger)
+        // Complete reconciliation after a restore or on request, in steps.
+        await verifyRequested(archiveSql, files, archive, previous, logger)
       } catch (err) {
         logger.error({ err }, 'archiving failed')
       } finally {
         running = false
       }
     }
+    // Archiv-Abgleich every night: the 500 least recently checked objects, every 10th by content.
+    await boss.createQueue(queues.archiveVerify)
+    await boss.work(queues.archiveVerify, async () => {
+      await verifyArchive(archiveSql, files, archive, previous, logger, {
+        limit: 500,
+        deepEvery: 10,
+      })
+    })
+    await boss.schedule(queues.archiveVerify, '47 3 * * *', {}, { tz: 'Europe/Berlin' })
     archiveTimer = setInterval(tick, 30_000)
     void tick()
     logger.info({ bucket: archive.bucket, mode: archive.mode }, 'document archive enabled')
