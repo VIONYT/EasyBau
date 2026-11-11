@@ -1,0 +1,72 @@
+# Automatic update check (Dependabot). Dependabot ONLY opens pull requests against main; nothing is
+# merged automatically. Every update goes through CI (lint, tests, Docker pipeline with the WORM
+# tests against the pinned RustFS) and is merged by a person after review. Do not add auto-merge.
+version: 2
+updates:
+  # Images in compose.yaml/compose.test.yaml, above all the archive RustFS (tag + digest, ADR 0009)
+  # and PostgreSQL. Daily, so security fixes of the archive arrive quickly.
+  - package-ecosystem: docker-compose
+    directory: /
+    schedule:
+      interval: daily
+      time: "06:00"
+      timezone: Europe/Berlin
+    open-pull-requests-limit: 5
+    commit-message:
+      prefix: "chore(deps)"
+      include: scope
+    ignore:
+      # A major PostgreSQL upgrade needs dump/restore of the data volume: planned by hand.
+      - dependency-name: postgres
+        update-types: ["version-update:semver-major"]
+
+  # Base images of the Dockerfiles (Node, Caddy, Temurin for KoSIT, Alpine).
+  - package-ecosystem: docker
+    directory: /docker
+    schedule:
+      interval: weekly
+      day: monday
+      time: "06:00"
+      timezone: Europe/Berlin
+    open-pull-requests-limit: 5
+    commit-message:
+      prefix: "chore(deps)"
+      include: scope
+    ignore:
+      # Only the former MinIO (legacy profile, pinned source release) is built with Go.
+      - dependency-name: golang
+
+  # npm packages of the pnpm workspace (apps/*, packages/*).
+  - package-ecosystem: npm
+    directory: /
+    schedule:
+      interval: weekly
+      day: monday
+      time: "06:00"
+      timezone: Europe/Berlin
+    open-pull-requests-limit: 10
+    # New versions only after 7 days (supply-chain protection); security updates are not delayed.
+    cooldown:
+      default-days: 7
+    groups:
+      npm-minor-patch:
+        update-types: ["minor", "patch"]
+    commit-message:
+      prefix: "chore(deps)"
+      include: scope
+
+  # Actions in the CI and image workflows.
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
+      day: monday
+      time: "06:00"
+      timezone: Europe/Berlin
+    open-pull-requests-limit: 5
+    groups:
+      github-actions:
+        patterns: ["*"]
+    commit-message:
+      prefix: "chore(deps)"
+      include: scope

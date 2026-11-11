@@ -42,7 +42,7 @@
 ## Entscheidung
 1. **RustFS** wird der mitgelieferte Dienst `storage`.
    - Das Image des Herstellers für amd64 und arm64.
-   - Fest gepinnt mit Tag und Digest (`RUSTFS_IMAGE`), kein `latest`.
+   - Fest gepinnt mit Tag und Digest direkt in `compose.yaml` und `compose.test.yaml`, kein `latest`.
    - Nur intern erreichbar, Healthcheck `/health/ready`.
 2. **Der Root-Schlüssel erreicht die App nie.**
    - `storage-keys` erzeugt ihn beim ersten Start zufällig im Volume `archive-keys`. Nur die Archiv-Dienste binden dieses Volume ein.
@@ -57,6 +57,7 @@
 4. **Absicherung gegen Regressionen bei Updates.**
    - Die WORM-Angriffs-Suite und der Test des App-Schlüssels laufen in der Docker-Testpipeline und in CI gegen genau die gepinnte RustFS-Version.
    - Ein Update von RustFS ist nur ein neuer Digest in `compose.yaml` und `compose.test.yaml` und muss diese Tests bestehen.
+   - Dependabot (`.github/dependabot.yml`) schlägt neue Versionen als Pull Request vor; gemergt wird nie automatisch, sondern erst nach Durchsicht und grüner CI. Die CI prüft, dass beide Compose-Dateien dieselbe RustFS-Version verwenden.
 
 ## Folgen
 - **Positiv:**
