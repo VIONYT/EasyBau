@@ -4,6 +4,7 @@ import { api } from '../api'
 import { Field, FormError, optional, useForm } from '../forms'
 import { t } from '../i18n'
 import { type Route, useRoute } from '../router'
+import { AuditScreen } from './audit'
 import { Catalog } from './catalog'
 import { ContactEditor } from './contact-editor'
 import { DocumentScreen } from './document'
@@ -17,7 +18,15 @@ import { Security } from './security'
 import { Settings } from './settings'
 import { Users } from './users'
 
-type Tab = 'projects' | 'invoices' | 'contacts' | 'catalog' | 'users' | 'settings' | 'security'
+type Tab =
+  | 'projects'
+  | 'invoices'
+  | 'contacts'
+  | 'catalog'
+  | 'audit'
+  | 'users'
+  | 'settings'
+  | 'security'
 
 /** Working area after login. Admins without second factor only see the security settings. */
 export function Workspace({
@@ -63,6 +72,11 @@ export function Workspace({
       key: 'catalog',
       label: t('nav.catalog'),
       visible: !locked && me.permissions.includes('catalog.read'),
+    },
+    {
+      key: 'audit',
+      label: t('nav.audit'),
+      visible: !locked && me.permissions.includes('audit.read'),
     },
     {
       key: 'users',
@@ -141,6 +155,7 @@ export function Workspace({
         {current.view === 'contacts' ? <Contacts me={me} /> : null}
         {current.view === 'invoices' ? <Invoices navigate={navigate} /> : null}
         {current.view === 'users' ? <Users /> : null}
+        {current.view === 'audit' ? <AuditScreen me={me} /> : null}
         {current.view === 'security' ? <Security me={me} onChanged={refreshMe} /> : null}
       </main>
     </div>

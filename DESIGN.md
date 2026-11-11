@@ -443,6 +443,9 @@ invoice ─┬─ payment (date, amount_cents, method, reference)
 `audit_event(id, tenant_id, actor_user_id, action, entity, entity_id, before jsonb, after jsonb, ip, user_agent, created_at, prev_hash, hash)`.
 - **Append-only**: Der App-User hat auf dieser Tabelle nur `INSERT`/`SELECT`; Trigger blockiert `UPDATE`/`DELETE`.
 - **Hash-Kette** je Mandant (`hash = sha256(prev_hash || canonical(event))`) macht Manipulation erkennbar. Ein nächtlicher Job prüft die Kette.
+- Umsetzung (Migration 0024): Der Worker prüft jede Nacht (02:17 Uhr, pg-boss) die Kette aller Mandanten (`check_all_audit_chains()`), das Ergebnis steht in `audit_chain_check` (nur einfügen). Jede Prüfung verankert den neuesten Eintrag (Nummer + Hash); so fallen neben veränderten Einträgen auch am Ende gelöschte (`truncated`) und komplett neu berechnete Ketten (`rewritten`) auf. Betriebs-Check zeigt das Ergebnis, Warnung nach 26 Stunden ohne Prüfung; unter „Prüfung“ lässt sie sich sofort starten.
+- Protokolliert werden auch Firmendaten und Einstellungen (`tenant`), Steuersätze und Zahlungsziele.
+- Lesen: Bereich **Prüfung** (Recht `audit.read`) mit Änderungsprotokoll (Filter nach Bereich und Zeitraum, geänderte Felder vorher/nachher, Geheimnisse maskiert), Prüfung der Kette und Exporten (Z3).
 - Protokolliert werden alle Änderungen an steuerrelevanten Daten, Logins, Rechteänderungen und Exporte.
 
 ---
@@ -492,7 +495,7 @@ invoice ─┬─ payment (date, amount_cents, method, reference)
 | Vollständigkeit | Lückenlose Nummernkreise; Lücken technisch unmöglich (Nummer erst beim Festschreiben) |
 | Zeitgerechte Erfassung | `finalized_at`, Server-Zeitstempel |
 | Maschinelle Auswertbarkeit / **Z3-Datenträgerüberlassung** | Export „Betriebsprüfung“: ZIP mit CSV-Dateien (Rechnungen, Positionen, Steuerzeilen, Zahlungen, Kunden, Audit-Log) + **`index.xml` nach GDPdU-Beschreibungsstandard (gdpdu-01-09-2004.dtd)**, Zeitraumfilter, plus Original-Belegdateien |
-| Z1/Z2-Zugriff | Prüferrolle „Nur lesen“, zeitlich befristet, nur steuerrelevante Bereiche, jede Aktion protokolliert |
+| Z1/Z2-Zugriff | Prüferrolle „Nur lesen“, zeitlich befristet (Enddatum Pflicht, höchstens ein Jahr im Voraus, DB-Trigger 0024; danach keine Anmeldung mehr), nur steuerrelevante Bereiche, Bereich „Prüfung“ mit Änderungsprotokoll und Exporten; Anmeldungen und Exporte werden protokolliert |
 | Steuerberater | **DATEV-Buchungsstapel (EXTF, Format 700)** mit Erlöskonten nach SKR03/SKR04 (Mapping konfigurierbar), Debitorennummern, Belegfeld 1 = Rechnungsnummer; Zahlungseingänge (Bank an Debitor) und anerkannte Kürzungen/Rabatte (Erlöse an Debitor, je Steuersatz anteilig; kein Skonto, kein Einbehalt, keine Bauumlage, keine bestrittenen Kürzungen); Belegbilder als ZIP; später DATEV-Connect-online-Anbindung |
 | E-Rechnung | ZUGFeRD 2.x Profil EN 16931 (Standard) und XRechnung UBL (für öffentliche Auftraggeber mit Leitweg-ID); jede Datei wird vor dem Versand gegen KoSIT validiert, sonst blockiert der Versand mit einer verständlichen Meldung |
 | Verfahrensdokumentation | Vorlage in `docs/verfahrensdokumentation/`, die Kunden übernehmen und ergänzen können |

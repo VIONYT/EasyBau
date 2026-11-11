@@ -130,7 +130,7 @@ function lastMonth(): { from: string; to: string } {
   return { from: first.toISOString().slice(0, 10), to: last.toISOString().slice(0, 10) }
 }
 
-function ExportPanel() {
+export function ExportPanel() {
   const id = useId()
   const [period, setPeriod] = useState(lastMonth)
   const [withBelege, setWithBelege] = useState(true)
@@ -224,7 +224,7 @@ function formatBytes(bytes: number | null): string {
   return `${new Intl.NumberFormat('de-DE', { maximumFractionDigits: unit ? 1 : 0 }).format(value)} ${units[unit]}`
 }
 
-type CheckState = 'ok' | 'warning' | 'off'
+type CheckState = 'ok' | 'warning' | 'error' | 'off'
 
 function Check({ state, title, children }: { state: CheckState; title: string; children: string }) {
   return (
@@ -288,6 +288,12 @@ function OperationsPanel() {
               ? t('sys.einvoiceOk')
               : t('sys.einvoiceDown')}
         </Check>
+        <Check
+          state={status.audit.problem ? 'error' : status.audit.stale ? 'warning' : 'ok'}
+          title={t('sys.auditChain')}
+        >
+          {auditText(status.audit)}
+        </Check>
         <Check state={archiveState(status.archive)} title={t('sys.archive')}>
           {archiveText(status.archive)}
         </Check>
@@ -316,6 +322,21 @@ function OperationsPanel() {
       <p className="muted">{t('sys.backupHint')}</p>
     </div>
   )
+}
+
+/** Audit-Kette (rule 6): result of the newest check. */
+export function auditText(a: {
+  lastCheckAt: string | null
+  problem: string | null
+  brokenSeq: number | null
+  events: number
+}): string {
+  if (!a.lastCheckAt) return t('sys.auditNever')
+  const when = formatDateTime(a.lastCheckAt)
+  if (a.problem) {
+    return tf(`sys.audit.${a.problem}` as TextKey, { when, seq: String(a.brokenSeq ?? '') })
+  }
+  return tf('sys.auditOk', { when, n: String(a.events) })
 }
 
 type ArchiveOps = OperationsStatus['archive']

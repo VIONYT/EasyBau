@@ -749,6 +749,46 @@ test('Briefpapier: WYSIWYG-Editor nach DIN 5008 B und Druckansicht', async () =>
     await page.screenshot({ path: `${SCREENSHOTS}/briefpapier-druck.png`, fullPage: true })
 })
 
+test('Prüfung: Änderungsprotokoll, Hash-Kette und befristeter Prüferzugang', async ({
+  browser,
+}) => {
+  test.skip(!SETUP_TOKEN, 'SETUP_TOKEN must be set for a fresh stack')
+  await page.getByRole('button', { name: 'Prüfung' }).click()
+  await expect(page.getByRole('heading', { name: 'Prüfung', level: 1 })).toBeVisible()
+  await page.getByRole('button', { name: 'Kette jetzt prüfen' }).click()
+  await expect(page.getByText(/Kette vollständig und unverändert/)).toBeVisible()
+  // Änderungsprotokoll: changes of the company data with before/after.
+  await page.getByLabel('Bereich').selectOption('tenant')
+  const entry = page.locator('.audit-events li').filter({ hasText: 'Geändert' }).first()
+  await entry.locator('summary').click()
+  await expect(entry.getByRole('rowheader', { name: 'street' })).toBeVisible()
+  await expectNoHorizontalScroll(page)
+  if (SCREENSHOTS) await page.screenshot({ path: `${SCREENSHOTS}/pruefung.png`, fullPage: true })
+
+  // Prüfer (Steuerberatung/Betriebsprüfung): only with an end date, read-only.
+  await page.getByRole('button', { name: 'Benutzer' }).click()
+  await page.getByLabel('E-Mail-Adresse').fill('pruefer@finanzamt.example')
+  await page.getByLabel('Rolle').selectOption('auditor')
+  await expect(page.getByLabel(/Zugang bis/)).toBeVisible()
+  await page.getByRole('button', { name: 'Einladung erstellen' }).click()
+  const link = (await page.locator('code.secret').textContent()) ?? ''
+  await expect(page.getByText(/Zugang bis/).first()).toBeVisible()
+  const auditor = await browser.newContext()
+  const auditorPage = await auditor.newPage()
+  await auditorPage.goto(new URL(link).pathname + new URL(link).hash)
+  await auditorPage.locator('input[name=displayName]').fill('Paula Prüferin')
+  await auditorPage.locator('input[name=password]').fill('pruefer-passwort-1')
+  await auditorPage.getByRole('button', { name: 'Einladung annehmen' }).click()
+  await expect(auditorPage.getByRole('button', { name: 'Prüfung' })).toBeVisible()
+  await expect(auditorPage.getByRole('button', { name: 'Einstellungen' })).toHaveCount(0)
+  await expect(auditorPage.getByRole('button', { name: 'Benutzer' })).toHaveCount(0)
+  await auditorPage.getByRole('button', { name: 'Prüfung' }).click()
+  await expect(auditorPage.getByText(/Ihr Zugang ist befristet/)).toBeVisible()
+  await expect(auditorPage.getByRole('heading', { name: 'Exporte' })).toBeVisible()
+  await expectNoHorizontalScroll(auditorPage)
+  await auditor.close()
+})
+
 test('second factor fails without the security key', async () => {
   test.skip(!SETUP_TOKEN, 'SETUP_TOKEN must be set for a fresh stack')
   // Without the key the second step of the login fails with a readable message.

@@ -9,6 +9,7 @@ export type Route =
   | { view: 'security' }
   | { view: 'catalog' }
   | { view: 'settings' }
+  | { view: 'audit' }
   | { view: 'project'; id: string; section: ProjectSection }
   | { view: 'document'; id: string }
   | { view: 'print'; id: string }
@@ -50,6 +51,7 @@ export function parseRoute(path: string): Route {
   if (path.startsWith('/kontakte')) return { view: 'contacts' }
   if (path.startsWith('/rechnungen')) return { view: 'invoices' }
   if (path.startsWith('/benutzer')) return { view: 'users' }
+  if (path.startsWith('/pruefung')) return { view: 'audit' }
   if (path.startsWith('/sicherheit')) return { view: 'security' }
   return { view: 'projects' }
 }
@@ -70,6 +72,8 @@ export function pathOf(route: Route): string {
       return '/sicherheit'
     case 'invoices':
       return '/rechnungen'
+    case 'audit':
+      return '/pruefung'
     case 'project': {
       const segment = {
         overview: '',

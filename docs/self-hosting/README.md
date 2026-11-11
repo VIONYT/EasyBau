@@ -97,6 +97,8 @@ Der Dienst `backup` ([ADR 0005](../adr/0005-backup-dienst.md)) sichert **täglic
 
 Den Zustand zeigt **Einstellungen › Betrieb › Betriebs-Check** (Warnung, wenn die letzte erfolgreiche Sicherung älter als 26 Stunden ist).
 
+Ebenfalls im Betriebs-Check: die **nächtliche Prüfung des Änderungsprotokolls** (Hash-Kette, GoBD). Der Worker prüft jede Nacht um 02:17 Uhr alle Firmen. Meldet die Prüfung einen Fehler, wurden Einträge außerhalb der Anwendung verändert oder gelöscht (z. B. direkt in der Datenbank): Zugänge zur Datenbank prüfen und mit der letzten Sicherung abgleichen. Fehlt die Prüfung länger als 26 Stunden, läuft der Worker nicht.
+
 ```bash
 docker compose exec backup backup.sh run              # sofort sichern
 docker compose exec backup backup.sh list             # Sicherungen anzeigen

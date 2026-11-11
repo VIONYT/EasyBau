@@ -1,4 +1,5 @@
 import { withTenant } from '@opc/db'
+import { addDays, germanDate } from '@opc/domain'
 import {
   acceptInvitationRequest,
   type InvitationInfo,
@@ -18,6 +19,7 @@ import { randomToken, sha256 } from '../security/crypto.js'
 import { hashPassword, verifyPassword } from '../security/passwords.js'
 import { audit, finishLogin, rateLimit } from './auth-common.js'
 import { queueEmail } from './email.js'
+import { todayOf } from './receivables.js'
 
 const userParam = z.object({ userId: z.uuid('Ungültige ID.') })
 const idParam = z.object({ id: z.uuid('Ungültige ID.') })
@@ -25,6 +27,31 @@ const idParam = z.object({ id: z.uuid('Ungültige ID.') })
 const tokenBody = z.object({ token: z.string().min(20).max(100) })
 const INVITATION_DAYS = 7
 const INVITATION_INVALID = 'Die Einladung ist ungültig, abgelaufen oder wurde bereits verwendet.'
+
+/** Auditors (Prüfer) only get access for a limited time; at most one year ahead. */
+function checkAccessUntil(
+  roleKey: string,
+  until: string | null | undefined,
+  today: string,
+  field: 'accessUntil' | 'validUntil',
+) {
+  if (roleKey === 'auditor' && !until) {
+    throw new HttpError(400, 'Für Prüfer ist ein Enddatum des Zugangs Pflicht.', {
+      [field]: 'Bitte ein Enddatum angeben.',
+    })
+  }
+  if (!until) return
+  if (until < today) {
+    throw new HttpError(400, 'Das Enddatum liegt in der Vergangenheit.', {
+      [field]: 'Datum liegt in der Vergangenheit.',
+    })
+  }
+  if (until > addDays(today, 366)) {
+    throw new HttpError(400, 'Der Zugang kann höchstens ein Jahr im Voraus befristet werden.', {
+      [field]: 'Höchstens ein Jahr.',
+    })
+  }
+}
 
 function lastAdminError(error: unknown): never {
   if (error instanceof Error && /last admin/.test(error.message)) {
@@ -59,7 +86,9 @@ export function registerUserRoutes(app: FastifyInstance, services: Services) {
              (u.totp_enabled_at is not null) as "totpEnabled",
              (select count(*)::int from webauthn_credential w where w.user_id = u.id) as "webauthnCount",
              to_char(u.last_login_at at time zone 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS.MS"Z"') as "lastLoginAt",
-             (u.id = ${auth.userId}) as "isSelf"
+             (u.id = ${auth.userId}) as "isSelf",
+             to_char(m.valid_until, 'YYYY-MM-DD') as "validUntil",
+             coalesce(m.valid_until < current_date, false) as expired
       from membership m
       join app_user u on u.id = m.user_id
       join role r on r.id = m.role_id
@@ -70,19 +99,37 @@ export function registerUserRoutes(app: FastifyInstance, services: Services) {
   app.patch('/api/v1/users/:userId', async (request, reply) => {
     const auth = requirePermission(request, 'users.manage')
     const { userId } = parse(userParam, request.params)
-    const { roleKey } = parse(updateMemberRequest, request.body)
+    const input = parse(updateMemberRequest, request.body)
     if (userId === auth.userId)
-      throw new HttpError(409, 'Die eigene Rolle kann nicht geändert werden.')
-    await inTenant(services, auth, async (tx) => {
-      const [role] = await tx<{ id: string }[]>`select id from role where key = ${roleKey}`
+      throw new HttpError(409, 'Die eigene Rolle und den eigenen Zugang ändern Sie nicht selbst.')
+    const roleKey = await inTenant(services, auth, async (tx) => {
+      const [member] = await tx<{ roleKey: string; validUntil: string | null }[]>`
+        select r.key as "roleKey", to_char(m.valid_until, 'YYYY-MM-DD') as "validUntil"
+        from membership m join role r on r.id = m.role_id where m.user_id = ${userId}`
+      if (!member) throw notFound('Die Person')
+      const nextRole = input.roleKey ?? member.roleKey
+      const [role] = await tx<{ id: string }[]>`select id from role where key = ${nextRole}`
       if (!role) throw new HttpError(400, 'Unbekannte Rolle.', { roleKey: 'Unbekannte Rolle.' })
-      const updated =
-        await tx`update membership set role_id = ${role.id} where user_id = ${userId}`.catch(
-          lastAdminError,
-        )
-      if (!updated.count) throw notFound('Die Person')
+      const validUntil = input.validUntil !== undefined ? input.validUntil : member.validUntil
+      if (input.validUntil !== undefined || nextRole !== member.roleKey) {
+        checkAccessUntil(nextRole, validUntil, todayOf(tx), 'validUntil')
+      }
+      await tx`update membership set role_id = ${role.id}, valid_until = ${validUntil}::date
+               where user_id = ${userId}`.catch(lastAdminError)
+      return nextRole
     })
-    await audit(services, auth.tenantId, auth.userId, `role_changed:${roleKey}`, userId)
+    if (input.roleKey) {
+      await audit(services, auth.tenantId, auth.userId, `role_changed:${roleKey}`, userId)
+    }
+    if (input.validUntil !== undefined) {
+      await audit(
+        services,
+        auth.tenantId,
+        auth.userId,
+        `access_until:${input.validUntil ?? 'unlimited'}`,
+        userId,
+      )
+    }
     return reply.status(204).send()
   })
 
@@ -144,7 +191,8 @@ export function registerUserRoutes(app: FastifyInstance, services: Services) {
       select i.id, i.email, i.display_name as "displayName",
              json_build_object('key', r.key, 'name', r.name) as role,
              to_char(i.expires_at at time zone 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS.MS"Z"') as "expiresAt",
-             to_char(i.created_at at time zone 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS.MS"Z"') as "createdAt"
+             to_char(i.created_at at time zone 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS.MS"Z"') as "createdAt",
+             to_char(i.access_until, 'YYYY-MM-DD') as "accessUntil"
       from invitation i join role r on r.id = i.role_id
       where i.accepted_at is null and i.revoked_at is null and i.expires_at > now()
       order by i.created_at desc`,
@@ -158,6 +206,7 @@ export function registerUserRoutes(app: FastifyInstance, services: Services) {
     const invitation = await inTenant(services, auth, async (tx) => {
       const [role] = await tx<{ id: string }[]>`select id from role where key = ${input.roleKey}`
       if (!role) throw new HttpError(400, 'Unbekannte Rolle.', { roleKey: 'Unbekannte Rolle.' })
+      checkAccessUntil(input.roleKey, input.accessUntil, todayOf(tx), 'accessUntil')
       const [member] = await tx`
         select 1 from membership m join app_user u on u.id = m.user_id where lower(u.email) = ${input.email}`
       if (member)
@@ -169,14 +218,17 @@ export function registerUserRoutes(app: FastifyInstance, services: Services) {
                where lower(email) = ${input.email} and accepted_at is null and revoked_at is null`
       const [row] = await tx<InvitationSummary[]>`
         with inserted as (
-          insert into invitation (tenant_id, email, display_name, role_id, token_hash, invited_by, expires_at)
+          insert into invitation (tenant_id, email, display_name, role_id, token_hash, invited_by, expires_at,
+                                  access_until)
           values (${auth.tenantId}, ${input.email}, ${input.displayName ?? null}, ${role.id}, ${sha256(token)},
-                  ${auth.userId}, now() + make_interval(days => ${INVITATION_DAYS}))
+                  ${auth.userId}, now() + make_interval(days => ${INVITATION_DAYS}),
+                  ${input.accessUntil ?? null}::date)
           returning *)
         select i.id, i.email, i.display_name as "displayName",
                json_build_object('key', r.key, 'name', r.name) as role,
                to_char(i.expires_at at time zone 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS.MS"Z"') as "expiresAt",
-               to_char(i.created_at at time zone 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS.MS"Z"') as "createdAt"
+               to_char(i.created_at at time zone 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS.MS"Z"') as "createdAt",
+               to_char(i.access_until, 'YYYY-MM-DD') as "accessUntil"
         from inserted i join role r on r.id = i.role_id`
       const summary = row as InvitationSummary
       const acceptUrl = `${publicOrigin(services, request)}/einladung#${token}`
@@ -195,6 +247,9 @@ export function registerUserRoutes(app: FastifyInstance, services: Services) {
             acceptUrl,
             '',
             `Der Link ist ${INVITATION_DAYS} Tage gültig und nur einmal verwendbar.`,
+            ...(input.accessUntil
+              ? [`Ihr Zugang ist befristet bis ${germanDate(input.accessUntil)}.`]
+              : []),
             'Wenn Sie diese Einladung nicht erwartet haben, ignorieren Sie die E-Mail einfach.',
           ].join('\n'),
         })
@@ -292,10 +347,10 @@ export function registerUserRoutes(app: FastifyInstance, services: Services) {
       const [locked] = await tx`
         update invitation set accepted_at = now(), accepted_by = ${userId}
         where id = ${invitation.id} and accepted_at is null and revoked_at is null and expires_at > now()
-        returning role_id`
+        returning role_id, access_until`
       if (!locked) throw new HttpError(404, INVITATION_INVALID)
-      await tx`insert into membership (tenant_id, user_id, role_id)
-               values (${invitation.tenantId}, ${userId}, ${locked.role_id})
+      await tx`insert into membership (tenant_id, user_id, role_id, valid_until)
+               values (${invitation.tenantId}, ${userId}, ${locked.role_id}, ${locked.access_until})
                on conflict (tenant_id, user_id) do nothing`
     })
     // A login with second factors set up must still use them: no shortcut via invitations.

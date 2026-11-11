@@ -9,7 +9,14 @@ import { useCallback, useEffect, useId, useState } from 'react'
 import { type ApiError, api } from '../api'
 import { formatDateTime } from '../format'
 import { Field, FormError, optional, useForm, value } from '../forms'
-import { t } from '../i18n'
+import { t, tf } from '../i18n'
+
+/** Default end of a Prüfer access: 30 days from today. */
+const inDays = (days: number) => {
+  const d = new Date()
+  d.setDate(d.getDate() + days)
+  return new Intl.DateTimeFormat('en-CA', { timeZone: 'Europe/Berlin' }).format(d)
+}
 
 /** Benutzerverwaltung: members, roles, invitations (permission users.manage). */
 export function Users() {
@@ -20,6 +27,7 @@ export function Users() {
   const [link, setLink] = useState<string | null>(null)
   const [emailQueued, setEmailQueued] = useState(false)
   const [emailEnabled, setEmailEnabled] = useState(false)
+  const [inviteRole, setInviteRole] = useState('team_member')
   useEffect(() => {
     api<EmailSettings>('GET', '/api/v1/settings/email')
       .then((s) => setEmailEnabled(s.enabled))
@@ -58,6 +66,7 @@ export function Users() {
         email: value(data, 'email'),
         displayName: optional(data, 'displayName'),
         roleKey: value(data, 'roleKey'),
+        accessUntil: optional(data, 'accessUntil'),
         sendEmail: data.get('sendEmail') === 'on',
       }),
     (result) => {
@@ -85,6 +94,16 @@ export function Users() {
                 <span className="muted">
                   {m.email} · {m.totpEnabled || m.webauthnCount ? t('users.mfa') : t('users.noMfa')}
                 </span>
+                {m.validUntil ? (
+                  <>
+                    <br />
+                    <span className={m.expired ? 'warning-text' : 'muted'}>
+                      {tf(m.expired ? 'users.accessEnded' : 'users.accessLine', {
+                        date: formatDateTime(m.validUntil, 'date'),
+                      })}
+                    </span>
+                  </>
+                ) : null}
               </span>
               {m.isSelf ? (
                 <span className="muted">{m.role.name}</span>
@@ -94,9 +113,32 @@ export function Users() {
                     roles={roles}
                     value={m.role.key}
                     onChange={(roleKey) =>
-                      act(() => api('PATCH', `/api/v1/users/${m.userId}`, { roleKey }))
+                      act(() =>
+                        api('PATCH', `/api/v1/users/${m.userId}`, {
+                          roleKey,
+                          // A Prüfer always gets an end date (30 days, changeable below).
+                          ...(roleKey === 'auditor' && !m.validUntil
+                            ? { validUntil: inDays(30) }
+                            : {}),
+                        }),
+                      )
                     }
                   />
+                  {m.validUntil || m.role.key === 'auditor' ? (
+                    <input
+                      type="date"
+                      aria-label={`${t('users.accessUntil')} ${m.displayName}`}
+                      defaultValue={m.validUntil ?? ''}
+                      onBlur={(e) => {
+                        const next = e.target.value || null
+                        if (next !== m.validUntil) {
+                          void act(() =>
+                            api('PATCH', `/api/v1/users/${m.userId}`, { validUntil: next }),
+                          )
+                        }
+                      }}
+                    />
+                  ) : null}
                   {m.totpEnabled || m.webauthnCount ? (
                     <button
                       type="button"
@@ -146,7 +188,23 @@ export function Users() {
             name="displayName"
             error={invite.fieldErrors.displayName}
           />
-          <RoleField roles={roles} error={invite.fieldErrors.roleKey} />
+          <RoleField
+            roles={roles}
+            value={inviteRole}
+            onChange={setInviteRole}
+            error={invite.fieldErrors.roleKey}
+          />
+          {inviteRole === 'auditor' ? (
+            <Field
+              label={t('users.accessUntil')}
+              name="accessUntil"
+              type="date"
+              required
+              defaultValue={inDays(30)}
+              hint={t('users.accessUntilHint')}
+              error={invite.fieldErrors.accessUntil}
+            />
+          ) : null}
           {emailEnabled ? (
             <label className="check">
               <input type="checkbox" name="sendEmail" defaultChecked />
@@ -176,6 +234,9 @@ export function Users() {
                   <br />
                   <span className="muted">
                     {i.role.name} · {t('users.validUntil')} {formatDateTime(i.expiresAt, 'date')}
+                    {i.accessUntil
+                      ? ` · ${tf('users.accessLine', { date: formatDateTime(i.accessUntil, 'date') })}`
+                      : ''}
                   </span>
                 </span>
                 <button
@@ -219,12 +280,28 @@ function RoleSelect({
   )
 }
 
-function RoleField({ roles, error }: { roles: RoleSummary[]; error?: string | undefined }) {
+function RoleField({
+  roles,
+  value,
+  onChange,
+  error,
+}: {
+  roles: RoleSummary[]
+  value: string
+  onChange: (key: string) => void
+  error?: string | undefined
+}) {
   const id = useId()
   return (
     <div className="field">
       <label htmlFor={id}>{t('users.role')}</label>
-      <select id={id} name="roleKey" className="select" defaultValue="team_member">
+      <select
+        id={id}
+        name="roleKey"
+        className="select"
+        value={value}
+        onChange={(e) => onChange(e.target.value)}
+      >
         {roles.map((r) => (
           <option key={r.key} value={r.key}>
             {r.name}

@@ -1714,6 +1714,9 @@ fieldset.plain {
 .op-check--warning .op-check__state {
   color: var(--color-warning);
 }
+.op-check--error .op-check__state {
+  color: var(--color-error);
+}
 .op-check--off .op-check__state {
   color: var(--color-muted);
 }
@@ -2172,4 +2175,35 @@ fieldset.plain {
 .dunning-step legend {
   font-weight: 600;
   padding: 0 var(--space-1);
+}
+
+/* Prüfung: Änderungsprotokoll */
+.warning-text {
+  color: var(--color-warning);
+}
+.audit-summary {
+  cursor: pointer;
+  min-height: 44px;
+  display: flex;
+  align-items: center;
+}
+.audit-head {
+  display: grid;
+  gap: var(--space-1);
+}
+.table-scroll {
+  overflow-x: auto;
+  max-width: 100%;
+}
+.audit-changes {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.875rem;
+}
+.audit-cell {
+  text-align: left;
+  vertical-align: top;
+  padding: var(--space-1) var(--space-2);
+  border-bottom: 1px solid var(--color-border);
+  overflow-wrap: anywhere;
 }
