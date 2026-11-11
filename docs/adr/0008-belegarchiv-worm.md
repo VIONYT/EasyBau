@@ -47,11 +47,12 @@
 
 ## Konsequenzen
 - **Neuer Dienst `storage`** mit Volume `archive-data`. **Neue Pflichtvariable `ARCHIVE_S3_SECRET_KEY`.**
-- **Build-Ressourcen:** Der MinIO-Build kompiliert Go (einige Minuten, ca. 2 GB RAM beim Bauen). Auf sehr kleinen Servern ist ein vorgebautes Image (später über die Registry) oder externer S3 sinnvoll.
+- **Build-Ressourcen:** Der MinIO-Build kompiliert Go (einige Minuten, ca. 2 GB RAM beim Bauen). Deshalb gibt es vorgebaute Images (amd64/arm64) in der GitHub Container Registry (`.github/workflows/images.yml`: `edge` vom Hauptzweig nach grünem CI, Versionen und `latest` aus Release-Tags); Betreiber nutzen `docker compose pull`.
 - **Schutzumfang des mitgelieferten MinIO:**
   - Er schützt gegen nachträgliche Änderung über die Anwendung und gegen versehentliches Löschen.
   - Er schützt nicht gegen den Verlust der Festplatte oder gegen jemanden, der das Volume direkt löscht.
   - Für echte Unabhängigkeit vom Server: externer S3 bei einem zweiten Anbieter.
   - Die tägliche Sicherung enthält weiterhin alle Arbeitskopien (Volume `files`).
-- **Offen:** Abgleich nach einer Wiederherstellung auf einem neuen Server. Dabei werden archivierte Objekte geprüft und fehlende neu geschrieben.
+- **Archiv-Abgleich (umgesetzt, Migration 0025):** Der Worker prüft jede Nacht die am längsten nicht geprüften archivierten Objekte per HEAD (vorhanden, SHA-256-Metadatum, Größe, Sperrfrist ≥ Fristende), jedes zehnte zusätzlich per Download und SHA-256. Fehlende oder beschädigte Objekte werden aus einer unveränderten Quelle neu geschrieben: Arbeitskopie, sonst das bisherige Archiv (`ARCHIVE_PREVIOUS_S3_*`, nur beim Umzug). Mit Object Lock entsteht dabei eine neue Version; die alte bleibt gesperrt. Jede Prüfung steht in `artifact_archive_check` (nur einfügen). Ein vollständiger Abgleich je Firma (`archive_verify_request`) läuft nach `infra/restore.sh` automatisch, auf Wunsch im Betriebs-Check oder für alle Firmen mit `infra/archive-reconcile.sh`; nach dem Update auf 0025 einmal als Ausgangsprüfung.
+- **Umzug auf einen anderen S3 (umgesetzt):** neuen Bucket konfigurieren, bisherigen als `ARCHIVE_PREVIOUS_S3_*` angeben, vollständigen Abgleich starten. Die Objekte werden mit ihrer ursprünglichen Sperrfrist übernommen, nur wenn die SHA-256 stimmt (siehe docs/self-hosting, „Belegarchiv umziehen“).
 - **Unumkehrbar:** Ein COMPLIANCE-Lock lässt sich nicht verkürzen. Testsysteme sollten `ARCHIVE_RETENTION_MODE=GOVERNANCE` oder einen eigenen Bucket nutzen.

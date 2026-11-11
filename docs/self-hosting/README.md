@@ -20,6 +20,17 @@ In `.env` mindestens setzen:
 
 Statt Werten in `.env` können Docker-Secrets genutzt werden: `APP_SECRET_FILE=/run/secrets/app_secret`.
 
+**Variante A – vorgebaute Images (empfohlen, auch für kleine Server):** Die Images `app`, `web`, `kosit` und `storage` liegen für amd64 und arm64 in der GitHub Container Registry. Es muss nichts gebaut werden, auch nicht MinIO.
+
+```bash
+# in .env: APP_VERSION=1.2.3 (eine Release-Version) oder für den Entwicklungsstand
+#   APP_VERSION=edge, KOSIT_IMAGE_VERSION=edge, STORAGE_IMAGE_VERSION=edge
+docker compose pull
+docker compose up -d --no-build
+```
+
+**Variante B – selbst bauen** (z. B. für eigene Änderungen; MinIO wird aus dem Quellcode kompiliert, das braucht beim ersten Mal einige Minuten und kurzzeitig etwa 2 GB RAM):
+
 ```bash
 docker compose up -d --build
 ```
@@ -76,7 +87,7 @@ Danach `https://<APP_DOMAIN>` öffnen, den Code eingeben, die Firma und das erst
 - **Standard (mitgelieferter MinIO):**
   - Dienst `storage` mit Volume `archive-data`, nur intern erreichbar.
   - In der `.env` nur `ARCHIVE_S3_SECRET_KEY` setzen (z. B. `openssl rand -hex 24`). Der Bucket `belegarchiv` mit Object Lock wird beim ersten Start angelegt.
-  - Das Image wird aus dem offiziellen MinIO-Quellcode gebaut. Das dauert beim ersten Mal einige Minuten und braucht kurzzeitig etwa 2 GB RAM.
+  - Das Image ist aus dem offiziellen MinIO-Quellcode gebaut; mit vorgebauten Images (Abschnitt 1, Variante A) muss nichts kompiliert werden.
 - **Externer S3** (empfohlen, wenn das Archiv unabhängig vom Server sein soll):
   1. Beim Anbieter einen Bucket **mit aktiviertem Object Lock** anlegen. Das geht nur beim Anlegen. Dazu einen Zugang mit Schreib- und Leserecht auf diesen Bucket.
   2. In der `.env` eintragen:
@@ -88,7 +99,18 @@ Danach `https://<APP_DOMAIN>` öffnen, den Code eingeben, die Firma und das erst
   3. `docker compose up -d`. Der MinIO-Dienst läuft dann nicht.
 - **Zustand prüfen:** Einstellungen › Betrieb zeigt, ob der Bucket erreichbar ist und Object Lock hat, und wie viele Originale noch ausstehen oder fehlgeschlagen sind. Am Dokument steht „Original revisionssicher archiviert (unveränderbar bis …)“.
 - **Was der mitgelieferte MinIO schützt:** Er schützt gegen Änderungen über die Anwendung und gegen versehentliches Löschen. Er schützt nicht gegen den Ausfall der Festplatte. Dafür gibt es die tägliche Sicherung (sie enthält alle Arbeitskopien) und optional einen externen S3.
-- **Nach dem Wechsel auf externen S3:** Neue Originale gehen in den neuen Bucket. Was bereits im MinIO-Archiv liegt, bleibt dort, bis es per Hand übertragen wird (z. B. `mc mirror`). Das Volume `archive-data` erst nach Ablauf aller Fristen entfernen.
+- **Archiv-Abgleich:** Der Worker prüft jede Nacht (03:47 Uhr) die 500 am längsten nicht geprüften Originale im Bucket: vorhanden, SHA-256, Größe und Sperrfrist (jedes zehnte zusätzlich durch Herunterladen und Nachrechnen). Fehlt ein Original oder ist es beschädigt, wird es aus der Arbeitskopie neu geschrieben, mit der ursprünglichen Sperrfrist (als neue Version; die alte bleibt gesperrt). Gibt es keine unveränderte Kopie mehr, meldet der Betriebs-Check das Original als **fehlend** (rot). Einen vollständigen Abgleich startet „Belegarchiv jetzt vollständig abgleichen“ im Betriebs-Check bzw. für alle Firmen `sh infra/archive-reconcile.sh`; nach einer Wiederherstellung (`infra/restore.sh`) läuft er automatisch.
+- **Belegarchiv umziehen (z. B. mitgelieferter MinIO → externer S3):**
+  1. Beim Anbieter einen Bucket **mit Object Lock** anlegen (siehe oben) und den Zugang bereithalten.
+  2. In der `.env` das bisherige Archiv als Quelle eintragen; der MinIO-Dienst läuft dabei weiter (noch **kein** `COMPOSE_FILE` mit `compose.external-s3.yaml`):
+     - `ARCHIVE_PREVIOUS_S3_ENDPOINT=http://storage:9000`
+     - `ARCHIVE_PREVIOUS_S3_ACCESS_KEY=archiv` (der bisherige `ARCHIVE_S3_ACCESS_KEY`)
+     - `ARCHIVE_PREVIOUS_S3_SECRET_KEY=<bisheriger ARCHIVE_S3_SECRET_KEY>`
+     - `ARCHIVE_PREVIOUS_S3_BUCKET=belegarchiv`
+  3. Den neuen Bucket als `ARCHIVE_S3_ENDPOINT`, `ARCHIVE_S3_REGION`, `ARCHIVE_S3_BUCKET`, `ARCHIVE_S3_ACCESS_KEY`, `ARCHIVE_S3_SECRET_KEY` eintragen, dazu `ARCHIVE_S3_CREATE_BUCKET=false`. Dann `docker compose up -d`. Neue Originale gehen ab jetzt in den neuen Bucket.
+  4. `sh infra/archive-reconcile.sh` starten. Der Worker schreibt jedes archivierte Original mit seiner ursprünglichen Sperrfrist in den neuen Bucket, aus der Arbeitskopie oder, falls diese fehlt, aus dem bisherigen MinIO (nur wenn die SHA-256 stimmt). Den Fortschritt zeigt der Betriebs-Check jeder Firma.
+  5. Wenn der Abgleich fertig ist und **kein Original als fehlend** gemeldet wird: `ARCHIVE_PREVIOUS_S3_*` entfernen, `COMPOSE_FILE=compose.yaml:compose.external-s3.yaml` setzen und `docker compose up -d`. Das Volume `archive-data` aufheben (am besten bis zum Ende der letzten Frist); gelöscht werden kann es wegen Object Lock ohnehin nicht vorzeitig.
+  Andersherum (externer S3 → anderer Anbieter) geht es genauso: den bisherigen Bucket als `ARCHIVE_PREVIOUS_S3_*` eintragen.
 - **Exporte:** Der GoBD-Export (Z3) enthält die Originale im Ordner `belege/` mit Prüfsummen. Der DATEV-Export liefert auf Wunsch ein ZIP mit PDF je Rechnung.
 
 ## 6. Sicherung und Wiederherstellung
@@ -120,7 +142,7 @@ sh infra/restore.sh                # vorhandene Sicherungen anzeigen
 sh infra/restore.sh <Name>         # Sicherung prüfen, Rückfrage, Datenbank + Ablage ersetzen, Stack starten
 ```
 
-Auf einem neuen Server zuerst Repository und `.env` einrichten und die Sicherungsverzeichnisse nach `BACKUP_DIR` (bzw. in das Volume `backups`) kopieren. Alles, was nach der Sicherung eingegeben wurde, ist danach verloren. Wiederherstellen regelmäßig üben, z. B. auf einem Testrechner.
+Auf einem neuen Server zuerst Repository und `.env` einrichten und die Sicherungsverzeichnisse nach `BACKUP_DIR` (bzw. in das Volume `backups`) kopieren. Nach dem Wiederherstellen gleicht der Worker das Belegarchiv vollständig ab: Liegt auf dem neuen Server ein leerer MinIO, werden alle Originale aus der wiederhergestellten Ablage mit ihrer ursprünglichen Sperrfrist neu archiviert. Alles, was nach der Sicherung eingegeben wurde, ist danach verloren. Wiederherstellen regelmäßig üben, z. B. auf einem Testrechner.
 
 ## 7. Exporte
 
@@ -135,6 +157,9 @@ Jeder Export wird im Audit-Log vermerkt.
 ## 8. Updates
 
 ```bash
+# vorgebaute Images (APP_VERSION in .env auf die neue Version bzw. edge):
+git pull && docker compose pull && docker compose up -d --no-build
+# oder selbst bauen:
 git pull && docker compose up -d --build
 ```
 

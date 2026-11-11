@@ -456,7 +456,7 @@ invoice ─┬─ payment (date, amount_cents, method, reference)
 - **Hosting** liegt beim Betreiber (Self-Hosting). Die Doku empfiehlt Standorte in EU/Deutschland und einen Hoster mit ISO 27001 und AVV. Für Betreiber, die für andere Firmen hosten, gibt es eine AVV-Vorlage.
 - **Verschlüsselung**: TLS 1.2+ (HSTS), Verschlüsselung at rest (Volume + S3 SSE). Besonders sensible Felder (IBAN, API-Schlüssel) zusätzlich anwendungsseitig verschlüsselt (AES-256-GCM, Schlüssel im Secret-Store, rotierbar).
 - **Backups**: pgBackRest, kontinuierliche WAL-Archivierung (Point-in-Time-Recovery), tägliche Vollsicherung, verschlüsselt, auf ein zweites, vom Betreiber konfiguriertes Ziel (externes S3, SFTP oder NAS), 35 Tage Retention (einstellbar); **automatischer monatlicher Restore-Test** im `backup`-Container in eine Wegwerf-Datenbank, Ergebnis im Betriebs-Check.
-- **Archiv**: festgeschriebene Belege als Originaldatei im Bucket mit **Object Lock Compliance-Modus**, Sperrfrist = Aufbewahrungsfrist (Standard 10 Jahre ab Ende des Kalenderjahres). Hash zusätzlich in der DB.
+- **Archiv**: festgeschriebene Belege als Originaldatei im Bucket mit **Object Lock Compliance-Modus**, Sperrfrist = Aufbewahrungsfrist (Standard 10 Jahre ab Ende des Kalenderjahres). Hash zusätzlich in der DB. Nächtlicher Archiv-Abgleich (HEAD + SHA-256, Stichprobe per Download) schreibt fehlende oder beschädigte Originale aus der Arbeitskopie neu; vollständiger Abgleich nach einer Wiederherstellung und beim Umzug auf einen anderen S3 (ADR 0008, Migration 0025).
 
 ### 5.2 Anwendungssicherheit
 - Passwörter: argon2id; Login-Rate-Limit; Sperre nach Fehlversuchen; Benachrichtigung bei neuem Gerät.
