@@ -2,6 +2,7 @@ import type { BackupRunSummary, OperationsStatus } from '@opc/schemas'
 import type { FastifyInstance } from 'fastify'
 import { inTenant, requirePermission, type Services } from '../context.js'
 import { kositHealthy } from '../kosit.js'
+import { auditChainStatus } from './audit.js'
 
 /** Betriebs-Check: backup log (written by the backup service, ADR 0005), e-mail, security. */
 export function registerOperationsRoutes(app: FastifyInstance, services: Services) {
@@ -31,7 +32,15 @@ export function registerOperationsRoutes(app: FastifyInstance, services: Service
         left join artifact_archive_attempt t on t.artifact_id = a.id
         where not exists (select 1 from artifact_archive r where r.artifact_id = a.id)`
       const archiveStatus = services.archive ? await services.archive.status() : null
+      const audit = await auditChainStatus(tx)
       return {
+        audit: {
+          lastCheckAt: audit.last?.checkedAt ?? null,
+          problem: audit.last?.problem ?? null,
+          brokenSeq: audit.last?.brokenSeq ?? null,
+          events: audit.last?.events ?? 0,
+          stale: audit.stale,
+        },
         archive: {
           configured: services.archive !== null,
           bucket: services.archive?.bucket ?? null,

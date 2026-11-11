@@ -17,6 +17,7 @@ import { registerEinvoiceRoutes } from './einvoice.js'
 import { HttpError, problem, sendProblem } from './http.js'
 import { idempotencyHooks } from './idempotency.js'
 import { type EinvoiceValidator, kositValidator } from './kosit.js'
+import { registerAuditRoutes } from './routes/audit.js'
 import { authHook, mfaEnforcementHook, registerAuthRoutes } from './routes/auth.js'
 import { registerCatalogRoutes } from './routes/catalog.js'
 import { registerContactRoutes } from './routes/contacts.js'
@@ -230,6 +231,7 @@ export function buildApi({
   registerEinvoiceRoutes(app, services)
   registerReceivableRoutes(app, services)
   registerDunningRoutes(app, services)
+  registerAuditRoutes(app, services)
   registerSignatureRoutes(app, services)
   registerMeasurementRoutes(app, services)
   registerReportRoutes(app, services)

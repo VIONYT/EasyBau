@@ -315,6 +315,14 @@ export interface OperationsStatus {
   }
   email: { enabled: boolean; queued: number; failed: number }
   security: { requireAdminMfa: boolean; https: boolean }
+  /** Audit-Kette (rule 6): newest check of the hash chain; stale = older than 26 hours. */
+  audit: {
+    lastCheckAt: string | null
+    problem: 'broken' | 'truncated' | 'rewritten' | null
+    brokenSeq: number | null
+    events: number
+    stale: boolean
+  }
   /** KoSIT validator (ADR 0007): without it no invoice can be finalized (rule 8). */
   einvoice: { configured: boolean; reachable: boolean }
   /** Revisionssicheres Belegarchiv (ADR 0008, S3 with Object Lock). */

@@ -4,9 +4,11 @@ import { archiveStoreFromSettings, FsObjectStore } from '@opc/storage'
 import { PgBoss } from 'pg-boss'
 import type { Logger } from 'pino'
 import { archivePending } from './archive.js'
+import { checkAuditChains } from './audit.js'
 import { dispatchEmails, smtpTransport } from './email.js'
 
 export { type ArchiveRun, archivePending } from './archive.js'
+export { type AuditCheckResult, checkAuditChains } from './audit.js'
 
 export {
   type ArtifactReader,
@@ -23,6 +25,7 @@ export {
  */
 export const queues = {
   heartbeat: 'system.heartbeat',
+  auditCheck: 'audit.check-chain',
 } as const
 
 export interface Worker {
@@ -68,6 +71,13 @@ export async function startWorker(
   })
   // Proves the scheduler works end to end; replaced by real maintenance jobs later.
   await boss.schedule(queues.heartbeat, '*/15 * * * *')
+  // Audit-Kette nachts prüfen (rule 6): all companies, result in the Betriebs-Check.
+  const auditSql = createSql({ ...config, DATABASE_POOL_MAX: 1 })
+  await boss.createQueue(queues.auditCheck)
+  await boss.work(queues.auditCheck, async () => {
+    await checkAuditChains(auditSql, logger)
+  })
+  await boss.schedule(queues.auditCheck, '17 2 * * *', {}, { tz: 'Europe/Berlin' })
   // E-mail outbox (optional): polled every 15 s, cheap thanks to a partial index.
   let mailTimer: NodeJS.Timeout | undefined
   const sql = smtpEnabled(config) ? createSql({ ...config, DATABASE_POOL_MAX: 1 }) : undefined
@@ -140,6 +150,7 @@ export async function startWorker(
       await boss.stop({ graceful: true, timeout: 10_000 })
       await sql?.end({ timeout: 5 })
       await archiveSql?.end({ timeout: 5 })
+      await auditSql.end({ timeout: 5 })
       logger.info('worker stopped')
     },
   }

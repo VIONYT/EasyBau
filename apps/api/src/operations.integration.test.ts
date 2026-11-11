@@ -40,6 +40,8 @@ describe.skipIf(!process.env.DATABASE_URL)('Betriebs-Check (integration)', () =>
     expect(res.statusCode, res.body).toBe(200)
     expect(res.json()).toEqual({
       backup: { lastSuccess: null, recent: [] },
+      // No check of the audit chain yet: the nightly job has not run.
+      audit: { lastCheckAt: null, problem: null, brokenSeq: null, events: 0, stale: true },
       email: { enabled: false, queued: 0, failed: 0 },
       security: { requireAdminMfa: false, https: true },
       einvoice: { configured: true, reachable: true },
