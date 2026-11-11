@@ -119,8 +119,8 @@ describe('Belegarchiv (S3 Object Lock)', () => {
   })
 })
 
-/** Against a real MinIO (Docker test pipeline, CI): set ARCHIVE_S3_ENDPOINT and credentials. */
-describe.skipIf(!process.env.ARCHIVE_S3_ENDPOINT)('Belegarchiv mit MinIO (integration)', () => {
+/** Against a real S3 with Object Lock (Docker test pipeline, CI): set ARCHIVE_S3_ENDPOINT and credentials. */
+describe.skipIf(!process.env.ARCHIVE_S3_ENDPOINT)('Belegarchiv mit echtem S3 (integration)', () => {
   const store = new S3ArchiveStore({
     endpoint: process.env.ARCHIVE_S3_ENDPOINT as string,
     region: process.env.ARCHIVE_S3_REGION ?? 'us-east-1',
@@ -159,7 +159,7 @@ describe.skipIf(!process.env.ARCHIVE_S3_ENDPOINT)('Belegarchiv mit MinIO (integr
     const client = (store as unknown as { client: import('./s3.js').S3Client }).client
     await expect(
       client.request({ method: 'DELETE', key, query: { versionId: versionId as string } }),
-    ).rejects.toThrow(/WORM protected/)
+    ).rejects.toMatchObject({ name: 'S3Error' })
     expect((await store.get(key))?.equals(data)).toBe(true)
   })
 })
