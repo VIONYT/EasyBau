@@ -117,7 +117,8 @@ export class Client {
   get = (url: string) => this.request('GET', url)
   post = (url: string, body: unknown = {}, headers?: Record<string, string>) =>
     this.request('POST', url, body, headers)
-  patch = (url: string, body: unknown) => this.request('PATCH', url, body)
+  patch = (url: string, body: unknown, headers?: Record<string, string>) =>
+    this.request('PATCH', url, body, headers)
   put = (url: string, body: unknown) => this.request('PUT', url, body)
   delete = (url: string) => this.request('DELETE', url)
   /** Raw upload like the web app does it (application/octet-stream, metadata in the query). */

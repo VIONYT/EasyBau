@@ -26,6 +26,7 @@ import { registerDunningRoutes } from './routes/dunning.js'
 import { registerEmailRoutes } from './routes/email.js'
 import { registerExportRoutes } from './routes/exports.js'
 import { registerFileRoutes } from './routes/files.js'
+import { registerIncomingInvoiceRoutes } from './routes/incoming-invoices.js'
 import { registerInvoiceRoutes } from './routes/invoices.js'
 import { registerLetterheadRoutes } from './routes/letterhead.js'
 import { registerMeasurementRoutes } from './routes/measurements.js'
@@ -231,6 +232,7 @@ export function buildApi({
   registerEinvoiceRoutes(app, services)
   registerReceivableRoutes(app, services)
   registerDunningRoutes(app, services)
+  registerIncomingInvoiceRoutes(app, services)
   registerAuditRoutes(app, services)
   registerSignatureRoutes(app, services)
   registerMeasurementRoutes(app, services)

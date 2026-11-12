@@ -65,6 +65,40 @@ export async function storeArtifact(
 }
 
 /**
+ * Archives a received invoice unchanged as original of the incoming invoice (P1.11), the moment it
+ * arrives. Retention: 10 years from the end of the year of receipt (§ 147 AO; the receipt is never
+ * earlier than the invoice date, so the period is never too short).
+ */
+export async function storeIncomingOriginal(
+  tx: Tx,
+  services: Services,
+  auth: AuthContext,
+  incomingInvoiceId: string,
+  original: { data: Buffer; mime: string },
+): Promise<string> {
+  const pending = await services.storage.receive(Readable.from([original.data]), {
+    maxBytes: Math.max(MAX_ARTIFACT_BYTES, original.data.length),
+  })
+  try {
+    const [ids] = await tx<{ id: string }[]>`select uuid_v7() as id`
+    const artifactId = (ids as { id: string }).id
+    const key = `${auth.tenantId}/incoming/${incomingInvoiceId}/${artifactId}`
+    await tx`
+      insert into document_artifact (id, tenant_id, incoming_invoice_id, kind, storage_key, sha256,
+                                     size_bytes, mime_type, locked_until)
+      select ${artifactId}, tenant_id, id, 'incoming_original', ${key}, ${pending.sha256},
+             ${pending.sizeBytes}, ${original.mime},
+             (date_trunc('year', (received_at at time zone 'Europe/Berlin')::date)
+               + make_interval(years => 11) - interval '1 day')::date
+      from incoming_invoice where id = ${incomingInvoiceId}`
+    await pending.commit(key)
+    return artifactId
+  } finally {
+    await pending.discard()
+  }
+}
+
+/**
  * Opens an archived original: the working copy in the files volume, or – if that is gone (e.g.
  * after restoring only the database) – the WORM copy from the archive (ADR 0008).
  */

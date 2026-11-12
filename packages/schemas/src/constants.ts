@@ -117,3 +117,17 @@ export const COST_KINDS = ['labor', 'material', 'equipment', 'subcontract', 'oth
 
 /** Stammdaten: Leistungen (service) and Materialien (material). */
 export const CATALOG_KINDS = ['service', 'material'] as const
+
+/** Eingangsrechnungen (P1.11). */
+export const INCOMING_STATUSES = ['review', 'confirmed', 'discarded', 'cancelled'] as const
+export const INCOMING_SOURCES = [
+  'pdf',
+  'image',
+  'zugferd',
+  'xrechnung_cii',
+  'xrechnung_ubl',
+] as const
+/** Kostenart of an allocation (same keys as the calculation's cost kinds). */
+export const COST_TYPES = ['material', 'labor', 'equipment', 'subcontract', 'other'] as const
+/** Received invoices: PDF (also ZUGFeRD), XRechnung XML, photos/scans. */
+export const INCOMING_UPLOAD_EXTENSIONS = ['pdf', 'xml', 'jpg', 'jpeg', 'png'] as const
