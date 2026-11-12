@@ -50,10 +50,7 @@
    - Die App erhält einen eigenen Zugang (`ARCHIVE_S3_ACCESS_KEY`/`ARCHIVE_S3_SECRET_KEY`), der nur Folgendes darf: schreiben, lesen, Sperrfrist setzen und lesen, Bucket-Status lesen.
    - Nicht erlaubt sind: Löschen (auch keine Löschmarker), Bucket-Einstellungen ändern, weitere Buckets anlegen, die Admin-API nutzen. Das ist getestet in `app-key.integration.test.ts`.
    - Wer also App und Datenbank übernimmt, kann im Archiv nichts löschen.
-3. **Umstieg bestehender Installationen automatisch** (Migration 0026).
-   - Nach dem Update ist das RustFS-Archiv leer. Für jede Firma mit archivierten Originalen startet ein vollständiger Archiv-Abgleich (`archive_verify_request`, Grund `move`).
-   - Der Abgleich schreibt alle Originale aus der Arbeitskopie mit ihrer ursprünglichen Sperrfrist in RustFS.
-   - Das alte MinIO-Volume `archive-data` bleibt unangetastet. Fehlt eine Arbeitskopie, dient der alte MinIO als Quelle: Profil `legacy-minio` mit `ARCHIVE_PREVIOUS_S3_*` (ADR 0008).
+3. **Kein Umstieg von MinIO.** Das Projekt war bei der Entscheidung noch in Entwicklung, ohne Installationen bei Nutzern. Der MinIO-Dienst wurde deshalb ersatzlos entfernt (kein Profil, kein Volume `archive-data`). Migration 0026 ist bereits angewandt und bleibt (Regel: angewandte Migrationen nie ändern); auf einer neuen Installation ändert sie nichts, ihr Abgleich-Grund `move` dient weiter dem Umzug auf einen anderen S3 (`ARCHIVE_PREVIOUS_S3_*`).
 4. **Absicherung gegen Regressionen bei Updates.**
    - Die WORM-Angriffs-Suite und der Test des App-Schlüssels laufen in der Docker-Testpipeline und in CI gegen genau die gepinnte RustFS-Version.
    - Ein Update von RustFS ist nur ein neuer Digest in `compose.yaml` und `compose.test.yaml` und muss diese Tests bestehen.

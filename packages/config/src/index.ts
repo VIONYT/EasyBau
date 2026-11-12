@@ -116,7 +116,7 @@ const envSchema = z.object({
   /** COMPLIANCE: nobody can delete before the end of the retention period (GoBD); GOVERNANCE only for tests. */
   ARCHIVE_RETENTION_MODE: z.enum(['COMPLIANCE', 'GOVERNANCE']).default('COMPLIANCE'),
   /**
-   * Previous archive while moving to another S3 (e.g. former MinIO → RustFS, or → external provider): the
+   * Previous archive while moving to another S3 (e.g. bundled RustFS → external provider): the
    * archive reconciliation copies originals from here when the working copy is missing. Optional,
    * only during the move; reading only.
    */

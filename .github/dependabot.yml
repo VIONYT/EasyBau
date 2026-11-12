@@ -32,9 +32,6 @@ updates:
     commit-message:
       prefix: "chore(deps)"
       include: scope
-    ignore:
-      # Only the former MinIO (legacy profile, pinned source release) is built with Go.
-      - dependency-name: golang
 
   # npm packages of the pnpm workspace (apps/*, packages/*).
   - package-ecosystem: npm

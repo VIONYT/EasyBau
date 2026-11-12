@@ -203,24 +203,6 @@ services:
       storage:
         condition: service_healthy
 
-  # Only while moving from the former bundled MinIO (ADR 0008 → 0009): COMPOSE_PROFILES=legacy-minio
-  # and ARCHIVE_PREVIOUS_S3_ENDPOINT=http://storage-minio:9000 (docs/self-hosting, „Umstieg“).
-  storage-minio:
-    profiles: [legacy-minio]
-    image: ${IMAGE_PREFIX:-ghcr.io/vionyt/openplancraft}-storage:${STORAGE_IMAGE_VERSION:-latest}
-    build:
-      context: .
-      dockerfile: docker/minio-legacy.Dockerfile
-      secrets: [extra_ca]
-    restart: unless-stopped
-    read_only: true
-    tmpfs: [/tmp]
-    environment:
-      MINIO_ROOT_USER: ${ARCHIVE_S3_ACCESS_KEY:-archiv}
-      MINIO_ROOT_PASSWORD: ${ARCHIVE_S3_SECRET_KEY:?ARCHIVE_S3_SECRET_KEY fehlt in .env}
-    volumes:
-      - archive-data:/data
-
   # Daily backup of database and Ablage (ADR 0005). Same image as db, idles in a sleep loop.
   backup:
     image: postgres:17-alpine
@@ -256,8 +238,6 @@ volumes:
   archive:
   # Root key of the bundled RustFS (only storage-keys/storage/storage-setup mount it).
   archive-keys:
-  # Former bundled MinIO (ADR 0008). Keep it until all its retention periods have ended.
-  archive-data:
   backups:
   caddy-data:
   caddy-config:
