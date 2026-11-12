@@ -1281,7 +1281,7 @@ function EmailTemplateForm() {
         >
           {DOCUMENT_TYPES.map((d) => (
             <option key={d} value={d}>
-              {t(`doc.type.${d}` as TextKey)}
+              {t((d === 'invoice' ? 'doc.invoice.standard' : `doc.type.${d}`) as TextKey)}
               {data.templates[d].custom ? ` (${t('s.mail.custom')})` : ''}
             </option>
           ))}

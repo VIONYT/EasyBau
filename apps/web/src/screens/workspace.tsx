@@ -163,7 +163,7 @@ export function Workspace({
         {current.view === 'catalog' ? <Catalog me={me} /> : null}
         {current.view === 'settings' ? <Settings me={me} /> : null}
         {current.view === 'contacts' ? <Contacts me={me} /> : null}
-        {current.view === 'invoices' ? <Invoices navigate={navigate} /> : null}
+        {current.view === 'invoices' ? <Invoices me={me} navigate={navigate} /> : null}
         {current.view === 'incoming' ? <IncomingInvoices me={me} navigate={navigate} /> : null}
         {current.view === 'incomingInvoice' ? (
           <IncomingInvoiceScreen id={current.id} navigate={navigate} />

@@ -799,6 +799,13 @@ test('E-Mail-Vorlagen und Versand am Dokument', async () => {
   await expect(page.getByRole('heading', { name: 'Per E-Mail senden' })).toBeVisible()
   await expect(page.getByText(/E-Mail-Versand ist nicht eingerichtet/)).toBeVisible()
   await expectNoHorizontalScroll(page)
+
+  // Mahnvorschläge: nothing due in this stack (the dunned invoice was cancelled)
+  await page.getByRole('button', { name: 'Rechnungen', exact: true }).click()
+  await page.getByLabel('Mahnung fällig (Mahnvorschläge)').check()
+  await expect(page.getByText('Keine Rechnungen für diesen Filter.')).toBeVisible()
+  await expect(page.getByRole('button', { name: /Mahnlauf starten/ })).toHaveCount(0)
+  await expectNoHorizontalScroll(page)
 })
 
 test('Briefpapier: WYSIWYG-Editor nach DIN 5008 B und Druckansicht', async () => {

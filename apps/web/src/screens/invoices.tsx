@@ -1,4 +1,10 @@
-import type { InvoiceList, InvoiceListItem, ReceivableStatus } from '@opc/schemas'
+import type {
+  DunningBatchResult,
+  InvoiceList,
+  InvoiceListItem,
+  Me,
+  ReceivableStatus,
+} from '@opc/schemas'
 import { useCallback, useEffect, useId, useState } from 'react'
 import { type ApiError, api, downloadFile } from '../api'
 import { formatCents, formatDateTime } from '../format'
@@ -24,6 +30,7 @@ interface Filter {
   to: string
   q: string
   retention: boolean
+  dunningDue: boolean
 }
 
 function queryOf(filter: Filter, cursor?: string | null): string {
@@ -33,20 +40,27 @@ function queryOf(filter: Filter, cursor?: string | null): string {
   if (filter.to) params.set('to', filter.to)
   if (filter.q.trim()) params.set('q', filter.q.trim())
   if (filter.retention) params.set('retention', 'true')
+  if (filter.dunningDue) params.set('dunning', 'due')
   if (cursor) params.set('cursor', cursor)
   return params.toString()
 }
 
 /** Rechnungsliste (DESIGN.md §2): status, open amount and sums over the filter. No bookkeeping. */
-export function Invoices({ navigate }: { navigate: Navigate }) {
+export function Invoices({ me, navigate }: { me: Me; navigate: Navigate }) {
   const id = useId()
+  const canDun = me.permissions.includes('dunning.write')
   const [filter, setFilter] = useState<Filter>({
     status: '',
     from: '',
     to: '',
     q: '',
     retention: false,
+    dunningDue: false,
   })
+  const [selected, setSelected] = useState<Set<string>>(new Set())
+  const [mail, setMail] = useState(true)
+  const [running, setRunning] = useState(false)
+  const [results, setResults] = useState<DunningBatchResult[] | null>(null)
   const [list, setList] = useState<InvoiceList | null>(null)
   const [error, setError] = useState<string | null>(null)
 
@@ -73,7 +87,38 @@ export function Invoices({ navigate }: { navigate: Navigate }) {
       setError((err as ApiError).message)
     }
   }
-  const set = (patch: Partial<Filter>) => setFilter((f) => ({ ...f, ...patch }))
+  const set = (patch: Partial<Filter>) => {
+    setSelected(new Set())
+    setFilter((f) => ({ ...f, ...patch }))
+  }
+  const toggle = (invoiceId: string) =>
+    setSelected((current) => {
+      const next = new Set(current)
+      if (next.has(invoiceId)) next.delete(invoiceId)
+      else next.add(invoiceId)
+      return next
+    })
+  const due = list?.items.filter((i) => i.nextDunning?.due) ?? []
+  const runBatch = async () => {
+    if (!selected.size || !window.confirm(tf('dun.batch.confirm', { n: String(selected.size) }))) {
+      return
+    }
+    setRunning(true)
+    setError(null)
+    try {
+      const res = await api<{ results: DunningBatchResult[] }>('POST', '/api/v1/dunning/batch', {
+        invoiceIds: [...selected],
+        email: mail,
+      })
+      setResults(res.results)
+      setSelected(new Set())
+      load(filter)
+    } catch (err) {
+      setError((err as ApiError).message)
+    } finally {
+      setRunning(false)
+    }
+  }
 
   return (
     <section aria-labelledby={`${id}-title`}>
@@ -134,6 +179,14 @@ export function Invoices({ navigate }: { navigate: Navigate }) {
           />
           <span>{t('inv.list.retention')}</span>
         </label>
+        <label className="check">
+          <input
+            type="checkbox"
+            checked={filter.dunningDue}
+            onChange={(e) => set({ dunningDue: e.target.checked })}
+          />
+          <span>{t('dun.batch.filter')}</span>
+        </label>
       </div>
       <FormError>{error}</FormError>
       {list ? (
@@ -169,10 +222,75 @@ export function Invoices({ navigate }: { navigate: Navigate }) {
               {t('inv.list.csv')}
             </button>
           </div>
+          {results ? (
+            <div className="panel" role="status">
+              <h2>{t('dun.batch.results')}</h2>
+              <ul className="list">
+                {results.map((r) => (
+                  <li key={r.invoiceId} className="list-row">
+                    <span>
+                      <strong>{r.number}</strong>
+                      <span className={`block ${r.ok ? 'muted' : 'warning'}`}>
+                        {r.ok
+                          ? [
+                              t(`dun.level.${r.level}` as TextKey),
+                              r.emailedTo
+                                ? tf('dun.batch.emailed', { to: r.emailedTo })
+                                : t('dun.batch.pdfOnly'),
+                            ].join(' · ')
+                          : r.error}
+                      </span>
+                    </span>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          ) : null}
+          {canDun && due.length ? (
+            <div className="panel dunning-batch">
+              <p>{tf('dun.batch.due', { n: String(due.length) })}</p>
+              <div className="button-row">
+                <button
+                  type="button"
+                  className="button ghost auto"
+                  onClick={() =>
+                    setSelected(
+                      selected.size === due.length ? new Set() : new Set(due.map((i) => i.id)),
+                    )
+                  }
+                >
+                  {t(selected.size === due.length ? 'dun.batch.none' : 'dun.batch.all')}
+                </button>
+                <label className="check">
+                  <input
+                    type="checkbox"
+                    checked={mail}
+                    onChange={(e) => setMail(e.target.checked)}
+                  />
+                  <span>{t('dun.batch.mail')}</span>
+                </label>
+                <button
+                  type="button"
+                  className="button primary auto"
+                  disabled={running || !selected.size}
+                  onClick={runBatch}
+                >
+                  {tf('dun.batch.run', { n: String(selected.size) })}
+                </button>
+              </div>
+            </div>
+          ) : null}
           {list.items.length ? (
             <ul className="list invoice-list">
               {list.items.map((item) => (
-                <InvoiceRow key={item.id} item={item} navigate={navigate} />
+                <InvoiceRow
+                  key={item.id}
+                  item={item}
+                  navigate={navigate}
+                  selectable={canDun && Boolean(item.nextDunning?.due)}
+                  selected={selected.has(item.id)}
+                  onToggle={() => toggle(item.id)}
+                />
               ))}
             </ul>
           ) : (
@@ -191,7 +309,19 @@ export function Invoices({ navigate }: { navigate: Navigate }) {
   )
 }
 
-function InvoiceRow({ item, navigate }: { item: InvoiceListItem; navigate: Navigate }) {
+function InvoiceRow({
+  item,
+  navigate,
+  selectable,
+  selected,
+  onToggle,
+}: {
+  item: InvoiceListItem
+  navigate: Navigate
+  selectable: boolean
+  selected: boolean
+  onToggle: () => void
+}) {
   const label = documentLabel({
     type: item.type,
     invoiceKind: item.invoiceKind,
@@ -199,7 +329,20 @@ function InvoiceRow({ item, navigate }: { item: InvoiceListItem; navigate: Navig
     changeOrder: null,
   })
   return (
-    <li className={`list-link${item.status === 'cancelled' ? ' is-cancelled' : ''}`}>
+    <li
+      className={`list-link${item.status === 'cancelled' ? ' is-cancelled' : ''}${selectable ? ' selectable' : ''}`}
+    >
+      {selectable ? (
+        <label className="row-select">
+          <input
+            type="checkbox"
+            className="row-select-box"
+            checked={selected}
+            onChange={onToggle}
+          />
+          <span className="sr-only">{tf('dun.batch.select', { number: item.number ?? '' })}</span>
+        </label>
+      ) : null}
       <a
         href={`/dokumente/${item.id}`}
         onClick={(e) => {
@@ -223,6 +366,23 @@ function InvoiceRow({ item, navigate }: { item: InvoiceListItem; navigate: Navig
             : ''}
           {item.overdueDays ? ` (${tf('pay.overdueDays', { n: String(item.overdueDays) })})` : ''}
         </span>
+        {item.dunningLevel || item.nextDunning ? (
+          <span className={item.nextDunning?.due ? 'warning' : 'muted'}>
+            {[
+              item.dunningLevel
+                ? tf('dun.batch.last', { level: t(`dun.level.${item.dunningLevel}` as TextKey) })
+                : null,
+              item.nextDunning
+                ? tf(item.nextDunning.due ? 'dun.batch.nextDue' : 'dun.batch.nextFrom', {
+                    level: t(`dun.level.${item.nextDunning.level}` as TextKey),
+                    date: formatDateTime(item.nextDunning.possibleFrom, 'date'),
+                  })
+                : null,
+            ]
+              .filter(Boolean)
+              .join(' · ')}
+          </span>
+        ) : null}
         <span className="invoice-amounts">
           <span className="amount">{formatCents(item.grossCents)}</span>
           {item.status !== 'draft' && item.status !== 'cancelled' ? (
