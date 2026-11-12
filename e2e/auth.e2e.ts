@@ -905,6 +905,9 @@ test('Regiebericht in die Rechnung, Nachtrag aus dem Bautagebuch, Vertragssumme'
   await expect(page.getByText('Regiebericht vom 10.11.2026').first()).toBeVisible()
   await expect(page.getByText(/Stundenlohnarbeiten/).first()).toBeVisible()
   await expectNoHorizontalScroll(page)
+  // Draft removed again (later tests open the last invoice of the project); the report is free again.
+  const draftId = page.url().split('/').pop() as string
+  expect((await page.request.delete(`/api/v1/documents/${draftId}`)).status()).toBe(204)
 
   // Nachtrag aus „Besondere Vorkommnisse“ des Bautagebuchs, der Bericht ist Nachweis
   await page.getByRole('link', { name: /Sanierung Lindenweg/ }).click()
@@ -918,9 +921,10 @@ test('Regiebericht in die Rechnung, Nachtrag aus dem Bautagebuch, Vertragssumme'
 
   // Projektübersicht: Vertragssumme mit dem Nachtrag (Entwurf zählt nicht)
   await page.getByRole('link', { name: /Sanierung Lindenweg/ }).click()
+  await page.getByRole('button', { name: 'Übersicht', exact: true }).click()
   const contract = page.locator('section.contract')
   await expect(contract.getByRole('heading', { name: 'Vertragssumme' })).toBeVisible()
-  await expect(contract.getByText('Hauptauftrag')).toBeVisible()
+  await expect(contract.getByText('Hauptauftrag', { exact: true })).toBeVisible()
   await expect(contract.getByText(/N0\d/).first()).toBeVisible()
   await expectNoHorizontalScroll(page)
   if (SCREENSHOTS)
