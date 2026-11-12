@@ -114,6 +114,12 @@ Danach `https://<APP_DOMAIN>` öffnen, den Code eingeben, die Firma und das erst
   Andersherum (externer S3 → anderer Anbieter) geht es genauso: den bisherigen Bucket als `ARCHIVE_PREVIOUS_S3_*` eintragen.
 - **Exporte:** Der GoBD-Export (Z3) enthält die Originale im Ordner `belege/` mit Prüfsummen. Der DATEV-Export liefert auf Wunsch ein ZIP mit PDF je Rechnung.
 
+## 5c. App und Offline-Betrieb auf der Baustelle ([ADR 0010](../adr/0010-offline-baustelle.md))
+
+- Die Weboberfläche lässt sich auf Handy und Tablet „zum Startbildschirm hinzufügen“ (installierbare App). Voraussetzung ist HTTPS mit gültigem Zertifikat (Caddy erledigt das bei öffentlicher Domain automatisch).
+- Aufmaßzeilen, Bautagesberichte und Fotos können ohne Netz erfasst werden; sie werden übertragen, sobald wieder Verbindung besteht (oben im Bildschirm „… Änderung(en) warten auf Übertragung“). Vorher am Projekt „Offline verfügbar machen“ wählen.
+- Wer einen eigenen Reverse Proxy statt des mitgelieferten Caddy nutzt: `/sw.js`, `/index.html`, `/registerSW.js` und `/manifest.webmanifest` mit `Cache-Control: no-cache` ausliefern, sonst kommen App-Updates verspätet an.
+
 ## 6. Sicherung und Wiederherstellung
 
 Der Dienst `backup` ([ADR 0005](../adr/0005-backup-dienst.md)) sichert **täglich um `BACKUP_TIME`** (Standard 02:30, Zeitzone `TZ`) die Datenbank und die Ablage. Jede Sicherung ist ein Verzeichnis `JJJJ-MM-TT_HHMMSS` mit `db.dump`, `files.tar.gz` und `SHA256SUMS` und wird direkt nach dem Schreiben geprüft. Sicherungen älter als `BACKUP_KEEP_DAYS` (Standard 14) werden gelöscht, aber nur nach einer erfolgreichen neuen Sicherung.

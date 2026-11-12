@@ -1,6 +1,12 @@
-import type { Me, ReportDetail, ReportSummary } from '@opc/schemas'
+import type {
+  Me,
+  ProjectDetail,
+  ReportDetail,
+  ReportSummary,
+  ReportTemplateSummary,
+} from '@opc/schemas'
 import { useEffect, useState } from 'react'
-import { type ApiError, api } from '../api'
+import { type ApiError, api, mutate } from '../api'
 import { formatDateTime, formatInputNumber } from '../format'
 import { Field, FormError, useForm, value } from '../forms'
 import { type TextKey, t } from '../i18n'
@@ -41,12 +47,69 @@ export function ProjectDiary({
   }, [projectId])
 
   const open = (id: string) => navigate({ view: 'report', id })
+  const listPath = `/api/v1/projects/${projectId}/reports?template=daily_site_report`
   const form = useForm(
-    (data) =>
-      api<ReportDetail>('POST', `/api/v1/projects/${projectId}/reports`, {
-        templateKey: 'daily_site_report',
-        reportDate: value(data, 'reportDate'),
-      }),
+    async (data) => {
+      // The id is made on the device, so the report can be written offline and synced later.
+      const id = crypto.randomUUID()
+      const reportDate = value(data, 'reportDate')
+      const [templates, project] = await Promise.all([
+        api<ReportTemplateSummary[]>('GET', '/api/v1/report-templates'),
+        api<ProjectDetail>('GET', `/api/v1/projects/${projectId}`),
+      ])
+      const template = templates.find((tpl) => tpl.key === 'daily_site_report')
+      if (!template) throw new Error(t('off.notCached'))
+      const result = await mutate<ReportDetail>({
+        method: 'POST',
+        path: `/api/v1/projects/${projectId}/reports`,
+        json: { id, templateKey: 'daily_site_report', reportDate },
+        resource: `/api/v1/reports/${id}`,
+        label: `${template.name} ${formatDateTime(reportDate, 'date')}`,
+        optimistic: () => ({
+          id,
+          projectId,
+          template,
+          reportDate,
+          status: 'draft',
+          totalHours: '0',
+          staffCount: 0,
+          photoCount: 0,
+          weather: null,
+          createdBy: { id: me.user.id, displayName: me.user.displayName },
+          updatedAt: new Date().toISOString(),
+          project: { id: project.id, number: project.number, name: project.name },
+          serviceFrom: null,
+          serviceTo: null,
+          header: { contractor: me.tenant.name, client: null, placeOfPerformance: null },
+          data: {},
+          photos: [],
+          signatures: [],
+          completedAt: null,
+        }),
+        alsoUpdate: [
+          {
+            resource: listPath,
+            apply: (list) => [
+              {
+                id,
+                projectId,
+                template: { key: template.key, name: template.name },
+                reportDate,
+                status: 'draft',
+                totalHours: '0',
+                staffCount: 0,
+                photoCount: 0,
+                weather: null,
+                createdBy: { id: me.user.id, displayName: me.user.displayName },
+                updatedAt: new Date().toISOString(),
+              } satisfies ReportSummary,
+              ...(list as ReportSummary[]),
+            ],
+          },
+        ],
+      })
+      return result.data
+    },
     (report) => open(report.id),
   )
   const today = new Date()

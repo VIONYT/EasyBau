@@ -2,7 +2,8 @@ import type { Me, ProjectDetail } from '@opc/schemas'
 import { useCallback, useEffect, useState } from 'react'
 import { type ApiError, apiWithEtag } from '../api'
 import { FormError } from '../forms'
-import { t } from '../i18n'
+import { t, tf } from '../i18n'
+import { prepareProjectOffline } from '../offline/prefetch'
 import type { Navigate, ProjectSection } from '../router'
 import { ProjectDiary } from './diary'
 import { ProjectDocuments } from './documents'
@@ -30,6 +31,18 @@ export function ProjectScreen({
   const [editing, setEditing] = useState(false)
   const statuses = useStatuses()
   const canWrite = me.permissions.includes('project.write')
+  const siteWork =
+    me.permissions.includes('measurement.write') || me.permissions.includes('report.write')
+  const [offline, setOffline] = useState<string | null>(null)
+  const prepare = async () => {
+    setOffline(t('off.preparing'))
+    try {
+      const n = await prepareProjectOffline(id)
+      setOffline(tf('off.prepared', { n: String(n) }))
+    } catch (err) {
+      setOffline((err as Error).message)
+    }
+  }
 
   const load = useCallback(() => {
     apiWithEtag<ProjectDetail>('GET', `/api/v1/projects/${id}`)
@@ -122,6 +135,18 @@ export function ProjectScreen({
         {project.archived ? <span className="badge">{t('projects.archived')}</span> : null}
       </div>
       <FormError>{error}</FormError>
+      {siteWork && !project.archived ? (
+        <div className="offline-prepare">
+          <button type="button" className="button ghost auto" onClick={prepare}>
+            {t('off.prepare')}
+          </button>
+          {offline ? (
+            <p className="hint" role="status">
+              {offline}
+            </p>
+          ) : null}
+        </div>
+      ) : null}
       {editing ? (
         <ProjectForm
           project={project}

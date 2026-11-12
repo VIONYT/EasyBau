@@ -1,4 +1,9 @@
-import { MEASUREMENT_TEMPLATES, tryEvaluateFormula } from '@opc/domain'
+import {
+  FormulaError,
+  MEASUREMENT_TEMPLATES,
+  measurementLineQuantity,
+  tryEvaluateFormula,
+} from '@opc/domain'
 import type {
   Me,
   MeasurableDocumentRef,
@@ -9,7 +14,7 @@ import type {
   UnitSummary,
 } from '@opc/schemas'
 import { type FormEvent, useCallback, useEffect, useMemo, useState } from 'react'
-import { ApiError, api, apiWithEtag } from '../api'
+import { ApiError, api, apiWithEtag, mutate } from '../api'
 import { formatDateTime, formatInputNumber, formatQuantity, formatUnitAmount } from '../format'
 import { Field, FormError, optional, SelectField, useForm, value } from '../forms'
 import { type TextKey, t } from '../i18n'
@@ -26,6 +31,69 @@ import { documentLabel } from './documents'
 
 type Sheet = MeasurementSheetDetail
 type Apply = (result: { data: Sheet; etag: string | null }) => void
+/** A line captured offline that has not reached the server yet (ADR 0010). */
+type LocalLine = MeasurementLine & { pending?: boolean }
+
+const sheetPath = (sheet: Pick<Sheet, 'id'>) => `/api/v1/measurement-sheets/${sheet.id}`
+
+interface LineInput {
+  locationId: string | null
+  documentItemId: string | null
+  description: string | null
+  formula: string
+  isDeduction: boolean
+  unitId?: string | null
+}
+
+/**
+ * The line as it will look after the sync: quantity with the same domain rule as the server
+ * (preview only – the server computes it again, rule 11).
+ */
+function provisionalLine(
+  sheet: Sheet,
+  id: string,
+  input: LineInput,
+  items: MeasurableItem[],
+  units: UnitSummary[],
+  previous?: MeasurementLine,
+): LocalLine {
+  const item = input.documentItemId ? items.find((i) => i.id === input.documentItemId) : undefined
+  const chosen = input.unitId ? units.find((u) => u.id === input.unitId) : undefined
+  const unit =
+    item?.unit ??
+    (chosen
+      ? { id: chosen.id, symbol: chosen.symbol, decimals: chosen.decimals }
+      : (previous?.unit ?? null))
+  let resultQty: string
+  try {
+    resultQty = measurementLineQuantity({
+      formula: input.formula,
+      locationVariables: roomVariables(sheet.locations, input.locationId),
+      variables: previous?.variables ?? {},
+      isDeduction: input.isDeduction,
+      decimals: unit?.decimals ?? 2,
+    })
+  } catch (error) {
+    if (error instanceof FormulaError) {
+      throw new ApiError(400, error.message, { formula: error.message })
+    }
+    throw error
+  }
+  return {
+    id,
+    locationId: input.locationId,
+    documentItemId: input.documentItemId,
+    description: input.description,
+    formula: input.formula,
+    variables: previous?.variables ?? {},
+    resultQty,
+    isDeduction: input.isDeduction,
+    unit,
+    locked: false,
+    createdAt: previous?.createdAt ?? new Date().toISOString(),
+    pending: true,
+  }
+}
 
 export function refLabel(ref: MeasurableDocumentRef): string {
   const label = documentLabel({
@@ -399,10 +467,16 @@ function Lines({
     setError(null)
     try {
       apply(
-        await apiWithEtag<Sheet>(
-          'DELETE',
-          `/api/v1/measurement-sheets/${sheet.id}/lines/${line.id}`,
-        ),
+        await mutate<Sheet>({
+          method: 'DELETE',
+          path: `${sheetPath(sheet)}/lines/${line.id}`,
+          resource: sheetPath(sheet),
+          label: `${t('common.delete')}: ${line.formula}`,
+          optimistic: (current) => {
+            const base = current ?? sheet
+            return { ...base, lines: base.lines.filter((l) => l.id !== line.id) }
+          },
+        }),
       )
     } catch (err) {
       setError((err as ApiError).message)
@@ -413,6 +487,9 @@ function Lines({
     <div className="panel">
       <h2>{t('m.lines')}</h2>
       <FormError>{error}</FormError>
+      {sheet.lines.some((l) => (l as LocalLine).pending) ? (
+        <p className="hint">{t('off.sumsLater')}</p>
+      ) : null}
       {groups.map((group) => (
         <div key={group.key} className="line-group">
           <h3>{group.title}</h3>
@@ -437,6 +514,9 @@ function Lines({
                         <strong className="block">{line.description}</strong>
                       ) : null}
                       <code className="formula">{line.formula.replace(/\./g, ',')}</code>
+                      {(line as LocalLine).pending ? (
+                        <span className="not-synced">{t('off.notSynced')}</span>
+                      ) : null}
                       {line.isDeduction ? (
                         <span className="tag">{t('m.deductionShort')}</span>
                       ) : null}
@@ -544,14 +624,26 @@ function LineForm({
     setError(null)
     setFieldErrors({})
     try {
+      // New lines get their id on the device, so the outbox can send them again safely.
+      const lineId = line?.id ?? crypto.randomUUID()
       apply(
-        line
-          ? await apiWithEtag<Sheet>(
-              'PATCH',
-              `/api/v1/measurement-sheets/${sheet.id}/lines/${line.id}`,
-              body,
-            )
-          : await apiWithEtag<Sheet>('POST', `/api/v1/measurement-sheets/${sheet.id}/lines`, body),
+        await mutate<Sheet>({
+          method: line ? 'PATCH' : 'POST',
+          path: line ? `${sheetPath(sheet)}/lines/${line.id}` : `${sheetPath(sheet)}/lines`,
+          json: line ? body : { ...body, id: lineId },
+          resource: sheetPath(sheet),
+          label: `${t('m.lines')}: ${formula}`,
+          optimistic: (current) => {
+            const base = current ?? sheet
+            const next = provisionalLine(base, lineId, body, items, units, line)
+            return {
+              ...base,
+              lines: line
+                ? base.lines.map((l) => (l.id === line.id ? next : l))
+                : [...base.lines, next],
+            }
+          },
+        }),
       )
       onDone()
     } catch (err) {

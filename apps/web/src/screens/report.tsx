@@ -1,15 +1,7 @@
-import type {
-  FileSummary,
-  FolderSummary,
-  Me,
-  ReportDetail,
-  ReportSection,
-  SignerRole,
-  UnitSummary,
-} from '@opc/schemas'
+import type { Me, ReportDetail, ReportSection, SignerRole, UnitSummary } from '@opc/schemas'
 import { WEATHER_CONDITIONS } from '@opc/schemas/constants'
 import { type ChangeEvent, useCallback, useEffect, useMemo, useState } from 'react'
-import { ApiError, api, apiWithEtag, uploadFile } from '../api'
+import { ApiError, api, apiWithEtag, mutate } from '../api'
 import { formatDateTime, formatInputNumber } from '../format'
 import { FormError } from '../forms'
 import { type TextKey, t } from '../i18n'
@@ -24,6 +16,9 @@ import {
 } from '../signature'
 
 type Data = Record<string, Record<string, unknown>>
+/** A photo taken offline that waits in the outbox (ADR 0010). */
+type LocalPhoto = ReportDetail['photos'][number] & { pending?: boolean }
+const reportPath = (id: string) => `/api/v1/reports/${id}`
 type Row = Record<string, string | null | undefined>
 
 const EDITABLE = new Set([
@@ -92,10 +87,12 @@ function toRequest(sections: ReportSection[], data: Data): Data {
 /** A report (Bautagesbericht and other templates), rendered from the template's sections. */
 export function ReportScreen({ me, id, navigate }: { me: Me; id: string; navigate: Navigate }) {
   const [report, setReport] = useState<ReportDetail | null>(null)
-  const [etag, setEtag] = useState<string | null>(null)
+  const [, setEtag] = useState<string | null>(null)
   const [data, setData] = useState<Data>({})
   const [reportDate, setReportDate] = useState('')
   const [dirty, setDirty] = useState(false)
+  // Sections changed since the last save: only these are sent (others keep the server state).
+  const [touched, setTouched] = useState<Set<string>>(new Set())
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({})
@@ -109,6 +106,7 @@ export function ReportScreen({ me, id, navigate }: { me: Me; id: string; navigat
       setData(toInput(next.data as Data))
       setReportDate(next.reportDate)
       setDirty(false)
+      setTouched(new Set())
     },
     [],
   )
@@ -154,18 +152,30 @@ export function ReportScreen({ me, id, navigate }: { me: Me; id: string; navigat
   const editable = report.status === 'draft' && me.permissions.includes('report.write')
   const sections = report.template.sections
   const update = (sectionId: string, value: Record<string, unknown>) => {
+    setTouched((current) => new Set(current).add(sectionId))
     setData((d) => ({ ...d, [sectionId]: value }))
     setDirty(true)
     setSaved(false)
   }
   const save = async () => {
+    // Offline as well (ADR 0010): each section is replaced as a whole, last change wins.
+    const changed = toRequest(sections, data)
+    const body = {
+      reportDate,
+      data: Object.fromEntries(Object.entries(changed).filter(([key]) => touched.has(key))),
+    }
     const ok = await run(() =>
-      apiWithEtag<ReportDetail>(
-        'PATCH',
-        `/api/v1/reports/${report.id}`,
-        { reportDate, data: toRequest(sections, data) },
-        etag,
-      ),
+      mutate<ReportDetail>({
+        method: 'PATCH',
+        path: reportPath(report.id),
+        json: body,
+        resource: reportPath(report.id),
+        label: `${report.template.name} ${formatDateTime(reportDate, 'date')}`,
+        optimistic: (current) => {
+          const base = current ?? report
+          return { ...base, reportDate, data: { ...base.data, ...body.data } }
+        },
+      }),
     )
     if (ok) setSaved(true)
     return ok
@@ -613,22 +623,27 @@ function Photos({
     setUploading(true)
     setError(null)
     try {
-      // Photos are stored in the project's Ablage (folder „Fotos“ if it exists).
-      const folders = await api<FolderSummary[]>(
-        'GET',
-        `/api/v1/projects/${report.projectId}/folders`,
-      )
-      const folder = folders.find((f) => f.name === 'Fotos')
+      // Straight into the report (stored in the Ablage, folder „Fotos“); offline into the outbox.
       let latest: { data: ReportDetail; etag: string | null } | null = null
       for (const file of files) {
-        const query = new URLSearchParams({ filename: file.name || 'Foto.jpg' })
-        if (folder) query.set('folderId', folder.id)
-        const stored = await uploadFile<FileSummary>(
-          `/api/v1/projects/${report.projectId}/files?${query}`,
-          file,
-        )
-        latest = await apiWithEtag<ReportDetail>('POST', `/api/v1/reports/${report.id}/photos`, {
-          fileId: stored.id,
+        const filename = file.name || 'Foto.jpg'
+        latest = await mutate<ReportDetail>({
+          method: 'POST',
+          path: `${reportPath(report.id)}/photos/upload?${new URLSearchParams({ filename })}`,
+          blob: file,
+          resource: reportPath(report.id),
+          label: `${t('d.photo')}: ${filename}`,
+          optimistic: (current) => {
+            const base = current ?? report
+            const photo: LocalPhoto = {
+              fileId: `local-${crypto.randomUUID()}`,
+              filename,
+              caption: null,
+              isEvidence: false,
+              pending: true,
+            }
+            return { ...base, photos: [...base.photos, photo], photoCount: base.photoCount + 1 }
+          },
         })
       }
       if (latest) apply(latest)
@@ -652,32 +667,42 @@ function Photos({
       <h2>{t('d.section.photos')}</h2>
       {report.photos.length ? (
         <ul className="file-grid">
-          {report.photos.map((p) => (
-            <li key={p.fileId} className="file-card">
-              <a
-                className="file-preview"
-                href={`/api/v1/files/${p.fileId}/content`}
-                target="_blank"
-                rel="noopener"
-              >
-                <img
-                  src={`/api/v1/files/${p.fileId}/content`}
-                  alt={p.caption ?? p.filename}
-                  loading="lazy"
-                />
-              </a>
-              <span className="file-info">{p.caption ?? p.filename}</span>
-              {editable ? (
-                <button
-                  type="button"
-                  className="button ghost small danger"
-                  onClick={() => remove(p.fileId)}
+          {report.photos.map((p) =>
+            (p as LocalPhoto).pending ? (
+              <li key={p.fileId} className="file-card">
+                <span className="file-preview file-kind">{t('d.photo')}</span>
+                <span className="file-info">
+                  {p.filename}
+                  <span className="not-synced block">{t('off.notSynced')}</span>
+                </span>
+              </li>
+            ) : (
+              <li key={p.fileId} className="file-card">
+                <a
+                  className="file-preview"
+                  href={`/api/v1/files/${p.fileId}/content`}
+                  target="_blank"
+                  rel="noopener"
                 >
-                  {t('d.photo.remove')}
-                </button>
-              ) : null}
-            </li>
-          ))}
+                  <img
+                    src={`/api/v1/files/${p.fileId}/content`}
+                    alt={p.caption ?? p.filename}
+                    loading="lazy"
+                  />
+                </a>
+                <span className="file-info">{p.caption ?? p.filename}</span>
+                {editable ? (
+                  <button
+                    type="button"
+                    className="button ghost small danger"
+                    onClick={() => remove(p.fileId)}
+                  >
+                    {t('d.photo.remove')}
+                  </button>
+                ) : null}
+              </li>
+            ),
+          )}
         </ul>
       ) : null}
       {editable ? (
