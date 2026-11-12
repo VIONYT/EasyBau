@@ -1,6 +1,7 @@
 import { checkNumberPattern, formatNumber } from '@opc/domain'
 import type {
   BaseInterestRate,
+  BusinessArea,
   Company,
   DatevSettings,
   DunningLevel,
@@ -37,6 +38,7 @@ type Section =
   | 'letterhead'
   | 'filing'
   | 'datev'
+  | 'areas'
   | 'dunning'
   | 'system'
 
@@ -53,6 +55,7 @@ const SECTIONS: { key: Section; label: TextKey }[] = [
   { key: 'letterhead', label: 'lh.title' },
   { key: 'filing', label: 's.filing' },
   { key: 'datev', label: 's.datev' },
+  { key: 'areas', label: 's.areas' },
   { key: 'dunning', label: 'sys.dunning' },
   { key: 'system', label: 'sys.title' },
 ]
@@ -98,6 +101,7 @@ export function Settings({ me }: { me: Me }) {
         {section === 'letterhead' ? <LetterheadEditor canEdit={canWrite} /> : null}
         {section === 'filing' ? <FilingSettings /> : null}
         {section === 'datev' ? <DatevSettingsForm /> : null}
+        {section === 'areas' ? <BusinessAreaSettings /> : null}
         {section === 'dunning' ? <DunningSettingsForm /> : null}
         {section === 'system' ? <SystemSettings me={me} /> : null}
       </fieldset>
@@ -1138,6 +1142,16 @@ function DatevSettingsForm() {
       }
     />
   )
+  const expense = (key: keyof DatevSettings['expenseAccounts']) => (
+    <Input
+      label={t(`s.d.expense.${key}` as TextKey)}
+      inputMode="numeric"
+      value={data.expenseAccounts[key] ?? ''}
+      onChange={(v) =>
+        setData({ ...data, expenseAccounts: { ...data.expenseAccounts, [key]: nullable(v) } })
+      }
+    />
+  )
   return (
     <Panel title={t('s.datev')}>
       <p className="hint">{t('s.d.hint')}</p>
@@ -1191,6 +1205,22 @@ function DatevSettingsForm() {
           onChange={(v) => setData({ ...data, bankAccount: nullable(v) })}
         />
       </div>
+      <h3>{t('s.d.incoming')}</h3>
+      <p className="hint">{t('s.d.incomingHint')}</p>
+      <div className="row">
+        {expense('material')}
+        {expense('labor')}
+        {expense('equipment')}
+        {expense('subcontract')}
+        {expense('other')}
+        {expense('reverseCharge')}
+        <Input
+          label={t('s.d.creditor')}
+          inputMode="numeric"
+          value={data.creditorAccount ?? ''}
+          onChange={(v) => setData({ ...data, creditorAccount: nullable(v) })}
+        />
+      </div>
       <div className="button-row">
         <button
           type="button"
@@ -1203,6 +1233,69 @@ function DatevSettingsForm() {
           }
         >
           {t('common.save')}
+        </button>
+        {save.message}
+      </div>
+    </Panel>
+  )
+}
+
+// ---- Betriebsbereiche -------------------------------------------------------------------------
+
+function BusinessAreaSettings() {
+  const { data, error, reload } = useResource<BusinessArea[]>('/api/v1/business-areas')
+  const save = useSave()
+  const [name, setName] = useState('')
+  if (error) return <FormError>{error}</FormError>
+  if (!data) return <p className="muted">{t('common.loading')}</p>
+  return (
+    <Panel title={t('s.areas')}>
+      <p className="hint">{t('s.areas.hint')}</p>
+      <ul className="list">
+        {data.map((area) => (
+          <li key={area.id} className="list-row">
+            <span>
+              <strong>{area.name}</strong>
+              {area.archived ? <span className="tag">{t('s.areas.archived')}</span> : null}
+            </span>
+            <span className="actions">
+              <button
+                type="button"
+                className="button ghost small"
+                onClick={() =>
+                  save
+                    .run(() =>
+                      api('PATCH', `/api/v1/business-areas/${area.id}`, {
+                        archived: !area.archived,
+                      }),
+                    )
+                    .then(reload)
+                }
+              >
+                {t(area.archived ? 's.areas.restore' : 's.areas.archive')}
+              </button>
+            </span>
+          </li>
+        ))}
+      </ul>
+      <div className="row">
+        <Input label={t('s.areas.new')} value={name} onChange={setName} />
+      </div>
+      <div className="button-row">
+        <button
+          type="button"
+          className="button ghost"
+          disabled={!name.trim()}
+          onClick={() =>
+            save
+              .run(() => api('POST', '/api/v1/business-areas', { name }))
+              .then((created) => {
+                if (created) setName('')
+                reload()
+              })
+          }
+        >
+          {t('s.add')}
         </button>
         {save.message}
       </div>

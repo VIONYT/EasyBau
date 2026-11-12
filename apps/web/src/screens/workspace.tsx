@@ -8,6 +8,7 @@ import { AuditScreen } from './audit'
 import { Catalog } from './catalog'
 import { ContactEditor } from './contact-editor'
 import { DocumentScreen } from './document'
+import { IncomingInvoiceScreen, IncomingInvoices } from './incoming'
 import { Invoices } from './invoices'
 import { MeasurementScreen } from './measurement'
 import { PrintScreen } from './print'
@@ -21,6 +22,7 @@ import { Users } from './users'
 type Tab =
   | 'projects'
   | 'invoices'
+  | 'incoming'
   | 'contacts'
   | 'catalog'
   | 'audit'
@@ -55,13 +57,20 @@ export function Workspace({
     current.view === 'report' ||
     current.view === 'print'
       ? 'projects'
-      : current.view
+      : current.view === 'incomingInvoice'
+        ? 'incoming'
+        : current.view
   const tabs: { key: Tab; label: string; visible: boolean }[] = [
     { key: 'projects', label: t('nav.projects'), visible: !locked },
     {
       key: 'invoices',
       label: t('nav.invoices'),
       visible: !locked && me.permissions.includes('document.read'),
+    },
+    {
+      key: 'incoming',
+      label: t('nav.incoming'),
+      visible: !locked && me.permissions.includes('incoming_invoice.read'),
     },
     {
       key: 'contacts',
@@ -106,7 +115,8 @@ export function Workspace({
       : current.view === 'document' ||
           current.view === 'measurement' ||
           current.view === 'report' ||
-          current.view === 'print'
+          current.view === 'print' ||
+          current.view === 'incomingInvoice'
         ? `${current.view}-${current.id}`
         : current.view
   return (
@@ -154,6 +164,10 @@ export function Workspace({
         {current.view === 'settings' ? <Settings me={me} /> : null}
         {current.view === 'contacts' ? <Contacts me={me} /> : null}
         {current.view === 'invoices' ? <Invoices navigate={navigate} /> : null}
+        {current.view === 'incoming' ? <IncomingInvoices me={me} navigate={navigate} /> : null}
+        {current.view === 'incomingInvoice' ? (
+          <IncomingInvoiceScreen id={current.id} navigate={navigate} />
+        ) : null}
         {current.view === 'users' ? <Users /> : null}
         {current.view === 'audit' ? <AuditScreen me={me} /> : null}
         {current.view === 'security' ? <Security me={me} onChanged={refreshMe} /> : null}

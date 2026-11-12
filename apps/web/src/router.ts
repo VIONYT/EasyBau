@@ -5,6 +5,8 @@ export type Route =
   | { view: 'projects' }
   | { view: 'contacts' }
   | { view: 'invoices' }
+  | { view: 'incoming' }
+  | { view: 'incomingInvoice'; id: string }
   | { view: 'users' }
   | { view: 'security' }
   | { view: 'catalog' }
@@ -44,6 +46,9 @@ export function parseRoute(path: string): Route {
   if (document) return { view: 'document', id: document[1] as string }
   const measurement = new RegExp(`^/aufmass/(${UUID})/?$`).exec(path)
   if (measurement) return { view: 'measurement', id: measurement[1] as string }
+  const incoming = new RegExp(`^/eingangsrechnungen/(${UUID})/?$`).exec(path)
+  if (incoming) return { view: 'incomingInvoice', id: incoming[1] as string }
+  if (path.startsWith('/eingangsrechnungen')) return { view: 'incoming' }
   const report = new RegExp(`^/berichte/(${UUID})/?$`).exec(path)
   if (report) return { view: 'report', id: report[1] as string }
   if (path.startsWith('/stammdaten')) return { view: 'catalog' }
@@ -72,6 +77,10 @@ export function pathOf(route: Route): string {
       return '/sicherheit'
     case 'invoices':
       return '/rechnungen'
+    case 'incoming':
+      return '/eingangsrechnungen'
+    case 'incomingInvoice':
+      return `/eingangsrechnungen/${route.id}`
     case 'audit':
       return '/pruefung'
     case 'project': {

@@ -645,8 +645,8 @@ test('Rechnung: Pflichtangaben, Festschreiben und Korrigieren per Storno', async
   expect((await noticeFile.body()).subarray(0, 5).toString()).toBe('%PDF-')
 
   // Rechnungsliste mit Status, Summen und Filter
-  await page.getByRole('button', { name: 'Rechnungen' }).click()
-  await expect(page.getByRole('heading', { name: 'Rechnungen' })).toBeVisible()
+  await page.getByRole('button', { name: 'Rechnungen', exact: true }).click()
+  await expect(page.getByRole('heading', { name: 'Rechnungen', exact: true })).toBeVisible()
   await expect(page.getByRole('link', { name: /R-00101/ })).toContainText('angemahnt')
   await page.getByLabel('Status').selectOption('dunned')
   await expect(page.getByText('Rechnungen: 1')).toBeVisible()
@@ -674,6 +674,102 @@ test('Rechnung: Pflichtangaben, Festschreiben und Korrigieren per Storno', async
   await expectNoHorizontalScroll(page)
   if (SCREENSHOTS)
     await page.screenshot({ path: `${SCREENSHOTS}/rechnung-storno.png`, fullPage: true })
+})
+
+/** XRechnung (UBL) of a supplier as received by e-mail or download. */
+const SUPPLIER_XRECHNUNG = `<?xml version="1.0" encoding="UTF-8"?>
+<Invoice xmlns="urn:oasis:names:specification:ubl:schema:xsd:Invoice-2"
+  xmlns:cac="urn:oasis:names:specification:ubl:schema:xsd:CommonAggregateComponents-2"
+  xmlns:cbc="urn:oasis:names:specification:ubl:schema:xsd:CommonBasicComponents-2">
+  <cbc:CustomizationID>urn:cen.eu:en16931:2017#compliant#urn:xeinkauf.de:kosit:xrechnung_3.0</cbc:CustomizationID>
+  <cbc:ID>HS-2026-0815</cbc:ID>
+  <cbc:IssueDate>2026-11-02</cbc:IssueDate>
+  <cbc:DueDate>2026-12-02</cbc:DueDate>
+  <cbc:InvoiceTypeCode>380</cbc:InvoiceTypeCode>
+  <cbc:DocumentCurrencyCode>EUR</cbc:DocumentCurrencyCode>
+  <cbc:BuyerReference>Lindenweg</cbc:BuyerReference>
+  <cac:AccountingSupplierParty><cac:Party>
+    <cac:PartyName><cbc:Name>Holzhandel Süd GmbH</cbc:Name></cac:PartyName>
+    <cac:PostalAddress><cbc:StreetName>Sägewerk 1</cbc:StreetName><cbc:CityName>Celle</cbc:CityName>
+      <cbc:PostalZone>29221</cbc:PostalZone><cac:Country><cbc:IdentificationCode>DE</cbc:IdentificationCode></cac:Country></cac:PostalAddress>
+    <cac:PartyTaxScheme><cbc:CompanyID>DE811111111</cbc:CompanyID><cac:TaxScheme><cbc:ID>VAT</cbc:ID></cac:TaxScheme></cac:PartyTaxScheme>
+  </cac:Party></cac:AccountingSupplierParty>
+  <cac:AccountingCustomerParty><cac:Party><cac:PartyName><cbc:Name>Muster Bau GmbH</cbc:Name></cac:PartyName></cac:Party></cac:AccountingCustomerParty>
+  <cac:PaymentMeans><cbc:PaymentMeansCode>58</cbc:PaymentMeansCode>
+    <cac:PayeeFinancialAccount><cbc:ID>DE02120300000000202051</cbc:ID></cac:PayeeFinancialAccount></cac:PaymentMeans>
+  <cac:TaxTotal><cbc:TaxAmount currencyID="EUR">76.00</cbc:TaxAmount>
+    <cac:TaxSubtotal><cbc:TaxableAmount currencyID="EUR">400.00</cbc:TaxableAmount><cbc:TaxAmount currencyID="EUR">76.00</cbc:TaxAmount>
+      <cac:TaxCategory><cbc:ID>S</cbc:ID><cbc:Percent>19</cbc:Percent><cac:TaxScheme><cbc:ID>VAT</cbc:ID></cac:TaxScheme></cac:TaxCategory>
+    </cac:TaxSubtotal></cac:TaxTotal>
+  <cac:LegalMonetaryTotal><cbc:LineExtensionAmount currencyID="EUR">400.00</cbc:LineExtensionAmount>
+    <cbc:TaxExclusiveAmount currencyID="EUR">400.00</cbc:TaxExclusiveAmount>
+    <cbc:TaxInclusiveAmount currencyID="EUR">476.00</cbc:TaxInclusiveAmount>
+    <cbc:PayableAmount currencyID="EUR">476.00</cbc:PayableAmount></cac:LegalMonetaryTotal>
+  <cac:InvoiceLine><cbc:ID>1</cbc:ID><cbc:InvoicedQuantity unitCode="MTQ">2</cbc:InvoicedQuantity>
+    <cbc:LineExtensionAmount currencyID="EUR">400.00</cbc:LineExtensionAmount>
+    <cac:Item><cbc:Name>Konstruktionsvollholz 60×120</cbc:Name><cac:ClassifiedTaxCategory><cbc:ID>S</cbc:ID>
+      <cbc:Percent>19</cbc:Percent><cac:TaxScheme><cbc:ID>VAT</cbc:ID></cac:TaxScheme></cac:ClassifiedTaxCategory></cac:Item>
+    <cac:Price><cbc:PriceAmount currencyID="EUR">200.00</cbc:PriceAmount></cac:Price></cac:InvoiceLine>
+</Invoice>`
+
+test('Eingangsrechnung: XRechnung empfangen, prüfen, zuweisen, bestätigen und bezahlen', async () => {
+  test.skip(!SETUP_TOKEN, 'SETUP_TOKEN must be set for a fresh stack')
+  test.setTimeout(90_000)
+  await page.getByRole('button', { name: 'Eingangsrechnungen' }).click()
+  await expect(page.getByRole('heading', { name: 'Eingangsrechnungen' })).toBeVisible()
+  await expect(page.getByText('Nichts zu prüfen.')).toBeVisible()
+  await page.locator('input[type="file"]').setInputFiles({
+    name: 'xrechnung-holz.xml',
+    mimeType: 'application/xml',
+    buffer: Buffer.from(SUPPLIER_XRECHNUNG),
+  })
+
+  // One file: straight into the review, prefilled from the XML and shown readable
+  await expect(
+    page.getByRole('heading', { name: 'Holzhandel Süd GmbH · HS-2026-0815' }),
+  ).toBeVisible()
+  await expect(page.getByText(/E-Rechnung: XRechnung 3\.0/)).toBeVisible()
+  await expect(page.getByRole('cell', { name: /Konstruktionsvollholz/ })).toBeVisible()
+  await expect(page.getByLabel('Name des Lieferanten')).toHaveValue('Holzhandel Süd GmbH')
+  await expect(page.getByLabel('Rechnungsnummer')).toHaveValue('HS-2026-0815')
+  await expect(page.getByLabel('Brutto')).toHaveValue('476,00')
+  await expect(
+    page.getByText('Die Kosten sind noch keinem Projekt oder Betriebsbereich zugewiesen.'),
+  ).toBeVisible()
+
+  // Kostenzuweisung: the open net amount goes to the project
+  await page.getByRole('button', { name: 'Zuweisung hinzufügen' }).click()
+  const target = page.getByLabel('Zuweisung 1')
+  const project = await target
+    .locator('option', { hasText: 'Sanierung Lindenweg' })
+    .getAttribute('value')
+  await target.selectOption(project as string)
+  await page.getByLabel('Kostenart').selectOption('material')
+  await expect(page.getByLabel('Netto-Betrag')).toHaveValue('400,00')
+  await expectNoHorizontalScroll(page)
+  if (SCREENSHOTS)
+    await page.screenshot({ path: `${SCREENSHOTS}/eingangsrechnung-pruefen.png`, fullPage: true })
+  await page.getByRole('button', { name: 'Prüfung bestätigen' }).click()
+  await expect(page.locator('.invoice-head .chip')).toHaveText('offen')
+  await expect(page.getByText('Sanierung Lindenweg').first()).toBeVisible()
+
+  // Zahlstatus
+  await page.getByRole('button', { name: 'Als bezahlt markieren' }).click()
+  await expect(page.locator('.invoice-head .chip')).toHaveText('bezahlt')
+  await expect(page.getByText(/Bezahlt am/)).toBeVisible()
+  const original = await page.request.get(
+    `${new URL(page.url()).pathname.replace('/eingangsrechnungen/', '/api/v1/incoming-invoices/')}/original`,
+  )
+  expect(original.status()).toBe(200)
+  expect((await original.body()).toString()).toBe(SUPPLIER_XRECHNUNG)
+
+  // List with filter
+  await page.getByRole('link', { name: '← Eingangsrechnungen' }).click()
+  await page.getByRole('button', { name: 'Bezahlt' }).click()
+  await expect(page.getByRole('link', { name: /Holzhandel Süd GmbH/ })).toContainText('bezahlt')
+  await expectNoHorizontalScroll(page)
+  if (SCREENSHOTS)
+    await page.screenshot({ path: `${SCREENSHOTS}/eingangsrechnungen.png`, fullPage: true })
 })
 
 // Smallest valid PNG (1 × 1 px) as logo.

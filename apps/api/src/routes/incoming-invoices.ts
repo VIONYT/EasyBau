@@ -751,6 +751,13 @@ export function registerIncomingInvoiceRoutes(app: FastifyInstance, services: Se
         contentDisposition(inline ? 'inline' : 'attachment', row.detail.filename),
       )
       .header('cache-control', 'private, no-store')
+      .header('x-content-type-options', 'nosniff')
+      .header(
+        'content-security-policy',
+        row.detail.mimeType === 'application/pdf'
+          ? "default-src 'none'; img-src 'self' data:; style-src 'unsafe-inline'; frame-ancestors 'self'"
+          : "default-src 'none'; img-src 'self'; style-src 'unsafe-inline'; sandbox",
+      )
       .send(stream)
   })
 
