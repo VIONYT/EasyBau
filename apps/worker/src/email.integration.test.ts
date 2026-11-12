@@ -118,4 +118,48 @@ describe.skipIf(!testDatabaseUrl)('e-mail outbox dispatch (integration)', () => 
       { filename: 'Mahnung_R-1.pdf', content: Buffer.from('%PDF'), contentType: 'application/pdf' },
     ])
   })
+
+  it('sends a document with CC/BCC and marks it as sent once the server accepted it', async () => {
+    const tenant = await createTenant(db, 'Firma E')
+    const documentId = await tenant.run(async (tx) => {
+      const { projectId } = await createProject(tx, tenant.tenantId)
+      const { documentId } = await createDraftInvoice(tx, tenant.tenantId, projectId)
+      await finalizeDocument(tx, documentId)
+      await tx`
+        insert into email_message (tenant_id, kind, to_address, subject, body_text, document_id,
+                                   cc_addresses, bcc_addresses)
+        values (${tenant.tenantId}, 'document', 'kunde@example.test', 'Rechnung', 'Anbei', ${documentId},
+                ${['bauleitung@example.test']}, ${['archiv@example.test']})`
+      return documentId
+    })
+    const sent: OutgoingMail[] = []
+    const failing = { send: async () => Promise.reject(new Error('Postfach voll')) }
+    expect(await dispatchEmails(db.app, failing, 'x', silent)).toBe(0)
+    const status = async () =>
+      (
+        await tenant.run(
+          (tx) => tx<{ status: string; sent: boolean }[]>`
+            select status, sent_at is not null as sent from document where id = ${documentId}`,
+        )
+      )[0]
+    // Not accepted by the server: the document stays "finalized".
+    expect(await status()).toEqual({ status: 'finalized', sent: false })
+    await db.admin`update email_message set next_attempt_at = now() where document_id = ${documentId}`
+    expect(
+      await dispatchEmails(db.app, { send: async (mail) => void sent.push(mail) }, 'x', silent),
+    ).toBe(1)
+    expect(sent[0]).toMatchObject({
+      to: 'kunde@example.test',
+      cc: ['bauleitung@example.test'],
+      bcc: ['archiv@example.test'],
+    })
+    expect(await status()).toEqual({ status: 'sent', sent: true })
+    const audit = await tenant.run(
+      (tx) => tx<{ status: string }[]>`
+        select after ->> 'status' as status from audit_event
+        where entity = 'document' and entity_id = ${documentId} and action = 'update'
+        order by seq desc limit 1`,
+    )
+    expect(audit).toEqual([{ status: 'sent' }])
+  })
 })

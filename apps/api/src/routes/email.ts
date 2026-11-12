@@ -12,6 +12,10 @@ export interface QueuedEmail {
   /** Archived originals sent as attachments (read by the worker when sending). */
   attachments?: { artifactId: string; filename: string }[]
   dunningNoticeId?: string | null
+  /** Dokumente per E-Mail: the document is marked as sent once the server accepted the message. */
+  documentId?: string | null
+  cc?: string[]
+  bcc?: string[]
 }
 
 /**
@@ -24,9 +28,10 @@ export async function queueEmail(tx: Tx, auth: AuthContext, mail: QueuedEmail): 
   >`select email from tenant where id = current_tenant_id()`
   const [row] = await tx<{ id: string }[]>`
     insert into email_message (tenant_id, kind, to_address, reply_to, subject, body_text, created_by,
-                               dunning_notice_id)
+                               dunning_notice_id, document_id, cc_addresses, bcc_addresses)
     values (${auth.tenantId}, ${mail.kind}, ${mail.to}, ${company?.email ?? null}, ${mail.subject}, ${mail.text},
-            ${auth.userId}, ${mail.dunningNoticeId ?? null})
+            ${auth.userId}, ${mail.dunningNoticeId ?? null}, ${mail.documentId ?? null},
+            ${mail.cc ?? []}::text[], ${mail.bcc ?? []}::text[])
     returning id`
   const id = (row as { id: string }).id
   for (const attachment of mail.attachments ?? []) {

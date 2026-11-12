@@ -6,6 +6,8 @@ import type { Logger } from 'pino'
 export interface OutgoingMail {
   from: string
   to: string
+  cc?: string[]
+  bcc?: string[]
   replyTo?: string
   subject: string
   text: string
@@ -46,6 +48,8 @@ interface ClaimedMessage {
   reply_to: string | null
   subject: string
   body_text: string | null
+  cc_addresses: string[] | null
+  bcc_addresses: string[] | null
 }
 
 /**
@@ -76,6 +80,8 @@ export async function dispatchEmails(
       await transport.send({
         from,
         to: message.to_address,
+        ...(message.cc_addresses?.length ? { cc: message.cc_addresses } : {}),
+        ...(message.bcc_addresses?.length ? { bcc: message.bcc_addresses } : {}),
         ...(message.reply_to ? { replyTo: message.reply_to } : {}),
         subject: message.subject,
         text: message.body_text ?? '',
