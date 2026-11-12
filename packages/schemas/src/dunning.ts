@@ -82,6 +82,27 @@ export const createDunningRequest = z.object({
 })
 export type CreateDunningRequest = z.infer<typeof createDunningRequest>
 
+/** Mahnlauf: the next Mahnstufe for several invoices with the default values of the settings. */
+export const dunningBatchRequest = z.object({
+  invoiceIds: z
+    .array(z.uuid('Ungültige ID.'))
+    .min(1, 'Bitte Rechnungen auswählen.')
+    .max(50, 'Höchstens 50 Rechnungen auf einmal.'),
+  /** Send by e-mail where the customer's address is known (needs SMTP), otherwise PDF only. */
+  email: z.boolean().default(true),
+})
+
+export interface DunningBatchResult {
+  invoiceId: string
+  number: string | null
+  ok: boolean
+  level: DunningLevel | null
+  noticeId: string | null
+  /** E-mail queued to this address; null = PDF only (no address or no SMTP). */
+  emailedTo: string | null
+  error: string | null
+}
+
 export const sendDunningRequest = z.object({ to: email, message: optionalText(4000) })
 
 export interface DunningAmounts {

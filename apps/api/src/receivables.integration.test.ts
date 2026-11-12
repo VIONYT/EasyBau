@@ -321,11 +321,11 @@ describe.skipIf(!process.env.DATABASE_URL)('Zahlungen und Forderungen (integrati
     expect(csv.headers['content-type']).toBe('text/csv; charset=utf-8')
     const lines = csv.body.replace(/^﻿/, '').trim().split('\r\n')
     expect(lines[0]).toBe(
-      'Nummer;Art;Rechnungsdatum;Fällig am;Empfänger;Projekt;Netto;Brutto;Bezahlt;Abzüge;Offen;Einbehalt;Status',
+      'Nummer;Art;Rechnungsdatum;Fällig am;Empfänger;Projekt;Netto;Brutto;Bezahlt;Abzüge;Offen;Einbehalt;Status;Mahnstufe;Nächste Mahnstufe ab',
     )
     expect(lines[1]).toContain('"Wohnbau Nord eG"')
     expect(lines[1]).toContain('"1090,00"')
-    expect(lines[1]).toMatch(/"überfällig"$/)
+    expect(lines[1]).toMatch(/"überfällig";"";"Zahlungserinnerung ab \d{2}\.\d{2}\.2026"$/)
   })
 
   it('takes no new payments on a cancelled invoice, but reversals of earlier ones', async () => {

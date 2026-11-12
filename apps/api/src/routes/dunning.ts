@@ -25,9 +25,11 @@ import {
   DEFAULT_DUNNING_SETTINGS,
   type DocumentDetail,
   type DunningAmounts,
+  type DunningBatchResult,
   type DunningNotice,
   type DunningOverview,
   type DunningSettings,
+  dunningBatchRequest,
   dunningSettingsRequest,
   sendDunningRequest,
 } from '@opc/schemas'
@@ -327,6 +329,85 @@ async function queueNoticeEmail(
   })
 }
 
+/**
+ * Issues the next Mahnstufe of an invoice: frozen amounts and letter, PDF/A archived, optionally
+ * queued as e-mail – all in the caller's transaction (one notice is all or nothing).
+ */
+async function issueNotice(
+  tx: Tx,
+  services: Services,
+  auth: AuthContext,
+  id: string,
+  input: CreateDunningRequest,
+): Promise<{ noticeId: string; level: DunningLevel; number: string }> {
+  await tx`select id from document where id = ${id} for update`
+  const doc = await loadInvoice(tx, auth, id)
+  const notices = await noticesOf(tx, id)
+  const { amounts, blocked } = await planNext(tx, doc, notices, input, todayOf(tx))
+  if (!amounts) throw new HttpError(409, blocked as string)
+  const issuer = await liveIssuer(tx)
+  const { text, ...frozen } = amounts
+  const snapshot: DunningLetterSnapshot = {
+    issuer: {
+      name: issuer.name,
+      layout: issuer.letterhead,
+      values: (issuer.values ?? {}) as LetterheadValues,
+      iban: issuer.einvoice?.iban ?? issuer.values?.IBAN ?? null,
+      bic: issuer.einvoice?.bic ?? issuer.values?.BIC ?? null,
+    },
+    recipient: doc.recipient ? [doc.recipient.name, ...doc.recipient.lines] : [],
+    customerNumber: doc.recipient?.customerNumber ?? null,
+    invoice: {
+      number: doc.number as string,
+      title: documentTitle(doc),
+      documentDate: doc.documentDate,
+      dueDate: doc.dueDate,
+      subject: doc.subject,
+      placeOfPerformance: doc.placeOfPerformance,
+      grossCents: doc.totals.grossCents,
+    },
+    amounts: frozen,
+    text,
+    signer: auth.displayName,
+  }
+  const [row] = await tx<{ id: string }[]>`
+      insert into dunning_notice (tenant_id, invoice_id, level, notice_date, due_date, fee_cents,
+                                  interest_rate_percent, interest_cents, flat_fee_cents, open_amount_cents,
+                                  letter_snapshot, sent_at, created_by, business, interest_from,
+                                  interest_to, earlier_charges_cents, total_cents)
+      values (${auth.tenantId}, ${id}, ${amounts.level}, ${amounts.noticeDate}::date, ${amounts.dueDate}::date,
+              ${amounts.feeCents}, ${amounts.interestRatePercent}::numeric, ${amounts.interestCents},
+              ${amounts.flatFeeCents}, ${amounts.openCents}, ${tx.json(snapshot as never)}, now(),
+              ${auth.userId}, ${amounts.business}, ${amounts.interestFrom}::date, ${amounts.interestTo}::date,
+              ${amounts.earlierChargesCents}, ${amounts.totalCents})
+      returning id`
+  const noticeId = (row as { id: string }).id
+  const { logoPosition, ...letter } = dunningLetter(snapshot)
+  const pdf = renderLetterPdf(
+    { ...letter, logo: await logoFor(tx, services, logoPosition) },
+    { createdAt: new Date(services.now()) },
+  )
+  await storeArtifact(tx, services, auth, id, {
+    kind: 'dunning_pdf',
+    data: pdf,
+    mime: 'application/pdf',
+    dunningNoticeId: noticeId,
+    retentionFrom: amounts.noticeDate,
+    retentionYears: DUNNING_RETENTION_YEARS,
+  })
+  if (input.email) {
+    await queueNoticeEmail(
+      tx,
+      services,
+      auth,
+      { ...amounts, id: noticeId },
+      doc.number as string,
+      input.email,
+    )
+  }
+  return { noticeId, level: amounts.level, number: doc.number as string }
+}
+
 export function registerDunningRoutes(app: FastifyInstance, services: Services) {
   app.get('/api/v1/documents/:id/dunning', async (request): Promise<DunningOverview> => {
     const auth = requirePermission(request, 'document.read')
@@ -370,74 +451,60 @@ export function registerDunningRoutes(app: FastifyInstance, services: Services) 
     const { id } = parse(idParam, request.params)
     const input = parse(createDunningRequest, request.body)
     const notice = await inTenant(services, auth, async (tx) => {
-      await tx`select id from document where id = ${id} for update`
-      const doc = await loadInvoice(tx, auth, id)
-      const notices = await noticesOf(tx, id)
-      const { amounts, blocked } = await planNext(tx, doc, notices, input, todayOf(tx))
-      if (!amounts) throw new HttpError(409, blocked as string)
-      const issuer = await liveIssuer(tx)
-      const { text, ...frozen } = amounts
-      const snapshot: DunningLetterSnapshot = {
-        issuer: {
-          name: issuer.name,
-          layout: issuer.letterhead,
-          values: (issuer.values ?? {}) as LetterheadValues,
-          iban: issuer.einvoice?.iban ?? issuer.values?.IBAN ?? null,
-          bic: issuer.einvoice?.bic ?? issuer.values?.BIC ?? null,
-        },
-        recipient: doc.recipient ? [doc.recipient.name, ...doc.recipient.lines] : [],
-        customerNumber: doc.recipient?.customerNumber ?? null,
-        invoice: {
-          number: doc.number as string,
-          title: documentTitle(doc),
-          documentDate: doc.documentDate,
-          dueDate: doc.dueDate,
-          subject: doc.subject,
-          placeOfPerformance: doc.placeOfPerformance,
-          grossCents: doc.totals.grossCents,
-        },
-        amounts: frozen,
-        text,
-        signer: auth.displayName,
-      }
-      const [row] = await tx<{ id: string }[]>`
-        insert into dunning_notice (tenant_id, invoice_id, level, notice_date, due_date, fee_cents,
-                                    interest_rate_percent, interest_cents, flat_fee_cents, open_amount_cents,
-                                    letter_snapshot, sent_at, created_by, business, interest_from,
-                                    interest_to, earlier_charges_cents, total_cents)
-        values (${auth.tenantId}, ${id}, ${amounts.level}, ${amounts.noticeDate}::date, ${amounts.dueDate}::date,
-                ${amounts.feeCents}, ${amounts.interestRatePercent}::numeric, ${amounts.interestCents},
-                ${amounts.flatFeeCents}, ${amounts.openCents}, ${tx.json(snapshot as never)}, now(),
-                ${auth.userId}, ${amounts.business}, ${amounts.interestFrom}::date, ${amounts.interestTo}::date,
-                ${amounts.earlierChargesCents}, ${amounts.totalCents})
-        returning id`
-      const noticeId = (row as { id: string }).id
-      const { logoPosition, ...letter } = dunningLetter(snapshot)
-      const pdf = renderLetterPdf(
-        { ...letter, logo: await logoFor(tx, services, logoPosition) },
-        { createdAt: new Date(services.now()) },
-      )
-      await storeArtifact(tx, services, auth, id, {
-        kind: 'dunning_pdf',
-        data: pdf,
-        mime: 'application/pdf',
-        dunningNoticeId: noticeId,
-        retentionFrom: amounts.noticeDate,
-        retentionYears: DUNNING_RETENTION_YEARS,
-      })
-      if (input.email) {
-        await queueNoticeEmail(
-          tx,
-          services,
-          auth,
-          { ...amounts, id: noticeId },
-          doc.number as string,
-          input.email,
-        )
-      }
+      const { noticeId } = await issueNotice(tx, services, auth, id, input)
       return (await noticesOf(tx, id)).find((n) => n.id === noticeId) as DunningNotice
     })
     return reply.status(201).send(notice)
+  })
+
+  /**
+   * Mahnlauf (P2.2): the next Mahnstufe for each selected invoice with the defaults of the
+   * settings; each invoice in its own transaction, so one blocked invoice does not stop the rest.
+   */
+  app.post('/api/v1/dunning/batch', async (request) => {
+    const auth = requirePermission(request, 'dunning.write')
+    const input = parse(dunningBatchRequest, request.body)
+    const results: DunningBatchResult[] = []
+    for (const invoiceId of [...new Set(input.invoiceIds)]) {
+      try {
+        results.push(
+          await inTenant(services, auth, async (tx) => {
+            const doc = await loadInvoice(tx, auth, invoiceId)
+            const to =
+              input.email && services.config.SMTP_ENABLED ? await suggestedEmail(tx, doc) : null
+            const { noticeId, level } = await issueNotice(tx, services, auth, invoiceId, {
+              ...(to ? { email: { to } } : {}),
+            })
+            return {
+              invoiceId,
+              number: doc.number,
+              ok: true,
+              level,
+              noticeId,
+              emailedTo: to,
+              error: null,
+            }
+          }),
+        )
+      } catch (error) {
+        if (!(error instanceof HttpError)) throw error
+        const number = await inTenant(services, auth, async (tx) => {
+          const [row] = await tx<{ number: string | null }[]>`
+            select number from document where id = ${invoiceId}`
+          return row?.number ?? null
+        })
+        results.push({
+          invoiceId,
+          number,
+          ok: false,
+          level: null,
+          noticeId: null,
+          emailedTo: null,
+          error: error.message,
+        })
+      }
+    }
+    return { results }
   })
 
   app.post('/api/v1/dunning-notices/:id/email', async (request, reply) => {

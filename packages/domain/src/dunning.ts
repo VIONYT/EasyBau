@@ -51,6 +51,37 @@ export function nextDunningLevel(issued: readonly DunningLevel[]): DunningLevel 
   return null
 }
 
+export interface DunningDueInput {
+  /** Finalized invoice, neither cancelled nor itself a Stornorechnung. */
+  eligible: boolean
+  openCents: bigint
+  /** Fälligkeit of the invoice (or its date when there is none). */
+  dueDate: string
+  /** Notices issued so far, in order. */
+  notices: readonly { level: DunningLevel; dueDate: string }[]
+  /** Today in the company's time zone (YYYY-MM-DD). */
+  today: string
+}
+
+export interface DunningDue {
+  /** Next level that can be issued. */
+  level: DunningLevel
+  /** First day it can be issued: the day after the invoice's or the last notice's deadline. */
+  possibleFrom: string
+  /** It can be issued today (Mahnvorschlag). */
+  due: boolean
+}
+
+/** Next Mahnstufe of an invoice and from when it is possible – same rules as issuing a notice. */
+export function nextDunningDue(input: DunningDueInput): DunningDue | null {
+  if (!input.eligible || input.openCents <= 0n) return null
+  const level = nextDunningLevel(input.notices.map((n) => n.level))
+  if (!level) return null
+  const last = input.notices.at(-1)
+  const possibleFrom = addDays(last ? last.dueDate : input.dueDate, 1)
+  return { level, possibleFrom, due: possibleFrom <= input.today }
+}
+
 function daysInclusive(from: string, to: string): number {
   return (
     Math.round(

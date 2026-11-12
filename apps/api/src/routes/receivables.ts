@@ -1,5 +1,11 @@
 import type { Tx } from '@opc/db'
-import { addDays, type ReceivableState, receivableState } from '@opc/domain'
+import {
+  addDays,
+  type DunningLevel,
+  nextDunningDue,
+  type ReceivableState,
+  receivableState,
+} from '@opc/domain'
 import { csvLine, germanAmount, germanDate } from '@opc/exports'
 import {
   type AdjustmentEntry,
@@ -159,6 +165,7 @@ interface ListRow {
   plannedRetention: boolean
   dunned: boolean
   einvoice: boolean
+  notices: { level: DunningLevel; dueDate: string }[]
 }
 
 async function listInvoices(
@@ -181,7 +188,11 @@ async function listInvoices(
            coalesce(d.retention_percent, 0) > 0 as "plannedRetention",
            exists (select 1 from dunning_notice n where n.invoice_id = d.id and n.sent_at is not null) as dunned,
            exists (select 1 from document_artifact a where a.document_id = d.id
-                   and a.kind in ('zugferd_xml', 'xrechnung_xml')) as einvoice
+                   and a.kind in ('zugferd_xml', 'xrechnung_xml')) as einvoice,
+           coalesce((select json_agg(json_build_object('level', n.level,
+                                                       'dueDate', to_char(n.due_date, 'YYYY-MM-DD'))
+                                     order by n.notice_date, n.created_at)
+                     from dunning_notice n where n.invoice_id = d.id), '[]'::json) as notices
     from document d
     join project p on p.id = d.project_id
     left join contact c on c.id = d.contact_id
@@ -217,6 +228,17 @@ async function listInvoices(
         })
     const status = state?.status ?? 'draft'
     if (query.status && query.status !== status) continue
+    const nextDunning =
+      state && row.type === 'invoice'
+        ? nextDunningDue({
+            eligible: status !== 'cancelled' && row.invoiceKind !== 'cancellation',
+            openCents: state.openCents,
+            dueDate: row.dueDate ?? row.documentDate,
+            notices: row.notices,
+            today,
+          })
+        : null
+    if (query.dunning === 'due' && !nextDunning?.due) continue
     if (query.retention === 'true' && !row.plannedRetention && !state?.retentionHeldCents) continue
     const item: InvoiceListItem = {
       id: row.id,
@@ -238,6 +260,8 @@ async function listInvoices(
       status,
       overdueDays: state?.overdueDays ?? 0,
       hasEinvoice: row.einvoice,
+      dunningLevel: row.notices.at(-1)?.level ?? null,
+      nextDunning,
     }
     items.push(item)
     if (status === 'draft' || status === 'cancelled') continue
@@ -261,6 +285,12 @@ const STATUS_LABEL: Record<InvoiceListItem['status'], string> = {
   overdue: 'überfällig',
   dunned: 'angemahnt',
   cancelled: 'storniert',
+}
+
+const DUNNING_LABEL: Record<DunningLevel, string> = {
+  reminder: 'Zahlungserinnerung',
+  first: '1. Mahnung',
+  final: 'Letzte Mahnung',
 }
 
 const KIND_LABEL: Record<string, string> = {
@@ -443,6 +473,8 @@ export function registerReceivableRoutes(app: FastifyInstance, services: Service
         'Offen',
         'Einbehalt',
         'Status',
+        'Mahnstufe',
+        'Nächste Mahnstufe ab',
       ]),
       ...items.map((i) =>
         csvLine(
@@ -462,6 +494,10 @@ export function registerReceivableRoutes(app: FastifyInstance, services: Service
             germanAmount(i.openCents),
             germanAmount(i.retentionHeldCents),
             STATUS_LABEL[i.status],
+            i.dunningLevel ? DUNNING_LABEL[i.dunningLevel] : '',
+            i.nextDunning
+              ? `${DUNNING_LABEL[i.nextDunning.level]} ab ${germanDate(i.nextDunning.possibleFrom)}`
+              : '',
           ],
           true,
         ),

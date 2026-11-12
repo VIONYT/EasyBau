@@ -4,6 +4,7 @@ import {
   defaultInterest,
   dunningAmounts,
   LATE_PAYMENT_FLAT_FEE_CENTS,
+  nextDunningDue,
   nextDunningLevel,
 } from './dunning.js'
 
@@ -219,5 +220,53 @@ describe('dunning amounts', () => {
     expect(partly.segments.map((seg) => seg.principalCents)).toEqual([120_000n, 100_000n])
     const early = dunningAmounts({ ...base, interestFrom: '2026-07-05' })
     expect(early).toMatchObject({ interestCents: 0n, interestFrom: null, interestTo: null })
+  })
+})
+
+describe('Mahnvorschlag: nächste fällige Mahnstufe', () => {
+  const base = {
+    eligible: true,
+    openCents: 119_000n,
+    dueDate: '2026-11-16',
+    notices: [] as { level: 'reminder' | 'first' | 'final'; dueDate: string }[],
+    today: '2026-11-17',
+  }
+
+  it('suggests the Zahlungserinnerung the day after the due date', () => {
+    expect(nextDunningDue(base)).toEqual({
+      level: 'reminder',
+      possibleFrom: '2026-11-17',
+      due: true,
+    })
+    expect(nextDunningDue({ ...base, today: '2026-11-16' })).toEqual({
+      level: 'reminder',
+      possibleFrom: '2026-11-17',
+      due: false,
+    })
+  })
+
+  it('waits for the deadline of the last notice', () => {
+    const notices = [{ level: 'reminder' as const, dueDate: '2026-11-24' }]
+    expect(nextDunningDue({ ...base, notices, today: '2026-11-24' })).toEqual({
+      level: 'first',
+      possibleFrom: '2026-11-25',
+      due: false,
+    })
+    expect(nextDunningDue({ ...base, notices, today: '2026-11-25' })?.due).toBe(true)
+  })
+
+  it('has nothing to suggest for paid, cancelled or fully dunned invoices', () => {
+    expect(nextDunningDue({ ...base, openCents: 0n })).toBeNull()
+    expect(nextDunningDue({ ...base, eligible: false })).toBeNull()
+    expect(
+      nextDunningDue({
+        ...base,
+        notices: [
+          { level: 'reminder', dueDate: '2026-11-24' },
+          { level: 'first', dueDate: '2026-12-01' },
+          { level: 'final', dueDate: '2026-12-08' },
+        ],
+      }),
+    ).toBeNull()
   })
 })
