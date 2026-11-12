@@ -13,6 +13,7 @@ import {
   SUPPORTED_SECTION_TYPES,
   signReportRequest,
   updateReportRequest,
+  uploadReportPhotoQuery,
   type WeatherValue,
 } from '@opc/schemas'
 import type { FastifyInstance, FastifyReply } from 'fastify'
@@ -27,6 +28,7 @@ import {
   type Services,
 } from '../context.js'
 import { checkIfMatch, etagOf, HttpError, notFound, parse } from '../http.js'
+import { storeUploadedFile } from './files.js'
 import { ownSignature } from './signatures.js'
 
 const projectParam = z.object({ id: z.uuid('Ungültige ID.') })
@@ -332,8 +334,19 @@ export function registerReportRoutes(app: FastifyInstance, services: Services) {
     const auth = requirePermission(request, 'report.write')
     const { id } = parse(projectParam, request.params)
     const input = parse(createReportRequest, request.body)
-    const report = await inTenant(services, auth, async (tx) => {
+    const result = await inTenant(services, auth, async (tx) => {
       const project = await requireVisibleProject(tx, auth, id)
+      // Offline capture sends its own id: the same report again (sync retry) changes nothing.
+      if (input.id) {
+        const [existing] = await tx<{ projectId: string }[]>`
+          select project_id as "projectId" from report where id = ${input.id}`
+        if (existing) {
+          if (existing.projectId !== id) {
+            throw new HttpError(409, 'Diese Berichts-ID gehört zu einem anderen Projekt.')
+          }
+          return { report: await loadReport(tx, auth, input.id), created: false }
+        }
+      }
       if (project.archived) {
         throw new HttpError(409, 'Das Projekt ist archiviert. Bitte zuerst wiederherstellen.')
       }
@@ -346,8 +359,9 @@ export function registerReportRoutes(app: FastifyInstance, services: Services) {
       const date = input.reportDate ?? (today as { d: string }).d
       const data = await initialData(tx, id, date, template.sections)
       const [created] = await tx<{ id: string }[]>`
-        insert into report (tenant_id, project_id, template_id, report_date, data, created_by)
-        values (${auth.tenantId}, ${id}, ${template.id}, ${date}, ${tx.json(data as never)}, ${auth.userId})
+        insert into report (id, tenant_id, project_id, template_id, report_date, data, created_by)
+        values (coalesce(${input.id ?? null}::uuid, uuid_v7()), ${auth.tenantId}, ${id}, ${template.id}, ${date},
+                ${tx.json(data as never)}, ${auth.userId})
         returning id`.catch((error: { code?: string }) => {
         if (error.code === '23505') {
           throw new HttpError(
@@ -358,10 +372,10 @@ export function registerReportRoutes(app: FastifyInstance, services: Services) {
         }
         throw error
       })
-      return loadReport(tx, auth, (created as { id: string }).id)
+      return { report: await loadReport(tx, auth, (created as { id: string }).id), created: true }
     })
-    reply.header('location', `/api/v1/reports/${report?.id}`)
-    return sendReport(reply, report, 201)
+    reply.header('location', `/api/v1/reports/${result.report?.id}`)
+    return sendReport(reply, result.report, result.created ? 201 : 200)
   })
 
   app.get('/api/v1/reports/:id', async (request, reply) => {
@@ -445,6 +459,36 @@ export function registerReportRoutes(app: FastifyInstance, services: Services) {
       await tx`update report set updated_at = now() where id = ${id}`
       return loadReport(tx, auth, id)
     })
+    return sendReport(reply, report, 201)
+  })
+
+  // Photo straight from the camera (also from the offline outbox): stored in the Ablage (folder
+  // „Fotos“ if it exists) and attached to the report in one transaction.
+  app.post('/api/v1/reports/:id/photos/upload', async (request, reply) => {
+    const auth = requirePermission(request, 'report.write')
+    const { id } = parse(reportParam, request.params)
+    const query = parse(uploadReportPhotoQuery, request.query)
+    const target = await inTenant(services, auth, async (tx) => {
+      const current = await lockOpen(tx, auth, id)
+      const [folder] = await tx<{ id: string }[]>`
+        select id from project_folder where project_id = ${current.projectId} and name = 'Fotos' limit 1`
+      return { projectId: current.projectId, folderId: folder?.id ?? null }
+    })
+    await storeUploadedFile(services, auth, request, target.projectId, {
+      filename: query.filename,
+      folderId: target.folderId,
+      caption: null,
+      imageOnly: true,
+      onStored: async (tx, fileId) => {
+        await lockOpen(tx, auth, id)
+        await tx`
+          insert into report_photo (tenant_id, report_id, file_id, caption, sort)
+          values (${auth.tenantId}, ${id}, ${fileId}, ${query.caption ?? null},
+                  (select coalesce(max(sort), 0) + 10 from report_photo where report_id = ${id}))`
+        await tx`update report set updated_at = now() where id = ${id}`
+      },
+    })
+    const report = await inTenant(services, auth, (tx) => loadReport(tx, auth, id))
     return sendReport(reply, report, 201)
   })
 

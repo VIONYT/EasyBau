@@ -94,6 +94,8 @@ export type TextValue = z.infer<typeof textValue>
 export const createReportRequest = z.object({
   templateKey: z.string().min(1).max(100).default('daily_site_report'),
   reportDate: isoDate.optional(),
+  /** Client-generated id (offline capture, DESIGN.md §6): replaying the same report is idempotent. */
+  id: id.optional(),
 })
 
 export const updateReportRequest = z
@@ -105,6 +107,12 @@ export const updateReportRequest = z
     data: z.record(z.string().max(50), z.unknown()),
   })
   .partial()
+
+/** Photo straight from the camera into the report (stored in the project's Ablage, folder „Fotos“). */
+export const uploadReportPhotoQuery = z.object({
+  filename: z.string().trim().min(1, 'Dateiname fehlt.').max(500),
+  caption: optionalText(500),
+})
 
 export const addReportPhotoRequest = z.object({
   fileId: id,

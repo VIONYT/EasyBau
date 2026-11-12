@@ -585,8 +585,19 @@ export function registerMeasurementRoutes(app: FastifyInstance, services: Servic
     const auth = requirePermission(request, 'measurement.write')
     const { id } = parse(sheetParam, request.params)
     const input: CreateLineRequest = parse(createLineRequest, request.body)
-    const sheet = await inTenant(services, auth, async (tx) => {
+    const result = await inTenant(services, auth, async (tx) => {
       const current = await sheetOf(tx, auth, id, { forUpdate: true })
+      // Offline capture sends its own id: the same line again (sync retry) changes nothing.
+      if (input.id) {
+        const [existing] = await tx<{ sheetId: string }[]>`
+          select sheet_id as "sheetId" from measurement_line where id = ${input.id}`
+        if (existing) {
+          if (existing.sheetId !== id) {
+            throw new HttpError(409, 'Diese Zeilen-ID gehört zu einem anderen Aufmaßblatt.')
+          }
+          return { sheet: await loadSheet(tx, auth, id), created: false }
+        }
+      }
       await checkLocation(tx, id, input.locationId)
       const item = await checkItem(tx, current.projectId, input.documentItemId)
       const unitDecimals = await checkUnit(tx, input.unitId)
@@ -606,6 +617,7 @@ export function registerMeasurementRoutes(app: FastifyInstance, services: Servic
         select (coalesce(max(sort), 0) + 10)::int as sort from measurement_line where sheet_id = ${id}`
       await tx`
         insert into measurement_line ${tx({
+          ...(input.id ? { id: input.id } : {}),
           tenant_id: auth.tenantId,
           sheet_id: id,
           sort,
@@ -619,11 +631,15 @@ export function registerMeasurementRoutes(app: FastifyInstance, services: Servic
           unit_id: item?.unitId ?? input.unitId ?? null,
           is_deduction: input.isDeduction ?? false,
           created_by: auth.userId,
-        })}`
+        })}`.catch((error: { code?: string }) => {
+        if (error.code === '23505')
+          throw new HttpError(409, 'Diese Zeilen-ID ist bereits vergeben.')
+        throw error
+      })
       await touch(tx, id)
-      return loadSheet(tx, auth, id)
+      return { sheet: await loadSheet(tx, auth, id), created: true }
     })
-    return sendSheet(reply, sheet, 201)
+    return sendSheet(reply, result.sheet, result.created ? 201 : 200)
   })
 
   app.patch('/api/v1/measurement-sheets/:id/lines/:lineId', async (request, reply) => {

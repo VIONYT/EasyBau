@@ -52,14 +52,20 @@ const lineFields = {
   isDeduction: z.boolean(),
   variables: measurementVariables,
 }
-export const createLineRequest = z.object(lineFields).partial({
-  description: true,
-  locationId: true,
-  documentItemId: true,
-  unitId: true,
-  isDeduction: true,
-  variables: true,
-})
+export const createLineRequest = z
+  .object({
+    ...lineFields,
+    /** Client-generated id (offline capture, DESIGN.md §6): replaying the same line is idempotent. */
+    id: id.optional(),
+  })
+  .partial({
+    description: true,
+    locationId: true,
+    documentItemId: true,
+    unitId: true,
+    isDeduction: true,
+    variables: true,
+  })
 export type CreateLineRequest = z.infer<typeof createLineRequest>
 export const updateLineRequest = z.object(lineFields).partial()
 export type UpdateLineRequest = z.infer<typeof updateLineRequest>
