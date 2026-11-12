@@ -561,7 +561,7 @@ invoice ─┬─ payment (date, amount_cents, method, reference)
 ### 7.4 Navigation & Einstellungen (Informationsarchitektur)
 
 **Hauptnavigation** (Desktop-Seitenleiste; mobil: 4 Hauptpunkte + „Mehr“):
-Suchen · Benachrichtigungen · Übersicht · Projekte · Angebote · Ausgangsrechnungen · Kontakte · Stammdaten · *(Phase 2: Plantafel · Zeiten · Eingangsrechnungen)* · unten Hilfe, Neuigkeiten, Profil, Firmenwechsel (ein Nutzer kann mehreren Firmen angehören).
+Suchen · Benachrichtigungen · Übersicht · Projekte · Angebote · Ausgangsrechnungen · Kontakte · Stammdaten · Eingangsrechnungen · *(Phase 2: Plantafel · Zeiten)* · unten Hilfe, Neuigkeiten, Profil, Firmenwechsel (ein Nutzer kann mehreren Firmen angehören).
 
 **Einstellungen**, gruppiert:
 | Gruppe | Punkte |
@@ -627,9 +627,9 @@ Suchen · Benachrichtigungen · Übersicht · Projekte · Angebote · Ausgangsre
 ## 9. Offene Fragen
 1. ~~Hosting-Anbieter~~ → entschieden: Open Source, Self-Hosting per Docker (§1, §3.5). Lizenz AGPL-3.0-or-later; der Projektname „OpenPlancraft“ ist nur Arbeitstitel und wird vor dem ersten Release ersetzt (ADR 0001).
 2. ~~Preismodell~~ → entfällt als Lizenzthema. Optional später: bezahlter Support oder Hosting-Angebot durch Dritte.
-3. Österreich bereits im MVP oder erst in Phase 2?
-4. Formale GoBD-Testierung (IDW PS 880) anstreben?
+3. ~~Österreich bereits im MVP?~~ → entschieden (2026-11-12): nein, vorerst nicht; später Phase 2/3.
+4. ~~Formale GoBD-Testierung (IDW PS 880)?~~ → entschieden (2026-11-12): nein. Die Software ist Open Source und wird selbst betrieben; ein Testat gälte nur für eine bestimmte Version und Umgebung, die Kosten sind zu hoch. Stattdessen Vorlage Verfahrensdokumentation für Betreiber.
 5. Die Anforderung „…für die Finanzverwaltung so gespeichert, dass man Daten …“ war im Auftrag abgeschnitten. Angenommen wurde: **jederzeit vollständig und maschinell auswertbar exportieren kann** (Z3/DATEV, siehe 5.3). Bitte bestätigen oder ergänzen.
-6. **Eingangsrechnungen** schon ins MVP? Seit 2025 müssen alle Betriebe E-Rechnungen empfangen können; eine einfache Ablage mit lesbarer Darstellung, Projektzuordnung und Archiv wäre ein starkes Argument. Vorschlag: Basisversion ans Ende des MVP.
+6. ~~**Eingangsrechnungen** schon ins MVP?~~ → entschieden (2026-11-12): ja, Basisversion (Upload PDF/XML, lesbare Darstellung, Zuordnung Projekt/Betriebsbereich, Prüfung bestätigen, Archiv) in der ersten Version; volle Ausbaustufe (§2 Phase 2) und KI-Auslesen später.
 7. **Projekt-Chat** im MVP oder Phase 2? (Vorschlag: Phase 2; im MVP Kommentare an Dokumenten und Berichten.)
-8. **Schlussrechnung & Abschläge**: Bitte mit dem Steuerberater bestätigen, dass in der Schlussrechnung alle gestellten Abschlagsrechnungen (nicht nur die bezahlten) mit Steuerbetrag abgezogen werden (DESIGN.md §4.1). Alternative: nur vereinnahmte Teilentgelte abziehen. Beides ist konfigurierbar vorgesehen.
+8. **Schlussrechnung & Abschläge** (wird später geklärt): Bitte mit dem Steuerberater bestätigen, dass in der Schlussrechnung alle gestellten Abschlagsrechnungen (nicht nur die bezahlten) mit Steuerbetrag abgezogen werden (DESIGN.md §4.1). Alternative: nur vereinnahmte Teilentgelte abziehen. Beides ist konfigurierbar vorgesehen.
