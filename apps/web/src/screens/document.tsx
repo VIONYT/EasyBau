@@ -33,6 +33,7 @@ import { Field, FormError, optional, SelectField, TextArea, useForm, value } fro
 import { type TextKey, t, tf } from '../i18n'
 import type { Navigate } from '../router'
 import { articlePrice } from './catalog'
+import { DocumentEmailPanel } from './document-email'
 import { documentLabel, StatusChip } from './documents'
 import { DunningPanel } from './dunning'
 import { ReceivablePanel } from './payments'
@@ -148,6 +149,17 @@ export function DocumentScreen({ me, id, navigate }: { me: Me; id: string; navig
         apply={apply}
         navigate={navigate}
       />
+      {doc.finalizedAt ? (
+        <DocumentEmailPanel
+          doc={doc}
+          canWrite={me.permissions.includes('document.write')}
+          onSent={() =>
+            apiWithEtag<Doc>('GET', `/api/v1/documents/${id}`)
+              .then(apply)
+              .catch((err: ApiError) => setError(err.message))
+          }
+        />
+      ) : null}
       {doc.receivable ? (
         <ReceivablePanel
           doc={doc}

@@ -57,7 +57,12 @@ export async function emailTemplateSettings(tx: Tx): Promise<EmailTemplateSettin
       return [type, { ...(own ?? DEFAULT_EMAIL_TEMPLATES[type]), custom: Boolean(own) }]
     }),
   ) as EmailTemplateSettings['templates']
-  return { bcc: stored.bcc ?? null, templates, placeholders: [...EMAIL_PLACEHOLDERS] }
+  return {
+    bcc: stored.bcc ?? null,
+    templates,
+    defaults: DEFAULT_EMAIL_TEMPLATES,
+    placeholders: [...EMAIL_PLACEHOLDERS],
+  }
 }
 
 const isBilled = (doc: Pick<DocumentDetail, 'type'>) =>

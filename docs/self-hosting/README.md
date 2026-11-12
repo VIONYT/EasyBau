@@ -70,6 +70,7 @@ Danach `https://<APP_DOMAIN>` öffnen, den Code eingeben, die Firma und das erst
 - Aktivieren: `SMTP_HOST`, `SMTP_FROM` und meist `SMTP_USER`/`SMTP_PASSWORD` (oder `SMTP_PASSWORD_FILE`) in der `.env` setzen, Stack neu starten. Port 587 nutzt STARTTLS (Pflicht), Port 465 mit `SMTP_SECURE=true`.
 - E-Mails gehen zuerst in einen Postausgang in der Datenbank und werden vom Worker versendet (bis zu 5 Versuche mit wachsender Pause). Status und Fehler: Einstellungen › Betrieb. Inhalte (z. B. Einladungslinks) werden nach dem Versand gelöscht.
 - Antworten gehen an die E-Mail-Adresse der Firma (Einstellungen › Firma).
+- **Dokumente per E-Mail:** Fertiggestellte Angebote, Auftragsbestätigungen, Nachträge und festgeschriebene Rechnungen/Gutschriften lassen sich am Dokument versenden („Per E-Mail senden“). Anhang ist immer das archivierte Original (bei Rechnungen das ZUGFeRD-PDF), auf Wunsch zusätzlich die XRechnung. Betreff und Text kommen aus Einstellungen › E-Mail-Vorlagen (dort auch eine Blindkopie an das Büro-Postfach). Das Dokument wird erst auf „versendet“ gesetzt, wenn der SMTP-Server die E-Mail angenommen hat. Eine Zustellbestätigung des Empfängers gibt es nicht.
 
 ## 5a. E-Rechnung (Dienst „kosit“)
 

@@ -6,6 +6,7 @@ import type {
   DatevSettings,
   DunningLevel,
   DunningSettings,
+  EmailTemplateSettings,
   Me,
   NumberSequence,
   PaymentTerm,
@@ -39,6 +40,7 @@ type Section =
   | 'filing'
   | 'datev'
   | 'areas'
+  | 'mail'
   | 'dunning'
   | 'system'
 
@@ -56,6 +58,7 @@ const SECTIONS: { key: Section; label: TextKey }[] = [
   { key: 'filing', label: 's.filing' },
   { key: 'datev', label: 's.datev' },
   { key: 'areas', label: 's.areas' },
+  { key: 'mail', label: 's.mail' },
   { key: 'dunning', label: 'sys.dunning' },
   { key: 'system', label: 'sys.title' },
 ]
@@ -102,6 +105,7 @@ export function Settings({ me }: { me: Me }) {
         {section === 'filing' ? <FilingSettings /> : null}
         {section === 'datev' ? <DatevSettingsForm /> : null}
         {section === 'areas' ? <BusinessAreaSettings /> : null}
+        {section === 'mail' ? <EmailTemplateForm /> : null}
         {section === 'dunning' ? <DunningSettingsForm /> : null}
         {section === 'system' ? <SystemSettings me={me} /> : null}
       </fieldset>
@@ -1234,6 +1238,113 @@ function DatevSettingsForm() {
         >
           {t('common.save')}
         </button>
+        {save.message}
+      </div>
+    </Panel>
+  )
+}
+
+// ---- E-Mail-Vorlagen --------------------------------------------------------------------------
+
+type MailType = (typeof DOCUMENT_TYPES)[number]
+
+function EmailTemplateForm() {
+  const { data, setData, error } = useResource<EmailTemplateSettings>(
+    '/api/v1/settings/email-templates',
+  )
+  const save = useSave()
+  const [type, setType] = useState<MailType>('invoice')
+  if (error) return <FormError>{error}</FormError>
+  if (!data) return <p className="muted">{t('common.loading')}</p>
+  const current = data.templates[type]
+  const setTemplate = (patch: Partial<{ subject: string; body: string }>) =>
+    setData({
+      ...data,
+      templates: { ...data.templates, [type]: { ...current, ...patch, custom: true } },
+    })
+  return (
+    <Panel title={t('s.mail')}>
+      <p className="hint">{t('s.mail.hint')}</p>
+      <Input
+        label={t('s.mail.bcc')}
+        type="email"
+        value={data.bcc ?? ''}
+        onChange={(v) => setData({ ...data, bcc: nullable(v) })}
+      />
+      <div className="field">
+        <label htmlFor="mail-type">{t('s.mail.type')}</label>
+        <select
+          id="mail-type"
+          className="select"
+          value={type}
+          onChange={(e) => setType(e.target.value as MailType)}
+        >
+          {DOCUMENT_TYPES.map((d) => (
+            <option key={d} value={d}>
+              {t(`doc.type.${d}` as TextKey)}
+              {data.templates[d].custom ? ` (${t('s.mail.custom')})` : ''}
+            </option>
+          ))}
+        </select>
+      </div>
+      <Input
+        label={t('s.mail.subject')}
+        value={current.subject}
+        onChange={(v) => setTemplate({ subject: v })}
+      />
+      <div className="field">
+        <label htmlFor="mail-body">{t('s.mail.body')}</label>
+        <textarea
+          id="mail-body"
+          rows={10}
+          value={current.body}
+          onChange={(e) => setTemplate({ body: e.target.value })}
+        />
+        <p className="hint">
+          {tf('s.mail.placeholders', { list: data.placeholders.map((p) => `{${p}}`).join(' ') })}
+        </p>
+      </div>
+      <div className="button-row">
+        <button
+          type="button"
+          className="button primary auto"
+          disabled={save.busy}
+          onClick={() =>
+            save.run(async () => {
+              const templates = Object.fromEntries(
+                DOCUMENT_TYPES.filter((d) => data.templates[d].custom).map((d) => [
+                  d,
+                  { subject: data.templates[d].subject, body: data.templates[d].body },
+                ]),
+              )
+              const saved = await api<EmailTemplateSettings>(
+                'PUT',
+                '/api/v1/settings/email-templates',
+                {
+                  bcc: data.bcc,
+                  templates,
+                },
+              )
+              setData(saved)
+            })
+          }
+        >
+          {t('common.save')}
+        </button>
+        {current.custom ? (
+          <button
+            type="button"
+            className="button ghost auto"
+            onClick={() =>
+              setData({
+                ...data,
+                templates: { ...data.templates, [type]: { ...data.defaults[type], custom: false } },
+              })
+            }
+          >
+            {t('s.mail.reset')}
+          </button>
+        ) : null}
         {save.message}
       </div>
     </Panel>

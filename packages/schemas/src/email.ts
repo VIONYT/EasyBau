@@ -85,5 +85,7 @@ export interface EmailTemplateSettings {
     (typeof DOCUMENT_TYPES)[number],
     { subject: string; body: string; custom: boolean }
   >
+  /** Built-in texts, for „Standardtext wiederherstellen“. */
+  defaults: Record<(typeof DOCUMENT_TYPES)[number], { subject: string; body: string }>
   placeholders: string[]
 }

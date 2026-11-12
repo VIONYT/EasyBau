@@ -778,6 +778,29 @@ const LOGO_PNG = Buffer.from(
   'base64',
 )
 
+test('E-Mail-Vorlagen und Versand am Dokument', async () => {
+  test.skip(!SETUP_TOKEN, 'SETUP_TOKEN must be set for a fresh stack')
+  await page.getByRole('button', { name: 'Einstellungen' }).click()
+  await page.locator('#settings-section').selectOption({ label: 'E-Mail-Vorlagen' })
+  await expect(page.getByRole('heading', { name: 'E-Mail-Vorlagen' })).toBeVisible()
+  await expect(page.getByLabel('Betreff')).toHaveValue('{Dokument} {Nummer} – {Firma}')
+  await page.getByLabel('Betreff').fill('Ihre {Dokument} {Nummer}')
+  await page
+    .getByLabel('Blindkopie jeder Dokument-E-Mail an (z. B. Büro-Postfach)')
+    .fill('buero@muster-bau.example')
+  await page.getByRole('button', { name: 'Speichern' }).click()
+  await expect(page.getByText('Gespeichert.')).toBeVisible()
+  await expect(page.getByLabel('Dokumentart')).toContainText('Rechnung (eigene Vorlage)')
+  await expectNoHorizontalScroll(page)
+
+  // At the finalized Stornorechnung: the panel explains that SMTP is not set up in this stack
+  await page.getByRole('button', { name: 'Rechnungen', exact: true }).click()
+  await page.getByRole('link', { name: /R-00102/ }).click()
+  await expect(page.getByRole('heading', { name: 'Per E-Mail senden' })).toBeVisible()
+  await expect(page.getByText(/E-Mail-Versand ist nicht eingerichtet/)).toBeVisible()
+  await expectNoHorizontalScroll(page)
+})
+
 test('Briefpapier: WYSIWYG-Editor nach DIN 5008 B und Druckansicht', async () => {
   test.skip(!SETUP_TOKEN, 'SETUP_TOKEN must be set for a fresh stack')
   test.setTimeout(120_000)
