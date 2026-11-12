@@ -11,6 +11,8 @@ import {
   germanDate,
   gobdIndexXml,
   gobdTableCsv,
+  incomingBookings,
+  inputTaxKey,
   revenueAccount,
   safeEntryName,
   splitByWeights,
@@ -229,6 +231,94 @@ describe('DATEV', () => {
       [-9n, '8300', '10001', 'Storno Kürzung Wohnbau Nord eG'],
       [500n, '8400', '10001', 'Kürzung Wohnbau Nord eG'],
     ])
+  })
+
+  it('books received invoices per allocation with input tax key, § 13b and payments', () => {
+    const incomingAccounts = {
+      material: '3200',
+      labor: '3100',
+      equipment: '4960',
+      subcontract: '3100',
+      other: '4900',
+      reverseCharge: '3120',
+      creditor: '70000',
+      bank: '1200',
+    }
+    const bookings = incomingBookings(
+      [
+        {
+          invoiceNumber: 'RE-4711',
+          date: '2026-11-03',
+          supplierName: 'Baustoff Nord GmbH',
+          creditNote: false,
+          reverseCharge: false,
+          allocations: [
+            { costType: 'material', ratePercent: '19', netCents: 85_000n, taxCents: 16_150n },
+            { costType: 'equipment', ratePercent: '7', netCents: 10_000n, taxCents: 700n },
+            { costType: 'other', ratePercent: '0', netCents: 5_000n, taxCents: 0n },
+          ],
+        },
+        {
+          invoiceNumber: 'TS-117',
+          date: '2026-11-04',
+          supplierName: 'Trockenbau Süd GmbH',
+          creditNote: false,
+          reverseCharge: true,
+          allocations: [
+            { costType: 'subcontract', ratePercent: '0', netCents: 100_000n, taxCents: 0n },
+          ],
+        },
+        {
+          invoiceNumber: 'G-1',
+          date: '2026-11-05',
+          supplierName: 'Baustoff Nord GmbH',
+          creditNote: true,
+          reverseCharge: false,
+          allocations: [
+            { costType: 'material', ratePercent: '19', netCents: 1_000n, taxCents: 190n },
+            { costType: 'labor', ratePercent: '19', netCents: 0n, taxCents: 0n },
+          ],
+        },
+      ],
+      [
+        {
+          invoiceNumber: 'RE-4711',
+          date: '2026-11-10',
+          supplierName: 'Baustoff Nord GmbH',
+          amountCents: 116_850n,
+        },
+      ],
+      incomingAccounts,
+    )
+    expect(bookings.map((b) => [b.amountCents, b.account, b.contraAccount, b.taxKey])).toEqual([
+      [101_150n, '3200', '70000', '9'],
+      [10_700n, '4960', '70000', '8'],
+      [5_000n, '4900', '70000', undefined],
+      [100_000n, '3120', '70000', undefined],
+      [-1_190n, '3200', '70000', '9'],
+      [116_850n, '70000', '1200', undefined],
+    ])
+    expect([inputTaxKey('19.00'), inputTaxKey('7'), inputTaxKey('0')]).toEqual([
+      '9',
+      '8',
+      undefined,
+    ])
+    const file = datevBookingBatch(
+      {
+        consultantNumber: '1234567',
+        clientNumber: '10001',
+        fiscalYearStart: '2026-01-01',
+        accountLength: 4,
+        from: '2026-11-01',
+        to: '2026-11-30',
+        description: 'Eingangsrechnungen',
+        createdAt: new Date('2026-11-09T10:11:12.345Z'),
+      },
+      bookings,
+    )
+    expect(file.split('\r\n')[2]).toBe(
+      '1011,50;"S";"EUR";;;;3200;70000;"9";0311;"RE-4711";"";;"Baustoff Nord GmbH"',
+    )
   })
 
   it('splits amounts exactly by weight', () => {

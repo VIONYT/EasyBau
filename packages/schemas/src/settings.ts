@@ -252,6 +252,8 @@ export const filingTemplateRequest = z.object({
 
 // ---- DATEV ------------------------------------------------------------------------------------
 
+const datevAccount = z.string().regex(/^\d{4,8}$/, 'Konto: 4–8 Ziffern.')
+
 export const datevSettingsRequest = z.object({
   consultantNumber: z
     .string()
@@ -290,6 +292,24 @@ export const datevSettingsRequest = z.object({
     .string()
     .regex(/^\d{4,8}$/)
     .nullable(),
+  /** Eingangsrechnungen: expense account per cost type and for § 13b; empty = chart default. */
+  expenseAccounts: z
+    .object({
+      material: datevAccount.nullable(),
+      labor: datevAccount.nullable(),
+      equipment: datevAccount.nullable(),
+      subcontract: datevAccount.nullable(),
+      other: datevAccount.nullable(),
+      reverseCharge: datevAccount.nullable(),
+    })
+    .partial()
+    .default({}),
+  /** Kreditor for all suppliers (Sammelkreditor); empty = 70000. */
+  creditorAccount: z
+    .string()
+    .regex(/^\d{5,9}$/, 'Kreditorenkonto: 5–9 Ziffern.')
+    .nullable()
+    .default(null),
 })
 export type DatevSettings = z.infer<typeof datevSettingsRequest>
 

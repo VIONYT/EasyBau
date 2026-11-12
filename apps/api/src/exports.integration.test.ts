@@ -10,6 +10,22 @@ import { Client, createHarness, type Harness } from './testing/harness.js'
 
 const PDF = Buffer.from('%PDF-1.7\n1 0 obj << >> endobj\n%%EOF\n')
 
+/** XRechnung (UBL) of a supplier: 1.000 € + 19 % for materials. */
+const SUPPLIER_INVOICE = `<?xml version="1.0" encoding="UTF-8"?>
+<Invoice xmlns="urn:oasis:names:specification:ubl:schema:xsd:Invoice-2"
+  xmlns:cac="urn:oasis:names:specification:ubl:schema:xsd:CommonAggregateComponents-2"
+  xmlns:cbc="urn:oasis:names:specification:ubl:schema:xsd:CommonBasicComponents-2">
+  <cbc:CustomizationID>urn:cen.eu:en16931:2017#compliant#urn:xeinkauf.de:kosit:xrechnung_3.0</cbc:CustomizationID>
+  <cbc:ID>ER-4711</cbc:ID><cbc:IssueDate>2026-11-03</cbc:IssueDate><cbc:InvoiceTypeCode>380</cbc:InvoiceTypeCode>
+  <cbc:DocumentCurrencyCode>EUR</cbc:DocumentCurrencyCode>
+  <cac:AccountingSupplierParty><cac:Party><cac:PartyName><cbc:Name>Baustoff/Nord GmbH</cbc:Name></cac:PartyName></cac:Party></cac:AccountingSupplierParty>
+  <cac:TaxTotal><cbc:TaxAmount currencyID="EUR">190.00</cbc:TaxAmount><cac:TaxSubtotal>
+    <cbc:TaxableAmount currencyID="EUR">1000.00</cbc:TaxableAmount><cbc:TaxAmount currencyID="EUR">190.00</cbc:TaxAmount>
+    <cac:TaxCategory><cbc:ID>S</cbc:ID><cbc:Percent>19</cbc:Percent></cac:TaxCategory></cac:TaxSubtotal></cac:TaxTotal>
+  <cac:LegalMonetaryTotal><cbc:TaxExclusiveAmount currencyID="EUR">1000.00</cbc:TaxExclusiveAmount>
+    <cbc:TaxInclusiveAmount currencyID="EUR">1190.00</cbc:TaxInclusiveAmount></cac:LegalMonetaryTotal>
+</Invoice>`
+
 /** Lists the entries of a ZIP (central directory) without extracting. */
 function zipEntries(zip: Buffer): Map<string, Buffer> {
   const entries = new Map<string, Buffer>()
@@ -138,6 +154,23 @@ describe.skipIf(!process.env.DATABASE_URL)('Exporte (integration)', () => {
     )
     expect(upload.statusCode, upload.body).toBe(201)
 
+    // A received invoice (Eingangsrechnung), allocated to the project, confirmed and paid.
+    const received = await admin.upload(
+      '/api/v1/incoming-invoices?filename=er.xml',
+      Buffer.from(SUPPLIER_INVOICE),
+    )
+    expect(received.statusCode, received.body).toBe(201)
+    const allocated = await admin.patch(
+      `/api/v1/incoming-invoices/${received.json().id}`,
+      { allocations: [{ projectId, costType: 'material', ratePercent: '19', netCents: 100_000 }] },
+      { 'if-match': received.headers.etag as string },
+    )
+    expect(allocated.json().problems).toEqual([])
+    await admin.post(`/api/v1/incoming-invoices/${received.json().id}/confirm`, {})
+    await admin.post(`/api/v1/incoming-invoices/${received.json().id}/payment`, {
+      paidOn: '2026-11-07',
+    })
+
     const invite = await admin.post('/api/v1/invitations', {
       email: 'monteur@example.test',
       roleKey: 'team_member',
@@ -186,7 +219,14 @@ describe.skipIf(!process.env.DATABASE_URL)('Exporte (integration)', () => {
     expect(lines[0]).toMatch(/^"EXTF";700;21;"Buchungsstapel";/)
     expect(lines[0]).toContain(';1234567;10001;20260101;4;20261101;20261130;')
     const bookings = lines.slice(2)
-    expect(bookings).toHaveLength(5)
+    expect(bookings).toHaveLength(7)
+    // Eingangsrechnung: Wareneingang an Sammelkreditor with 19 % Vorsteuer (BU 9), payment Kreditor an Bank.
+    expect(bookings).toContain(
+      '1190,00;"S";"EUR";;;;3200;70000;"9";0311;"ER-4711";"";;"Baustoff/Nord GmbH"',
+    )
+    expect(bookings).toContain(
+      '1190,00;"S";"EUR";;;;70000;1200;;0711;"ER-4711";"";;"Zahlung Baustoff/Nord GmbH"',
+    )
     // 10 × 45,00 € net + 19 % = 535,50 €; 20,00 € + 7 % = 21,40 €; payment 300,00 €
     expect(bookings.join('\n')).toContain('535,50;"S"')
     expect(bookings.join('\n')).toContain('21,40;"S"')
@@ -213,11 +253,26 @@ describe.skipIf(!process.env.DATABASE_URL)('Exporte (integration)', () => {
       'rechnungspositionen.csv',
       'umsatzsteuer.csv',
       'zahlungen.csv',
+      'eingangsrechnungen.csv',
+      'eingangsrechnungen_steuer.csv',
+      'eingangsrechnungen_zuweisung.csv',
       'kunden.csv',
       'protokoll.csv',
       'belege.csv',
       'belege/R-00101.pdf',
+      expect.stringMatching(/^belege\/eingang\/Baustoff_Nord_GmbH_ER-4711_[0-9a-f]{8}\.xml$/),
     ])
+    const incoming = zip.get('eingangsrechnungen.csv')?.toString('latin1') ?? ''
+    expect(incoming).toContain('"Baustoff/Nord GmbH"')
+    expect(incoming).toContain('"ER-4711"')
+    expect(incoming).toContain('1190,00')
+    expect(incoming).toMatch(/"gepr.{1,2}ft"/)
+    expect(zip.get('eingangsrechnungen_zuweisung.csv')?.toString('latin1')).toContain(
+      '"Sanierung Lindenweg"',
+    )
+    expect(zip.get('eingangsrechnungen_zuweisung.csv')?.toString('latin1')).toContain('190,00')
+    const receivedOriginal = [...zip.entries()].find(([k]) => k.startsWith('belege/eingang/'))?.[1]
+    expect(receivedOriginal?.toString('utf8')).toBe(SUPPLIER_INVOICE)
     const index = zip.get('index.xml')?.toString('utf8') ?? ''
     expect(index).toContain('<!DOCTYPE DataSet SYSTEM "gdpdu-01-09-2004.dtd">')
     expect(index).toContain('<Name>Export Bau GmbH</Name>')
@@ -249,6 +304,7 @@ describe.skipIf(!process.env.DATABASE_URL)('Exporte (integration)', () => {
     expect([...zip.keys()]).toEqual([
       'EXTF_Buchungsstapel_2026-11-01_2026-11-30.csv',
       'Belege/R-00101.pdf',
+      expect.stringMatching(/^Belege\/eingang\/Baustoff_Nord_GmbH_ER-4711_[0-9a-f]{8}\.xml$/),
     ])
     expect(zip.get('EXTF_Buchungsstapel_2026-11-01_2026-11-30.csv')?.toString('latin1')).toMatch(
       /^"EXTF"/,
@@ -263,7 +319,13 @@ describe.skipIf(!process.env.DATABASE_URL)('Exporte (integration)', () => {
     expect(manifest).toMatchObject({ format: 'openplancraft-export', version: 1 })
     expect(manifest.tables.document).toBe(2)
     expect(manifest.files).toHaveLength(1)
-    expect(manifest.belege).toEqual([{ path: 'belege/R-00101.pdf', sha256: expect.any(String) }])
+    expect(manifest.tables.incoming_invoice).toBe(1)
+    expect(manifest.tables.incoming_invoice_allocation).toBe(1)
+    expect(manifest.tables.business_area).toBe(6)
+    expect(manifest.belege).toEqual([
+      { path: 'belege/R-00101.pdf', sha256: expect.any(String) },
+      { path: expect.stringMatching(/^belege\/eingang\//), sha256: expect.any(String) },
+    ])
     expect(zip.get('belege/R-00101.pdf')?.subarray(0, 5).toString()).toBe('%PDF-')
     const filePath = manifest.files[0].path as string
     expect(filePath).toMatch(/^ablage\/.+\/.+_Plan EG\.pdf$/)
