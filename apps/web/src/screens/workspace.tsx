@@ -3,6 +3,8 @@ import { useCallback, useEffect, useState } from 'react'
 import { api } from '../api'
 import { Field, FormError, optional, useForm } from '../forms'
 import { t } from '../i18n'
+import { hasWaitingChanges } from '../offline/client'
+import { OfflineBar } from '../offline/OfflineBar'
 import { type Route, useRoute } from '../router'
 import { AuditScreen } from './audit'
 import { Catalog } from './catalog'
@@ -100,6 +102,7 @@ export function Workspace({
     { key: 'security', label: t('nav.security'), visible: true },
   ]
   const logout = async () => {
+    if ((await hasWaitingChanges()) && !window.confirm(t('off.logoutWaiting'))) return
     await api('POST', '/api/v1/auth/logout').catch(() => undefined)
     window.history.replaceState(null, '', '/')
     onLogout()
@@ -145,6 +148,7 @@ export function Workspace({
             </button>
           ))}
       </nav>
+      <OfflineBar />
       <main className="content" key={`${routeKey}-${visit}`}>
         {current.view === 'projects' ? <Projects me={me} navigate={navigate} /> : null}
         {current.view === 'project' ? (
