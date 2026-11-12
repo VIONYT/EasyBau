@@ -29,6 +29,7 @@ import {
   type DocumentTotals,
   documentStatusRequest,
   type EinvoiceFormat,
+  type EvidenceRef,
   finalizeRequest,
   moveItemRequest,
   PRICED_POSITION_TYPES,
@@ -52,6 +53,7 @@ import {
 } from '../context.js'
 import { einvoiceSummary } from '../einvoice.js'
 import { checkIfMatch, etagOf, HttpError, notFound, parse } from '../http.js'
+import { checkEvidence, resolveEvidence } from './change-orders.js'
 import { finalizeInvoice } from './invoices.js'
 import { companyValues, loadLetterhead } from './letterhead.js'
 import { archiveDocumentPdf } from './pdf.js'
@@ -639,9 +641,16 @@ export async function loadDocument(
         : null,
     }
   })
-  const [info] = await tx<{ contractId: string; contractLabel: string; reason: string | null }[]>`
+  const [info] = await tx<
+    {
+      contractId: string
+      contractLabel: string
+      reason: string | null
+      evidence: EvidenceRef[]
+    }[]
+  >`
     select m.contract_document_id as "contractId",
-           coalesce(c.number, 'Auftragsbestätigung (Entwurf)') as "contractLabel", m.reason
+           coalesce(c.number, 'Auftragsbestätigung (Entwurf)') as "contractLabel", m.reason, m.evidence
     from change_order_meta m join document c on c.id = m.contract_document_id
     where m.document_id = ${id}`
   const canConvert =
@@ -652,7 +661,7 @@ export async function loadDocument(
     ...doc,
     issuer: issuerSnapshot ?? (await liveIssuer(tx)),
     recipient: recipientSnapshot ?? (await liveRecipient(tx, contactId)),
-    changeOrderInfo: info ?? null,
+    changeOrderInfo: info ? { ...info, evidence: await resolveEvidence(tx, info.evidence) } : null,
     canConvertToChangeOrder: canConvert,
     items,
     totals: totalsOf(rows, costs, doc, await loadDeductions(tx, id)),
@@ -763,7 +772,7 @@ function siteLine(site: {
   return [site.street, place].filter(Boolean).join(', ') || null
 }
 
-async function createDocument(
+export async function createDocument(
   tx: Tx,
   auth: AuthContext,
   projectId: string,
@@ -870,12 +879,13 @@ async function createDocument(
   const documentId = (created as { id: string }).id
 
   if (input.type === 'change_order') {
+    const evidence = await checkEvidence(tx, projectId, input.evidence ?? [])
     // The latest order confirmation is the main contract (Hauptauftrag).
     await tx`
-      insert into change_order_meta (document_id, tenant_id, contract_document_id, number, basis, reason)
+      insert into change_order_meta (document_id, tenant_id, contract_document_id, number, basis, reason, evidence)
       select ${documentId}, ${auth.tenantId}, c.id,
              (select coalesce(max(m.number), 0) + 1 from change_order_meta m where m.contract_document_id = c.id),
-             ${input.basis ?? 'additional_work'}, ${input.reason ?? null}
+             ${input.basis ?? 'additional_work'}, ${input.reason ?? null}, ${tx.json(evidence as never)}
       from document c
       where c.project_id = ${projectId} and c.type = 'order_confirmation' and c.status <> 'cancelled'
       order by c.created_at desc limit 1`
@@ -895,11 +905,11 @@ export async function copyItems(tx: Tx, fromId: string, toId: string) {
       insert into document_item (tenant_id, document_id, parent_id, sort, position_type, oz, quantity, unit_id,
                                  unit_symbol, unit_unece_code, short_text, long_text, show_long_text, calc_mode,
                                  unit_price_cents, discount_percent, total_cents, tax_rate_percent, tax_category,
-                                 catalog_item_id, source_item_id, image_file_id)
+                                 catalog_item_id, source_item_id, image_file_id, source_report_id)
       select tenant_id, ${toId}, ${row.parentId ? (newIds.get(row.parentId) ?? null) : null}, sort, position_type, oz,
              quantity, unit_id, unit_symbol, unit_unece_code, short_text, long_text, show_long_text, calc_mode,
              unit_price_cents, discount_percent, total_cents, tax_rate_percent, tax_category,
-             catalog_item_id, id, image_file_id
+             catalog_item_id, id, image_file_id, source_report_id
       from document_item where id = ${row.id}
       returning id`
     const newId = (created as { id: string }).id

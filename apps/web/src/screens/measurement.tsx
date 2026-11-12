@@ -28,6 +28,7 @@ import {
   useMySignature,
 } from '../signature'
 import { documentLabel } from './documents'
+import { VariancePanel } from './variances'
 
 type Sheet = MeasurementSheetDetail
 type Apply = (result: { data: Sheet; etag: string | null }) => void
@@ -241,6 +242,9 @@ export function MeasurementScreen({
       <Rooms sheet={sheet} editable={editable} apply={apply} />
       <Lines sheet={sheet} editable={editable} items={items} units={units} apply={apply} />
       <Quantities me={me} sheet={sheet} />
+      {sheet.kind === 'performance' && me.permissions.includes('document.write') ? (
+        <VariancePanel sheet={sheet} lineCount={sheet.lines.length} navigate={navigate} />
+      ) : null}
       {editable ? <SignPanel sheet={sheet} me={me} apply={apply} /> : null}
       {editable ? (
         <button type="button" className="button ghost danger" onClick={remove}>

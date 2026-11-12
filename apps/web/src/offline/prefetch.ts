@@ -8,7 +8,8 @@ import { api } from '../api'
  */
 export async function prepareProjectOffline(projectId: string): Promise<number> {
   const base = `/api/v1/projects/${projectId}`
-  const reportsPath = `${base}/reports?template=daily_site_report`
+  // All reports of the project (Bautagebuch and the other templates; one list, filtered on screen).
+  const reportsPath = `${base}/reports`
   const [sheets, reports] = await Promise.all([
     api<MeasurementSheetSummary[]>('GET', `${base}/measurement-sheets`),
     api<ReportSummary[]>('GET', reportsPath),
@@ -18,6 +19,7 @@ export async function prepareProjectOffline(projectId: string): Promise<number> 
     api('GET', `${base}/folders`),
     api('GET', '/api/v1/units'),
     api('GET', '/api/v1/report-templates'),
+    api('GET', `${base}/reports?template=daily_site_report`),
   ])
   const kinds = [...new Set(sheets.map((s) => s.kind))]
   const recent = reports.slice(0, 30)
@@ -26,5 +28,5 @@ export async function prepareProjectOffline(projectId: string): Promise<number> 
     ...kinds.map((kind) => api('GET', `${base}/measurable-items?kind=${kind}`)),
     ...recent.map((r) => api('GET', `/api/v1/reports/${r.id}`)),
   ])
-  return 8 + sheets.length + kinds.length + recent.length
+  return 9 + sheets.length + kinds.length + recent.length
 }

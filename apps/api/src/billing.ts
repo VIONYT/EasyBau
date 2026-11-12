@@ -15,6 +15,7 @@ import {
 import { einvoiceProblems } from '@opc/einvoice'
 import type { DeductionSummary, DocumentDetail, FinalizeCheck } from '@opc/schemas'
 import { einvoiceContext } from './einvoice.js'
+import { reportBillingProblems } from './routes/report-billing.js'
 
 /**
  * Rechnungsstellung: data access for deductions (Abschläge), Mengenfortschreibung from the
@@ -274,11 +275,13 @@ export async function invoiceFinalizeCheck(
   }
 
   // Regel 12: positions from change orders only when accepted; free positions only with warning.
+  for (const problem of await reportBillingProblems(tx, doc.id)) errors.push(problem)
   const origins = await tx<
     {
       itemId: string
       inContract: boolean
       openChangeOrder: number | null
+      report: string | null
     }[]
   >`
     with recursive chain as (
@@ -295,7 +298,10 @@ export async function invoiceFinalizeCheck(
            ))) as "inContract",
            max(case when d.type = 'change_order' and not (
              co.status = 'accepted' or (co.status = 'partially_accepted' and coalesce(dec.accepted, false))
-           ) then co.number end)::int as "openChangeOrder"
+           ) then co.number end)::int as "openChangeOrder",
+           (select t.name || ' vom ' || to_char(r.report_date, 'DD.MM.YYYY')
+            from document_item o join report r on r.id = o.source_report_id
+            join report_template t on t.id = r.template_id where o.id = c.item_id) as report
     from chain c
     join document_item s on s.id = c.cur
     join document d on d.id = s.document_id
@@ -309,18 +315,29 @@ export async function invoiceFinalizeCheck(
     const item = priced.find((i) => i.id === itemId)
     return `Position ${item?.oz ?? ''} „${item?.shortText ?? ''}“`.replace('  ', ' ')
   }
+  const reports = new Set<string>()
   for (const origin of origins) {
     if (origin.openChangeOrder !== null) {
       errors.push({
         field: 'items',
         message: `${label(origin.itemId)} stammt aus Nachtrag N${String(origin.openChangeOrder).padStart(2, '0')}, der nicht beauftragt ist. Nicht beauftragte Nachträge sind nicht abrechenbar.`,
       })
+    } else if (origin.report && doc.type === 'invoice') {
+      reports.add(origin.report)
     } else if (!origin.inContract && contract?.exists && doc.type === 'invoice') {
       warnings.push({
         field: 'items',
         message: `${label(origin.itemId)} gehört weder zum Hauptauftrag noch zu einem beauftragten Nachtrag (freie Position).`,
       })
     }
+  }
+
+  // Stundenlohnarbeiten are billable only when agreed before they started (VOB/B § 2 Abs. 10).
+  for (const report of reports) {
+    warnings.push({
+      field: 'items',
+      message: `Positionen aus dem ${report}: Stundenlohnarbeiten sind nur abrechenbar, wenn sie vor Beginn vereinbart wurden. Bitte auch die Preise prüfen.`,
+    })
   }
 
   // Quantities taken from the Leistungsaufmaß must still be current (another invoice may have

@@ -57,6 +57,22 @@ const cents = z
   .min(-100_000_000_000)
   .max(100_000_000_000)
 
+/** Nachweis eines Nachtrags (P2.6): Bericht, Aufmaßblatt or file of the same project. */
+export const EVIDENCE_KINDS = ['report', 'measurement_sheet', 'file'] as const
+export type EvidenceKind = (typeof EVIDENCE_KINDS)[number]
+export const evidenceRef = z.object({ kind: z.enum(EVIDENCE_KINDS), id })
+export type EvidenceRef = z.infer<typeof evidenceRef>
+export const evidenceList = z.array(evidenceRef).max(30, 'Höchstens 30 Nachweise.')
+
+/** PUT /documents/:id/evidence – replaces the Nachweise of a change order. */
+export const changeOrderEvidenceRequest = z.object({ evidence: evidenceList })
+
+/** Nachtrag aus Mehrmengen eines Leistungsaufmaßes (POST /measurement-sheets/:id/change-order). */
+export const varianceChangeOrderRequest = z.object({
+  /** Only these contract positions; default all with Mehrmenge. */
+  itemIds: z.array(id).max(200).optional(),
+})
+
 export const createDocumentRequest = z
   .object({
     type: z.enum(DOCUMENT_TYPES, 'Unbekannter Dokumenttyp.'),
@@ -67,6 +83,8 @@ export const createDocumentRequest = z
     /** Change orders: legal basis (VOB/B § 2 Abs. 5/6, BGB § 650b) and reason. */
     basis: z.enum(CHANGE_ORDER_BASES).optional(),
     reason: optionalText(2000),
+    /** Change orders: Nachweise (report, Aufmaßblatt, file of the project). */
+    evidence: evidenceList.optional(),
   })
   .superRefine((value, ctx) => {
     if (value.type === 'invoice' && !value.invoiceKind) {
@@ -461,7 +479,12 @@ export interface DocumentDetail extends DocumentSummary {
   recipient: PartyAddress | null
   finalizedAt: string | null
   /** Change orders: main contract, reason. */
-  changeOrderInfo: { contractId: string; contractLabel: string; reason: string | null } | null
+  changeOrderInfo: {
+    contractId: string
+    contractLabel: string
+    reason: string | null
+    evidence: EvidenceItem[]
+  } | null
   /** Schalter „Nachtragsangebot“ possible (draft quote/change order with a main contract). */
   canConvertToChangeOrder: boolean
   items: DocumentItem[]
@@ -492,4 +515,61 @@ export interface TaxRateSummary {
   percent: string
   categoryCode: string
   isDefault: boolean
+}
+
+/** Resolved Nachweis with a label for the screen. */
+export interface EvidenceItem extends EvidenceRef {
+  label: string
+  /** Report date, sheet date or upload date. */
+  date: string | null
+  /** Report/sheet is signed or the file is locked as evidence. */
+  locked: boolean
+}
+
+/** Vertragssumme eines Projekts (GET /projects/:id/contract, P2.6). */
+export interface ProjectContract {
+  contract: {
+    id: string
+    number: string | null
+    status: DocumentStatus
+    documentDate: string
+    netCents: number
+  } | null
+  changeOrders: {
+    id: string
+    number: string | null
+    /** N01, N02 … */
+    changeOrderNumber: number
+    basis: ChangeOrderBasis
+    status: 'draft' | 'offered' | 'accepted' | 'partially_accepted' | 'rejected'
+    subject: string | null
+    reason: string | null
+    netCents: number
+    /** Counted for the Vertragssumme. */
+    acceptedNetCents: number
+    evidenceCount: number
+    decidedAt: string | null
+  }[]
+  totals: {
+    contractNetCents: number
+    acceptedNetCents: number
+    offeredNetCents: number
+    draftNetCents: number
+    rejectedNetCents: number
+    totalNetCents: number
+    potentialNetCents: number
+  }
+}
+
+/** Mehrmenge of a contract position on a Leistungsaufmaß (GET /measurement-sheets/:id/variances). */
+export interface SheetVariance {
+  itemId: string
+  oz: string | null
+  shortText: string | null
+  unit: string | null
+  orderedQuantity: string
+  measuredQuantity: string
+  /** Already in other change orders (not rejected). */
+  claimedQuantity: string
+  extraQuantity: string
 }

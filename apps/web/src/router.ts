@@ -18,19 +18,26 @@ export type Route =
   | { view: 'measurement'; id: string }
   | { view: 'report'; id: string }
 
-export type ProjectSection = 'overview' | 'documents' | 'measurements' | 'diary' | 'files'
+export type ProjectSection =
+  | 'overview'
+  | 'documents'
+  | 'measurements'
+  | 'diary'
+  | 'reports'
+  | 'files'
 
 const UUID = '[0-9a-f-]{36}'
 const SECTIONS = {
   dokumente: 'documents',
   aufmass: 'measurements',
   bautagebuch: 'diary',
+  berichte: 'reports',
   ablage: 'files',
 } as const
 
 export function parseRoute(path: string): Route {
   const project = new RegExp(
-    `^/projekte/(${UUID})(?:/(dokumente|aufmass|bautagebuch|ablage))?/?$`,
+    `^/projekte/(${UUID})(?:/(dokumente|aufmass|bautagebuch|berichte|ablage))?/?$`,
   ).exec(path)
   if (project) {
     const section = project[2] as keyof typeof SECTIONS | undefined
@@ -89,6 +96,7 @@ export function pathOf(route: Route): string {
         documents: '/dokumente',
         measurements: '/aufmass',
         diary: '/bautagebuch',
+        reports: '/berichte',
         files: '/ablage',
       }
       return `/projekte/${route.id}${segment[route.section]}`

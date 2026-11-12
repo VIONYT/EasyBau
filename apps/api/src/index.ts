@@ -20,6 +20,7 @@ import { type EinvoiceValidator, kositValidator } from './kosit.js'
 import { registerAuditRoutes } from './routes/audit.js'
 import { authHook, mfaEnforcementHook, registerAuthRoutes } from './routes/auth.js'
 import { registerCatalogRoutes } from './routes/catalog.js'
+import { registerChangeOrderRoutes } from './routes/change-orders.js'
 import { registerContactRoutes } from './routes/contacts.js'
 import { registerDocumentEmailRoutes } from './routes/document-email.js'
 import { registerDocumentRoutes } from './routes/documents.js'
@@ -35,6 +36,7 @@ import { registerOperationsRoutes } from './routes/operations.js'
 import { registerPdfRoutes } from './routes/pdf.js'
 import { registerProjectRoutes } from './routes/projects.js'
 import { registerReceivableRoutes } from './routes/receivables.js'
+import { registerReportBillingRoutes } from './routes/report-billing.js'
 import { registerReportRoutes } from './routes/reports.js'
 import { registerSettingsRoutes } from './routes/settings.js'
 import { registerSignatureRoutes } from './routes/signatures.js'
@@ -239,6 +241,8 @@ export function buildApi({
   registerSignatureRoutes(app, services)
   registerMeasurementRoutes(app, services)
   registerReportRoutes(app, services)
+  registerReportBillingRoutes(app, services)
+  registerChangeOrderRoutes(app, services)
   registerCatalogRoutes(app, services)
   registerSettingsRoutes(app, services)
   registerEmailRoutes(app, services)

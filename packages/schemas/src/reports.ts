@@ -17,6 +17,8 @@ export interface ReportSection {
   transferTimes?: boolean
   /** header: Leistungszeitraum (Regiebericht). */
   servicePeriod?: boolean
+  /** text: follow-up documents that can be started from this section (Vorkommnisse). */
+  actions?: ('obstruction_notice' | 'change_order')[]
 }
 
 export interface ReportTemplateSummary {
@@ -135,6 +137,11 @@ export const signReportRequest = z.object({
 
 export const reportListQuery = z.object({ template: z.string().max(100).optional() })
 
+/** Regie-/Einsatzberichte in eine Rechnung übernehmen (P2.5). */
+export const applyReportsRequest = z.object({
+  reportIds: z.array(id).min(1, 'Bitte mindestens einen Bericht auswählen.').max(50),
+})
+
 // ---- Responses -----------------------------------------------------------------------------------
 
 export interface ReportSummary {
@@ -150,6 +157,25 @@ export interface ReportSummary {
   weather: WeatherValue | null
   createdBy: { id: string; displayName: string } | null
   updatedAt: string
+  /** Template is billable (Regie-, Einsatz-, Bautagesbericht, Abnahme). */
+  billable: boolean
+  /** Invoice the report was billed with (not cancelled); null while unbilled. */
+  billedInvoice: { id: string; number: string | null } | null
+}
+
+/** Report as candidate for an invoice draft (GET /documents/:id/reports). */
+export interface BillableReport {
+  id: string
+  template: { key: string; name: string }
+  reportDate: string
+  serviceFrom: string | null
+  serviceTo: string | null
+  status: ReportSummary['status']
+  totalHours: string
+  /** Already taken over into this draft. */
+  inThisDocument: boolean
+  /** Why it cannot be taken over (unsigned, already billed or in another draft); null = possible. */
+  blocked: string | null
 }
 
 export interface ReportPhoto {

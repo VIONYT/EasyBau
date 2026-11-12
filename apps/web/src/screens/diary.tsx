@@ -9,7 +9,7 @@ import { useEffect, useState } from 'react'
 import { type ApiError, api, mutate } from '../api'
 import { formatDateTime, formatInputNumber } from '../format'
 import { Field, FormError, useForm, value } from '../forms'
-import { type TextKey, t } from '../i18n'
+import { type TextKey, t, tf } from '../i18n'
 import type { Navigate } from '../router'
 
 export function weatherText(weather: ReportSummary['weather']): string {
@@ -23,46 +23,71 @@ export function weatherText(weather: ReportSummary['weather']): string {
     .join(', ')
 }
 
+const DIARY = 'daily_site_report'
+
 /** Bautagebuch of a project: one daily report (Bautagesbericht) per day, newest first. */
-export function ProjectDiary({
-  me,
-  projectId,
-  archived,
-  navigate,
-}: {
+export function ProjectDiary(props: {
   me: Me
   projectId: string
   archived: boolean
   navigate: Navigate
 }) {
+  return <ProjectReports {...props} kind="diary" />
+}
+
+/**
+ * Reports of a project: the Bautagebuch, or all other templates (Regie-, Einsatzbericht,
+ * Abnahmeprotokoll, Bedenken- und Behinderungsanzeige …) with the template chosen when creating.
+ */
+export function ProjectReports({
+  me,
+  projectId,
+  archived,
+  navigate,
+  kind,
+}: {
+  me: Me
+  projectId: string
+  archived: boolean
+  navigate: Navigate
+  kind: 'diary' | 'reports'
+}) {
+  const diary = kind === 'diary'
   const [reports, setReports] = useState<ReportSummary[] | null>(null)
+  const [templates, setTemplates] = useState<ReportTemplateSummary[]>([])
   const [error, setError] = useState<string | null>(null)
   const [creating, setCreating] = useState(false)
   const canWrite = me.permissions.includes('report.write') && !archived
+  const listPath = `/api/v1/projects/${projectId}/reports${diary ? `?template=${DIARY}` : ''}`
 
   useEffect(() => {
-    api<ReportSummary[]>('GET', `/api/v1/projects/${projectId}/reports?template=daily_site_report`)
-      .then(setReports)
+    api<ReportSummary[]>('GET', listPath)
+      .then((list) => setReports(diary ? list : list.filter((r) => r.template.key !== DIARY)))
       .catch((err: ApiError) => setError(err.message))
-  }, [projectId])
+    if (!diary) {
+      api<ReportTemplateSummary[]>('GET', '/api/v1/report-templates')
+        .then((list) => setTemplates(list.filter((tpl) => tpl.key !== DIARY)))
+        .catch(() => undefined)
+    }
+  }, [listPath, diary])
 
   const open = (id: string) => navigate({ view: 'report', id })
-  const listPath = `/api/v1/projects/${projectId}/reports?template=daily_site_report`
   const form = useForm(
     async (data) => {
       // The id is made on the device, so the report can be written offline and synced later.
       const id = crypto.randomUUID()
       const reportDate = value(data, 'reportDate')
-      const [templates, project] = await Promise.all([
+      const templateKey = diary ? DIARY : value(data, 'templateKey')
+      const [all, project] = await Promise.all([
         api<ReportTemplateSummary[]>('GET', '/api/v1/report-templates'),
         api<ProjectDetail>('GET', `/api/v1/projects/${projectId}`),
       ])
-      const template = templates.find((tpl) => tpl.key === 'daily_site_report')
+      const template = all.find((tpl) => tpl.key === templateKey)
       if (!template) throw new Error(t('off.notCached'))
       const result = await mutate<ReportDetail>({
         method: 'POST',
         path: `/api/v1/projects/${projectId}/reports`,
-        json: { id, templateKey: 'daily_site_report', reportDate },
+        json: { id, templateKey, reportDate },
         resource: `/api/v1/reports/${id}`,
         label: `${template.name} ${formatDateTime(reportDate, 'date')}`,
         optimistic: () => ({
@@ -85,6 +110,8 @@ export function ProjectDiary({
           photos: [],
           signatures: [],
           completedAt: null,
+          billable: template.billable,
+          billedInvoice: null,
         }),
         alsoUpdate: [
           {
@@ -102,6 +129,8 @@ export function ProjectDiary({
                 weather: null,
                 createdBy: { id: me.user.id, displayName: me.user.displayName },
                 updatedAt: new Date().toISOString(),
+                billable: template.billable,
+                billedInvoice: null,
               } satisfies ReportSummary,
               ...(list as ReportSummary[]),
             ],
@@ -120,16 +149,31 @@ export function ProjectDiary({
   return (
     <div>
       <div className="section-head">
-        <h2>{t('d.title')}</h2>
+        <h2>{t(diary ? 'd.title' : 'rep.title')}</h2>
         {canWrite && !creating ? (
           <button type="button" className="button primary auto" onClick={() => setCreating(true)}>
-            {t('d.new')}
+            {t(diary ? 'd.new' : 'rep.new')}
           </button>
         ) : null}
       </div>
       {creating ? (
         <form className="panel" onSubmit={form.onSubmit} noValidate>
           <FormError>{form.error}</FormError>
+          {diary ? null : (
+            <div className="field">
+              <label htmlFor="report-template">{t('rep.template')}</label>
+              <select id="report-template" name="templateKey" defaultValue="daywork_report">
+                {templates.map((tpl) => (
+                  <option key={tpl.key} value={tpl.key}>
+                    {tpl.name}
+                  </option>
+                ))}
+              </select>
+              {form.fieldErrors.templateKey ? (
+                <p className="field-error">{form.fieldErrors.templateKey}</p>
+              ) : null}
+            </div>
+          )}
           <Field
             label={t('d.date')}
             name="reportDate"
@@ -139,7 +183,7 @@ export function ProjectDiary({
           />
           <div className="button-row">
             <button type="submit" className="button primary auto" disabled={form.busy}>
-              {t('d.create')}
+              {t(diary ? 'd.create' : 'rep.create')}
             </button>
             <button type="button" className="button ghost" onClick={() => setCreating(false)}>
               {t('common.cancel')}
@@ -149,7 +193,9 @@ export function ProjectDiary({
       ) : null}
       <FormError>{error}</FormError>
       {!reports ? <p className="muted">{t('common.loading')}</p> : null}
-      {reports && !reports.length ? <p className="muted">{t('d.empty')}</p> : null}
+      {reports && !reports.length ? (
+        <p className="muted">{t(diary ? 'd.empty' : 'rep.empty')}</p>
+      ) : null}
       {reports?.length ? (
         <ul className="list">
           {reports.map((r) => (
@@ -163,6 +209,7 @@ export function ProjectDiary({
               >
                 <span className="doc-line">
                   <strong>
+                    {diary ? null : `${r.template.name} · `}
                     {new Intl.DateTimeFormat('de-DE', { weekday: 'short' }).format(
                       new Date(`${r.reportDate}T12:00:00`),
                     )}
@@ -171,12 +218,21 @@ export function ProjectDiary({
                   <span className={`chip chip--${r.status === 'signed' ? 'accepted' : 'draft'}`}>
                     {t(`d.status.${r.status}` as TextKey)}
                   </span>
+                  {r.billedInvoice ? (
+                    <span className="chip chip--pay-paid">
+                      {tf('rep.billed', { number: r.billedInvoice.number ?? '' })}
+                    </span>
+                  ) : r.billable && r.status === 'signed' && !diary ? (
+                    <span className="chip chip--pay-open">{t('rep.unbilled')}</span>
+                  ) : null}
                 </span>
                 <span className="muted">
                   {[
                     weatherText(r.weather),
-                    `${r.staffCount} ${r.staffCount === 1 ? t('d.person') : t('d.people')}`,
-                    `${formatInputNumber(r.totalHours)} ${t('d.hours')}`,
+                    r.staffCount
+                      ? `${r.staffCount} ${r.staffCount === 1 ? t('d.person') : t('d.people')}`
+                      : '',
+                    r.staffCount ? `${formatInputNumber(r.totalHours)} ${t('d.hours')}` : '',
                     r.photoCount
                       ? `${r.photoCount} ${r.photoCount === 1 ? t('d.photo') : t('d.photos')}`
                       : '',

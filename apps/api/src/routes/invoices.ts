@@ -10,6 +10,7 @@ import { issueEinvoices } from '../einvoice.js'
 import { HttpError, notFound, parse } from '../http.js'
 import { copyItems, liveIssuer, loadDocument, lockDraft, recalculate } from './documents.js'
 import { archiveDocumentPdf } from './pdf.js'
+import { markReportsBilled } from './report-billing.js'
 
 const documentParam = z.object({ id: z.uuid('Ungültige ID.') })
 
@@ -124,6 +125,8 @@ export async function finalizeInvoice(
            recipient_snapshot = ${tx.json(detail.recipient as never)},
            legal_notes = ${tx.json(legalNotes)}
     where id = ${id} and project_id = ${current.projectId}`
+  // Regie-/Einsatzberichte in this invoice are billed now (P2.5).
+  await markReportsBilled(tx, id)
 
   // Rule 8: ZUGFeRD/XRechnung from the frozen document, validated by KoSIT, archived. A failed
   // check rolls the whole transaction back: no number is consumed, the invoice stays a draft.

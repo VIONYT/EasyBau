@@ -36,7 +36,9 @@ import { articlePrice } from './catalog'
 import { DocumentEmailPanel } from './document-email'
 import { documentLabel, StatusChip } from './documents'
 import { DunningPanel } from './dunning'
+import { EvidencePanel } from './evidence'
 import { ReceivablePanel } from './payments'
+import { ReportApplyPanel } from './report-apply'
 
 type Doc = DocumentDetail
 type Apply = (result: { data: Doc; etag: string | null }) => void
@@ -140,6 +142,14 @@ export function DocumentScreen({ me, id, navigate }: { me: Me; id: string; navig
 
       {doc.type === 'quote' || doc.type === 'change_order' ? (
         <ChangeOrderSwitch doc={doc} editable={editable} apply={apply} />
+      ) : null}
+      {doc.type === 'change_order' && doc.changeOrderInfo ? (
+        <EvidencePanel
+          doc={doc}
+          canWrite={me.permissions.includes('document.write')}
+          apply={apply}
+          navigate={navigate}
+        />
       ) : null}
       <DocumentActions
         doc={doc}
@@ -577,6 +587,9 @@ function Positions({
         >
           {t('doc.applyMeasurements')}
         </button>
+      ) : null}
+      {editable && !adding && doc.type === 'invoice' && doc.invoiceKind !== 'cancellation' ? (
+        <ReportApplyPanel doc={doc} apply={apply} />
       ) : null}
       {editable && picking ? (
         <CatalogPicker doc={doc} titles={titles} apply={apply} onClose={() => setPicking(false)} />

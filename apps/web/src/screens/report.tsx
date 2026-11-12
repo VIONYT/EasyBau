@@ -4,7 +4,7 @@ import { type ChangeEvent, useCallback, useEffect, useMemo, useState } from 'rea
 import { ApiError, api, apiWithEtag, mutate } from '../api'
 import { formatDateTime, formatInputNumber } from '../format'
 import { FormError } from '../forms'
-import { type TextKey, t } from '../i18n'
+import { type TextKey, t, tf } from '../i18n'
 import type { Navigate } from '../router'
 import {
   initialChoice,
@@ -90,6 +90,7 @@ export function ReportScreen({ me, id, navigate }: { me: Me; id: string; navigat
   const [, setEtag] = useState<string | null>(null)
   const [data, setData] = useState<Data>({})
   const [reportDate, setReportDate] = useState('')
+  const [period, setPeriod] = useState({ from: '', to: '' })
   const [dirty, setDirty] = useState(false)
   // Sections changed since the last save: only these are sent (others keep the server state).
   const [touched, setTouched] = useState<Set<string>>(new Set())
@@ -105,6 +106,7 @@ export function ReportScreen({ me, id, navigate }: { me: Me; id: string; navigat
       setEtag(tag)
       setData(toInput(next.data as Data))
       setReportDate(next.reportDate)
+      setPeriod({ from: next.serviceFrom ?? '', to: next.serviceTo ?? '' })
       setDirty(false)
       setTouched(new Set())
     },
@@ -151,6 +153,7 @@ export function ReportScreen({ me, id, navigate }: { me: Me; id: string; navigat
 
   const editable = report.status === 'draft' && me.permissions.includes('report.write')
   const sections = report.template.sections
+  const servicePeriod = sections.some((s) => s.type === 'header' && s.servicePeriod)
   const update = (sectionId: string, value: Record<string, unknown>) => {
     setTouched((current) => new Set(current).add(sectionId))
     setData((d) => ({ ...d, [sectionId]: value }))
@@ -162,6 +165,7 @@ export function ReportScreen({ me, id, navigate }: { me: Me; id: string; navigat
     const changed = toRequest(sections, data)
     const body = {
       reportDate,
+      ...(servicePeriod ? { serviceFrom: period.from || null, serviceTo: period.to || null } : {}),
       data: Object.fromEntries(Object.entries(changed).filter(([key]) => touched.has(key))),
     }
     const ok = await run(() =>
@@ -173,14 +177,22 @@ export function ReportScreen({ me, id, navigate }: { me: Me; id: string; navigat
         label: `${report.template.name} ${formatDateTime(reportDate, 'date')}`,
         optimistic: (current) => {
           const base = current ?? report
-          return { ...base, reportDate, data: { ...base.data, ...body.data } }
+          return {
+            ...base,
+            reportDate,
+            serviceFrom: servicePeriod ? period.from || null : base.serviceFrom,
+            serviceTo: servicePeriod ? period.to || null : base.serviceTo,
+            data: { ...base.data, ...body.data },
+          }
         },
       }),
     )
     if (ok) setSaved(true)
     return ok
   }
-  const back = () => navigate({ view: 'project', id: report.project.id, section: 'diary' })
+  const diary = report.template.key === 'daily_site_report'
+  const back = () =>
+    navigate({ view: 'project', id: report.project.id, section: diary ? 'diary' : 'reports' })
   const remove = async () => {
     if (!window.confirm(t('d.deleteConfirm'))) return
     try {
@@ -196,7 +208,7 @@ export function ReportScreen({ me, id, navigate }: { me: Me; id: string; navigat
     <section className="site report" aria-labelledby="report-title">
       <a
         className="back"
-        href={`/projekte/${report.project.id}/bautagebuch`}
+        href={`/projekte/${report.project.id}/${diary ? 'bautagebuch' : 'berichte'}`}
         onClick={(e) => {
           e.preventDefault()
           back()
@@ -213,6 +225,20 @@ export function ReportScreen({ me, id, navigate }: { me: Me; id: string; navigat
           {t(`d.status.${report.status}` as TextKey)}
         </span>
       </div>
+      {report.billedInvoice ? (
+        <p className="notice inline" role="status">
+          {t('rep.billedIn')}{' '}
+          <a
+            href={`/dokumente/${report.billedInvoice.id}`}
+            onClick={(e) => {
+              e.preventDefault()
+              if (report.billedInvoice) navigate({ view: 'document', id: report.billedInvoice.id })
+            }}
+          >
+            {report.billedInvoice.number}
+          </a>
+        </p>
+      ) : null}
       <div className="button-row">
         <a
           className="button ghost"
@@ -251,6 +277,24 @@ export function ReportScreen({ me, id, navigate }: { me: Me; id: string; navigat
               }}
             />
           </div>
+          {servicePeriod ? (
+            <div className="row">
+              {(['from', 'to'] as const).map((key) => (
+                <div key={key} className="field">
+                  <label htmlFor={`period-${key}`}>{t(`rep.period.${key}` as TextKey)}</label>
+                  <input
+                    id={`period-${key}`}
+                    type="date"
+                    value={period[key]}
+                    onChange={(e) => {
+                      setPeriod({ ...period, [key]: e.target.value })
+                      setDirty(true)
+                    }}
+                  />
+                </div>
+              ))}
+            </div>
+          ) : null}
         </div>
 
         {sections.map((section) => {
@@ -323,6 +367,23 @@ export function ReportScreen({ me, id, navigate }: { me: Me; id: string; navigat
           }
         })}
       </fieldset>
+
+      {me.permissions.includes('report.write')
+        ? sections
+            .filter((s) => s.type === 'text' && s.actions?.length)
+            .map((section) => (
+              <FollowUps
+                key={section.id}
+                report={report}
+                label={sectionTitle(section)}
+                text={((data[section.id] as { text?: string } | undefined)?.text ?? '').trim()}
+                actions={section.actions ?? []}
+                me={me}
+                navigate={navigate}
+                setError={setError}
+              />
+            ))
+        : null}
 
       {sections.some((s) => s.type === 'photos') ? (
         <Photos report={report} editable={editable} apply={applyPhotos} setError={setError} />
@@ -741,11 +802,13 @@ function Signatures({
   save: (() => Promise<boolean>) | null
   run: (call: () => Promise<{ data: ReportDetail; etag: string | null }>) => Promise<boolean>
 }) {
-  const roles: SignerRole[] = [
+  const required: SignerRole[] = [
     ...new Set(
       report.template.sections.filter((s) => s.type === 'signatures').flatMap((s) => s.roles ?? []),
     ),
   ]
+  // Anzeigen (Bedenken, Behinderung) have no signature section: the contractor signs to freeze them.
+  const roles: SignerRole[] = required.length ? required : ['contractor']
   const [names, setNames] = useState<Record<string, string>>({ contractor: me.user.displayName })
   const [mine] = useMySignature()
   // The signed-in user signs as Auftragnehmer; everyone else draws on this device.
@@ -773,8 +836,7 @@ function Signatures({
       </div>
     )
   }
-  if (report.status !== 'draft' || !me.permissions.includes('report.sign') || !roles.length)
-    return null
+  if (report.status !== 'draft' || !me.permissions.includes('report.sign')) return null
   const sign = async () => {
     if (save && !(await save())) return
     if (!window.confirm(t('d.signConfirm'))) return
@@ -818,6 +880,90 @@ function Signatures({
       <button type="button" className="button primary auto" disabled={busy} onClick={sign}>
         {t('d.sign')}
       </button>
+    </div>
+  )
+}
+
+/**
+ * Folgedokumente aus „Besondere Vorkommnisse“ (P2.5/P2.6): a Behinderungsanzeige (VOB/B § 6) or a
+ * Nachtrag, prefilled with the text and linked to this report as evidence.
+ */
+function FollowUps({
+  report,
+  label,
+  text,
+  actions,
+  me,
+  navigate,
+  setError,
+}: {
+  report: ReportDetail
+  label: string
+  text: string
+  actions: NonNullable<ReportSection['actions']>
+  me: Me
+  navigate: Navigate
+  setError: (message: string | null) => void
+}) {
+  const [busy, setBusy] = useState(false)
+  const start = async (action: (typeof actions)[number]) => {
+    setBusy(true)
+    setError(null)
+    try {
+      if (action === 'obstruction_notice') {
+        const created = await api<ReportDetail>(
+          'POST',
+          `/api/v1/projects/${report.project.id}/reports`,
+          { templateKey: 'obstruction_notice', reportDate: report.reportDate },
+        )
+        if (text) {
+          await api('PATCH', `/api/v1/reports/${created.id}`, {
+            data: {
+              obstruction: {
+                text: `${text}\n\n${t('rep.fromReport')} ${report.template.name} ${formatDateTime(report.reportDate, 'date')}`,
+              },
+            },
+          })
+        }
+        navigate({ view: 'report', id: created.id })
+      } else {
+        const created = await api<{ id: string }>(
+          'POST',
+          `/api/v1/projects/${report.project.id}/documents`,
+          {
+            type: 'change_order',
+            basis: 'additional_work',
+            reason: text || null,
+            evidence: [{ kind: 'report', id: report.id }],
+          },
+        )
+        navigate({ view: 'document', id: created.id })
+      }
+    } catch (err) {
+      setError((err as ApiError).message)
+    } finally {
+      setBusy(false)
+    }
+  }
+  return (
+    <div className="panel">
+      <h2>{tf('rep.followUps', { section: label })}</h2>
+      <p className="hint">{t('rep.followUpsHint')}</p>
+      <div className="button-row">
+        {actions
+          .filter((a) => a !== 'change_order' || me.permissions.includes('document.write'))
+          .map((action) => (
+            <button
+              key={action}
+              type="button"
+              className="button ghost auto"
+              disabled={busy}
+              onClick={() => start(action)}
+            >
+              {t(`rep.action.${action}` as TextKey)}
+            </button>
+          ))}
+      </div>
     </div>
   )
 }

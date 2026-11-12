@@ -48,7 +48,7 @@ const SUPPORTED = new Set<string>(SUPPORTED_SECTION_TYPES)
 const isSupported = (sections: ReportSection[]) => sections.every((s) => SUPPORTED.has(s.type))
 
 /** Sum of all staff hours of a report (two decimals, exact: hours are stored as text). */
-function totalHours(sections: ReportSection[], data: Record<string, unknown>): string {
+export function totalHours(sections: ReportSection[], data: Record<string, unknown>): string {
   let hundredths = 0
   for (const section of sections.filter((s) => s.type === 'staff')) {
     for (const row of (data[section.id] as StaffValue | undefined)?.rows ?? []) {
@@ -87,6 +87,7 @@ interface ReportRow {
   createdById: string | null
   updatedAt: string
   updatedRaw: Date
+  billedInvoice: ReportSummary['billedInvoice']
 }
 
 function reportColumns(tx: Tx) {
@@ -96,7 +97,9 @@ function reportColumns(tx: Tx) {
     r.template_snapshot as "templateSnapshot",
     (select count(*)::int from report_photo ph where ph.report_id = r.id) as "photoCount",
     case when u.id is null then null else json_build_object('id', u.id, 'displayName', u.display_name) end as "createdBy",
-    r.created_by as "createdById", ${ISO(tx, 'r.updated_at')} as "updatedAt", r.updated_at as "updatedRaw"`
+    r.created_by as "createdById", ${ISO(tx, 'r.updated_at')} as "updatedAt", r.updated_at as "updatedRaw",
+    (select json_build_object('id', b.id, 'number', b.number) from document b
+     where b.id = r.billed_in_invoice_id and b.status <> 'cancelled') as "billedInvoice"`
 }
 
 const fromReports = (tx: Tx) => tx`
@@ -119,6 +122,8 @@ function toSummary(row: ReportRow): ReportSummary {
     weather: weatherOf(sections, row.data),
     createdBy: row.createdBy,
     updatedAt: row.updatedAt,
+    billable: row.billable,
+    billedInvoice: row.billedInvoice,
   }
 }
 
