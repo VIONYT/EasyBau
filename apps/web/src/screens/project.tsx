@@ -10,6 +10,7 @@ import { ProjectDiary, ProjectReports } from './diary'
 import { ProjectDocuments } from './documents'
 import { ProjectFiles } from './files'
 import { ProjectMeasurements } from './measurements'
+import { ProjectFiguresPanel } from './project-figures'
 import { ProjectForm, period, StatusBadge, useStatuses } from './projects'
 
 type Section = ProjectSection
@@ -211,7 +212,10 @@ export function ProjectScreen({
         </div>
       ) : null}
       {section === 'overview' && me.permissions.includes('document.read') ? (
-        <ContractPanel projectId={project.id} navigate={navigate} />
+        <>
+          <ProjectFiguresPanel projectId={project.id} />
+          <ContractPanel projectId={project.id} navigate={navigate} />
+        </>
       ) : null}
       {section === 'documents' ? (
         <ProjectDocuments me={me} project={project} navigate={navigate} />

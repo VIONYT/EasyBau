@@ -2376,3 +2376,17 @@ fieldset.plain {
 .offline-prepare .hint {
   margin: 0;
 }
+
+/* Projektkennzahlen (P2.7) */
+.figures .tile h3 {
+  margin: 0 0 var(--space-1);
+  font-size: 0.875rem;
+  color: var(--color-muted);
+}
+
+.amount-big {
+  margin: 0;
+  font-size: 1.25rem;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}

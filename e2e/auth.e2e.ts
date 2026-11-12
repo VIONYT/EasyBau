@@ -931,6 +931,36 @@ test('Regiebericht in die Rechnung, Nachtrag aus dem Bautagebuch, Vertragssumme'
     await page.screenshot({ path: `${SCREENSHOTS}/vertragssumme.png`, fullPage: true })
 })
 
+test('Projektkennzahlen und Filter der Projektliste', async () => {
+  test.skip(!SETUP_TOKEN, 'SETUP_TOKEN must be set for a fresh stack')
+
+  // Kennzahlen in der Projektübersicht
+  await page.getByRole('button', { name: 'Projekte' }).click()
+  await page.getByRole('link', { name: /Sanierung Lindenweg/ }).click()
+  const figures = page.locator('section.figures')
+  await expect(figures.getByRole('heading', { name: 'Kennzahlen' })).toBeVisible()
+  await expect(figures.getByRole('heading', { name: 'Soll-Stunden' })).toBeVisible()
+  await expect(figures.getByText(/aus der Kalkulation von AB-00101/)).toBeVisible()
+  await expect(figures.getByRole('heading', { name: 'Auftragssumme' })).toBeVisible()
+  await expect(figures.getByRole('heading', { name: 'Abgerechnet' })).toBeVisible()
+  await expect(figures.getByRole('heading', { name: 'Offene Forderungen' })).toBeVisible()
+  await expectNoHorizontalScroll(page)
+  if (SCREENSHOTS) await page.screenshot({ path: `${SCREENSHOTS}/kennzahlen.png`, fullPage: true })
+
+  // Filter: Zeitraum und Mitarbeitende
+  await page.getByRole('button', { name: 'Projekte' }).click()
+  await page.getByText('Filter', { exact: true }).click()
+  await page.getByLabel('Mitarbeitende').selectOption({ label: 'Nur meine Projekte' })
+  await page.getByLabel('Zeitraum von').fill('2020-01-01')
+  await page.getByLabel('Zeitraum bis').fill('2020-12-31')
+  await expect(page.getByText('Noch keine Einträge.')).toBeVisible()
+  await page.getByLabel('Zeitraum bis').fill('2030-12-31')
+  await expect(page.getByRole('link', { name: /Sanierung Lindenweg/ })).toBeVisible()
+  await expectNoHorizontalScroll(page)
+  await page.getByRole('button', { name: 'Filter zurücksetzen' }).click()
+  await expect(page.getByLabel('Zeitraum von')).toHaveValue('')
+})
+
 test('Briefpapier: WYSIWYG-Editor nach DIN 5008 B und Druckansicht', async () => {
   test.skip(!SETUP_TOKEN, 'SETUP_TOKEN must be set for a fresh stack')
   test.setTimeout(120_000)

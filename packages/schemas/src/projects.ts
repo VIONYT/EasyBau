@@ -53,6 +53,9 @@ export const projectListQuery = listQuery.extend({
   memberId: id.optional(),
   customerId: id.optional(),
   archived: z.enum(['true', 'false']).default('false'),
+  /** Zeitraum: projects whose period (start–end) overlaps from–to; projects without dates are left out. */
+  from: isoDate.optional(),
+  to: isoDate.optional(),
 })
 
 export interface ProjectStatus {
@@ -82,4 +85,30 @@ export interface ProjectDetail extends ProjectSummary {
   description: string | null
   site: z.infer<typeof projectSite>
   createdAt: string
+}
+
+/** Projektkennzahlen (GET /projects/:id/figures, P2.7); amounts in cents. */
+export interface ProjectFiguresDto {
+  /** Soll-Stunden from the Kalkulation of the contract (or, without contract, of the latest quote). */
+  plannedHours: string
+  /** Where the Soll-Stunden come from; null when there is no document to compute them from. */
+  hoursBasis: { kind: 'contract' | 'quote'; label: string } | null
+  /** Counted positions without Kalkulation (their hours are unknown). */
+  uncalculatedCount: number
+  /** Auftragssumme = Vertragssumme netto (Hauptauftrag + beauftragte Nachträge). */
+  contractNetCents: number | null
+  billedNetCents: number
+  billedGrossCents: number
+  paidCents: number
+  openReceivableCents: number
+  unbilledNetCents: number | null
+  overbilledNetCents: number
+  billedPercent: string | null
+  invoiceCount: number
+}
+
+/** Person of the company for project teams and filters (GET /team: names only). */
+export interface TeamMember {
+  id: string
+  displayName: string
 }

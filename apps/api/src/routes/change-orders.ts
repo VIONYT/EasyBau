@@ -94,7 +94,7 @@ export async function resolveEvidence(
   })
 }
 
-async function projectContract(tx: Tx, projectId: string): Promise<ProjectContract> {
+export async function projectContract(tx: Tx, projectId: string): Promise<ProjectContract> {
   const [contract] = await tx<(NonNullable<ProjectContract['contract']> & { netRaw: string })[]>`
     select id, number, status, to_char(document_date, 'YYYY-MM-DD') as "documentDate",
            net_total_cents::text as "netRaw"
