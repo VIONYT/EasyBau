@@ -4,7 +4,7 @@ import { type ApiError, api } from '../api'
 import { formatDateTime } from '../format'
 import { FormError } from '../forms'
 import { type TextKey, t, tf } from '../i18n'
-import type { Navigate, Route } from '../router'
+import { type Navigate, pathOf, type Route } from '../router'
 
 /** Where a search hit leads. Contacts and Stammdaten have no own page yet: their list. */
 function routeOf(hit: SearchHit): Route {
@@ -46,7 +46,7 @@ export function SearchScreen({ q, navigate }: { q: string; navigate: Navigate })
             {group.hits.map((hit) => (
               <li key={hit.id} className="list-link">
                 <a
-                  href="/"
+                  href={pathOf(routeOf(hit))}
                   onClick={(e) => {
                     e.preventDefault()
                     navigate(routeOf(hit))

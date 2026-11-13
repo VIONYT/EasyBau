@@ -921,7 +921,7 @@ test('Regiebericht in die Rechnung, Nachtrag aus dem Bautagebuch, Vertragssumme'
 
   // Projektübersicht: Vertragssumme mit dem Nachtrag (Entwurf zählt nicht)
   await page.getByRole('link', { name: /Sanierung Lindenweg/ }).click()
-  await page.getByRole('button', { name: 'Übersicht', exact: true }).click()
+  await page.locator('nav.tabs.sub').getByRole('button', { name: 'Übersicht' }).click()
   const contract = page.locator('section.contract')
   await expect(contract.getByRole('heading', { name: 'Vertragssumme' })).toBeVisible()
   await expect(contract.getByText('Hauptauftrag', { exact: true })).toBeVisible()
@@ -984,7 +984,12 @@ test('Übersicht, globale Suche und Benachrichtigungen', async () => {
   await expect(page.getByRole('heading', { name: 'Kontakte' })).toBeVisible()
   await expect(page.getByRole('heading', { name: 'Dokumente' })).toBeVisible()
   await expectNoHorizontalScroll(page)
-  await page.getByRole('link', { name: /P-00101 · Sanierung Lindenweg/ }).click()
+  await page.getByRole('searchbox', { name: 'Suchen' }).fill('Lindenweg')
+  await page.getByRole('searchbox', { name: 'Suchen' }).press('Enter')
+  await page
+    .getByRole('region', { name: 'Projekte' })
+    .getByRole('link', { name: /P-00101 · Sanierung Lindenweg/ })
+    .click()
   await expect(page.getByRole('heading', { name: /Sanierung Lindenweg/, level: 1 })).toBeVisible()
 
   // Benachrichtigungen
