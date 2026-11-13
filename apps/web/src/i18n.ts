@@ -219,7 +219,7 @@ const de = {
     'Den Link zusätzlich per E-Mail an die Person senden? (Abbrechen = nur Link anzeigen, z. B. zum persönlichen Übergeben)',
   'users.resetLinkFor': 'Neues Passwort für {name}',
   'users.resetLinkIntro':
-    'Diesen Link der Person persönlich übergeben. Er ist 24 Stunden gültig und nur einmal verwendbar; alle bisherigen Anmeldungen der Person werden beim Festlegen beendet.',
+    'Diesen Link der Person übergeben. Er ist bis {until} gültig und nur einmal verwendbar; alle bisherigen Anmeldungen der Person werden beim Festlegen beendet.',
   'users.resetEmailQueued': 'Der Link wurde auch per E-Mail verschickt.',
   'contacts.new': 'Neuer Kontakt',
   'contacts.export': 'CSV exportieren',

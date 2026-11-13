@@ -31,14 +31,18 @@ import { queueEmail } from './email.js'
  * (link to hand over, also without SMTP) and E-Mail-Bestätigung.
  *
  * Security: the link carries a 256-bit random token, the database only its SHA-256; links are
- * single-use and short-lived (30 min self-service, 24 h from the administration, 48 h for the
- * confirmation). The request never reveals whether an address has a login. A new password is
+ * single-use and short-lived: password links 30 min whenever SMTP is set up (24 h only for a link
+ * the administration hands over in person without SMTP), 48 h for the e-mail confirmation. The request never reveals whether an address has a login. A new password is
  * stored as argon2id, ends all sessions and keeps the second factor – the next login still asks
  * for it.
  */
 
 const SELF_RESET_MINUTES = 30
-const ADMIN_RESET_HOURS = 24
+/** Without SMTP the link is handed over in person, so it may live longer. */
+const ADMIN_RESET_HOURS_WITHOUT_SMTP = 24
+/** With SMTP every password link expires after half an hour at the latest. */
+const resetMinutes = (services: Services) =>
+  services.config.SMTP_ENABLED ? SELF_RESET_MINUTES : ADMIN_RESET_HOURS_WITHOUT_SMTP * 60
 const VERIFY_HOURS = 48
 const GENERIC_INVALID = 'Der Link ist ungültig oder abgelaufen. Bitte einen neuen anfordern.'
 
@@ -239,7 +243,7 @@ export function registerAccountRoutes(app: FastifyInstance, services: Services) 
         userId,
         purpose: 'password_reset',
         email: user.email,
-        minutes: ADMIN_RESET_HOURS * 60,
+        minutes: resetMinutes(services),
         createdBy: auth.userId,
       })
       const url = resetUrl(services, request, token)
@@ -257,7 +261,7 @@ export function registerAccountRoutes(app: FastifyInstance, services: Services) 
               '',
               url,
               '',
-              `Der Link ist ${ADMIN_RESET_HOURS} Stunden gültig und nur einmal verwendbar.`,
+              `Der Link ist ${SELF_RESET_MINUTES} Minuten gültig und nur einmal verwendbar.`,
             ].join('\n'),
           }),
         )

@@ -86,7 +86,10 @@ export function Users() {
         <div className="panel">
           <h2>{tf('users.resetLinkFor', { name: reset.name })}</h2>
           {reset.emailQueued ? <p role="status">{t('users.resetEmailQueued')}</p> : null}
-          <InviteLink link={reset.resetUrl} intro={t('users.resetLinkIntro')} />
+          <InviteLink
+            link={reset.resetUrl}
+            intro={tf('users.resetLinkIntro', { until: formatDateTime(reset.expiresAt) })}
+          />
           <button type="button" className="button ghost" onClick={() => setReset(null)}>
             {t('contacts.close')}
           </button>

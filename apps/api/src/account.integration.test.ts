@@ -169,6 +169,10 @@ describe.skipIf(!process.env.DATABASE_URL)(
       const reset = res.json() as AdminPasswordReset
       expect(reset.resetUrl).toMatch(/\/passwort-zuruecksetzen#[A-Za-z0-9_-]{43}$/)
       expect(reset.emailQueued).toBe(false)
+      // With SMTP set up a password link expires after half an hour at the latest.
+      const minutes = (Date.parse(reset.expiresAt) - Date.now()) / 60_000
+      expect(minutes).toBeGreaterThan(25)
+      expect(minutes).toBeLessThanOrEqual(30.5)
       const token = reset.resetUrl.split('#')[1] as string
       expect(
         (
