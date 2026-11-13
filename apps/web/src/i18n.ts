@@ -1550,6 +1550,52 @@ const de = {
   'doc.laborShareAmount': 'Lohnkostenanteil (§ 35a)',
   'doc.laborShareNone': 'Kein Lohnanteil – nur Positionen mit Kalkulation (Lohn) zählen.',
   'mail.files': 'Weitere Anhänge',
+  // ---- Angebot (P2.12) ----
+  'tp.title': 'Preis anpassen (Zielpreis)',
+  'tp.hint':
+    'Gewünschte Nettosumme eingeben. Bei Positionen mit Kalkulation werden nur die Zuschläge angepasst, die Kosten bleiben. Positionen ohne Kalkulation behalten ihren Preis.',
+  'tp.target': 'Ziel-Nettosumme',
+  'tp.invalid': 'Bitte einen Betrag eingeben, z. B. 12.500,00.',
+  'tp.previewButton': 'Vorschau',
+  'tp.apply': 'Zielpreis übernehmen',
+  'tp.preview':
+    'Netto bisher {before}, danach etwa {after}. {adjusted} kalkulierte Position(en) werden angepasst, {fixed} bleiben unverändert.',
+  'tp.applied':
+    'Übernommen: netto {before} → {after}. {adjusted} Position(en) angepasst, {fixed} unverändert.',
+  'tp.residual':
+    'Rundungsdifferenz zum Zielpreis: {amount} (Einheitspreise werden auf Cent gerundet).',
+  'tp.belowCost': 'Achtung, unter Kosten: {list}',
+  'ver.title': 'Versionen',
+  'ver.label': 'Version {n}',
+  'ver.draft': 'Entwurf',
+  'ver.create': 'Neue Version anlegen',
+  'ver.outdated': 'Es gibt eine neuere Version dieses Angebots.',
+  'img.title': 'Bild einfügen',
+  'img.file': 'Bild aus der Projektablage',
+  'img.choose': '– Bild wählen –',
+  'img.none': 'In der Ablage gibt es noch keine Bilder.',
+  'img.upload': 'Oder neues Bild hochladen',
+  'img.caption': 'Bildunterschrift (optional)',
+  'img.add': 'Bild einfügen',
+  'stm.save': 'In Stammdaten speichern',
+  'stm.saved': 'In Stammdaten',
+  'cc.export': 'CSV exportieren',
+  'cc.import': 'CSV importieren',
+  'cc.importTitle': 'Stammdaten aus CSV importieren',
+  'cc.importHint':
+    'Spalten wie im Export (Art, Ordner, Artikelnummer, Hersteller, EAN, Kurztext, Langtext, Einheit, EK, Zuschlag %, VK, Gebindeinhalt). Kurztext und Einheit sind Pflicht. Kalkulationen (Bestandteile) werden nicht übernommen.',
+  'cc.file': 'CSV-Datei',
+  'cc.update':
+    'Vorhandene Einträge (gleiche Artikelnummer bzw. Kurztext und Einheit) aktualisieren',
+  'cc.preview': 'Vorschau',
+  'cc.run': 'Importieren',
+  'cc.summary': '{created} neu, {updated} aktualisiert, {skipped} übersprungen, {errors} Fehler',
+  'cc.newFolders': 'Neue Ordner: {list}',
+  'cc.done': 'Import abgeschlossen.',
+  'cc.action.create': 'neu',
+  'cc.action.update': 'aktualisieren',
+  'cc.action.skip': 'übersprungen',
+  'cc.action.error': 'Fehler',
 } as const
 
 export type TextKey = keyof typeof de

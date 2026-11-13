@@ -124,6 +124,9 @@ interface ItemRow {
   calcMode: 'unit_price' | 'total_price' | null
   cumulativeQuantity: string | null
   previouslyBilledQuantity: string | null
+  imageFileId: string | null
+  imageName: string | null
+  catalogItemId: string | null
 }
 
 interface CostRow {
@@ -149,7 +152,9 @@ async function loadItems(tx: Tx, documentId: string): Promise<ItemRow[]> {
            total_cents::text as "totalCents", trim_scale(tax_rate_percent)::text as "taxRatePercent",
            tax_category as "taxCategory", quantity_from_measurement as "fromMeasurement",
            calc_mode as "calcMode", trim_scale(cumulative_quantity)::text as "cumulativeQuantity",
-           trim_scale(previously_billed_quantity)::text as "previouslyBilledQuantity"
+           trim_scale(previously_billed_quantity)::text as "previouslyBilledQuantity",
+           image_file_id as "imageFileId", catalog_item_id as "catalogItemId",
+           (select f.filename from file f where f.id = image_file_id) as "imageName"
     from document_item where document_id = ${documentId}`
 }
 
@@ -580,6 +585,7 @@ type DocumentRow = Omit<
     issuerSnapshot: Issuer | null
     recipientSnapshot: DocumentDetail['recipient'] | null
     storedNotes: string[] | null
+    hasVersions: boolean
   }
 
 export async function loadDocument(
@@ -604,14 +610,24 @@ export async function loadDocument(
            trim_scale(d.construction_levy_percent)::text as "constructionLevyPercent",
            d.progress_billing_mode as "progressBillingMode", ${DATE(tx, 'd.due_date')} as "dueDate",
            d.cancel_reason as "cancelReason", d.legal_notes as "storedNotes",
-           d.show_labor_share as "showLaborShare"
+           d.show_labor_share as "showLaborShare", d.version,
+           d.previous_version_id is not null or exists (
+             select 1 from document v where v.previous_version_id = d.id) as "hasVersions"
     from ${fromDocuments(tx)}
     left join contact c on c.id = d.contact_id
     where d.id = ${id} and ${projectVisibility(tx, auth)}`
   if (!row) return null
   const rows = await loadItems(tx, id)
   const costs = await loadCostLines(tx, id)
-  const { updatedRaw, contactId, issuerSnapshot, recipientSnapshot, storedNotes, ...doc } = row
+  const {
+    updatedRaw,
+    contactId,
+    issuerSnapshot,
+    recipientSnapshot,
+    storedNotes,
+    hasVersions,
+    ...doc
+  } = row
   const items: DocumentItem[] = outline(rows).map(({ row: r, level }) => {
     const lines = costs.get(r.id) ?? []
     const calc = lines.length ? (priceOf(r, lines) as ReturnType<typeof calculateItem>) : null
@@ -654,6 +670,14 @@ export async function loadDocument(
             laborHours: roundTo(calc.laborHours, 2),
           }
         : null,
+      image: r.imageFileId
+        ? {
+            fileId: r.imageFileId,
+            name: r.imageName ?? '',
+            url: `/api/v1/files/${r.imageFileId}/content`,
+          }
+        : null,
+      catalogItemId: r.catalogItemId,
     }
   })
   const [info] = await tx<
@@ -681,6 +705,7 @@ export async function loadDocument(
     items,
     totals: totalsOf(rows, costs, doc, await loadDeductions(tx, id)),
     legalNotes: [],
+    versions: hasVersions ? await versionsOf(tx, id) : [],
     einvoice: doc.status === 'draft' ? null : await einvoiceSummary(tx, id),
     archive: doc.status === 'draft' ? null : await archiveSummary(tx, id),
   }
@@ -688,6 +713,22 @@ export async function loadDocument(
   detail.legalNotes = storedNotes ?? (doc.status === 'draft' ? legalNotesOf(detail) : [])
   detail.receivable = await loadReceivable(tx, detail, todayOf(tx))
   return { ...detail, etag: etagOf(updatedRaw) }
+}
+
+/** All versions of an offer (Angebotsversionen, P2.12), oldest first. */
+async function versionsOf(tx: Tx, id: string): Promise<DocumentDetail['versions']> {
+  return tx<DocumentDetail['versions']>`
+    with recursive up as (
+      select id, previous_version_id from document where id = ${id}
+      union all
+      select d.id, d.previous_version_id from document d join up on d.id = up.previous_version_id
+    ), chain as (
+      select d.id, d.version, d.number, d.status from document d
+      where d.id = (select id from up where previous_version_id is null)
+      union all
+      select d.id, d.version, d.number, d.status from document d join chain on d.previous_version_id = chain.id
+    )
+    select id, version, number, status from chain order by version`
 }
 
 /** Locks a draft for changes; finalized documents are immutable (rule 2). */
@@ -943,6 +984,28 @@ export async function copyItems(tx: Tx, fromId: string, toId: string) {
 }
 
 // ---- Items ----------------------------------------------------------------------------------------
+
+const IMAGE_TYPES = ['image/png', 'image/jpeg', 'image/webp', 'image/gif']
+
+/** Bild-Position: an image of the Ablage of the document's project. */
+async function imageFileOf(tx: Tx, documentId: string, fileId: string | null | undefined) {
+  const [file] = fileId
+    ? await tx<{ mime: string }[]>`
+        select f.mime_type as mime from file f join document d on d.project_id = f.project_id
+        where f.id = ${fileId} and d.id = ${documentId}`
+    : []
+  if (!file) {
+    throw new HttpError(400, 'Die Eingaben sind unvollständig oder ungültig.', {
+      imageFileId: 'Das Bild gehört nicht zur Ablage dieses Projekts.',
+    })
+  }
+  if (!IMAGE_TYPES.includes(file.mime)) {
+    throw new HttpError(400, 'Die Eingaben sind unvollständig oder ungültig.', {
+      imageFileId: 'Als Bild sind PNG, JPEG, WebP und GIF möglich.',
+    })
+  }
+  return fileId
+}
 
 export async function unitSnapshot(tx: Tx, unitId: string) {
   const [unit] = await tx<{ symbol: string; unece: string; decimals: number }[]>`
@@ -1213,6 +1276,8 @@ export function registerDocumentRoutes(app: FastifyInstance, services: Services)
           discount_percent: priced ? (input.discountPercent ?? null) : null,
           tax_rate_percent: priced ? taxRate : null,
           calc_mode: priced ? 'unit_price' : null,
+          image_file_id:
+            input.positionType === 'image' ? await imageFileOf(tx, id, input.imageFileId) : null,
         })}`
       await recalculate(tx, id)
       return loadDocument(tx, auth, id)
@@ -1432,8 +1497,10 @@ export function registerDocumentRoutes(app: FastifyInstance, services: Services)
     const { id } = parse(documentParam, request.params)
     const doc = await inTenant(services, auth, async (tx) => {
       const current = await lockDraft(tx, auth, id)
-      const [d] = await tx<{ type: string; contactId: string | null; documentDate: string }[]>`
-        select type, contact_id as "contactId", to_char(document_date, 'YYYY-MM-DD') as "documentDate"
+      const [d] = await tx<
+        { type: string; contactId: string | null; documentDate: string; version: number }[]
+      >`
+        select type, contact_id as "contactId", to_char(document_date, 'YYYY-MM-DD') as "documentDate", version
         from document where id = ${id}`
       if (!d) throw notFound('Das Dokument')
       if (d.type === 'invoice' || d.type === 'credit_note') {
@@ -1463,6 +1530,17 @@ export function registerDocumentRoutes(app: FastifyInstance, services: Services)
           )
         }
         number = `${meta.contractNumber}/N${String(meta.n).padStart(2, '0')}`
+      } else if (d.version > 1) {
+        // Angebotsversion: number of version 1 with "-V2", "-V3" … (no new number from the sequence).
+        const [root] = await tx<{ number: string | null }[]>`
+          with recursive up as (
+            select id, previous_version_id, number from document where id = ${id}
+            union all
+            select p.id, p.previous_version_id, p.number from document p join up on p.id = up.previous_version_id
+          )
+          select number from up where previous_version_id is null`
+        if (!root?.number) throw new HttpError(409, 'Die erste Version hat noch keine Nummer.')
+        number = `${root.number}-V${d.version}`
       } else {
         const [next] = await tx<
           { n: string }[]

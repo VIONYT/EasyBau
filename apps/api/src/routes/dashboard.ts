@@ -85,6 +85,8 @@ async function dashboard(tx: Tx, auth: AuthContext, today: string): Promise<Dash
           -- An Angebot with an Auftragsbestätigung is decided, even when its status was not set.
           and not exists (select 1 from document o where o.source_document_id = d.id
                           and o.type = 'order_confirmation' and o.status <> 'cancelled')
+          -- Replaced by a newer version (P2.12): only the newest version is open.
+          and not exists (select 1 from document v where v.previous_version_id = d.id)
           and p.archived_at is null and ${projectVisibility(tx, auth)}
         order by d.document_date desc, d.created_at desc limit 10`
     : null

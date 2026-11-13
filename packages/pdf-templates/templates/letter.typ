@@ -180,6 +180,11 @@
       )
     } else if item.kind == "text" {
       rows += ([], table.cell(colspan: 4, lines(item.text)))
+    } else if item.kind == "image" {
+      rows += ([], table.cell(colspan: 4, block(breakable: false, {
+        box(width: 75%, height: 70mm, image(item.path, width: 100%, height: 100%, fit: "contain"))
+        if item.caption != none { block(above: 1mm, text(size: 8.5pt, fill: muted, item.caption)) }
+      })))
     } else {
       let description = {
         item.text

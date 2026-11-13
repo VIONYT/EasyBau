@@ -46,6 +46,9 @@ function sampleDocument(items = 3): DocumentDetail {
     retentionPercent: '5',
     constructionLevyPercent: null,
     progressBillingMode: null,
+    showLaborShare: false,
+    version: 1,
+    versions: [],
     dueDate: '2026-12-05',
     cancelReason: null,
     legalNotes: ['Zahlbar ohne Abzug bis 05.12.2026.'],
@@ -90,6 +93,8 @@ function sampleDocument(items = 3): DocumentDetail {
       calcMode: null,
       costLines: [],
       calculation: null,
+      image: null,
+      catalogItemId: null,
     })),
     totals: {
       performance: { netCents: 107000, taxCents: 20330, grossCents: 127330 },
@@ -131,6 +136,7 @@ function sampleDocument(items = 3): DocumentDetail {
       marginCents: 0,
       laborHours: '0',
       uncalculatedCount: 0,
+      laborShare: { netCents: 0, grossCents: 0 },
     },
   }
 }

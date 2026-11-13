@@ -1190,6 +1190,124 @@ test('Einstellungen: Hinweisleiste, Feiertage, Lohnkostenanteil, Dateinamen und 
   await expect(page.getByText('Beispiel: Rechnung_R2026-00101.pdf')).toBeVisible()
 })
 
+test('Angebot: Bild-Position, Zielpreis, in Stammdaten speichern, Versionen, Stammdaten-CSV', async () => {
+  test.skip(!SETUP_TOKEN, 'SETUP_TOKEN must be set for a fresh stack')
+  test.setTimeout(120_000)
+  // Setup via API: customer, project, quote with one calculated position
+  const units = (await (await page.request.get('/api/v1/units')).json()) as {
+    id: string
+    symbol: string
+  }[]
+  const unit = (symbol: string) => units.find((u) => u.symbol === symbol)?.id
+  const customer = await (
+    await page.request.post('/api/v1/contacts', {
+      data: {
+        kind: 'person',
+        firstName: 'Paula',
+        lastName: 'Preis',
+        addresses: [{ kind: 'main', street: 'Am Markt 1', postalCode: '30159', city: 'Hannover' }],
+      },
+    })
+  ).json()
+  const project = await (
+    await page.request.post('/api/v1/projects', {
+      data: { name: 'Bad Preis', customerId: customer.id },
+    })
+  ).json()
+  const quote = await (
+    await page.request.post(`/api/v1/projects/${project.id}/documents`, { data: { type: 'quote' } })
+  ).json()
+  const withItem = await (
+    await page.request.post(`/api/v1/documents/${quote.id}/items`, {
+      data: {
+        positionType: 'item',
+        shortText: 'Fliesen verlegen',
+        quantity: '20',
+        unitId: unit('m²'),
+      },
+    })
+  ).json()
+  const calc = await page.request.post(
+    `/api/v1/documents/${quote.id}/items/${withItem.items[0].id}/calculation`,
+    {
+      data: {
+        lines: [
+          {
+            kind: 'labor',
+            description: 'Fliesenleger',
+            quantity: '60',
+            unitId: unit('min'),
+            unitCostCents: 5000,
+          },
+          {
+            kind: 'material',
+            description: 'Fliesen',
+            quantity: '1',
+            unitId: unit('m²'),
+            unitCostCents: 2000,
+          },
+        ],
+      },
+    },
+  )
+  expect(calc.status()).toBe(200)
+  await page.goto(`/dokumente/${quote.id}`)
+  await expect(page.getByRole('heading', { name: 'Angebot', exact: true })).toBeVisible()
+
+  // Bild-Position: upload into the project's Ablage and insert with caption
+  await page.getByRole('button', { name: '+ Bild' }).click()
+  await page.getByLabel('Oder neues Bild hochladen').setInputFiles({
+    name: 'muster.png',
+    mimeType: 'image/png',
+    buffer: PNG,
+  })
+  await expect(page.getByLabel('Bild aus der Projektablage')).toHaveValue(/[0-9a-f-]{36}/)
+  await page.getByLabel('Bildunterschrift (optional)').fill('Fliesenmuster')
+  await page.getByRole('button', { name: 'Bild einfügen' }).click()
+  await expect(page.getByRole('img', { name: 'Fliesenmuster' })).toBeVisible()
+
+  // Zielpreis: preview, then apply
+  await page.getByText('Preis anpassen (Zielpreis)').click()
+  await page.getByLabel('Ziel-Nettosumme').fill('1.500,00')
+  await page.getByRole('button', { name: 'Vorschau' }).click()
+  await expect(page.getByText(/danach etwa 1\.500,00/)).toBeVisible()
+  await page.getByRole('button', { name: 'Zielpreis übernehmen' }).click()
+  await expect(page.getByText(/^Übernommen: netto/)).toBeVisible()
+  await expectNoHorizontalScroll(page)
+
+  // In Stammdaten speichern
+  await page.getByRole('button', { name: 'In Stammdaten speichern: Fliesen verlegen' }).click()
+  await expect(page.getByText('In Stammdaten', { exact: true })).toBeVisible()
+
+  // Fertigstellen, then a new version
+  page.once('dialog', (dialog) => dialog.accept())
+  await page.getByRole('button', { name: 'Fertigstellen' }).click()
+  await expect(page.getByRole('heading', { name: 'Versionen' })).toBeVisible()
+  await page.getByRole('button', { name: 'Neue Version anlegen' }).click()
+  await expect(page.getByText('Version 2 · Entwurf')).toBeVisible()
+  await expect(page.getByRole('link', { name: /^Version 1 · A/ })).toBeVisible()
+  await expectNoHorizontalScroll(page)
+
+  // Stammdaten: the saved Leistung, CSV import of materials
+  await page.getByRole('button', { name: 'Stammdaten', exact: true }).click()
+  await expect(page.getByRole('listitem').filter({ hasText: 'Fliesen verlegen' })).toBeVisible()
+  await page.getByRole('button', { name: 'Materialien' }).click()
+  await page.getByRole('button', { name: 'CSV importieren' }).click()
+  await page.getByLabel('CSV-Datei').setInputFiles({
+    name: 'material.csv',
+    mimeType: 'text/csv',
+    buffer: Buffer.from(
+      'Art;Artikelnummer;Kurztext;Einheit;EK;VK\r\nMaterial;FK-1;Fliesenkleber;kg;1,20;2,10\r\n',
+    ),
+  })
+  await page.getByRole('button', { name: 'Vorschau' }).click()
+  await expect(page.getByText('1 neu, 0 aktualisiert, 0 übersprungen, 0 Fehler')).toBeVisible()
+  await page.getByRole('button', { name: 'Importieren' }).click()
+  await expect(page.getByText(/Import abgeschlossen/)).toBeVisible()
+  await expect(page.getByRole('listitem').filter({ hasText: 'Fliesenkleber' })).toBeVisible()
+  await expectNoHorizontalScroll(page)
+})
+
 test('Briefpapier: WYSIWYG-Editor nach DIN 5008 B und Druckansicht', async () => {
   test.skip(!SETUP_TOKEN, 'SETUP_TOKEN must be set for a fresh stack')
   test.setTimeout(120_000)

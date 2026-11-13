@@ -20,6 +20,7 @@ import {
 } from '../format'
 import { FormError, SelectField } from '../forms'
 import { type TextKey, t, tf } from '../i18n'
+import { CatalogImport } from './catalog-import'
 
 type Section = 'service' | 'material' | 'catalogs'
 
@@ -79,6 +80,7 @@ function ItemList({
   const [folderId, setFolderId] = useState('')
   const [query, setQuery] = useState('')
   const [editing, setEditing] = useState<CatalogItem | 'new' | null>(null)
+  const [importing, setImporting] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
   const reload = useCallback(() => {
@@ -114,12 +116,29 @@ function ItemList({
     <div>
       <div className="section-head">
         <h2>{kind === 'service' ? t('c.services') : t('c.materials')}</h2>
-        {canWrite && !editing ? (
-          <button type="button" className="button primary auto" onClick={() => setEditing('new')}>
-            {kind === 'service' ? t('c.newService') : t('c.newMaterial')}
-          </button>
-        ) : null}
+        <span className="button-row">
+          <a
+            className="button ghost auto"
+            href={`/api/v1/catalog/export.csv?kind=${kind}`}
+            download
+          >
+            {t('cc.export')}
+          </a>
+          {canWrite && !importing ? (
+            <button type="button" className="button ghost auto" onClick={() => setImporting(true)}>
+              {t('cc.import')}
+            </button>
+          ) : null}
+          {canWrite && !editing ? (
+            <button type="button" className="button primary auto" onClick={() => setEditing('new')}>
+              {kind === 'service' ? t('c.newService') : t('c.newMaterial')}
+            </button>
+          ) : null}
+        </span>
       </div>
+      {importing ? (
+        <CatalogImport kind={kind} onImported={reload} onClose={() => setImporting(false)} />
+      ) : null}
       {editing ? (
         <ItemForm
           kind={kind}

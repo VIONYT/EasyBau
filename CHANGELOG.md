@@ -5,6 +5,13 @@ Alle wesentlichen Änderungen, vor allem solche, die Betreiber betreffen (neue V
 ## Unveröffentlicht
 
 ### Neu
+- **Angebot ausgebaut**:
+  - **Preis anpassen (Zielpreis)**: Gewünschte Nettosumme eingeben, Vorschau ansehen, übernehmen. Bei kalkulierten Positionen werden nur die Zuschläge angepasst (Kosten bleiben), Positionen ohne Kalkulation behalten ihren Preis; Positionen unter Kosten und die Rundungsdifferenz werden angezeigt (`POST /documents/:id/target-price`).
+  - **Bilder als Position**: Bild aus der Projektablage wählen oder neu hochladen, mit Bildunterschrift; erscheint in Druckansicht und PDF. Ein so verwendetes Bild lässt sich nicht mehr aus der Ablage löschen.
+  - **Versionen**: Aus einem fertigen Angebot oder Kostenvoranschlag „Neue Version anlegen“ (Kopie als Entwurf). Die Nummer bekommt beim Fertigstellen den Zusatz `-V2`, `-V3` …; alte Versionen bleiben unverändert erhalten. Die Übersicht zählt nur die neueste Version als offenes Angebot.
+  - **In Stammdaten speichern**: Eine Position mit ihrer Kalkulation wird zur neuen Leistung in den Stammdaten.
+  - **Stammdaten als CSV**: Export von Leistungen und Materialien und Import mit Vorschau (Spalten wie im Export, gängige Spaltennamen werden erkannt; vorhandene Einträge werden übersprungen oder auf Wunsch aktualisiert; fehlende Ordner werden angelegt).
+  - Datenbank-Migration `0033_offer_tools`; kein neuer Container, keine neue Variable.
 - **Einstellungen ergänzt**:
   - **Feiertage nach Bundesland** (Einstellungen › Feiertage): Die gesetzlichen Feiertage werden für das unter „Firma“ gewählte Bundesland automatisch berechnet (jetzt Auswahlliste statt Freitext). Örtliche Feiertage und Betriebsruhe lassen sich als eigene Tage ergänzen (`GET/POST/DELETE /settings/holidays`).
   - **Lohnkostenanteil nach § 35a EStG**: Unter Einstellungen › Dokumente legen Sie fest, für welche Dokumente (Rechnungen / Angebotsdokumente) und Empfänger (Personen / Organisationen) er ausgewiesen wird; Standard: Rechnungen an Personen. Je Dokument abschaltbar („Lohnkostenanteil ausweisen“ im Kopf). Der Anteil kommt aus der Kalkulation (Lohn) und steht als Hinweis unter den Summen, auch im PDF.

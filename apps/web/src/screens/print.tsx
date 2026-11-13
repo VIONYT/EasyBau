@@ -151,6 +151,20 @@ export function PrintScreen({ id, navigate }: { id: string; navigate: Navigate }
                       <strong>{formatCents(doc.totals.titleSubtotals[item.id] ?? 0)}</strong>
                     </td>
                   </tr>
+                ) : item.positionType === 'image' ? (
+                  <tr key={item.id}>
+                    <td />
+                    <td colSpan={4}>
+                      {item.image ? (
+                        <img
+                          className="print-image"
+                          src={item.image.url}
+                          alt={item.shortText ?? item.image.name}
+                        />
+                      ) : null}
+                      {item.shortText ? <div className="muted">{item.shortText}</div> : null}
+                    </td>
+                  </tr>
                 ) : item.positionType === 'text' ? (
                   <tr key={item.id}>
                     <td />

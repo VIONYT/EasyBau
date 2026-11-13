@@ -37,6 +37,14 @@ import { DocumentEmailPanel } from './document-email'
 import { documentLabel, StatusChip } from './documents'
 import { DunningPanel } from './dunning'
 import { EvidencePanel } from './evidence'
+import {
+  ImagePositionForm,
+  ImagePositionView,
+  SaveToCatalogButton,
+  TARGET_PRICE_TYPES,
+  TargetPricePanel,
+  VersionsPanel,
+} from './offer-tools'
 import { ReceivablePanel } from './payments'
 import { ReportApplyPanel } from './report-apply'
 
@@ -151,6 +159,11 @@ export function DocumentScreen({ me, id, navigate }: { me: Me; id: string; navig
           navigate={navigate}
         />
       ) : null}
+      <VersionsPanel
+        doc={doc}
+        canWrite={me.permissions.includes('document.write')}
+        navigate={navigate}
+      />
       <DocumentActions
         doc={doc}
         canWrite={me.permissions.includes('document.write')}
@@ -197,8 +210,14 @@ export function DocumentScreen({ me, id, navigate }: { me: Me; id: string; navig
         rates={rates}
         apply={apply}
         canUseCatalog={me.permissions.includes('catalog.read')}
+        canSaveCatalog={me.permissions.includes('catalog.write')}
       />
       <Totals doc={doc} />
+      {editable &&
+      TARGET_PRICE_TYPES.includes(doc.type) &&
+      me.permissions.includes('price.view') ? (
+        <TargetPricePanel doc={doc} apply={apply} />
+      ) : null}
       {me.permissions.includes('price.view') ? <InternalCalculation doc={doc} /> : null}
 
       {editable ? (
@@ -460,6 +479,7 @@ function Positions({
   rates,
   apply,
   canUseCatalog,
+  canSaveCatalog,
 }: {
   doc: Doc
   editable: boolean
@@ -467,6 +487,7 @@ function Positions({
   rates: TaxRateSummary[]
   apply: Apply
   canUseCatalog: boolean
+  canSaveCatalog: boolean
 }) {
   const [adding, setAdding] = useState<EditablePositionType | null>(null)
   const [editingId, setEditingId] = useState<string | null>(null)
@@ -536,6 +557,9 @@ function Positions({
               ) : (
                 <>
                   <PositionView item={item} subtotal={doc.totals.titleSubtotals[item.id]} />
+                  {canSaveCatalog && isPriced(item.positionType) && doc.type !== 'invoice' ? (
+                    <SaveToCatalogButton doc={doc} item={item} />
+                  ) : null}
                   {editable ? (
                     <span className="actions">
                       {isPriced(item.positionType) ? (
@@ -548,14 +572,16 @@ function Positions({
                           {t('q.calc')}
                         </button>
                       ) : null}
-                      <button
-                        type="button"
-                        className="button ghost icon"
-                        aria-label={`${t('common.edit')}: ${item.shortText ?? t('doc.pos.text')}`}
-                        onClick={() => setEditingId(item.id)}
-                      >
-                        ✎
-                      </button>
+                      {item.positionType !== 'image' ? (
+                        <button
+                          type="button"
+                          className="button ghost icon"
+                          aria-label={`${t('common.edit')}: ${item.shortText ?? t('doc.pos.text')}`}
+                          onClick={() => setEditingId(item.id)}
+                        >
+                          ✎
+                        </button>
+                      ) : null}
                       <button
                         type="button"
                         className="button ghost icon"
@@ -588,7 +614,17 @@ function Positions({
           ))}
         </ol>
       ) : null}
-      {editable && adding ? (
+      {editable && adding === 'image' ? (
+        <ImagePositionForm
+          doc={doc}
+          onDone={(result) => {
+            apply(result)
+            setAdding(null)
+          }}
+          onCancel={() => setAdding(null)}
+        />
+      ) : null}
+      {editable && adding && adding !== 'image' ? (
         <ItemForm
           doc={doc}
           positionType={adding}
@@ -627,7 +663,7 @@ function Positions({
       {editable && !adding ? (
         <fieldset className="add-bar">
           <legend className="muted">{t('doc.addPosition')}</legend>
-          {(['title', 'item', 'lump_sum', 'optional', 'alternative', 'text'] as const).map(
+          {(['title', 'item', 'lump_sum', 'optional', 'alternative', 'text', 'image'] as const).map(
             (type) => (
               <button
                 key={type}
@@ -656,6 +692,7 @@ function PositionView({ item, subtotal }: { item: DocumentItem; subtotal: number
       </div>
     )
   }
+  if (item.positionType === 'image') return <ImagePositionView item={item} />
   if (!isPriced(item.positionType)) {
     return <p className="position-text pre">{item.longText ?? item.shortText}</p>
   }

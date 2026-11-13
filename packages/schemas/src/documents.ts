@@ -163,6 +163,8 @@ export const createItemRequest = z
     positionType: z.enum(EDITABLE_POSITION_TYPES, 'Unbekannter Positionstyp.'),
     /** Enclosing title; omitted or null: top level. */
     parentId: id.nullish(),
+    /** Bild-Position: image file of the project's Ablage (PNG, JPEG, WebP, GIF). */
+    imageFileId: id.nullish(),
     ...itemFields,
   })
   .partial({
@@ -186,6 +188,8 @@ export const createItemRequest = z
       }
     } else if (value.positionType === 'title' && !value.shortText) {
       ctx.addIssue({ code: 'custom', path: ['shortText'], message: 'Titel fehlt.' })
+    } else if (value.positionType === 'image' && !value.imageFileId) {
+      ctx.addIssue({ code: 'custom', path: ['imageFileId'], message: 'Bild fehlt.' })
     }
   })
 export type CreateItemRequest = z.infer<typeof createItemRequest>
@@ -295,7 +299,7 @@ export interface DocumentSummary {
 export interface DocumentItem {
   id: string
   parentId: string | null
-  positionType: EditablePositionType | 'subtotal' | 'image'
+  positionType: EditablePositionType | 'subtotal'
   oz: string | null
   /** Depth in the outline (0 = top level). */
   level: number
@@ -322,6 +326,10 @@ export interface DocumentItem {
     marginPercent: string | null
     laborHours: string
   } | null
+  /** Bild-Position (P2.12): image file of the project's Ablage; caption = shortText. */
+  image: { fileId: string; name: string; url: string } | null
+  /** Taken from or saved to the Stammdaten. */
+  catalogItemId: string | null
 }
 
 export interface CostLine {
@@ -464,6 +472,9 @@ export interface DocumentDetail extends DocumentSummary {
   progressBillingMode: 'cumulative' | 'individual' | null
   /** Lohnkostenanteil nach § 35a EStG ausweisen (default from Einstellungen › Dokumente). */
   showLaborShare: boolean
+  /** Angebotsversionen (P2.12): 1, 2 … and all versions of the same offer, oldest first. */
+  version: number
+  versions: { id: string; version: number; number: string | null; status: DocumentStatus }[]
   /** Fälligkeit: document date + payment term (set when finalized). */
   dueDate: string | null
   cancelReason: string | null
@@ -579,3 +590,40 @@ export interface SheetVariance {
   claimedQuantity: string
   extraQuantity: string
 }
+
+// ---- Zielpreis „Preis anpassen“ (P2.12) ----------------------------------------------------------
+
+export const targetPriceRequest = z.object({
+  /** Desired net total of the document (after Gesamtrabatt), in cents. */
+  targetNetCents: z
+    .number()
+    .int('Betrag in Cent (ganze Zahl) erwartet.')
+    .min(0)
+    .max(100_000_000_000),
+  /** Positions whose price must not change. */
+  lockedItemIds: z.array(z.uuid('Ungültige ID.')).max(2000).default([]),
+  /** false: only preview the effect. */
+  apply: z.boolean().default(false),
+})
+export type TargetPriceRequest = z.infer<typeof targetPriceRequest>
+
+export interface TargetPriceResult {
+  currentNetCents: number
+  targetNetCents: number
+  /** Net total after applying (preview: estimate before rounding of the unit prices). */
+  netCents: number
+  /** target − net (rounding of EP × Menge; never hidden). */
+  residualCents: number
+  adjustedCount: number
+  /** Positions without Kalkulation or locked: price stays. */
+  fixedCount: number
+  /** Positions that would be sold below cost. */
+  belowCost: { id: string; oz: string | null; shortText: string | null }[]
+  applied: boolean
+  document: DocumentDetail | null
+}
+
+/** „In Stammdaten speichern“: the position (with its Kalkulation) as a new Leistung. */
+export const saveToCatalogRequest = z.object({
+  folderId: z.uuid('Ungültige ID.').nullish(),
+})

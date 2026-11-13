@@ -384,7 +384,15 @@ export function registerFileRoutes(app: FastifyInstance, services: Services) {
       }
       if (!canModify(auth, current))
         throw new HttpError(403, 'Diese Datei dürfen Sie nicht löschen.')
-      await tx`delete from file where id = ${id}`
+      await tx`delete from file where id = ${id}`.catch((error: { code?: string }) => {
+        if (error.code === '23503') {
+          throw new HttpError(
+            409,
+            'Diese Datei wird als Bild in einem Dokument verwendet und kann nicht gelöscht werden.',
+          )
+        }
+        throw error
+      })
       return current.storageKey
     })
     // Only after the deletion is committed (an orphaned object is harmless, a missing one is not).

@@ -121,3 +121,58 @@ export function applyTargetPrice(
 export function targetPriceAdjustmentLine(currentNetCents: bigint, targetNetCents: bigint): bigint {
   return targetNetCents - currentNetCents
 }
+
+/**
+ * Zielpreis for positions with Kalkulation (P2.12): the factor by which each adjustable
+ * position's selling value changes. Same rule as `applyTargetPrice` (only the markup part is
+ * scaled; without any markup proportionally), but exact and independent of line discounts – the
+ * caller scales the markups of the cost lines (`scaleMarkupPercent`) and recalculates, so the
+ * printed EP × Menge stays consistent. A small rounding remainder is expected and reported.
+ */
+export function targetPriceRatios(
+  items: readonly TargetPriceItem[],
+  targetNetCents: bigint,
+): { ratios: Map<string, Decimal>; belowCost: string[] } {
+  if (targetNetCents < 0n) throw new CalculationError('Der Zielpreis darf nicht negativ sein.')
+  const adjustable = items.filter((i) => i.costCents !== null && !i.locked && i.totalCents > 0n)
+  if (adjustable.length === 0) {
+    throw new CalculationError(
+      'Keine kalkulierten Positionen vorhanden, deren Preis angepasst werden kann.',
+    )
+  }
+  const fixed = items.filter((i) => !adjustable.includes(i)).reduce((s, i) => s + i.totalCents, 0n)
+  const target = new Decimal((targetNetCents - fixed).toString())
+  const cost = adjustable.reduce(
+    (s, i) => s.plus((i.costCents as bigint).toString()),
+    new Decimal(0),
+  )
+  const current = adjustable.reduce((s, i) => s.plus(i.totalCents.toString()), new Decimal(0))
+  const markup = current.minus(cost)
+  const ratios = new Map<string, Decimal>()
+  const belowCost: string[] = []
+  for (const item of adjustable) {
+    const total = new Decimal(item.totalCents.toString())
+    const itemCost = new Decimal((item.costCents as bigint).toString())
+    const next = markup.isZero()
+      ? total.div(current).mul(target)
+      : itemCost.plus(total.minus(itemCost).mul(target.minus(cost).div(markup)))
+    if (next.lte(0)) {
+      throw new CalculationError('Der Zielpreis ist zu niedrig: Preise würden 0 oder negativ.')
+    }
+    ratios.set(item.id, next.div(total))
+    if (next.lt(itemCost)) belowCost.push(item.id)
+  }
+  return { ratios, belowCost }
+}
+
+/** New Zuschlag of a cost line so its selling value changes by `ratio`: (1 + m′) = (1 + m) · ratio. */
+export function scaleMarkupPercent(markupPercent: string, ratio: Decimal): string {
+  const next = new Decimal(markupPercent).plus(100).mul(ratio).minus(100)
+  if (next.lte(-100)) throw new CalculationError('Der Zielpreis ist zu niedrig.')
+  if (next.gte(1000)) {
+    throw new CalculationError(
+      'Der Zielpreis ist zu hoch: Zuschläge über 999 % sind nicht möglich.',
+    )
+  }
+  return next.toDecimalPlaces(4, Decimal.ROUND_HALF_UP).toFixed(4)
+}

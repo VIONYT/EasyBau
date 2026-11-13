@@ -69,6 +69,7 @@ export const EDITABLE_POSITION_TYPES = [
   'optional',
   'lump_sum',
   'text',
+  'image',
 ] as const
 
 export type EditablePositionType = (typeof EDITABLE_POSITION_TYPES)[number]
