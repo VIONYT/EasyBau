@@ -86,3 +86,44 @@ export function projectFigures(input: ProjectFiguresInput): ProjectFigures {
         : null,
   }
 }
+
+export type ProjectCostType = 'material' | 'labor' | 'equipment' | 'subcontract' | 'other'
+
+export interface ProjectCostLine {
+  costType: ProjectCostType
+  /** Net amount allocated to the project. */
+  netCents: bigint
+  /** Gutschrift of a supplier: reduces the costs. */
+  creditNote: boolean
+}
+
+export interface ProjectCosts {
+  totalCents: bigint
+  byType: Record<ProjectCostType, bigint>
+  /** Vorläufiger Deckungsbeitrag = abgerechnet netto − Fremdkosten (ohne eigenen Lohn). */
+  contributionCents: bigint
+}
+
+/**
+ * Projektkosten aus Eingangsrechnungen (P2.4): confirmed allocations to the project, net, by cost
+ * type. Own wages are not included (Zeiterfassung, Phase 2) – the contribution is preliminary.
+ */
+export function projectCosts(
+  lines: readonly ProjectCostLine[],
+  billedNetCents: bigint,
+): ProjectCosts {
+  const byType: Record<ProjectCostType, bigint> = {
+    material: 0n,
+    labor: 0n,
+    equipment: 0n,
+    subcontract: 0n,
+    other: 0n,
+  }
+  let totalCents = 0n
+  for (const line of lines) {
+    const amount = line.creditNote ? -line.netCents : line.netCents
+    byType[line.costType] += amount
+    totalCents += amount
+  }
+  return { totalCents, byType, contributionCents: billedNetCents - totalCents }
+}

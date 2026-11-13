@@ -211,6 +211,7 @@ interface IncomingRow {
   paidOn: string | null
   closeReason: string | null
   filename: string
+  creditorNumber: string | null
 }
 
 /**
@@ -226,7 +227,8 @@ async function incomingOf(tx: Tx, from: string, to: string, statuses: string[]) 
            i.reverse_charge as "reverseCharge",
            to_char(i.received_at at time zone 'Europe/Berlin', 'YYYY-MM-DD') as "receivedAt",
            to_char(i.confirmed_at at time zone 'Europe/Berlin', 'YYYY-MM-DD') as "confirmedAt",
-           to_char(i.paid_on, 'YYYY-MM-DD') as "paidOn", i.close_reason as "closeReason", i.filename
+           to_char(i.paid_on, 'YYYY-MM-DD') as "paidOn", i.close_reason as "closeReason", i.filename,
+           (select c.creditor_number from contact c where c.id = i.contact_id) as "creditorNumber"
     from incoming_invoice i
     where i.status in ${tx(statuses)}
       and coalesce(i.invoice_date, (i.received_at at time zone 'Europe/Berlin')::date)
@@ -458,6 +460,7 @@ export function registerExportRoutes(app: FastifyInstance, services: Services) {
         supplierName: i.supplierName ?? '',
         creditNote: i.documentKind === 'credit_note',
         reverseCharge: i.reverseCharge,
+        creditorAccount: i.creditorNumber,
         allocations: incoming.allocations
           .filter((a) => a.invoiceId === i.id)
           .map((a) => ({
@@ -475,10 +478,12 @@ export function registerExportRoutes(app: FastifyInstance, services: Services) {
             gross: string
             kind: string
             supplier: string | null
+            creditor: string | null
           }[]
         >`
           select invoice_number as number, to_char(paid_on, 'YYYY-MM-DD') as date, gross_cents::text as gross,
-                 document_kind as kind, supplier_name as supplier
+                 document_kind as kind, supplier_name as supplier,
+                 (select c.creditor_number from contact c where c.id = incoming_invoice.contact_id) as creditor
           from incoming_invoice
           where status = 'confirmed' and paid_on between ${from}::date and ${to}::date
           order by paid_on, received_at`
@@ -487,6 +492,7 @@ export function registerExportRoutes(app: FastifyInstance, services: Services) {
         date: p.date,
         supplierName: p.supplier ?? '',
         amountCents: BigInt(p.gross) * (p.kind === 'credit_note' ? -1n : 1n),
+        creditorAccount: p.creditor,
       }))
       const csv = datevBookingBatch(
         {

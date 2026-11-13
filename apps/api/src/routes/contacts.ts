@@ -39,6 +39,7 @@ const SIMPLE_FIELDS: Record<string, string> = {
   taxMode: 'tax_mode',
   vatId: 'vat_id',
   buyerReference: 'buyer_reference',
+  creditorNumber: 'creditor_number',
   einvoiceEmail: 'einvoice_email',
   einvoiceFormat: 'einvoice_format',
 }
@@ -84,7 +85,7 @@ async function loadContact(tx: Tx, id: string): Promise<(ContactDetail & { etag:
            organization_name as "organizationName", salutation, title, first_name as "firstName",
            last_name as "lastName", website, description, payment_term_id as "paymentTermId",
            tax_mode as "taxMode", vat_id as "vatId", buyer_reference as "buyerReference",
-           einvoice_email as "einvoiceEmail", einvoice_format as "einvoiceFormat",
+           creditor_number as "creditorNumber", einvoice_email as "einvoiceEmail", einvoice_format as "einvoiceFormat",
            updated_at as "updatedRaw", to_char(updated_at at time zone 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS.MS"Z"') as "updatedAt",
            to_char(created_at at time zone 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS.MS"Z"') as "createdAt"
     from contact where id = ${id}`
@@ -109,6 +110,16 @@ async function loadContact(tx: Tx, id: string): Promise<(ContactDetail & { etag:
   return { ...rest, channels, addresses, links, projects, etag: etagOf(updatedRaw) }
 }
 
+/** Unique Kreditorennummer per company. */
+function creditorTaken(error: { code?: string; constraint_name?: string }): never {
+  if (error.code === '23505' && error.constraint_name === 'contact_creditor_number_uq') {
+    throw new HttpError(400, 'Die Eingaben sind unvollständig oder ungültig.', {
+      creditorNumber: 'Diese Kreditorennummer ist schon vergeben.',
+    })
+  }
+  throw error
+}
+
 /** Inserts a contact with channels and addresses; `number` is the Kundennummer (or none). */
 export async function insertContact(
   tx: Tx,
@@ -123,7 +134,9 @@ export async function insertContact(
     number,
     created_by: auth.userId,
   }
-  const [row] = await tx<{ id: string }[]>`insert into contact ${tx(columns)} returning id`
+  const [row] = await tx<{ id: string }[]>`insert into contact ${tx(columns)} returning id`.catch(
+    creditorTaken,
+  )
   const id = (row as { id: string }).id
   await replaceChildren(tx, auth.tenantId, id, input)
   return id
@@ -230,7 +243,8 @@ export function registerContactRoutes(app: FastifyInstance, services: Services) 
         })
       }
       const columns = columnsOf(input)
-      if (Object.keys(columns).length) await tx`update contact set ${tx(columns)} where id = ${id}`
+      if (Object.keys(columns).length)
+        await tx`update contact set ${tx(columns)} where id = ${id}`.catch(creditorTaken)
       else await tx`update contact set updated_at = now() where id = ${id}`
       await replaceChildren(tx, auth.tenantId, id, input)
       return loadContact(tx, id)

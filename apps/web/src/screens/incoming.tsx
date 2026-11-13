@@ -33,11 +33,28 @@ const FILTERS: { key: ListFilter; label: TextKey }[] = [
   { key: 'all', label: 'in.filter.all' },
 ]
 
-function queryOf(filter: ListFilter, q: string, cursor?: string | null): string {
+/** Zeitraum (Rechnungsdatum) and Zuweisung (p:<project> or b:<business area>). */
+interface ExtraFilter {
+  from: string
+  to: string
+  target: string
+}
+const NO_EXTRA: ExtraFilter = { from: '', to: '', target: '' }
+
+function queryOf(
+  filter: ListFilter,
+  q: string,
+  cursor?: string | null,
+  extra: ExtraFilter = NO_EXTRA,
+): string {
   const params = new URLSearchParams()
   if (filter === 'review') params.set('status', 'review')
   if (filter === 'open' || filter === 'overdue' || filter === 'paid') params.set('payment', filter)
   if (q.trim()) params.set('q', q.trim())
+  if (extra.from) params.set('from', extra.from)
+  if (extra.to) params.set('to', extra.to)
+  if (extra.target.startsWith('p:')) params.set('projectId', extra.target.slice(2))
+  if (extra.target.startsWith('b:')) params.set('businessAreaId', extra.target.slice(2))
   if (cursor) params.set('cursor', cursor)
   return params.toString()
 }
@@ -64,6 +81,19 @@ export function IncomingInvoices({ me, navigate }: { me: Me; navigate: Navigate 
   const canWrite = me.permissions.includes('incoming_invoice.write')
   const [filter, setFilter] = useState<ListFilter>(canWrite ? 'review' : 'all')
   const [q, setQ] = useState('')
+  const [extra, setExtra] = useState<ExtraFilter>(NO_EXTRA)
+  const [targets, setTargets] = useState<{ projects: ProjectSummary[]; areas: BusinessArea[] }>({
+    projects: [],
+    areas: [],
+  })
+  useEffect(() => {
+    Promise.all([
+      api<Page<ProjectSummary>>('GET', '/api/v1/projects?limit=100'),
+      api<BusinessArea[]>('GET', '/api/v1/business-areas'),
+    ])
+      .then(([projects, areas]) => setTargets({ projects: projects.items, areas }))
+      .catch(() => undefined)
+  }, [])
   const [list, setList] = useState<IncomingInvoiceList | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [uploads, setUploads] = useState<
@@ -72,23 +102,23 @@ export function IncomingInvoices({ me, navigate }: { me: Me; navigate: Navigate 
   const [dragging, setDragging] = useState(false)
   const input = useRef<HTMLInputElement>(null)
 
-  const load = useCallback((f: ListFilter, query: string) => {
+  const load = useCallback((f: ListFilter, query: string, more: ExtraFilter) => {
     setError(null)
-    api<IncomingInvoiceList>('GET', `/api/v1/incoming-invoices?${queryOf(f, query)}`)
+    api<IncomingInvoiceList>('GET', `/api/v1/incoming-invoices?${queryOf(f, query, null, more)}`)
       .then(setList)
       .catch((err: ApiError) => setError(err.message))
   }, [])
   useEffect(() => {
-    const timer = setTimeout(() => load(filter, q), 250)
+    const timer = setTimeout(() => load(filter, q, extra), 250)
     return () => clearTimeout(timer)
-  }, [filter, q, load])
+  }, [filter, q, extra, load])
 
   const more = async () => {
     if (!list?.nextCursor) return
     try {
       const next = await api<IncomingInvoiceList>(
         'GET',
-        `/api/v1/incoming-invoices?${queryOf(filter, q, list.nextCursor)}`,
+        `/api/v1/incoming-invoices?${queryOf(filter, q, list.nextCursor, extra)}`,
       )
       setList({ ...next, items: [...list.items, ...next.items] })
     } catch (err) {
@@ -132,7 +162,7 @@ export function IncomingInvoices({ me, navigate }: { me: Me; navigate: Navigate 
       navigate({ view: 'incomingInvoice', id: lastId })
       return
     }
-    load(filter, q)
+    load(filter, q, extra)
   }
 
   const onDrop = (event: DragEvent) => {
@@ -224,6 +254,56 @@ export function IncomingInvoices({ me, navigate }: { me: Me; navigate: Navigate 
         <label htmlFor={`${id}-q`}>{t('common.search')}</label>
         <input id={`${id}-q`} type="search" value={q} onChange={(e) => setQ(e.target.value)} />
       </div>
+      <div className="row filters">
+        <div className="field">
+          <label htmlFor={`${id}-from`}>{t('in.filter.from')}</label>
+          <input
+            id={`${id}-from`}
+            type="date"
+            value={extra.from}
+            onChange={(e) => setExtra({ ...extra, from: e.target.value })}
+          />
+        </div>
+        <div className="field">
+          <label htmlFor={`${id}-to`}>{t('in.filter.to')}</label>
+          <input
+            id={`${id}-to`}
+            type="date"
+            value={extra.to}
+            onChange={(e) => setExtra({ ...extra, to: e.target.value })}
+          />
+        </div>
+        <div className="field">
+          <label htmlFor={`${id}-target`}>{t('in.filter.target')}</label>
+          <select
+            id={`${id}-target`}
+            className="select"
+            value={extra.target}
+            onChange={(e) => setExtra({ ...extra, target: e.target.value })}
+          >
+            <option value="">{t('in.filter.anyTarget')}</option>
+            {targets.projects.length ? (
+              <optgroup label={t('in.projects')}>
+                {targets.projects.map((p) => (
+                  <option key={p.id} value={`p:${p.id}`}>
+                    {p.number ? `${p.number} · ` : ''}
+                    {p.name}
+                  </option>
+                ))}
+              </optgroup>
+            ) : null}
+            {targets.areas.length ? (
+              <optgroup label={t('in.businessAreas')}>
+                {targets.areas.map((a) => (
+                  <option key={a.id} value={`b:${a.id}`}>
+                    {a.name}
+                  </option>
+                ))}
+              </optgroup>
+            ) : null}
+          </select>
+        </div>
+      </div>
       <FormError>{error}</FormError>
       {list ? (
         list.items.length ? (
@@ -302,6 +382,8 @@ interface AllocationRow {
   rate: string
   net: string
   description: string
+  /** Kostenzuweisung je Rechnungsposition (e-invoice line). */
+  lineId: string | null
 }
 interface Form {
   documentKind: 'invoice' | 'credit_note'
@@ -352,6 +434,7 @@ function formOf(d: IncomingInvoiceDetail): Form {
       rate: a.ratePercent.replace('.', ','),
       net: centsToInput(a.netCents),
       description: a.description ?? '',
+      lineId: a.lineId,
     })),
   }
 }
@@ -394,6 +477,7 @@ function requestOf(form: Form) {
         ratePercent: a.rate.trim() || '0',
         netCents: cents(a.net),
         description: a.description,
+        lineId: a.lineId,
       })),
   }
 }
@@ -517,6 +601,21 @@ export function IncomingInvoiceScreen({ id, navigate }: { id: string; navigate: 
               <img src={original} alt={tf('in.originalOf', { name: detail.filename })} />
             </a>
           ) : null}
+          {detail.mimeType === 'application/pdf' ? (
+            <iframe
+              className="incoming-pdf"
+              src={original}
+              title={tf('in.originalOf', { name: detail.filename })}
+            />
+          ) : null}
+          {detail.receivedVia === 'email' ? (
+            <p className="hint">
+              {tf('in.viaEmail', {
+                from: detail.emailFrom ?? '–',
+                subject: detail.emailSubject ?? '–',
+              })}
+            </p>
+          ) : null}
           <p>
             <strong>{detail.filename}</strong>
             <span className="muted block">
@@ -569,6 +668,7 @@ export function IncomingInvoiceScreen({ id, navigate }: { id: string; navigate: 
               projects={projects}
               areas={areas}
               errors={fieldErrors}
+              lines={detail.einvoice?.lines ?? []}
             />
           ) : (
             <ReadOnlyData detail={detail} />
@@ -839,12 +939,15 @@ function ReviewForm({
   projects,
   areas,
   errors,
+  lines,
 }: {
   form: Form
   update: (patch: Partial<Form>) => void
   projects: ProjectSummary[]
   areas: BusinessArea[]
   errors: Record<string, string>
+  /** Positions of the e-invoice: „Je Rechnungsposition zuweisen“. */
+  lines: NonNullable<IncomingInvoiceDetail['einvoice']>['lines']
 }) {
   const id = useId()
   const rates = form.taxLines.map((l) => rateOf(l.rate)).filter(Boolean)
@@ -876,8 +979,27 @@ function ReviewForm({
           rate: (open?.rate ?? rates[0] ?? '19').replace('.', ','),
           net: open ? centsToInput(open.rest) : '',
           description: '',
+          lineId: null,
         },
       ],
+    })
+  }
+  // One allocation per invoice line (net, rate and text of the line); the target of the first
+  // allocation is preset and can be changed per line.
+  const usableLines = lines.filter((l) => l.netCents !== null && l.netCents > 0)
+  const byLine = () => {
+    const target = form.allocations[0]?.target ?? ''
+    const costType = form.allocations[0]?.costType ?? 'material'
+    update({
+      allocations: usableLines.map((l, index) => ({
+        key: ++rowKey,
+        target,
+        costType,
+        rate: (l.vatRate ?? rates[0] ?? '0').replace('.', ','),
+        net: centsToInput(l.netCents as number),
+        description: [l.id ?? String(index + 1), l.name].filter(Boolean).join(' '),
+        lineId: l.id ?? String(index + 1),
+      })),
     })
   }
 
@@ -1129,9 +1251,23 @@ function ReviewForm({
               </li>
             ))}
         </ul>
-        <button type="button" className="button ghost small" onClick={addRest}>
-          {t('in.addAllocation')}
-        </button>
+        <div className="button-row">
+          <button type="button" className="button ghost small" onClick={addRest}>
+            {t('in.addAllocation')}
+          </button>
+          {usableLines.length > 1 ? (
+            <button
+              type="button"
+              className="button ghost small"
+              onClick={() => {
+                if (form.allocations.length && !window.confirm(t('in.byLineConfirm'))) return
+                byLine()
+              }}
+            >
+              {tf('in.byLine', { n: String(usableLines.length) })}
+            </button>
+          ) : null}
+        </div>
       </fieldset>
       <div className="field">
         <label htmlFor={`${id}-note`}>{t('in.note')}</label>

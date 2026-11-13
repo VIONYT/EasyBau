@@ -9,6 +9,8 @@ import type {
   DunningSettings,
   EmailTemplateSettings,
   HolidayList,
+  IncomingMailRun,
+  IncomingMailSettings,
   Me,
   NumberSequence,
   PaymentTerm,
@@ -45,6 +47,7 @@ type Section =
   | 'datev'
   | 'areas'
   | 'mail'
+  | 'incomingMail'
   | 'dunning'
   | 'system'
 
@@ -65,6 +68,7 @@ const SECTIONS: { key: Section; label: TextKey }[] = [
   { key: 'datev', label: 's.datev' },
   { key: 'areas', label: 's.areas' },
   { key: 'mail', label: 's.mail' },
+  { key: 'incomingMail', label: 's.incomingMail' },
   { key: 'dunning', label: 'sys.dunning' },
   { key: 'system', label: 'sys.title' },
 ]
@@ -117,6 +121,7 @@ export function Settings({ me, initial }: { me: Me; initial?: string | undefined
         {section === 'areas' ? <BusinessAreaSettings /> : null}
         {section === 'mail' ? <EmailTemplateForm /> : null}
         {section === 'dunning' ? <DunningSettingsForm /> : null}
+        {section === 'incomingMail' ? <IncomingMailForm /> : null}
         {section === 'system' ? <SystemSettings me={me} /> : null}
       </fieldset>
     </section>
@@ -1905,6 +1910,139 @@ function HolidaySettings({ canWrite }: { canWrite: boolean }) {
           {t('hol.add')}
         </button>
         {save.message}
+      </div>
+    </Panel>
+  )
+}
+
+// ---- Rechnungseingang per E-Mail (P2.4) ---------------------------------------------------------
+
+function IncomingMailForm() {
+  const { data, setData, error } = useResource<IncomingMailSettings>(
+    '/api/v1/settings/incoming-mail',
+  )
+  const [password, setPassword] = useState('')
+  const save = useSave()
+  const fetchNow = useSave()
+  if (error) return <FormError>{error}</FormError>
+  if (!data) return <p className="muted">{t('common.loading')}</p>
+  const run = data.lastRun
+  return (
+    <Panel title={t('s.incomingMail')}>
+      <p className="hint">{t('im.hint')}</p>
+      {!data.available ? <p className="warning">{t('im.unavailable')}</p> : null}
+      <Check
+        label={t('im.enabled')}
+        checked={data.enabled}
+        onChange={(enabled) => setData({ ...data, enabled })}
+      />
+      <div className="row">
+        <Input
+          label={t('im.host')}
+          value={data.host ?? ''}
+          onChange={(host) => setData({ ...data, host })}
+        />
+        <Input
+          label={t('im.port')}
+          type="number"
+          inputMode="numeric"
+          value={String(data.port)}
+          onChange={(port) => setData({ ...data, port: Number(port) || 993 })}
+        />
+      </div>
+      <Check
+        label={t('im.secure')}
+        checked={data.secure}
+        onChange={(secure) => setData({ ...data, secure })}
+      />
+      <div className="row">
+        <Input
+          label={t('im.user')}
+          value={data.user ?? ''}
+          onChange={(user) => setData({ ...data, user })}
+        />
+        <div className="field">
+          <label htmlFor="incoming-mail-password">{t('im.password')}</label>
+          <input
+            id="incoming-mail-password"
+            type="password"
+            autoComplete="new-password"
+            value={password}
+            onChange={(e) => setPassword(e.target.value)}
+          />
+          {data.hasPassword ? <p className="hint">{t('im.passwordStored')}</p> : null}
+        </div>
+      </div>
+      <div className="row">
+        <Input
+          label={t('im.mailbox')}
+          value={data.mailbox}
+          onChange={(mailbox) => setData({ ...data, mailbox })}
+        />
+        <Input
+          label={t('im.processed')}
+          value={data.processedMailbox ?? ''}
+          onChange={(processedMailbox) => setData({ ...data, processedMailbox })}
+        />
+      </div>
+      <p className="hint" role="status">
+        {run
+          ? `${tf('im.lastRun', {
+              at: new Date(run.at).toLocaleString('de-DE'),
+              messages: String(run.messages),
+              imported: String(run.imported),
+              duplicates: String(run.duplicates),
+              ignored: String(run.ignored),
+              failed: String(run.failed),
+            })}${run.error ? ` ${run.error}` : ''}`
+          : t('im.never')}
+      </p>
+      <div className="button-row">
+        <button
+          type="button"
+          className="button primary auto"
+          disabled={save.busy}
+          onClick={() =>
+            save.run(async () => {
+              setData(
+                await api<IncomingMailSettings>('PUT', '/api/v1/settings/incoming-mail', {
+                  enabled: data.enabled,
+                  host: nullable(data.host ?? ''),
+                  port: data.port,
+                  secure: data.secure,
+                  user: nullable(data.user ?? ''),
+                  ...(password ? { password } : {}),
+                  mailbox: data.mailbox || 'INBOX',
+                  processedMailbox: nullable(data.processedMailbox ?? ''),
+                }),
+              )
+              setPassword('')
+            })
+          }
+        >
+          {t('common.save')}
+        </button>
+        {data.available ? (
+          <button
+            type="button"
+            className="button ghost auto"
+            disabled={fetchNow.busy}
+            onClick={() =>
+              fetchNow.run(async () => {
+                const result = await api<IncomingMailRun>(
+                  'POST',
+                  '/api/v1/settings/incoming-mail/run',
+                  {},
+                )
+                setData({ ...data, lastRun: result })
+              })
+            }
+          >
+            {t('im.run')}
+          </button>
+        ) : null}
+        {save.message}
+        {fetchNow.message}
       </div>
     </Panel>
   )

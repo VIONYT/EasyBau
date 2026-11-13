@@ -72,7 +72,7 @@ export async function storeArtifact(
 export async function storeIncomingOriginal(
   tx: Tx,
   services: Services,
-  auth: AuthContext,
+  auth: Pick<AuthContext, 'tenantId'>,
   incomingInvoiceId: string,
   original: { data: Buffer; mime: string },
 ): Promise<string> {

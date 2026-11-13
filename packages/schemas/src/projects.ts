@@ -105,6 +105,16 @@ export interface ProjectFiguresDto {
   overbilledNetCents: number
   billedPercent: string | null
   invoiceCount: number
+  /**
+   * Projektkosten aus bestätigten Eingangsrechnungen (net, by cost type) and the preliminary
+   * Deckungsbeitrag; null without the right to read incoming invoices.
+   */
+  costs: {
+    totalCents: number
+    byType: Record<'material' | 'labor' | 'equipment' | 'subcontract' | 'other', number>
+    contributionCents: number
+    invoiceCount: number
+  } | null
 }
 
 /** Person of the company for project teams and filters (GET /team: names only). */

@@ -114,6 +114,7 @@ export function ContactEditor({
           taxMode: value(data, 'taxMode'),
           vatId: nullable(data, 'vatId'),
           buyerReference: nullable(data, 'buyerReference'),
+          creditorNumber: nullable(data, 'creditorNumber'),
           einvoiceEmail: nullable(data, 'einvoiceEmail'),
           einvoiceFormat: nullable(data, 'einvoiceFormat'),
           channels: channels.filter((c) => c.value.trim()),
@@ -476,6 +477,14 @@ export function ContactEditor({
             }
             defaultValue={c.buyerReference ?? ''}
             error={form.fieldErrors.buyerReference}
+          />
+          <Field
+            label={t('contacts.creditorNumber')}
+            name="creditorNumber"
+            inputMode="numeric"
+            hint={t('contacts.creditorNumberHint')}
+            defaultValue={c.creditorNumber ?? ''}
+            error={form.fieldErrors.creditorNumber}
           />
           <Field
             label={t('contacts.einvoiceEmail')}

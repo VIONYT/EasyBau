@@ -34,6 +34,7 @@ import { registerEmailRoutes } from './routes/email.js'
 import { registerExportRoutes } from './routes/exports.js'
 import { registerFileRoutes } from './routes/files.js'
 import { registerIncomingInvoiceRoutes } from './routes/incoming-invoices.js'
+import { type MailboxConnector, registerIncomingMailboxRoutes } from './routes/incoming-mailbox.js'
 import { registerInvoiceRoutes } from './routes/invoices.js'
 import { registerLetterheadRoutes } from './routes/letterhead.js'
 import { registerMeasurementRoutes } from './routes/measurements.js'
@@ -70,6 +71,8 @@ export interface ApiDeps {
         | 'UPLOAD_MAX_MB'
         | 'SMTP_HOST'
         | 'SMTP_FROM'
+        | 'INCOMING_MAIL_ENABLED'
+        | 'INCOMING_MAIL_INTERVAL_MINUTES'
         | 'KOSIT_URL'
         | 'KOSIT_TIMEOUT_MS'
         | 'ARCHIVE_S3_ENDPOINT'
@@ -96,6 +99,10 @@ export interface ApiDeps {
   einvoiceValidator?: EinvoiceValidator | null
   /** WORM archive (ADR 0008); defaults to the S3 bucket from ARCHIVE_S3_* (none without it). */
   archive?: ArchiveStore | null
+  /** Fetch the companies' invoice mailboxes periodically (only the process serving the API). */
+  pollMailboxes?: boolean
+  /** Tests: replaces the IMAP connection. */
+  mailboxConnector?: MailboxConnector
 }
 
 const MUTATING = new Set(['POST', 'PUT', 'PATCH', 'DELETE'])
@@ -110,6 +117,8 @@ export function buildApi({
   now = Date.now,
   einvoiceValidator,
   archive,
+  pollMailboxes = false,
+  mailboxConnector,
 }: ApiDeps): FastifyInstance {
   const app = Fastify({ logger, trustProxy: true, bodyLimit: 1024 * 1024 })
 
@@ -176,6 +185,7 @@ export function buildApi({
       UPLOAD_MAX_MB: config.UPLOAD_MAX_MB ?? 50,
       SMTP_ENABLED: Boolean(config.SMTP_HOST && config.SMTP_FROM),
       SMTP_FROM: config.SMTP_FROM,
+      INCOMING_MAIL_ENABLED: config.INCOMING_MAIL_ENABLED ?? false,
       KOSIT_URL: config.KOSIT_URL,
     },
     storage: storage ?? new FsObjectStore(config.STORAGE_DIR ?? '/data/files'),
@@ -248,6 +258,11 @@ export function buildApi({
   registerOfferToolRoutes(app, services)
   registerCatalogCsvRoutes(app, services)
   registerIncomingInvoiceRoutes(app, services)
+  registerIncomingMailboxRoutes(app, services, {
+    poll: pollMailboxes,
+    intervalMinutes: config.INCOMING_MAIL_INTERVAL_MINUTES ?? 5,
+    ...(mailboxConnector ? { connector: mailboxConnector } : {}),
+  })
   registerAuditRoutes(app, services)
   registerSignatureRoutes(app, services)
   registerMeasurementRoutes(app, services)

@@ -138,6 +138,9 @@ interface Row {
   allocatedTo: string[] | null
   receivedAt: string
   sortDate: string
+  receivedVia: 'upload' | 'email'
+  emailFrom: string | null
+  emailSubject: string | null
 }
 
 const listColumns = (tx: Tx) => tx`
@@ -152,6 +155,7 @@ const listColumns = (tx: Tx) => tx`
    left join business_area b on b.id = a.business_area_id
    where a.incoming_invoice_id = i.id) as "allocatedTo",
   ${ISO(tx, 'i.received_at')} as "receivedAt",
+  i.received_via as "receivedVia", i.email_from as "emailFrom", i.email_subject as "emailSubject",
   to_char(coalesce(i.invoice_date, (i.received_at at time zone 'Europe/Berlin')::date), 'YYYY-MM-DD') as "sortDate"`
 
 function toListItem(row: Row, today: string): IncomingInvoiceListItem {
@@ -177,6 +181,9 @@ function toListItem(row: Row, today: string): IncomingInvoiceListItem {
     einvoiceValid: row.einvoiceValid,
     allocatedTo: row.allocatedTo ?? [],
     receivedAt: row.receivedAt,
+    receivedVia: row.receivedVia,
+    emailFrom: row.emailFrom,
+    emailSubject: row.emailSubject,
   }
 }
 
@@ -237,7 +244,7 @@ export async function loadIncoming(
     select a.id, a.project_id as "projectId", p.name as "projectName",
            a.business_area_id as "businessAreaId", b.name as "businessAreaName",
            a.cost_type as "costType", a.rate_percent::text as "ratePercent", a.net_cents::text as net,
-           a.description
+           a.description, a.line_id as "lineId"
     from incoming_invoice_allocation a
     left join project p on p.id = a.project_id
     left join business_area b on b.id = a.business_area_id
@@ -514,9 +521,9 @@ async function writeLines(tx: Tx, auth: AuthContext, id: string, input: UpdateIn
     for (const [position, a] of input.allocations.entries()) {
       await tx`
         insert into incoming_invoice_allocation (tenant_id, incoming_invoice_id, project_id, business_area_id,
-                                                 cost_type, rate_percent, net_cents, description, position)
+                                                 cost_type, rate_percent, net_cents, description, position, line_id)
         values (${auth.tenantId}, ${id}, ${a.projectId}, ${a.businessAreaId}, ${a.costType}, ${a.ratePercent},
-                ${a.netCents}, ${a.description ?? null}, ${position})`
+                ${a.netCents}, ${a.description ?? null}, ${position}, ${a.lineId ?? null})`
     }
   }
 }
@@ -559,6 +566,93 @@ async function uniqueName<T>(run: () => Promise<T>): Promise<T> {
     }
     throw error
   }
+}
+
+/**
+ * Receives one file as Eingangsrechnung: type check, e-invoice read + KoSIT (outside the
+ * transaction), duplicate check by SHA-256, data prefilled, original stored (WORM). Used by the
+ * upload and by the e-mail inbox (P2.4). Returns the id; 409 for a file received before.
+ */
+export async function ingestIncomingInvoice(
+  services: Services,
+  auth: { tenantId: string; userId: string | null },
+  file: { filename: string; data: Buffer },
+  origin: { via: 'upload' | 'email'; from?: string | null; subject?: string | null },
+): Promise<string> {
+  const filename = sanitizeFilename(file.filename)
+  const data = file.data
+  const received = receive(filename, data)
+  const sha256 = createHash('sha256').update(data).digest()
+
+  const existing = await inTenant(
+    services,
+    auth,
+    (tx) => tx<{ id: string }[]>`select id from incoming_invoice where sha256 = ${sha256}`,
+  )
+  if (existing[0]) {
+    throw new HttpError(409, 'Diese Datei wurde bereits als Eingangsrechnung hochgeladen.', {
+      existingId: existing[0].id,
+    })
+  }
+  // Outside the transaction: KoSIT may take a moment.
+  const validation = received.xml ? await validate(services, received.xml) : null
+  const messages: Messages = [...(validation?.messages ?? [])]
+  if (received.unreadable) {
+    messages.push({
+      level: 'warning',
+      code: null,
+      text: `Die eingebettete E-Rechnung ist nicht lesbar: ${received.unreadable}`,
+    })
+  }
+  const data0 = prefill(received.einvoice)
+
+  return inTenant(services, auth, async (tx) => {
+    const vatId = normalizeVatId(data0?.supplierVatId ?? null)
+    const [contact] = vatId
+      ? await tx<{ id: string }[]>`
+          select id from contact
+          where archived_at is null and upper(regexp_replace(vat_id, '[\\s.-]', '', 'g')) = ${vatId}
+          order by created_at limit 1`
+      : []
+    let inserted: { id: string }[]
+    try {
+      inserted = await tx<{ id: string }[]>`
+        insert into incoming_invoice (
+          tenant_id, document_kind, source, filename, mime_type, sha256, size_bytes,
+          einvoice_profile, einvoice_en16931, einvoice_valid, einvoice_messages, einvoice,
+          contact_id, supplier_name, supplier_vat_id, supplier_tax_number, supplier_address, supplier_iban,
+          invoice_number, invoice_date, due_date, net_cents, tax_cents, gross_cents, reverse_charge,
+          uploaded_by, received_via, email_from, email_subject)
+        values (
+          ${auth.tenantId}, ${data0?.documentKind ?? 'invoice'}, ${received.source}, ${filename},
+          ${received.mime}, ${sha256}, ${data.length},
+          ${received.einvoice?.profile.label ?? null}, ${received.einvoice?.profile.en16931 ?? null},
+          ${validation?.valid ?? null}, ${tx.json(messages)},
+          ${received.einvoice ? tx.json(JSON.parse(JSON.stringify(einvoiceView(received.einvoice)))) : null},
+          ${contact?.id ?? null}, ${data0?.supplierName?.slice(0, 200) ?? null},
+          ${data0?.supplierVatId?.slice(0, 30) ?? null}, ${data0?.supplierTaxNumber?.slice(0, 30) ?? null},
+          ${data0?.supplierAddress?.slice(0, 500) ?? null}, ${data0?.supplierIban ?? null},
+          ${data0?.invoiceNumber ?? null}, ${data0?.invoiceDate ?? null}, ${data0?.dueDate ?? null},
+          ${data0?.netCents ?? 0n}, ${data0?.taxCents ?? 0n}, ${data0?.grossCents ?? 0n},
+          ${data0?.reverseCharge ?? false}, ${auth.userId}, ${origin.via},
+          ${origin.from?.slice(0, 300) ?? null}, ${origin.subject?.slice(0, 500) ?? null})
+        returning id`
+    } catch (error) {
+      if ((error as { code?: string }).code === '23505') {
+        throw new HttpError(409, 'Diese Datei wurde bereits als Eingangsrechnung hochgeladen.')
+      }
+      throw error
+    }
+    const incomingId = (inserted[0] as { id: string }).id
+    for (const [position, line] of (data0?.taxLines ?? []).entries()) {
+      await tx`
+        insert into incoming_invoice_tax (tenant_id, incoming_invoice_id, rate_percent, net_cents, tax_cents, position)
+        values (${auth.tenantId}, ${incomingId}, ${line.ratePercent}, ${line.netCents}, ${line.taxCents}, ${position})
+        on conflict (incoming_invoice_id, rate_percent) do nothing`
+    }
+    await storeIncomingOriginal(tx, services, auth, incomingId, { data, mime: received.mime })
+    return incomingId
+  })
 }
 
 export function registerIncomingInvoiceRoutes(app: FastifyInstance, services: Services) {
@@ -645,78 +739,14 @@ export function registerIncomingInvoiceRoutes(app: FastifyInstance, services: Se
     }
     const data = await readBody(body, maxBytes, tooLarge)
     if (!data.length) throw new HttpError(400, 'Die Datei ist leer.')
-    const filename = sanitizeFilename(rawName)
-    const received = receive(filename, data)
-    const sha256 = createHash('sha256').update(data).digest()
-
-    const existing = await inTenant(
+    const id = await ingestIncomingInvoice(
       services,
       auth,
-      (tx) => tx<{ id: string }[]>`select id from incoming_invoice where sha256 = ${sha256}`,
+      { filename: rawName, data },
+      {
+        via: 'upload',
+      },
     )
-    if (existing[0]) {
-      throw new HttpError(409, 'Diese Datei wurde bereits als Eingangsrechnung hochgeladen.', {
-        existingId: existing[0].id,
-      })
-    }
-    // Outside the transaction: KoSIT may take a moment.
-    const validation = received.xml ? await validate(services, received.xml) : null
-    const messages: Messages = [...(validation?.messages ?? [])]
-    if (received.unreadable) {
-      messages.push({
-        level: 'warning',
-        code: null,
-        text: `Die eingebettete E-Rechnung ist nicht lesbar: ${received.unreadable}`,
-      })
-    }
-    const data0 = prefill(received.einvoice)
-
-    const id = await inTenant(services, auth, async (tx) => {
-      const vatId = normalizeVatId(data0?.supplierVatId ?? null)
-      const [contact] = vatId
-        ? await tx<{ id: string }[]>`
-            select id from contact
-            where archived_at is null and upper(regexp_replace(vat_id, '[\\s.-]', '', 'g')) = ${vatId}
-            order by created_at limit 1`
-        : []
-      let inserted: { id: string }[]
-      try {
-        inserted = await tx<{ id: string }[]>`
-          insert into incoming_invoice (
-            tenant_id, document_kind, source, filename, mime_type, sha256, size_bytes,
-            einvoice_profile, einvoice_en16931, einvoice_valid, einvoice_messages, einvoice,
-            contact_id, supplier_name, supplier_vat_id, supplier_tax_number, supplier_address, supplier_iban,
-            invoice_number, invoice_date, due_date, net_cents, tax_cents, gross_cents, reverse_charge,
-            uploaded_by)
-          values (
-            ${auth.tenantId}, ${data0?.documentKind ?? 'invoice'}, ${received.source}, ${filename},
-            ${received.mime}, ${sha256}, ${data.length},
-            ${received.einvoice?.profile.label ?? null}, ${received.einvoice?.profile.en16931 ?? null},
-            ${validation?.valid ?? null}, ${tx.json(messages)},
-            ${received.einvoice ? tx.json(JSON.parse(JSON.stringify(einvoiceView(received.einvoice)))) : null},
-            ${contact?.id ?? null}, ${data0?.supplierName?.slice(0, 200) ?? null},
-            ${data0?.supplierVatId?.slice(0, 30) ?? null}, ${data0?.supplierTaxNumber?.slice(0, 30) ?? null},
-            ${data0?.supplierAddress?.slice(0, 500) ?? null}, ${data0?.supplierIban ?? null},
-            ${data0?.invoiceNumber ?? null}, ${data0?.invoiceDate ?? null}, ${data0?.dueDate ?? null},
-            ${data0?.netCents ?? 0n}, ${data0?.taxCents ?? 0n}, ${data0?.grossCents ?? 0n},
-            ${data0?.reverseCharge ?? false}, ${auth.userId})
-          returning id`
-      } catch (error) {
-        if ((error as { code?: string }).code === '23505') {
-          throw new HttpError(409, 'Diese Datei wurde bereits als Eingangsrechnung hochgeladen.')
-        }
-        throw error
-      }
-      const incomingId = (inserted[0] as { id: string }).id
-      for (const [position, line] of (data0?.taxLines ?? []).entries()) {
-        await tx`
-          insert into incoming_invoice_tax (tenant_id, incoming_invoice_id, rate_percent, net_cents, tax_cents, position)
-          values (${auth.tenantId}, ${incomingId}, ${line.ratePercent}, ${line.netCents}, ${line.taxCents}, ${position})
-          on conflict (incoming_invoice_id, rate_percent) do nothing`
-      }
-      await storeIncomingOriginal(tx, services, auth, incomingId, { data, mime: received.mime })
-      return incomingId
-    })
     reply.status(201)
     return send(auth, id, reply)
   })

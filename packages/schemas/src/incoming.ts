@@ -48,6 +48,8 @@ export const incomingAllocationInput = z.object({
   ratePercent: rate,
   netCents: cents.positive('Der Betrag muss größer als 0 sein.'),
   description: optionalText(500),
+  /** Kostenzuweisung je Rechnungsposition: line id of the e-invoice (BT-126). */
+  lineId: optionalText(100),
 })
 export type IncomingAllocationInput = z.infer<typeof incomingAllocationInput>
 
@@ -69,7 +71,7 @@ export const updateIncomingRequest = z.object({
   reverseCharge: z.boolean().optional(),
   note: optionalText(2000),
   taxLines: z.array(incomingTaxLineInput).max(10, 'Höchstens 10 Steuersätze.').optional(),
-  allocations: z.array(incomingAllocationInput).max(50, 'Höchstens 50 Zuweisungen.').optional(),
+  allocations: z.array(incomingAllocationInput).max(300, 'Höchstens 300 Zuweisungen.').optional(),
 })
 export type UpdateIncomingRequest = z.infer<typeof updateIncomingRequest>
 
@@ -185,6 +187,7 @@ export interface IncomingAllocation {
   ratePercent: string
   netCents: number
   description: string | null
+  lineId: string | null
 }
 
 export interface IncomingRequirement {
@@ -211,6 +214,10 @@ export interface IncomingInvoiceListItem {
   /** Projects and business areas, e.g. "Neubau Müller, Lager". */
   allocatedTo: string[]
   receivedAt: string
+  /** Upload or Rechnungseingang per E-Mail (with sender and subject). */
+  receivedVia: 'upload' | 'email'
+  emailFrom: string | null
+  emailSubject: string | null
 }
 
 export interface IncomingInvoiceList {
@@ -263,4 +270,47 @@ export interface IncomingInvoiceDetail extends IncomingInvoiceListItem {
   closeReason: string | null
   archive: { archived: boolean; retainUntil: string }
   canEdit: boolean
+}
+
+// ---- Rechnungseingang per E-Mail (P2.4) -------------------------------------------------------
+
+export const incomingMailSettingsRequest = z.object({
+  enabled: z.boolean(),
+  host: optionalText(200),
+  port: z.number().int().min(1).max(65535).default(993),
+  /** TLS from the start (993); false: STARTTLS (143). */
+  secure: z.boolean().default(true),
+  user: optionalText(200),
+  /** undefined: keep the stored password; '' or null: remove it. */
+  password: z.string().max(500).nullable().optional(),
+  mailbox: text(200).default('INBOX'),
+  /** Move processed messages there (e.g. „Verarbeitet“); empty: only mark as read. */
+  processedMailbox: optionalText(200),
+})
+export type IncomingMailSettingsRequest = z.infer<typeof incomingMailSettingsRequest>
+
+export interface IncomingMailRun {
+  at: string
+  messages: number
+  imported: number
+  duplicates: number
+  /** Attachments that are no invoice (other file types). */
+  ignored: number
+  /** Temporary errors: the message stays unread and is tried again. */
+  failed: number
+  error: string | null
+}
+
+export interface IncomingMailSettings {
+  /** Allowed by the operator (INCOMING_MAIL_ENABLED). */
+  available: boolean
+  enabled: boolean
+  host: string | null
+  port: number
+  secure: boolean
+  user: string | null
+  hasPassword: boolean
+  mailbox: string
+  processedMailbox: string | null
+  lastRun: IncomingMailRun | null
 }

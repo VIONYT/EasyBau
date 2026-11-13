@@ -1,5 +1,10 @@
 import type { Tx } from '@opc/db'
-import { type BilledDocument, projectFigures } from '@opc/domain'
+import {
+  type BilledDocument,
+  type ProjectCostType,
+  projectCosts,
+  projectFigures,
+} from '@opc/domain'
 import type { DocumentDetail, ProjectFiguresDto } from '@opc/schemas'
 import type { FastifyInstance } from 'fastify'
 import { z } from 'zod'
@@ -109,6 +114,33 @@ export async function loadProjectFigures(
     documents,
   })
   const n = (v: bigint | null) => (v === null ? null : Number(v))
+  // Projektkosten: confirmed incoming invoices allocated to the project (cancelled ones not).
+  let costs: ProjectFiguresDto['costs'] = null
+  if (auth.permissions.has('incoming_invoice.read')) {
+    const rows = await tx<
+      { costType: ProjectCostType; net: string; creditNote: boolean; invoiceId: string }[]
+    >`
+      select a.cost_type as "costType", a.net_cents::text as net,
+             i.document_kind = 'credit_note' as "creditNote", i.id as "invoiceId"
+      from incoming_invoice_allocation a join incoming_invoice i on i.id = a.incoming_invoice_id
+      where a.project_id = ${projectId} and i.status = 'confirmed'`
+    const sums = projectCosts(
+      rows.map((r) => ({
+        costType: r.costType,
+        netCents: BigInt(r.net),
+        creditNote: r.creditNote,
+      })),
+      figures.billedNetCents,
+    )
+    costs = {
+      totalCents: Number(sums.totalCents),
+      byType: Object.fromEntries(
+        Object.entries(sums.byType).map(([k, v]) => [k, Number(v)]),
+      ) as NonNullable<ProjectFiguresDto['costs']>['byType'],
+      contributionCents: Number(sums.contributionCents),
+      invoiceCount: new Set(rows.map((r) => r.invoiceId)).size,
+    }
+  }
   return {
     plannedHours: figures.plannedHours,
     hoursBasis: planned.basis,
@@ -122,6 +154,7 @@ export async function loadProjectFigures(
     overbilledNetCents: Number(figures.overbilledNetCents),
     billedPercent: figures.billedPercent,
     invoiceCount: documents.length,
+    costs,
   }
 }
 

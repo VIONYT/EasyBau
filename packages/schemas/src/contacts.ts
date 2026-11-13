@@ -41,6 +41,13 @@ const contactFields = {
   taxMode: taxMode.optional(),
   vatId: optionalText(30),
   buyerReference: optionalText(100),
+  /** Kreditorennummer (DATEV Personenkonto, e.g. 70001) of a supplier. */
+  creditorNumber: z
+    .string()
+    .trim()
+    .regex(/^\d{5,9}$/, 'Kreditorennummer: 5 bis 9 Ziffern, z. B. 70001.')
+    .or(z.literal('').transform(() => null))
+    .nullish(),
   einvoiceEmail: email.nullish(),
   einvoiceFormat: einvoiceFormat.nullish(),
   /** Replaces all channels / addresses when given. */
@@ -187,6 +194,7 @@ export interface ContactDetail
   taxMode: z.infer<typeof taxMode>
   vatId: string | null
   buyerReference: string | null
+  creditorNumber: string | null
   einvoiceEmail: string | null
   einvoiceFormat: z.infer<typeof einvoiceFormat> | null
   channels: (z.infer<typeof contactChannel> & { id: string })[]

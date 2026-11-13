@@ -203,6 +203,8 @@ export interface ExportIncoming {
   supplierName: string
   creditNote: boolean
   reverseCharge: boolean
+  /** Kreditorennummer of the supplier; otherwise the Sammelkreditor. */
+  creditorAccount?: string | null
   allocations: {
     costType: 'material' | 'labor' | 'equipment' | 'subcontract' | 'other'
     ratePercent: string
@@ -217,6 +219,7 @@ export interface ExportIncomingPayment {
   supplierName: string
   /** Gross amount; negative for credit notes. */
   amountCents: bigint
+  creditorAccount?: string | null
 }
 
 /** DATEV BU-Schlüssel for input tax: 9 = 19 % Vorsteuer, 8 = 7 % Vorsteuer, none for 0 %. */
@@ -245,7 +248,7 @@ export function incomingBookings(
       bookings.push({
         amountCents: (allocation.netCents + allocation.taxCents) * sign,
         account: invoice.reverseCharge ? accounts.reverseCharge : accounts[allocation.costType],
-        contraAccount: accounts.creditor,
+        contraAccount: invoice.creditorAccount || accounts.creditor,
         date: invoice.date,
         documentNo: invoice.invoiceNumber,
         text: invoice.supplierName,
@@ -256,7 +259,7 @@ export function incomingBookings(
   for (const payment of payments) {
     bookings.push({
       amountCents: payment.amountCents,
-      account: accounts.creditor,
+      account: payment.creditorAccount || accounts.creditor,
       contraAccount: accounts.bank,
       date: payment.date,
       documentNo: payment.invoiceNumber,

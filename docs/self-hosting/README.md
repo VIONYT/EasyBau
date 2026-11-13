@@ -73,7 +73,17 @@ Danach `https://<APP_DOMAIN>` öffnen, den Code eingeben, die Firma und das erst
 - Aktivieren: `SMTP_HOST`, `SMTP_FROM` und meist `SMTP_USER`/`SMTP_PASSWORD` (oder `SMTP_PASSWORD_FILE`) in der `.env` setzen, Stack neu starten. Port 587 nutzt STARTTLS (Pflicht), Port 465 mit `SMTP_SECURE=true`.
 - E-Mails gehen zuerst in einen Postausgang in der Datenbank und werden vom Worker versendet (bis zu 5 Versuche mit wachsender Pause). Status und Fehler: Einstellungen › Betrieb. Inhalte (z. B. Einladungslinks) werden nach dem Versand gelöscht.
 - Antworten gehen an die E-Mail-Adresse der Firma (Einstellungen › Firma).
+- Die Vorschau des Rechnungs-PDFs bei Eingangsrechnungen wird im Proxy (Caddy) als einzige Adresse für die Einbettung in die eigene Seite freigegeben (`X-Frame-Options: SAMEORIGIN` nur für `/api/v1/incoming-invoices/<id>/original`). Wer einen eigenen Reverse-Proxy nutzt, muss diese Ausnahme ebenfalls setzen, sonst bleibt die Vorschau leer (Öffnen im neuen Tab geht immer).
 - **Dokumente per E-Mail:** Fertiggestellte Angebote, Auftragsbestätigungen, Nachträge und festgeschriebene Rechnungen/Gutschriften lassen sich am Dokument versenden („Per E-Mail senden“). Anhang ist immer das archivierte Original (bei Rechnungen das ZUGFeRD-PDF), auf Wunsch zusätzlich die XRechnung. Betreff und Text kommen aus Einstellungen › E-Mail-Vorlagen (dort auch eine Blindkopie an das Büro-Postfach). Das Dokument wird erst auf „versendet“ gesetzt, wenn der SMTP-Server die E-Mail angenommen hat. Eine Zustellbestätigung des Empfängers gibt es nicht.
+
+### Rechnungseingang per E-Mail (optional)
+
+- Standard: aus. Freischalten mit `INCOMING_MAIL_ENABLED=true` in der `.env` (Abruf alle `INCOMING_MAIL_INTERVAL_MINUTES` Minuten, Standard 5), Stack neu starten.
+- Danach trägt jede Firma unter Einstellungen › Rechnungseingang ihr IMAP-Postfach ein (Server, Port 993 mit TLS, Benutzer, Passwort, Ordner; optional ein Ordner für verarbeitete E-Mails). Das Passwort wird verschlüsselt gespeichert (Schlüssel aus `APP_SECRET`) und nie angezeigt.
+- Abgerufen werden ungelesene E-Mails. Rechnungsanhänge (PDF/ZUGFeRD, XRechnung-XML, JPG/PNG) landen in „Eingangsrechnungen › Zu prüfen“ (gleiche Prüfung wie beim Hochladen, Original revisionssicher abgelegt); andere Anhänge werden ignoriert. Die E-Mail wird danach als gelesen markiert bzw. verschoben. Bei vorübergehenden Fehlern bleibt sie ungelesen und wird beim nächsten Abruf erneut verarbeitet.
+- Der Abruf läuft im Prozess, der die API bedient; mehrere API-Instanzen stimmen sich über eine Datenbank-Sperre ab. Ergebnis des letzten Abrufs und Fehler (z. B. „Anmeldung am Postfach fehlgeschlagen“) stehen in den Einstellungen; „Jetzt abrufen“ testet die Zugangsdaten.
+- Der Server muss den IMAP-Server erreichen dürfen (ausgehend Port 993 bzw. 143).
+- Bitte ein eigenes Postfach nur für Rechnungen verwenden: jeder PDF-/Bild-Anhang wird als mögliche Rechnung übernommen.
 
 ## 5a. E-Rechnung (Dienst „kosit“)
 

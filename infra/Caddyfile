@@ -9,11 +9,23 @@
 	header {
 		Strict-Transport-Security "max-age=31536000; includeSubDomains"
 		X-Content-Type-Options "nosniff"
-		X-Frame-Options "DENY"
 		Referrer-Policy "strict-origin-when-cross-origin"
 		Permissions-Policy "camera=(self), geolocation=(self), microphone=()"
-		Content-Security-Policy "default-src 'self'; img-src 'self' data: blob:; style-src 'self'; script-src 'self'; connect-src 'self'; frame-ancestors 'none'; base-uri 'self'; form-action 'self'"
 		-Server
+	}
+	# The original of an Eingangsrechnung may be shown in a frame of the app itself (PDF preview
+	# next to the data, P2.4); everything else must never be framed.
+	@framable path_regexp framable ^/api/v1/incoming-invoices/[0-9a-f-]+/original$
+	header @framable {
+		defer
+		X-Frame-Options "SAMEORIGIN"
+		Content-Security-Policy "default-src 'none'; img-src 'self' data:; style-src 'unsafe-inline'; frame-ancestors 'self'"
+	}
+	@notFramable not path_regexp notframable ^/api/v1/incoming-invoices/[0-9a-f-]+/original$
+	header @notFramable {
+		defer
+		X-Frame-Options "DENY"
+		Content-Security-Policy "default-src 'self'; img-src 'self' data: blob:; style-src 'self'; script-src 'self'; connect-src 'self'; frame-ancestors 'none'; base-uri 'self'; form-action 'self'"
 	}
 
 	@backend path /api/* /healthz /readyz

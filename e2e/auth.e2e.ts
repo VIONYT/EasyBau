@@ -770,6 +770,43 @@ test('Eingangsrechnung: XRechnung empfangen, prüfen, zuweisen, bestätigen und 
   await expectNoHorizontalScroll(page)
   if (SCREENSHOTS)
     await page.screenshot({ path: `${SCREENSHOTS}/eingangsrechnungen.png`, fullPage: true })
+
+  // Filter Zuweisung and Zeitraum (P2.4)
+  const filterTarget = page.getByLabel('Zuweisung', { exact: true })
+  const lindenweg = await filterTarget
+    .locator('option', { hasText: 'Sanierung Lindenweg' })
+    .getAttribute('value')
+  await filterTarget.selectOption(lindenweg as string)
+  await expect(page.getByRole('link', { name: /Holzhandel Süd GmbH/ })).toBeVisible()
+  await page.getByLabel('Rechnungsdatum von').fill('2030-01-01')
+  await expect(page.getByRole('link', { name: /Holzhandel Süd GmbH/ })).toHaveCount(0)
+  await page.getByLabel('Rechnungsdatum von').fill('')
+  await filterTarget.selectOption('')
+
+  // PDF: preview next to the data (frame allowed by the proxy only for the original)
+  await page.getByRole('button', { name: 'Alle' }).click()
+  await page.locator('input[type="file"]').setInputFiles({
+    name: 'lieferschein-rechnung.pdf',
+    mimeType: 'application/pdf',
+    buffer: Buffer.from(
+      '%PDF-1.4\n1 0 obj<</Type/Catalog/Pages 2 0 R>>endobj\n2 0 obj<</Type/Pages/Kids[]/Count 0>>endobj\ntrailer<</Root 1 0 R>>\n%%EOF\n',
+    ),
+  })
+  const frame = page.locator('iframe.incoming-pdf')
+  await expect(frame).toBeVisible()
+  const framed = await page.request.get((await frame.getAttribute('src')) as string)
+  expect(framed.headers()['x-frame-options']).toBe('SAMEORIGIN')
+  expect(framed.headers()['content-security-policy']).toContain("frame-ancestors 'self'")
+  const app = await page.request.get('/')
+  expect(app.headers()['x-frame-options']).toBe('DENY')
+  await expectNoHorizontalScroll(page)
+
+  // Rechnungseingang per E-Mail: not enabled by the operator in this stack
+  await page.getByRole('button', { name: 'Einstellungen' }).click()
+  await page.locator('#settings-section').selectOption({ label: 'Rechnungseingang (E-Mail)' })
+  await expect(page.getByText(/nicht freigeschaltet/)).toBeVisible()
+  await expect(page.getByRole('button', { name: 'Jetzt abrufen' })).toHaveCount(0)
+  await expectNoHorizontalScroll(page)
 })
 
 // Smallest valid PNG (1 × 1 px) as logo.

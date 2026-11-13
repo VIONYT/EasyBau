@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { projectFigures, sumHours } from './project-figures.js'
+import { projectCosts, projectFigures, sumHours } from './project-figures.js'
 
 const invoice = (net: bigint, open = 0n, paid = 0n) => ({
   type: 'invoice' as const,
@@ -78,5 +78,25 @@ describe('projectFigures (Projektkennzahlen)', () => {
   it('rounds hours to two decimals', () => {
     expect(sumHours(['0.125', '0.004'])).toBe('0.13')
     expect(sumHours(['8.5'])).toBe('8.5')
+  })
+})
+
+describe('Projektkosten aus Eingangsrechnungen', () => {
+  it('sums allocations by cost type, credit notes reduce', () => {
+    expect(
+      projectCosts(
+        [
+          { costType: 'material', netCents: 100_000n, creditNote: false },
+          { costType: 'material', netCents: 20_000n, creditNote: true },
+          { costType: 'subcontract', netCents: 50_000n, creditNote: false },
+        ],
+        300_000n,
+      ),
+    ).toEqual({
+      totalCents: 130_000n,
+      byType: { material: 80_000n, labor: 0n, equipment: 0n, subcontract: 50_000n, other: 0n },
+      contributionCents: 170_000n,
+    })
+    expect(projectCosts([], 0n).totalCents).toBe(0n)
   })
 })

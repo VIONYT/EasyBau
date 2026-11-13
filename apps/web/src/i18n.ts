@@ -1596,6 +1596,41 @@ const de = {
   'cc.action.update': 'aktualisieren',
   'cc.action.skip': 'übersprungen',
   'cc.action.error': 'Fehler',
+  // ---- Eingangsrechnungen ausbauen (P2.4) ----
+  'in.filter.from': 'Rechnungsdatum von',
+  'in.filter.to': 'bis',
+  'in.filter.target': 'Zuweisung',
+  'in.filter.anyTarget': 'Alle Projekte und Betriebsbereiche',
+  'in.byLine': 'Je Rechnungsposition zuweisen ({n})',
+  'in.byLineConfirm':
+    'Die bisherigen Zuweisungen durch je eine Zuweisung pro Rechnungsposition ersetzen?',
+  'in.viaEmail': 'Per E-Mail eingegangen von {from} – Betreff: {subject}',
+  'contacts.creditorNumber': 'Kreditorennummer (DATEV)',
+  'contacts.creditorNumberHint':
+    'Für Lieferanten: eigenes Personenkonto im DATEV-Export (z. B. 70001). Ohne Nummer wird der Sammelkreditor verwendet.',
+  'fig.costs': 'Kosten aus Eingangsrechnungen',
+  'fig.costsHint':
+    'Netto, nur bestätigte Eingangsrechnungen mit Zuweisung auf dieses Projekt. Eigene Lohnkosten fehlen noch (Zeiterfassung).',
+  'fig.contribution': 'Vorläufiger Deckungsbeitrag',
+  'fig.costInvoices': '{n} Eingangsrechnung(en)',
+  's.incomingMail': 'Rechnungseingang (E-Mail)',
+  'im.hint':
+    'Rechnungen, die an dieses Postfach geschickt werden, erscheinen automatisch unter „Eingangsrechnungen › Zu prüfen“. Verwendet werden Anhänge als PDF, XML (XRechnung/ZUGFeRD) und Fotos (JPG, PNG). Bitte ein eigenes Postfach nur für Rechnungen verwenden.',
+  'im.unavailable':
+    'Der Rechnungseingang per E-Mail ist auf diesem Server nicht freigeschaltet. Der Betreiber schaltet ihn mit INCOMING_MAIL_ENABLED=true in der .env frei.',
+  'im.enabled': 'Postfach regelmäßig abrufen',
+  'im.host': 'IMAP-Server',
+  'im.port': 'Port',
+  'im.secure': 'TLS-Verschlüsselung (Port 993)',
+  'im.user': 'Benutzername',
+  'im.password': 'Passwort',
+  'im.passwordStored': 'Gespeichert – leer lassen, um es zu behalten.',
+  'im.mailbox': 'Ordner',
+  'im.processed': 'Verarbeitete E-Mails verschieben nach (leer: nur als gelesen markieren)',
+  'im.run': 'Jetzt abrufen',
+  'im.lastRun':
+    'Letzter Abruf {at}: {messages} E-Mail(s), {imported} Rechnung(en) übernommen, {duplicates} schon vorhanden, {ignored} andere Anhänge, {failed} später erneut.',
+  'im.never': 'Noch nicht abgerufen.',
 } as const
 
 export type TextKey = keyof typeof de

@@ -3,7 +3,7 @@ import { useEffect, useId, useState } from 'react'
 import { type ApiError, api } from '../api'
 import { formatCents, formatInputNumber } from '../format'
 import { FormError } from '../forms'
-import { t, tf } from '../i18n'
+import { type TextKey, t, tf } from '../i18n'
 
 /**
  * Projektkennzahlen (P2.7): Soll-Stunden, Auftragssumme, abgerechnet, noch abzurechnen,
@@ -83,6 +83,30 @@ export function ProjectFiguresPanel({ projectId }: { projectId: string }) {
           <p className="amount-big">{formatCents(figures.openReceivableCents)}</p>
           <p className="hint">{t('fig.gross')}</p>
         </div>
+        {figures.costs ? (
+          <>
+            <div className="tile">
+              <h3>{t('fig.costs')}</h3>
+              <p className="amount-big">{formatCents(figures.costs.totalCents)}</p>
+              <p className="hint">
+                {[
+                  tf('fig.costInvoices', { n: String(figures.costs.invoiceCount) }),
+                  ...(['material', 'labor', 'equipment', 'subcontract', 'other'] as const)
+                    .filter((k) => figures.costs?.byType[k])
+                    .map(
+                      (k) =>
+                        `${t(`in.cost.${k}` as TextKey)} ${formatCents(figures.costs?.byType[k] ?? 0)}`,
+                    ),
+                ].join(' · ')}
+              </p>
+            </div>
+            <div className="tile">
+              <h3>{t('fig.contribution')}</h3>
+              <p className="amount-big">{formatCents(figures.costs.contributionCents)}</p>
+              <p className="hint">{t('fig.costsHint')}</p>
+            </div>
+          </>
+        ) : null}
       </div>
     </section>
   )

@@ -39,7 +39,7 @@ async function main(): Promise<void> {
   const app = buildApi({
     config,
     isReady: () => pingDatabase(sql),
-    ...(runsApi(config.APP_ROLE) && setupToken ? { sql, setupToken } : {}),
+    ...(runsApi(config.APP_ROLE) && setupToken ? { sql, setupToken, pollMailboxes: true } : {}),
     logger: {
       level: config.LOG_LEVEL,
       // No PII in logs (CLAUDE.md rule 9): log method and path only, never IPs or query strings.

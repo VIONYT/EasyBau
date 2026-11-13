@@ -5,6 +5,14 @@ Alle wesentlichen Änderungen, vor allem solche, die Betreiber betreffen (neue V
 ## Unveröffentlicht
 
 ### Neu
+- **Eingangsrechnungen ausgebaut**:
+  - **Rechnungseingang per E-Mail** (optional): Nach Freischaltung durch den Betreiber (`INCOMING_MAIL_ENABLED=true`) trägt jede Firma unter Einstellungen › Rechnungseingang ihr IMAP-Postfach ein. Rechnungsanhänge ungelesener E-Mails landen automatisch in „Zu prüfen“ (mit Absender und Betreff), die E-Mail wird als gelesen markiert oder verschoben. Passwort verschlüsselt gespeichert, „Jetzt abrufen“ zum Testen.
+  - **Kostenzuweisung je Rechnungsposition**: Bei E-Rechnungen mit mehreren Positionen „Je Rechnungsposition zuweisen“ – je Position eine Zuweisung mit Betrag, Steuersatz und Text, Projekt/Betriebsbereich je Zeile wählbar.
+  - **Filter** nach Rechnungsdatum (von/bis) und Zuweisung (Projekt oder Betriebsbereich) in der Liste.
+  - **Kreditorennummern**: Lieferanten bekommen im Kontakt eine Kreditorennummer (DATEV-Personenkonto, z. B. 70001); der DATEV-Export bucht dann darauf statt auf den Sammelkreditor.
+  - **Projektkosten** in den Projektkennzahlen: Kosten aus bestätigten Eingangsrechnungen je Kostenart und vorläufiger Deckungsbeitrag (ohne eigene Lohnkosten).
+  - **PDF-Vorschau** neben den Rechnungsdaten (im Proxy nur für das Original der Eingangsrechnung erlaubt).
+  - Datenbank-Migration `0034_incoming_extended`; neue optionale Variablen `INCOMING_MAIL_ENABLED`, `INCOMING_MAIL_INTERVAL_MINUTES`; geänderte `infra/Caddyfile` (Einbettung nur für das Original). Kein neuer Container.
 - **Angebot ausgebaut**:
   - **Preis anpassen (Zielpreis)**: Gewünschte Nettosumme eingeben, Vorschau ansehen, übernehmen. Bei kalkulierten Positionen werden nur die Zuschläge angepasst (Kosten bleiben), Positionen ohne Kalkulation behalten ihren Preis; Positionen unter Kosten und die Rundungsdifferenz werden angezeigt (`POST /documents/:id/target-price`).
   - **Bilder als Position**: Bild aus der Projektablage wählen oder neu hochladen, mit Bildunterschrift; erscheint in Druckansicht und PDF. Ein so verwendetes Bild lässt sich nicht mehr aus der Ablage löschen.

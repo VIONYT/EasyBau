@@ -297,6 +297,7 @@ describe('DATEV', () => {
           supplierName: 'Trockenbau Süd GmbH',
           creditNote: false,
           reverseCharge: true,
+          creditorAccount: '70012',
           allocations: [
             { costType: 'subcontract', ratePercent: '0', netCents: 100_000n, taxCents: 0n },
           ],
@@ -320,6 +321,13 @@ describe('DATEV', () => {
           supplierName: 'Baustoff Nord GmbH',
           amountCents: 116_850n,
         },
+        {
+          invoiceNumber: 'TS-117',
+          date: '2026-11-12',
+          supplierName: 'Trockenbau Süd GmbH',
+          amountCents: 100_000n,
+          creditorAccount: '70012',
+        },
       ],
       incomingAccounts,
     )
@@ -327,9 +335,11 @@ describe('DATEV', () => {
       [101_150n, '3200', '70000', '9'],
       [10_700n, '4960', '70000', '8'],
       [5_000n, '4900', '70000', undefined],
-      [100_000n, '3120', '70000', undefined],
+      // Supplier with its own Kreditorennummer instead of the Sammelkreditor
+      [100_000n, '3120', '70012', undefined],
       [-1_190n, '3200', '70000', '9'],
       [116_850n, '70000', '1200', undefined],
+      [100_000n, '70012', '1200', undefined],
     ])
     expect([inputTaxKey('19.00'), inputTaxKey('7'), inputTaxKey('0')]).toEqual([
       '9',
