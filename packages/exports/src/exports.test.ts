@@ -13,6 +13,7 @@ import {
   gobdTableCsv,
   incomingBookings,
   inputTaxKey,
+  parseCsv,
   revenueAccount,
   safeEntryName,
   splitByWeights,
@@ -79,6 +80,38 @@ describe('zip', () => {
     expect(safeEntryName('../../etc/passwd')).toBe('etc/passwd')
     expect(safeEntryName('\\\\server\\a\\.\\b.txt')).toBe('server/a/b.txt')
     expect(() => safeEntryName('../..')).toThrow(/empty/)
+  })
+})
+
+describe('parseCsv', () => {
+  it('reads German Excel CSV with quotes, BOM and CRLF', () => {
+    const text =
+      '\uFEFFFirma;Ort;Notiz\r\n"Müller & Söhne; GmbH";Hannover;"sagt ""Hallo""\r\nzweite Zeile"\r\n\r\nBau AG;Celle;\r\n'
+    expect(parseCsv(text)).toEqual([
+      ['Firma', 'Ort', 'Notiz'],
+      ['Müller & Söhne; GmbH', 'Hannover', 'sagt "Hallo"\r\nzweite Zeile'],
+      ['Bau AG', 'Celle', ''],
+    ])
+  })
+
+  it('detects comma and tab separators and reads a last line without newline', () => {
+    expect(parseCsv('a,b\n1,"2,5"')).toEqual([
+      ['a', 'b'],
+      ['1', '2,5'],
+    ])
+    expect(parseCsv('a\tb\rx\ty')).toEqual([
+      ['a', 'b'],
+      ['x', 'y'],
+    ])
+    expect(parseCsv('')).toEqual([])
+  })
+
+  it('round-trips what csv() writes', () => {
+    const rows = [
+      ['x;y', 'a"b', ''],
+      ['1', 'zwei\nZeilen', 'ü'],
+    ]
+    expect(parseCsv(csv(['A', 'B', 'C'], rows))).toEqual([['A', 'B', 'C'], ...rows])
   })
 })
 

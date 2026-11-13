@@ -2,6 +2,7 @@ import type { Tx } from '@opc/db'
 import {
   type ContactDetail,
   type ContactSummary,
+  type CreateContactRequest,
   contactListQuery,
   createContactRequest,
   linkContactRequest,
@@ -108,6 +109,26 @@ async function loadContact(tx: Tx, id: string): Promise<(ContactDetail & { etag:
   return { ...rest, channels, addresses, links, projects, etag: etagOf(updatedRaw) }
 }
 
+/** Inserts a contact with channels and addresses; `number` is the Kundennummer (or none). */
+export async function insertContact(
+  tx: Tx,
+  auth: { tenantId: string; userId: string },
+  input: CreateContactRequest,
+  number: string | null,
+): Promise<string> {
+  const columns = {
+    ...columnsOf(input),
+    tenant_id: auth.tenantId,
+    kind: input.kind,
+    number,
+    created_by: auth.userId,
+  }
+  const [row] = await tx<{ id: string }[]>`insert into contact ${tx(columns)} returning id`
+  const id = (row as { id: string }).id
+  await replaceChildren(tx, auth.tenantId, id, input)
+  return id
+}
+
 export function registerContactRoutes(app: FastifyInstance, services: Services) {
   app.get('/api/v1/contacts', async (request): Promise<Page<ContactSummary>> => {
     const auth = requirePermission(request, 'contacts.read')
@@ -130,6 +151,7 @@ export function registerContactRoutes(app: FastifyInstance, services: Services) 
       where (c.archived_at is not null) = ${query.archived === 'true'}
         and (${query.kind ?? null}::text is null or c.kind = ${query.kind ?? null})
         and (${query.color ?? null}::text is null or c.color = ${query.color ?? null})
+        and (${query.customer ?? null}::text is null or (c.number is not null) = ${query.customer === 'true'})
         and (${search}::text is null
              or lower(c.display_name) like ${search}
              or lower(coalesce(c.number, '')) like ${search}
@@ -157,16 +179,7 @@ export function registerContactRoutes(app: FastifyInstance, services: Services) 
       const [number] = input.assignCustomerNumber
         ? await tx<{ n: string }[]>`select next_number('contact') as n`
         : [{ n: null }]
-      const columns = {
-        ...columnsOf(input),
-        tenant_id: auth.tenantId,
-        kind: input.kind,
-        number: number?.n ?? null,
-        created_by: auth.userId,
-      }
-      const [row] = await tx<{ id: string }[]>`insert into contact ${tx(columns)} returning id`
-      const id = (row as { id: string }).id
-      await replaceChildren(tx, auth.tenantId, id, input)
+      const id = await insertContact(tx, auth, input, number?.n ?? null)
       return loadContact(tx, id)
     })
     const { etag, ...body } = contact as ContactDetail & { etag: string }

@@ -2445,3 +2445,37 @@ fieldset.plain {
   font-weight: 600;
   font-variant-numeric: tabular-nums;
 }
+
+/* Kontakte (P2.9) */
+.channel-row {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 140px), 1fr));
+  gap: 0 var(--space-4);
+  align-items: end;
+  padding-bottom: var(--space-2);
+  border-bottom: 1px solid var(--color-border);
+}
+
+.billing-address {
+  padding-left: var(--space-4);
+  border-left: 4px solid var(--color-border);
+}
+
+.link-button {
+  min-height: 44px;
+  padding: 0;
+  font: inherit;
+  color: var(--color-primary);
+  text-decoration: underline;
+  background: none;
+  border: 0;
+  cursor: pointer;
+}
+
+.contact-links {
+  margin-top: var(--space-4);
+}
+
+.import-rows .import-error {
+  color: var(--color-error);
+}

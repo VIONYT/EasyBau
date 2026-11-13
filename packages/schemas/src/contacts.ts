@@ -90,7 +90,61 @@ export const contactListQuery = listQuery.extend({
   kind: contactKind.optional(),
   color: color.optional(),
   archived: z.enum(['true', 'false']).default('false'),
+  /** Kunden = Kontakte mit Kundennummer; false = ohne (z. B. Lieferanten, Ansprechpartner). */
+  customer: z.enum(['true', 'false']).optional(),
 })
+
+/** Columns of the contact CSV (export and import, German headers). */
+export const CONTACT_CSV_COLUMNS = [
+  'Typ',
+  'Kundennummer',
+  'Firma',
+  'Anrede',
+  'Titel',
+  'Vorname',
+  'Nachname',
+  'Straße',
+  'Adresszusatz',
+  'PLZ',
+  'Ort',
+  'Land',
+  'E-Mail',
+  'Telefon',
+  'Mobil',
+  'Website',
+  'USt-IdNr.',
+  'Steuerfall',
+  'Leitweg-ID',
+  'E-Mail für E-Rechnungen',
+  'Beschreibung',
+] as const
+
+/** CSV-Import (POST /contacts/import): preview first (dryRun), then import. */
+export const importContactsRequest = z.object({
+  csv: z
+    .string()
+    .min(1, 'Die Datei ist leer.')
+    .max(5_000_000, 'Die Datei ist zu groß (max. 5 MB).'),
+  dryRun: z.boolean().default(true),
+  /** Draw a Kundennummer for rows without one. */
+  assignCustomerNumbers: z.boolean().default(true),
+})
+
+export interface ContactImportRow {
+  /** Line in the file (header = 1). */
+  line: number
+  name: string
+  action: 'create' | 'skip' | 'error'
+  message: string | null
+}
+
+export interface ContactImportResult {
+  dryRun: boolean
+  created: number
+  skipped: number
+  errors: number
+  rows: ContactImportRow[]
+}
 
 export const linkContactRequest = z.object({
   organizationId: id,

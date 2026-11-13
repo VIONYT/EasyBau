@@ -998,6 +998,80 @@ test('Übersicht, globale Suche und Benachrichtigungen', async () => {
   await expectNoHorizontalScroll(page)
 })
 
+test('Kontakte: Kanäle, Rechnungsempfänger, Ansprechpartner, Filter und CSV-Import', async () => {
+  test.skip(!SETUP_TOKEN, 'SETUP_TOKEN must be set for a fresh stack')
+  test.setTimeout(90_000)
+  await page.getByRole('button', { name: 'Kontakte' }).click()
+  const create = page.locator('form.inline-form')
+  const editor = page.locator('.contact-editor')
+
+  // Neue Organisation mit E-Mail, Telefon und abweichendem Rechnungsempfänger
+  await create.getByLabel('Name der Organisation').fill('Hausverwaltung Klee GmbH')
+  await create.getByRole('button', { name: 'Speichern' }).click()
+  await expect(editor.getByRole('heading', { name: /Hausverwaltung Klee GmbH/ })).toBeVisible()
+  await editor.getByRole('button', { name: '+ E-Mail oder Telefon' }).click()
+  await editor.getByLabel('Adresse / Nummer').fill('info@klee.example')
+  await editor.getByLabel('Straße und Hausnummer').first().fill('Gartenstraße 9')
+  await editor.getByLabel('PLZ').first().fill('30161')
+  await editor.getByLabel('Ort').first().fill('Hannover')
+  await editor.getByLabel('Abweichender Rechnungsempfänger').check()
+  await editor
+    .getByLabel('Empfängerblock (Name, Abteilung, z. Hd.)')
+    .fill('Hausverwaltung Klee GmbH\nBuchhaltung')
+  await editor.locator('.billing-address').getByLabel('Straße und Hausnummer').fill('Postfach 4711')
+  await editor.locator('.billing-address').getByLabel('PLZ').fill('30001')
+  await editor.locator('.billing-address').getByLabel('Ort').fill('Hannover')
+  await editor.getByRole('button', { name: 'Speichern' }).click()
+  await expect(page.getByText('Kontakt gespeichert.')).toBeVisible()
+  await expect(editor.getByLabel('Adresse / Nummer')).toHaveValue('info@klee.example')
+  await expectNoHorizontalScroll(page)
+  if (SCREENSHOTS) await page.screenshot({ path: `${SCREENSHOTS}/kontakt.png`, fullPage: true })
+
+  // Ansprechpartnerin anlegen und verknüpfen
+  const organizationUrl = page.url()
+  await editor.getByRole('button', { name: 'Schließen' }).click()
+  await create.getByText('Person', { exact: true }).click()
+  await create.getByLabel('Vorname').fill('Klara')
+  await create.getByLabel('Nachname').fill('Klee')
+  await create.getByRole('button', { name: 'Speichern' }).click()
+  await expect(editor.getByRole('heading', { name: /Klee, Klara/ })).toBeVisible()
+  await editor.getByRole('button', { name: '+ Organisation' }).click()
+  await editor.getByLabel('Suchen', { exact: true }).fill('Klee')
+  await editor
+    .getByLabel('Organisation', { exact: true })
+    .selectOption({ label: 'Hausverwaltung Klee GmbH' })
+  await editor.getByLabel('Funktion').fill('Buchhaltung')
+  await editor.getByRole('button', { name: 'Verknüpfen' }).click()
+  await expect(editor.getByText('· Buchhaltung')).toBeVisible()
+  expect(organizationUrl).toContain('/kontakte')
+
+  // Filter: nur Personen
+  await page.getByLabel('Art', { exact: true }).selectOption({ label: 'Person' })
+  await expect(page.getByRole('button', { name: /Klee, Klara/ })).toBeVisible()
+  await expect(page.getByRole('button', { name: /Wohnbau Nord eG/ })).toHaveCount(0)
+  await page.getByLabel('Art', { exact: true }).selectOption({ label: 'Alle' })
+
+  // CSV: Export-Link und Import mit Vorschau
+  await expect(page.getByRole('link', { name: 'CSV exportieren' })).toHaveAttribute(
+    'href',
+    /\/api\/v1\/contacts\/export\.csv/,
+  )
+  await page.getByRole('button', { name: 'CSV importieren' }).click()
+  await page.getByLabel('CSV-Datei').setInputFiles({
+    name: 'kontakte.csv',
+    mimeType: 'text/csv',
+    buffer: Buffer.from(
+      'Firma;Straße;PLZ;Ort;E-Mail\r\nDachdecker Wind KG;Am Deich 2;26122;Oldenburg;post@wind.example\r\nHausverwaltung Klee GmbH;Gartenstraße 9;30161;Hannover;\r\n',
+    ),
+  })
+  await page.getByRole('button', { name: 'Vorschau' }).click()
+  await expect(page.getByText(/1 neu, 1 übersprungen, 0 fehlerhaft/)).toBeVisible()
+  await page.getByRole('button', { name: '1 Kontakte importieren' }).click()
+  await expect(page.getByText(/1 importiert/)).toBeVisible()
+  await expect(page.getByRole('button', { name: /Dachdecker Wind KG/ })).toBeVisible()
+  await expectNoHorizontalScroll(page)
+})
+
 test('Briefpapier: WYSIWYG-Editor nach DIN 5008 B und Druckansicht', async () => {
   test.skip(!SETUP_TOKEN, 'SETUP_TOKEN must be set for a fresh stack')
   test.setTimeout(120_000)

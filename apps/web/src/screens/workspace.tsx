@@ -1,14 +1,15 @@
 import type { ContactDetail, ContactSummary, Me, Page } from '@opc/schemas'
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useId, useState } from 'react'
 import { api } from '../api'
 import { Field, FormError, optional, useForm } from '../forms'
 import { t } from '../i18n'
 import { hasWaitingChanges } from '../offline/client'
 import { OfflineBar } from '../offline/OfflineBar'
-import { parseRoute, type Route, useRoute } from '../router'
+import { type Navigate, parseRoute, type Route, useRoute } from '../router'
 import { AuditScreen } from './audit'
 import { Catalog } from './catalog'
 import { ContactEditor } from './contact-editor'
+import { ContactImport } from './contact-import'
 import { Dashboard } from './dashboard'
 import { DocumentScreen } from './document'
 import { IncomingInvoiceScreen, IncomingInvoices } from './incoming'
@@ -207,7 +208,7 @@ export function Workspace({
         ) : null}
         {current.view === 'catalog' ? <Catalog me={me} /> : null}
         {current.view === 'settings' ? <Settings me={me} /> : null}
-        {current.view === 'contacts' ? <Contacts me={me} /> : null}
+        {current.view === 'contacts' ? <Contacts me={me} navigate={navigate} /> : null}
         {current.view === 'invoices' ? <Invoices me={me} navigate={navigate} /> : null}
         {current.view === 'incoming' ? <IncomingInvoices me={me} navigate={navigate} /> : null}
         {current.view === 'incomingInvoice' ? (
@@ -233,9 +234,23 @@ function useList<T>(path: string) {
   return { items, error, reload }
 }
 
-function Contacts({ me }: { me: Me }) {
+const NO_CONTACT_FILTER = { kind: '', customer: '', archived: false }
+
+function contactQuery(query: string, filter: typeof NO_CONTACT_FILTER) {
+  const params = new URLSearchParams({ q: query })
+  if (filter.kind) params.set('kind', filter.kind)
+  if (filter.customer) params.set('customer', filter.customer)
+  if (filter.archived) params.set('archived', 'true')
+  return params.toString()
+}
+
+function Contacts({ me, navigate }: { me: Me; navigate: Navigate }) {
   const [query, setQuery] = useState('')
-  const list = useList<ContactSummary>(`/api/v1/contacts?q=${encodeURIComponent(query)}`)
+  const [filter, setFilter] = useState(NO_CONTACT_FILTER)
+  const [importing, setImporting] = useState(false)
+  const filterId = useId()
+  const list = useList<ContactSummary>(`/api/v1/contacts?${contactQuery(query, filter)}`)
+  const canWrite = me.permissions.includes('contacts.write')
   const [kind, setKind] = useState<'organization' | 'person'>('organization')
   const [selected, setSelected] = useState<string | null>(null)
   const form = useForm(
@@ -254,7 +269,26 @@ function Contacts({ me }: { me: Me }) {
   )
   return (
     <section aria-labelledby="contacts-title">
-      <h1 id="contacts-title">{t('nav.contacts')}</h1>
+      <div className="section-head">
+        <h1 id="contacts-title">{t('nav.contacts')}</h1>
+        <div className="button-row">
+          <a
+            className="button ghost auto"
+            href={`/api/v1/contacts/export.csv?${contactQuery('', filter)}`}
+            download
+          >
+            {t('contacts.export')}
+          </a>
+          {canWrite && !importing ? (
+            <button type="button" className="button ghost auto" onClick={() => setImporting(true)}>
+              {t('contacts.import.title')}
+            </button>
+          ) : null}
+        </div>
+      </div>
+      {importing ? (
+        <ContactImport onImported={list.reload} onClose={() => setImporting(false)} />
+      ) : null}
       <input
         type="search"
         className="search"
@@ -263,7 +297,41 @@ function Contacts({ me }: { me: Me }) {
         value={query}
         onChange={(e) => setQuery(e.target.value)}
       />
-      {me.permissions.includes('contacts.write') ? (
+      <div className="row contact-filters">
+        <div className="field">
+          <label htmlFor={`${filterId}-kind`}>{t('contacts.filter.kind')}</label>
+          <select
+            id={`${filterId}-kind`}
+            value={filter.kind}
+            onChange={(e) => setFilter({ ...filter, kind: e.target.value })}
+          >
+            <option value="">{t('contacts.filter.all')}</option>
+            <option value="organization">{t('contacts.kind.organization')}</option>
+            <option value="person">{t('contacts.kind.person')}</option>
+          </select>
+        </div>
+        <div className="field">
+          <label htmlFor={`${filterId}-customer`}>{t('contacts.filter.customer')}</label>
+          <select
+            id={`${filterId}-customer`}
+            value={filter.customer}
+            onChange={(e) => setFilter({ ...filter, customer: e.target.value })}
+          >
+            <option value="">{t('contacts.filter.all')}</option>
+            <option value="true">{t('contacts.filter.customers')}</option>
+            <option value="false">{t('contacts.filter.others')}</option>
+          </select>
+        </div>
+      </div>
+      <label className="check">
+        <input
+          type="checkbox"
+          checked={filter.archived}
+          onChange={(e) => setFilter({ ...filter, archived: e.target.checked })}
+        />
+        <span>{t('contacts.filter.archived')}</span>
+      </label>
+      {canWrite ? (
         <form className="inline-form" onSubmit={form.onSubmit} noValidate>
           <h2>{t('contacts.new')}</h2>
           <FormError>{form.error}</FormError>
@@ -311,9 +379,14 @@ function Contacts({ me }: { me: Me }) {
       {selected ? (
         <ContactEditor
           id={selected}
-          canWrite={me.permissions.includes('contacts.write')}
+          canWrite={canWrite}
+          canReadSettings={me.permissions.includes('settings.read')}
           onSaved={() => list.reload()}
           onClose={() => setSelected(null)}
+          onOpenProject={(projectId) =>
+            navigate({ view: 'project', id: projectId, section: 'overview' })
+          }
+          onOpenContact={(contactId) => setSelected(contactId)}
         />
       ) : null}
       <List

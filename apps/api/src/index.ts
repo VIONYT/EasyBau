@@ -21,6 +21,7 @@ import { registerAuditRoutes } from './routes/audit.js'
 import { authHook, mfaEnforcementHook, registerAuthRoutes } from './routes/auth.js'
 import { registerCatalogRoutes } from './routes/catalog.js'
 import { registerChangeOrderRoutes } from './routes/change-orders.js'
+import { registerContactCsvRoutes } from './routes/contact-csv.js'
 import { registerContactRoutes } from './routes/contacts.js'
 import { registerDashboardRoutes } from './routes/dashboard.js'
 import { registerDocumentEmailRoutes } from './routes/document-email.js'
@@ -246,6 +247,7 @@ export function buildApi({
   registerReportRoutes(app, services)
   registerReportBillingRoutes(app, services)
   registerChangeOrderRoutes(app, services)
+  registerContactCsvRoutes(app, services)
   registerProjectFigureRoutes(app, services)
   registerDashboardRoutes(app, services)
   registerNotificationRoutes(app, services)
