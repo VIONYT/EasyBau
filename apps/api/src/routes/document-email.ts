@@ -23,6 +23,7 @@ import type { FastifyInstance } from 'fastify'
 import { z } from 'zod'
 import { type AuthContext, inTenant, requirePermission, type Services } from '../context.js'
 import { HttpError, notFound, parse } from '../http.js'
+import { attachmentFiles, documentFileName, documentSettings } from './document-settings.js'
 import { loadDocument } from './documents.js'
 import { queueEmail } from './email.js'
 import { archiveDocumentPdf } from './pdf.js'
@@ -68,10 +69,6 @@ export async function emailTemplateSettings(tx: Tx): Promise<EmailTemplateSettin
 const isBilled = (doc: Pick<DocumentDetail, 'type'>) =>
   doc.type === 'invoice' || doc.type === 'credit_note'
 
-/** File name of the PDF in the e-mail, e.g. "Rechnung_R2026-00101.pdf". */
-const pdfName = (doc: DocumentDetail) =>
-  `${documentTitle(doc).replace(/\s+/g, '_').replace(/\./g, '')}_${doc.number ?? 'Entwurf'}.pdf`
-
 interface ArtifactRow {
   id: string
   kind: 'pdf' | 'zugferd_pdf' | 'xrechnung_xml'
@@ -79,6 +76,7 @@ interface ArtifactRow {
 }
 
 async function originalsOf(tx: Tx, doc: DocumentDetail) {
+  const pdfName = await documentFileName(tx, doc)
   const rows = await tx<ArtifactRow[]>`
     select id, kind, format from document_artifact
     where document_id = ${doc.id} and kind in ('pdf', 'zugferd_pdf', 'xrechnung_xml')
@@ -89,7 +87,7 @@ async function originalsOf(tx: Tx, doc: DocumentDetail) {
   const xmlName = (row: ArtifactRow) =>
     `${doc.number}_${row.format === 'xrechnung_cii' && xmls.length > 1 ? 'xrechnung_cii' : 'xrechnung'}.xml`
   return {
-    pdf: pdf ? { artifactId: pdf.id, filename: pdfName(doc) } : null,
+    pdf: pdf ? { artifactId: pdf.id, filename: pdfName } : null,
     xrechnung: xmls.map((row) => ({ artifactId: row.id, filename: xmlName(row) })),
   }
 }
@@ -164,14 +162,28 @@ async function draftOf(
     bcc: settings.bcc ? [settings.bcc] : [],
     subject: fillEmailTemplate(template.subject, values),
     text: fillEmailTemplate(template.body, values),
-    attachments: [{ filename: originals.pdf?.filename ?? pdfName(doc), kind: 'pdf' }],
+    attachments: [
+      { filename: originals.pdf?.filename ?? (await documentFileName(tx, doc)), kind: 'pdf' },
+    ],
     xrechnung: {
       available: originals.xrechnung.length > 0,
       recommended: recommended && originals.xrechnung.length > 0,
       filenames: originals.xrechnung.map((x) => x.filename),
     },
+    files: await filesOf(tx, doc),
     history: await historyOf(tx, doc.id),
   }
+}
+
+/** Company files (AGB …); the automatic attachments of the document type are preselected. */
+async function filesOf(tx: Tx, doc: DocumentDetail) {
+  const selected = new Set((await documentSettings(tx)).attachments[doc.type] ?? [])
+  return (await attachmentFiles(tx)).map((f) => ({
+    id: f.id,
+    filename: f.name,
+    sizeBytes: f.sizeBytes,
+    selected: selected.has(f.id),
+  }))
 }
 
 async function requireDocument(tx: Tx, auth: AuthContext, id: string) {
@@ -217,6 +229,17 @@ export function registerDocumentEmailRoutes(app: FastifyInstance, services: Serv
           attachXrechnung: 'Keine XRechnung vorhanden.',
         })
       }
+      const automatic = (await documentSettings(tx)).attachments[doc.type] ?? []
+      const fileIds = [...new Set(input.fileIds ?? automatic)]
+      const files = fileIds.length
+        ? await tx<{ id: string; name: string }[]>`
+            select id, name from tenant_asset where kind = 'attachment' and id in ${tx(fileIds)}`
+        : []
+      if (files.length !== fileIds.length) {
+        throw new HttpError(400, 'Ein Anhang wurde nicht gefunden.', {
+          fileIds: 'Unbekannter Anhang.',
+        })
+      }
       await queueEmail(tx, auth, {
         kind: 'document',
         to: input.to,
@@ -225,7 +248,14 @@ export function registerDocumentEmailRoutes(app: FastifyInstance, services: Serv
         subject: input.subject,
         text: input.text,
         documentId: id,
-        attachments: [originals.pdf, ...(input.attachXrechnung ? originals.xrechnung : [])],
+        attachments: [
+          originals.pdf,
+          ...(input.attachXrechnung ? originals.xrechnung : []),
+          ...fileIds.map((fid) => {
+            const file = files.find((f) => f.id === fid) as { id: string; name: string }
+            return { assetId: file.id, filename: file.name }
+          }),
+        ],
       })
       return draftOf(tx, services, doc)
     })

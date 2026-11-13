@@ -9,8 +9,8 @@ export interface QueuedEmail {
   to: string
   subject: string
   text: string
-  /** Archived originals sent as attachments (read by the worker when sending). */
-  attachments?: { artifactId: string; filename: string }[]
+  /** Archived originals or company files (AGB …) sent as attachments (read by the worker). */
+  attachments?: (({ artifactId: string } | { assetId: string }) & { filename: string })[]
   dunningNoticeId?: string | null
   /** Dokumente per E-Mail: the document is marked as sent once the server accepted the message. */
   documentId?: string | null
@@ -36,8 +36,9 @@ export async function queueEmail(tx: Tx, auth: AuthContext, mail: QueuedEmail): 
   const id = (row as { id: string }).id
   for (const attachment of mail.attachments ?? []) {
     await tx`
-      insert into email_attachment (tenant_id, email_message_id, artifact_id, filename)
-      values (${auth.tenantId}, ${id}, ${attachment.artifactId}, ${attachment.filename})`
+      insert into email_attachment (tenant_id, email_message_id, artifact_id, asset_id, filename)
+      values (${auth.tenantId}, ${id}, ${'artifactId' in attachment ? attachment.artifactId : null},
+              ${'assetId' in attachment ? attachment.assetId : null}, ${attachment.filename})`
   }
   return id
 }

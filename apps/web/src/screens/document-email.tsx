@@ -37,6 +37,7 @@ export function DocumentEmailPanel({
     subject: '',
     text: '',
     xrechnung: false,
+    fileIds: [] as string[],
   })
 
   const load = useCallback(() => {
@@ -50,6 +51,7 @@ export function DocumentEmailPanel({
           subject: d.subject,
           text: d.text,
           xrechnung: d.xrechnung.recommended,
+          fileIds: d.files.filter((f) => f.selected).map((f) => f.id),
         })
       })
       .catch((err: ApiError) => setError(err.message))
@@ -69,6 +71,7 @@ export function DocumentEmailPanel({
         subject: form.subject,
         text: form.text,
         attachXrechnung: form.xrechnung,
+        fileIds: form.fileIds,
       })
       setDraft(result)
       setOpen(false)
@@ -157,6 +160,7 @@ export function DocumentEmailPanel({
               {[
                 ...draft.attachments.map((a) => a.filename),
                 ...(form.xrechnung ? draft.xrechnung.filenames : []),
+                ...draft.files.filter((f) => form.fileIds.includes(f.id)).map((f) => f.filename),
               ].join(', ')}
             </span>
           </p>
@@ -172,6 +176,27 @@ export function DocumentEmailPanel({
                 {draft.xrechnung.recommended ? ` (${t('mail.recommended')})` : ''}
               </span>
             </label>
+          ) : null}
+          {draft.files.length ? (
+            <fieldset className="plain">
+              <legend>{t('mail.files')}</legend>
+              {draft.files.map((file) => (
+                <label key={file.id} className="check">
+                  <input
+                    type="checkbox"
+                    checked={form.fileIds.includes(file.id)}
+                    onChange={(e) =>
+                      set({
+                        fileIds: e.target.checked
+                          ? [...form.fileIds, file.id]
+                          : form.fileIds.filter((id) => id !== file.id),
+                      })
+                    }
+                  />
+                  <span>{file.filename}</span>
+                </label>
+              ))}
+            </fieldset>
           ) : null}
           <FormError>{error}</FormError>
           <div className="button-row">

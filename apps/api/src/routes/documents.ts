@@ -54,6 +54,7 @@ import {
 import { einvoiceSummary } from '../einvoice.js'
 import { checkIfMatch, etagOf, HttpError, notFound, parse } from '../http.js'
 import { checkEvidence, resolveEvidence } from './change-orders.js'
+import { documentSettings, laborShareDefault } from './document-settings.js'
 import { finalizeInvoice } from './invoices.js'
 import { companyValues, loadLetterhead } from './letterhead.js'
 import { notify, projectMembersExcept } from './notifications.js'
@@ -348,14 +349,22 @@ function totalsOf(
   const totals = calculateDocumentTotals({
     ...totalsInput(doc),
     deductions: deductions.inputs,
-    lines: rows.map((row) => ({
-      id: row.id,
-      parentId: row.parentId,
-      positionType: row.positionType as PositionType,
-      ...(row.totalCents === null ? {} : { totalCents: BigInt(row.totalCents) }),
-      ...(row.taxRatePercent ? { taxRatePercent: row.taxRatePercent } : {}),
-      ...(row.taxCategory ? { taxCategory: row.taxCategory } : {}),
-    })),
+    lines: rows.map((row) => {
+      const lines = costs.get(row.id)
+      // Lohnkostenanteil (§ 35a) only from positions with Kalkulation.
+      const labor = lines?.length
+        ? ((priceOf(row, lines) as ReturnType<typeof calculateItem> | null)?.laborShareCents ?? 0n)
+        : 0n
+      return {
+        id: row.id,
+        parentId: row.parentId,
+        positionType: row.positionType as PositionType,
+        ...(row.totalCents === null ? {} : { totalCents: BigInt(row.totalCents) }),
+        ...(row.taxRatePercent ? { taxRatePercent: row.taxRatePercent } : {}),
+        ...(row.taxCategory ? { taxCategory: row.taxCategory } : {}),
+        ...(labor ? { laborShareCents: labor } : {}),
+      }
+    }),
   })
   // Kalkulation of the counted positions (Soll-Kosten, Soll-Stunden).
   let costCents = 0n
@@ -405,6 +414,10 @@ function totalsOf(
     marginCents: Number(totals.netCents - costCents),
     laborHours: roundTo(new Decimal(laborHundredths.toString()).div(100), 2),
     uncalculatedCount,
+    laborShare: {
+      netCents: Number(totals.laborShare.netCents),
+      grossCents: Number(totals.laborShare.grossCents),
+    },
   }
 }
 
@@ -590,7 +603,8 @@ export async function loadDocument(
            trim_scale(d.retention_percent)::text as "retentionPercent",
            trim_scale(d.construction_levy_percent)::text as "constructionLevyPercent",
            d.progress_billing_mode as "progressBillingMode", ${DATE(tx, 'd.due_date')} as "dueDate",
-           d.cancel_reason as "cancelReason", d.legal_notes as "storedNotes"
+           d.cancel_reason as "cancelReason", d.legal_notes as "storedNotes",
+           d.show_labor_share as "showLaborShare"
     from ${fromDocuments(tx)}
     left join contact c on c.id = d.contact_id
     where d.id = ${id} and ${projectVisibility(tx, auth)}`
@@ -832,12 +846,13 @@ export async function createDocument(
     ? await tx<
         {
           taxMode: string
+          kind: string
           dueDays: number | null
           discountPercent: string | null
           discountDays: number | null
         }[]
       >`
-        select c.tax_mode as "taxMode", pt.due_days as "dueDays",
+        select c.tax_mode as "taxMode", c.kind, pt.due_days as "dueDays",
                pt.cash_discount_percent::text as "discountPercent", pt.cash_discount_days as "discountDays"
         from contact c left join payment_term pt on pt.id = c.payment_term_id where c.id = ${contactId}`
     : []
@@ -848,6 +863,7 @@ export async function createDocument(
            cash_discount_days as "discountDays"
     from payment_term where is_default limit 1`
   const term = contact?.dueDays != null ? contact : defaultTerm
+  const defaults = await documentSettings(tx)
   const billed = input.type === 'invoice' || input.type === 'credit_note'
   const templates = await tx<{ placement: 'intro' | 'closing'; body: string }[]>`
     select placement, body from text_template where document_type = ${input.type} and is_default`
@@ -860,7 +876,8 @@ export async function createDocument(
     type: input.type,
     invoice_kind: input.invoiceKind ?? null,
     progress_no: input.invoiceKind === 'progress' ? facts.nextProgressNo : null,
-    progress_billing_mode: input.invoiceKind === 'progress' ? 'cumulative' : null,
+    progress_billing_mode: input.invoiceKind === 'progress' ? defaults.progressBillingMode : null,
+    show_labor_share: laborShareDefault(defaults, input.type, contact?.kind ?? null),
     subject: input.subject ?? source?.subject ?? project.name,
     place_of_performance: source ? source.placeOfPerformance : siteLine(project),
     contact_id: contactId,
@@ -1073,11 +1090,26 @@ export function registerDocumentRoutes(app: FastifyInstance, services: Services)
         retentionPercent: 'retention_percent',
         constructionLevyPercent: 'construction_levy_percent',
         progressBillingMode: 'progress_billing_mode',
+        showLaborShare: 'show_labor_share',
       }
       const columns: Record<string, unknown> = {}
       for (const [key, column] of Object.entries(map)) {
         const value = input[key as keyof typeof input]
         if (value !== undefined) columns[column] = value
+      }
+      // Another recipient brings the default of „Lohnkostenanteil ausweisen“ (person/organization).
+      if (input.contactId !== undefined && input.showLaborShare === undefined) {
+        const [row] = await tx<{ type: string; kind: string | null; changed: boolean }[]>`
+          select d.type, (select kind from contact where id = ${input.contactId}) as kind,
+                 d.contact_id is distinct from ${input.contactId}::uuid as changed
+          from document d where d.id = ${id}`
+        if (row?.changed) {
+          columns.show_labor_share = laborShareDefault(
+            await documentSettings(tx),
+            row.type,
+            row.kind,
+          )
+        }
       }
       if (Object.keys(columns).length) {
         await tx`update document set ${tx(columns)} where id = ${id}`.catch(
@@ -1446,7 +1478,8 @@ export function registerDocumentRoutes(app: FastifyInstance, services: Services)
         update document set number = ${number}, status = 'finalized', finalized_at = now(),
                finalized_by = ${auth.userId}, content_hash = ${hash},
                issuer_snapshot = ${tx.json(preview.issuer as never)},
-               recipient_snapshot = ${tx.json(preview.recipient as never)}
+               recipient_snapshot = ${tx.json(preview.recipient as never)},
+               legal_notes = ${tx.json(legalNotesOf(preview))}
         where id = ${id} and project_id = ${current.projectId}`
       return loadDocument(tx, auth, id)
     })

@@ -13,7 +13,7 @@ export type Route =
   | { view: 'users' }
   | { view: 'security' }
   | { view: 'catalog' }
-  | { view: 'settings' }
+  | { view: 'settings'; section?: string }
   | { view: 'audit' }
   | { view: 'project'; id: string; section: ProjectSection }
   | { view: 'document'; id: string }
@@ -67,7 +67,10 @@ export function parseRoute(path: string, search = ''): Route {
   if (path.startsWith('/suche')) {
     return { view: 'search', q: new URLSearchParams(search).get('q') ?? '' }
   }
-  if (path.startsWith('/einstellungen')) return { view: 'settings' }
+  if (path.startsWith('/einstellungen')) {
+    const section = new URLSearchParams(search).get('bereich')
+    return section ? { view: 'settings', section } : { view: 'settings' }
+  }
   if (path.startsWith('/kontakte')) return { view: 'contacts' }
   if (path.startsWith('/rechnungen')) return { view: 'invoices' }
   if (path.startsWith('/benutzer')) return { view: 'users' }
@@ -91,7 +94,9 @@ export function pathOf(route: Route): string {
     case 'catalog':
       return '/stammdaten'
     case 'settings':
-      return '/einstellungen'
+      return route.section
+        ? `/einstellungen?bereich=${encodeURIComponent(route.section)}`
+        : '/einstellungen'
     case 'users':
       return '/benutzer'
     case 'security':

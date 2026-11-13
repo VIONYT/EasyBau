@@ -1,5 +1,5 @@
 import { z } from 'zod'
-import { email, text } from './common.js'
+import { email, id, text } from './common.js'
 import { DOCUMENT_TYPES } from './constants.js'
 
 export interface EmailSettings {
@@ -34,6 +34,8 @@ export const sendDocumentEmailRequest = z.object({
   text: text(20_000),
   /** Rechnungen: attach the archived XRechnung XML(s) as well. */
   attachXrechnung: z.boolean().default(false),
+  /** Company files to attach (AGB …); omitted = the automatic attachments of the document type. */
+  fileIds: z.array(id).max(10, 'Höchstens 10 Anhänge.').optional(),
 })
 export type SendDocumentEmailRequest = z.infer<typeof sendDocumentEmailRequest>
 
@@ -66,6 +68,8 @@ export interface DocumentEmailDraft {
   /** Attached originals (always) and the XRechnung that can be added. */
   attachments: { filename: string; kind: 'pdf' | 'xrechnung' }[]
   xrechnung: { available: boolean; recommended: boolean; filenames: string[] }
+  /** Company files (AGB …): all uploaded ones, `selected` = automatic attachment of this type. */
+  files: { id: string; filename: string; sizeBytes: number; selected: boolean }[]
   history: DocumentEmailEntry[]
 }
 

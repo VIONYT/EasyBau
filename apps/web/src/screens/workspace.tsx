@@ -15,6 +15,7 @@ import { DocumentScreen } from './document'
 import { IncomingInvoiceScreen, IncomingInvoices } from './incoming'
 import { Invoices } from './invoices'
 import { MeasurementScreen } from './measurement'
+import { NoticeBar } from './notice-bar'
 import { PrintScreen } from './print'
 import { ProjectScreen } from './project'
 import { Projects } from './projects'
@@ -182,6 +183,13 @@ export function Workspace({
           ))}
       </nav>
       <OfflineBar />
+      <NoticeBar
+        reloadKey={routeKey}
+        open={(path) => {
+          const [pathname, search] = path.split('?')
+          navigate(parseRoute(pathname as string, search ? `?${search}` : ''))
+        }}
+      />
       <main className="content" key={`${routeKey}-${visit}`}>
         {current.view === 'dashboard' ? <Dashboard me={me} navigate={navigate} /> : null}
         {current.view === 'search' ? <SearchScreen q={current.q} navigate={navigate} /> : null}
@@ -207,7 +215,7 @@ export function Workspace({
           <ReportScreen me={me} id={current.id} navigate={navigate} />
         ) : null}
         {current.view === 'catalog' ? <Catalog me={me} /> : null}
-        {current.view === 'settings' ? <Settings me={me} /> : null}
+        {current.view === 'settings' ? <Settings me={me} initial={current.section} /> : null}
         {current.view === 'contacts' ? <Contacts me={me} navigate={navigate} /> : null}
         {current.view === 'invoices' ? <Invoices me={me} navigate={navigate} /> : null}
         {current.view === 'incoming' ? <IncomingInvoices me={me} navigate={navigate} /> : null}

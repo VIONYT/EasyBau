@@ -1,0 +1,315 @@
+import { Readable } from 'node:stream'
+import type { Tx } from '@opc/db'
+import {
+  checkFileNamePattern,
+  companyNotices,
+  DEFAULT_FILE_NAME_PATTERN,
+  FILE_NAME_PLACEHOLDERS,
+  type FileNamePlaceholder,
+  fileNameFrom,
+  isFederalState,
+  publicHolidays,
+} from '@opc/domain'
+import { documentTitle } from '@opc/pdf-templates'
+import {
+  type AttachmentFile,
+  attachmentUploadQuery,
+  type CompanyNoticeEntry,
+  type DocumentDetail,
+  type DocumentSettings,
+  type DocumentSettingsRequest,
+  documentSettingsRequest,
+  type HolidayList,
+  holidayQuery,
+  holidayRequest,
+  settingsIdParam,
+} from '@opc/schemas'
+import { TooLargeError } from '@opc/storage'
+import type { FastifyInstance } from 'fastify'
+import { inTenant, requireAuth, requirePermission, type Services } from '../context.js'
+import { HttpError, notFound, parse } from '../http.js'
+
+/**
+ * Einstellungen ergänzen (P2.11): Dokument-Vorgaben (Lohnkostenanteil § 35a, Abschlagsart,
+ * Dateinamen-Muster, automatische Anhänge), gesetzliche Feiertage nach Bundesland plus eigene,
+ * and the Hinweisleiste for missing company data.
+ */
+
+export const DEFAULT_DOCUMENT_SETTINGS: DocumentSettingsRequest = {
+  // DESIGN.md §7.4: Standard „Rechnungen an Personen“.
+  laborShare: {
+    invoice: { person: true, organization: false },
+    offer: { person: false, organization: false },
+  },
+  progressBillingMode: 'cumulative',
+  fileNamePattern: DEFAULT_FILE_NAME_PATTERN,
+  attachments: {},
+}
+
+const ATTACHMENT_MAX_BYTES = 10 * 1024 * 1024
+
+export async function documentSettings(tx: Tx): Promise<DocumentSettingsRequest> {
+  const [row] = await tx<{ documents: Partial<DocumentSettingsRequest> | null }[]>`
+    select settings -> 'documents' as documents from tenant where id = current_tenant_id()`
+  return { ...DEFAULT_DOCUMENT_SETTINGS, ...(row?.documents ?? {}) }
+}
+
+/** Default of „Lohnkostenanteil ausweisen“ for a new document (matrix in the settings). */
+export function laborShareDefault(
+  settings: Pick<DocumentSettingsRequest, 'laborShare'>,
+  type: string,
+  contactKind: string | null,
+): boolean {
+  if (!contactKind) return false
+  const kind = contactKind === 'person' ? 'person' : 'organization'
+  if (type === 'invoice' || type === 'credit_note') return settings.laborShare.invoice[kind]
+  if (['quote', 'cost_estimate', 'order_confirmation', 'change_order'].includes(type)) {
+    return settings.laborShare.offer[kind]
+  }
+  return false
+}
+
+type NamedDocument = Pick<
+  DocumentDetail,
+  'type' | 'invoiceKind' | 'progressNo' | 'changeOrder' | 'number' | 'documentDate'
+> & {
+  project: { name: string }
+  recipient: { name: string } | null
+  contact: { displayName: string } | null
+}
+
+export function fileNameValues(doc: NamedDocument): Record<FileNamePlaceholder, string | null> {
+  return {
+    // "2. Abschlagsrechnung" → "2_Abschlagsrechnung"
+    Typ: documentTitle(doc).replace(/\./g, ''),
+    Nummer: doc.number ?? 'Entwurf',
+    Kunde: doc.recipient?.name ?? doc.contact?.displayName ?? null,
+    Projekt: doc.project.name,
+    Datum: doc.documentDate,
+    Jahr: doc.documentDate.slice(0, 4),
+  }
+}
+
+/** File name of a document PDF after the company's Dateinamen-Muster. */
+export async function documentFileName(
+  tx: Tx,
+  doc: NamedDocument,
+  extension = 'pdf',
+): Promise<string> {
+  const { fileNamePattern } = await documentSettings(tx)
+  return fileNameFrom(fileNamePattern, fileNameValues(doc), extension)
+}
+
+export async function attachmentFiles(tx: Tx): Promise<AttachmentFile[]> {
+  return tx<AttachmentFile[]>`
+    select id, name, size_bytes::float8 as "sizeBytes",
+           to_char(created_at at time zone 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS.MS"Z"') as "createdAt"
+    from tenant_asset where kind = 'attachment' order by created_at desc`
+}
+
+async function loadSettings(tx: Tx): Promise<DocumentSettings> {
+  const stored = await documentSettings(tx)
+  return {
+    ...stored,
+    placeholders: [...FILE_NAME_PLACEHOLDERS],
+    defaultFileNamePattern: DEFAULT_FILE_NAME_PATTERN,
+    files: await attachmentFiles(tx),
+    example: fileNameFrom(
+      stored.fileNamePattern,
+      {
+        Typ: 'Rechnung',
+        Nummer: 'R2026-00101',
+        Kunde: 'Mustermann, Max',
+        Projekt: 'Badsanierung',
+        Datum: '2026-11-13',
+        Jahr: '2026',
+      },
+      'pdf',
+    ),
+  }
+}
+
+const invalid = (errors: Record<string, string>) =>
+  new HttpError(400, 'Die Eingaben sind unvollständig oder ungültig.', errors)
+
+export function registerDocumentSettingsRoutes(app: FastifyInstance, services: Services) {
+  // ---- Dokument-Vorgaben ----
+
+  app.get('/api/v1/settings/documents', async (request) => {
+    const auth = requirePermission(request, 'settings.read')
+    return inTenant(services, auth, loadSettings)
+  })
+
+  app.put('/api/v1/settings/documents', async (request) => {
+    const auth = requirePermission(request, 'settings.write')
+    const input = parse(documentSettingsRequest, request.body)
+    const patternError = checkFileNamePattern(input.fileNamePattern)
+    if (patternError) throw invalid({ fileNamePattern: patternError })
+    return inTenant(services, auth, async (tx) => {
+      const ids = [...new Set(Object.values(input.attachments).flat())] as string[]
+      if (ids.length) {
+        const found = await tx<{ id: string }[]>`
+          select id from tenant_asset where kind = 'attachment' and id in ${tx(ids)}`
+        if (found.length !== ids.length) {
+          throw invalid({ attachments: 'Ein Anhang wurde nicht gefunden. Bitte erneut hochladen.' })
+        }
+      }
+      const attachments = Object.fromEntries(
+        Object.entries(input.attachments).filter(([, list]) => list?.length),
+      )
+      const stored = { ...input, attachments }
+      await tx`update tenant set settings = jsonb_set(settings, '{documents}', ${tx.json(stored as never)})
+               where id = current_tenant_id()`
+      return loadSettings(tx)
+    })
+  })
+
+  // Anhang hochladen (PDF, höchstens 10 MB): raw bytes, file name in ?name=.
+  app.post('/api/v1/settings/attachments', async (request, reply) => {
+    const auth = requirePermission(request, 'settings.write')
+    const body = request.body
+    if (!(body instanceof Readable)) {
+      throw new HttpError(415, 'Bitte die Datei als application/octet-stream senden.')
+    }
+    const tooLarge = () => new HttpError(413, 'Der Anhang ist zu groß (höchstens 10 MB).')
+    let query: { name: string }
+    try {
+      query = parse(attachmentUploadQuery, request.query)
+    } catch (error) {
+      body.resume()
+      throw error
+    }
+    if (Number(request.headers['content-length'] ?? 0) > ATTACHMENT_MAX_BYTES) {
+      body.resume()
+      throw tooLarge()
+    }
+    let pending: Awaited<ReturnType<typeof services.storage.receive>>
+    try {
+      pending = await services.storage.receive(body, { maxBytes: ATTACHMENT_MAX_BYTES })
+    } catch (error) {
+      body.resume()
+      if (error instanceof TooLargeError) throw tooLarge()
+      throw error
+    }
+    try {
+      if (pending.head.subarray(0, 5).toString('latin1') !== '%PDF-') {
+        throw new HttpError(415, 'Als Anhang sind nur PDF-Dateien erlaubt.')
+      }
+      const upload = pending
+      const name = query.name.toLowerCase().endsWith('.pdf') ? query.name : `${query.name}.pdf`
+      const file = await inTenant(services, auth, async (tx) => {
+        const [existing] = await tx<{ id: string; kind: string }[]>`
+          select id, kind from tenant_asset where sha256 = ${upload.sha256}`
+        if (existing && existing.kind !== 'attachment') {
+          throw new HttpError(409, 'Diese Datei kann nicht als Anhang verwendet werden.')
+        }
+        let id = existing?.id
+        if (!id) {
+          const [ids] = await tx<{ id: string }[]>`select uuid_v7() as id`
+          id = (ids as { id: string }).id
+          const key = `${auth.tenantId}/assets/${id}`
+          await tx`
+            insert into tenant_asset (id, tenant_id, kind, name, storage_key, sha256, mime_type, size_bytes, created_by)
+            values (${id}, ${auth.tenantId}, 'attachment', ${name}, ${key}, ${upload.sha256},
+                    'application/pdf', ${upload.sizeBytes}, ${auth.userId})`
+          await upload.commit(key)
+        }
+        return (await attachmentFiles(tx)).find((f) => f.id === id) as AttachmentFile
+      })
+      return reply.status(201).send(file)
+    } finally {
+      await pending.discard()
+    }
+  })
+
+  // ---- Feiertage ----
+
+  const holidayList = async (tx: Tx, year: number): Promise<HolidayList> => {
+    const [tenant] = await tx<{ state: string | null }[]>`
+      select federal_state as state from tenant where id = current_tenant_id()`
+    const state = isFederalState(tenant?.state) ? tenant.state : null
+    const own = await tx<{ id: string; date: string; name: string }[]>`
+      select id, to_char(day, 'YYYY-MM-DD') as date, name from holiday
+      where day between make_date(${year}, 1, 1) and make_date(${year}, 12, 31)`
+    const statutory = state ? publicHolidays(year, state) : []
+    return {
+      year,
+      federalState: state,
+      holidays: [
+        ...statutory.map((h) => ({ id: null, date: h.date, name: h.name, custom: false })),
+        ...own.map((h) => ({ ...h, custom: true })),
+      ].sort((a, b) => a.date.localeCompare(b.date) || Number(a.custom) - Number(b.custom)),
+    }
+  }
+
+  app.get('/api/v1/settings/holidays', async (request): Promise<HolidayList> => {
+    const auth = requireAuth(request)
+    const { year } = parse(holidayQuery, request.query)
+    return inTenant(services, auth, (tx) => holidayList(tx, year))
+  })
+
+  app.post('/api/v1/settings/holidays', async (request, reply) => {
+    const auth = requirePermission(request, 'settings.write')
+    const input = parse(holidayRequest, request.body)
+    const year = Number(input.date.slice(0, 4))
+    if (year < 1995 || year > 2199) throw invalid({ date: 'Jahr zwischen 1995 und 2199.' })
+    const list = await inTenant(services, auth, async (tx) => {
+      await tx`
+        insert into holiday (tenant_id, day, name, is_custom)
+        values (${auth.tenantId}, ${input.date}, ${input.name}, true)`.catch(
+        (error: { code?: string }) => {
+          if (error.code === '23505') {
+            throw invalid({ date: 'Für diesen Tag gibt es schon einen eigenen Eintrag.' })
+          }
+          throw error
+        },
+      )
+      return holidayList(tx, year)
+    })
+    return reply.status(201).send(list)
+  })
+
+  // Own holidays are no tax-relevant data; removing one is allowed.
+  app.delete('/api/v1/settings/holidays/:id', async (request, reply) => {
+    const auth = requirePermission(request, 'settings.write')
+    const { id } = parse(settingsIdParam, request.params)
+    await inTenant(services, auth, async (tx) => {
+      const deleted = await tx`delete from holiday where id = ${id}`
+      if (!deleted.count) throw notFound('Der Feiertag')
+    })
+    return reply.status(204).send()
+  })
+
+  // ---- Hinweisleiste ----
+
+  app.get('/api/v1/notices', async (request): Promise<CompanyNoticeEntry[]> => {
+    const auth = requireAuth(request)
+    return inTenant(services, auth, async (tx) => {
+      const [company] = await tx<
+        {
+          name: string
+          street: string | null
+          postalCode: string | null
+          city: string | null
+          taxNumber: string | null
+          vatId: string | null
+          hasIban: boolean
+          email: string | null
+          federalState: string | null
+        }[]
+      >`
+        select name, street, postal_code as "postalCode", city, tax_number as "taxNumber", vat_id as "vatId",
+               iban_enc is not null as "hasIban", email, federal_state as "federalState"
+        from tenant where id = current_tenant_id()`
+      const [user] = await tx<{ verified: boolean }[]>`
+        select email_verified_at is not null as verified from app_user where id = ${auth.userId}`
+      if (!company) return []
+      const { hasIban, ...rest } = company
+      return companyNotices({
+        company: { ...rest, iban: hasIban ? 'set' : null },
+        canManageCompany: auth.permissions.has('tenant.manage'),
+        emailVerified: services.config.SMTP_ENABLED ? (user?.verified ?? false) : null,
+      })
+    })
+  })
+}

@@ -1128,6 +1128,68 @@ test('Konto: Passwort vergessen und Passwort-Link der Administration', async ({ 
   await expect(page.getByText('nicht bestätigt')).toBeVisible()
 })
 
+test('Einstellungen: Hinweisleiste, Feiertage, Lohnkostenanteil, Dateinamen und Anhänge', async () => {
+  test.skip(!SETUP_TOKEN, 'SETUP_TOKEN must be set for a fresh stack')
+  // Hinweisleiste: only the federal state is still missing; „Beheben“ opens the company settings
+  await page.getByRole('button', { name: 'Projekte' }).click()
+  const notices = page.getByRole('region', { name: 'Hinweise' })
+  await expect(notices).toContainText('Bundesland fehlt')
+  await expectNoHorizontalScroll(page)
+  await notices.getByRole('link', { name: 'Beheben' }).click()
+  await expect(page.locator('#settings-section')).toHaveValue('company')
+  await page.getByLabel('Bundesland').selectOption({ label: 'Niedersachsen' })
+  await page.getByRole('button', { name: 'Speichern' }).click()
+  await expect(page.getByText('Gespeichert.')).toBeVisible()
+  await page.getByRole('button', { name: 'Projekte' }).click()
+  await expect(page.getByRole('region', { name: 'Hinweise' })).toHaveCount(0)
+
+  // Feiertage: computed for Niedersachsen, plus an own day
+  await page.getByRole('button', { name: 'Einstellungen' }).click()
+  await page.locator('#settings-section').selectOption({ label: 'Feiertage' })
+  await expect(
+    page.getByRole('heading', { name: 'Gesetzliche Feiertage in Niedersachsen' }),
+  ).toBeVisible()
+  const days = page.getByRole('listitem')
+  await expect(days.filter({ hasText: 'Reformationstag' })).toBeVisible()
+  // Not statutory in Niedersachsen (the hint text mentions it as a local holiday elsewhere)
+  await expect(days.filter({ hasText: 'Fronleichnam' })).toHaveCount(0)
+  await page.getByLabel('Datum').fill(`${new Date().getFullYear()}-12-24`)
+  await page.getByLabel('Bezeichnung').fill('Betriebsruhe')
+  await page.getByRole('button', { name: 'Eigenen Tag hinzufügen' }).click()
+  await expect(page.getByText(/Betriebsruhe · eigener Eintrag/)).toBeVisible()
+  await expectNoHorizontalScroll(page)
+
+  // Dokumente: § 35a also for organizations, file names, AGB as automatic attachment of quotes
+  await page.locator('#settings-section').selectOption({ label: 'Dokumente' })
+  await expect(
+    page.getByRole('heading', { name: 'Lohnkostenanteil ausweisen (§ 35a EStG)' }),
+  ).toBeVisible()
+  await page
+    .getByRole('group', { name: 'Rechnungen', exact: true })
+    .getByLabel('an Organisationen')
+    .check()
+  await page.getByLabel('Muster für PDF-Dateien und E-Mail-Anhänge').fill('{Typ}_{Nummer}_{Kunde}')
+  await page.getByLabel('Bezeichnung (wird Dateiname)').fill('AGB Muster Bau')
+  await page.getByLabel('PDF hochladen').setInputFiles({
+    name: 'agb.pdf',
+    mimeType: 'application/pdf',
+    buffer: Buffer.from('%PDF-1.7\n1 0 obj<<>>endobj\ntrailer<<>>\n%%EOF\n'),
+  })
+  await expect(page.getByText('AGB Muster Bau.pdf')).toBeVisible()
+  await page
+    .getByRole('group', { name: 'Anhängen an' })
+    .getByLabel('Angebot', { exact: true })
+    .check()
+  await page.getByRole('button', { name: 'Speichern' }).click()
+  await expect(page.getByText('Gespeichert.')).toBeVisible()
+  await expect(page.getByText('Beispiel: Rechnung_R2026-00101_Mustermann,_Max.pdf')).toBeVisible()
+  await expectNoHorizontalScroll(page)
+  // back to the default, so later steps see the usual file names
+  await page.getByRole('button', { name: 'Standard' }).click()
+  await page.getByRole('button', { name: 'Speichern' }).click()
+  await expect(page.getByText('Beispiel: Rechnung_R2026-00101.pdf')).toBeVisible()
+})
+
 test('Briefpapier: WYSIWYG-Editor nach DIN 5008 B und Druckansicht', async () => {
   test.skip(!SETUP_TOKEN, 'SETUP_TOKEN must be set for a fresh stack')
   test.setTimeout(120_000)

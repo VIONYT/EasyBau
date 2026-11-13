@@ -4,9 +4,11 @@ import type {
   BusinessArea,
   Company,
   DatevSettings,
+  DocumentSettings,
   DunningLevel,
   DunningSettings,
   EmailTemplateSettings,
+  HolidayList,
   Me,
   NumberSequence,
   PaymentTerm,
@@ -17,9 +19,9 @@ import type {
   WageGroup,
   WorkingDay,
 } from '@opc/schemas'
-import { COST_KINDS, DOCUMENT_TYPES } from '@opc/schemas/constants'
+import { COST_KINDS, DOCUMENT_TYPES, FEDERAL_STATES } from '@opc/schemas/constants'
 import { type ReactNode, useCallback, useEffect, useId, useRef, useState } from 'react'
-import { ApiError, api } from '../api'
+import { ApiError, api, uploadFile } from '../api'
 import { formatCents, formatInputNumber, parseEuro } from '../format'
 import { FormError } from '../forms'
 import { type TextKey, t, tf } from '../i18n'
@@ -36,6 +38,8 @@ type Section =
   | 'units'
   | 'workingHours'
   | 'texts'
+  | 'documents'
+  | 'holidays'
   | 'letterhead'
   | 'filing'
   | 'datev'
@@ -53,7 +57,9 @@ const SECTIONS: { key: Section; label: TextKey }[] = [
   { key: 'wageGroups', label: 's.wageGroups' },
   { key: 'units', label: 's.units' },
   { key: 'workingHours', label: 's.workingHours' },
+  { key: 'holidays', label: 's.holidays' },
   { key: 'texts', label: 's.texts' },
+  { key: 'documents', label: 's.documents' },
   { key: 'letterhead', label: 'lh.title' },
   { key: 'filing', label: 's.filing' },
   { key: 'datev', label: 's.datev' },
@@ -64,8 +70,10 @@ const SECTIONS: { key: Section; label: TextKey }[] = [
 ]
 
 /** Einstellungen (DESIGN.md §7.4): company, numbering, prices, units, texts, exports, operation. */
-export function Settings({ me }: { me: Me }) {
-  const [section, setSection] = useState<Section>('company')
+export function Settings({ me, initial }: { me: Me; initial?: string | undefined }) {
+  const [section, setSection] = useState<Section>(
+    SECTIONS.find((s) => s.key === initial)?.key ?? 'company',
+  )
   const canWrite = me.permissions.includes('settings.write')
   return (
     <section aria-labelledby="settings-title">
@@ -101,6 +109,8 @@ export function Settings({ me }: { me: Me }) {
         {section === 'units' ? <UnitSettings /> : null}
         {section === 'workingHours' ? <WorkingHourSettings /> : null}
         {section === 'texts' ? <TextSettings /> : null}
+        {section === 'documents' ? <DocumentDefaultsForm /> : null}
+        {section === 'holidays' ? <HolidaySettings canWrite={canWrite} /> : null}
         {section === 'letterhead' ? <LetterheadEditor canEdit={canWrite} /> : null}
         {section === 'filing' ? <FilingSettings /> : null}
         {section === 'datev' ? <DatevSettingsForm /> : null}
@@ -250,21 +260,28 @@ function CompanySettings({ canEdit }: { canEdit: boolean }) {
   const save = useSave()
   if (error) return <FormError>{error}</FormError>
   if (!data) return <p className="muted">{t('common.loading')}</p>
-  const field = (key: keyof Company) => (
-    <Input
-      key={key}
-      label={t(COMPANY_FIELDS.find((f) => f.key === key)?.label as TextKey)}
-      value={(data[key] as string | null) ?? ''}
-      onChange={(v) => setData({ ...data, [key]: v })}
-      {...(key === 'iban' ? { hint: t('s.c.ibanHint') } : {})}
-    />
-  )
+  const field = (key: keyof Company) =>
+    key === 'federalState' ? (
+      <FederalStateSelect
+        key={key}
+        value={data.federalState}
+        onChange={(federalState) => setData({ ...data, federalState })}
+      />
+    ) : (
+      <Input
+        key={key}
+        label={t(COMPANY_FIELDS.find((f) => f.key === key)?.label as TextKey)}
+        value={(data[key] as string | null) ?? ''}
+        onChange={(v) => setData({ ...data, [key]: v })}
+        {...(key === 'iban' ? { hint: t('s.c.ibanHint') } : {})}
+      />
+    )
   const submit = () =>
     save.run(async () => {
       const body = Object.fromEntries(
         COMPANY_FIELDS.map(({ key }) => [
           key,
-          key === 'name' || key === 'countryCode'
+          key === 'name' || key === 'countryCode' || key === 'federalState'
             ? data[key]
             : (nullable(String(data[key] ?? '')) ??
               (key === 'email' || key === 'iban' ? '' : null)),
@@ -1587,3 +1604,308 @@ function BaseRateSettings() {
 }
 
 const formatDate = (iso: string) => iso.split('-').reverse().join('.')
+
+function FederalStateSelect({
+  value,
+  onChange,
+}: {
+  value: Company['federalState']
+  onChange: (value: Company['federalState']) => void
+}) {
+  const id = useId()
+  return (
+    <div className="field">
+      <label htmlFor={id}>{t('s.c.federalState')}</label>
+      <select
+        id={id}
+        className="select"
+        value={value ?? ''}
+        onChange={(e) => onChange((e.target.value || null) as Company['federalState'])}
+      >
+        <option value="">{t('s.c.federalStateNone')}</option>
+        {FEDERAL_STATES.map((code) => (
+          <option key={code} value={code}>
+            {t(`fs.${code}` as TextKey)}
+          </option>
+        ))}
+      </select>
+      <p className="hint">{t('s.c.federalStateHint')}</p>
+    </div>
+  )
+}
+
+// ---- Dokumente (P2.11): § 35a, Abschläge, Dateinamen, automatische Anhänge -------------------
+
+const typeLabel = (type: string) =>
+  t((type === 'invoice' ? 'doc.invoice.standard' : `doc.type.${type}`) as TextKey)
+
+function DocumentDefaultsForm() {
+  const { data, setData, error } = useResource<DocumentSettings>('/api/v1/settings/documents')
+  const save = useSave()
+  const upload = useSave()
+  const [name, setName] = useState('')
+  const fileRef = useRef<HTMLInputElement>(null)
+  if (error) return <FormError>{error}</FormError>
+  if (!data) return <p className="muted">{t('common.loading')}</p>
+  const store = () =>
+    save.run(async () =>
+      setData(
+        await api<DocumentSettings>('PUT', '/api/v1/settings/documents', {
+          laborShare: data.laborShare,
+          progressBillingMode: data.progressBillingMode,
+          fileNamePattern: data.fileNamePattern,
+          attachments: data.attachments,
+        }),
+      ),
+    )
+  const matrix = (row: 'invoice' | 'offer', column: 'person' | 'organization') => (
+    <Check
+      label={t(column === 'person' ? 'sd.persons' : 'sd.organizations')}
+      checked={data.laborShare[row][column]}
+      onChange={(v) =>
+        setData({
+          ...data,
+          laborShare: { ...data.laborShare, [row]: { ...data.laborShare[row], [column]: v } },
+        })
+      }
+    />
+  )
+  const toggleAttachment = (type: string, fileId: string, on: boolean) => {
+    const current = data.attachments[type as keyof typeof data.attachments] ?? []
+    setData({
+      ...data,
+      attachments: {
+        ...data.attachments,
+        [type]: on ? [...current, fileId] : current.filter((id) => id !== fileId),
+      },
+    })
+  }
+  const send = (file: File) =>
+    upload.run(async () => {
+      const label = name.trim() || file.name
+      await uploadFile(`/api/v1/settings/attachments?name=${encodeURIComponent(label)}`, file)
+      setName('')
+      if (fileRef.current) fileRef.current.value = ''
+      setData({
+        ...(await api<DocumentSettings>('GET', '/api/v1/settings/documents')),
+        // keep unsaved changes of the form
+        laborShare: data.laborShare,
+        progressBillingMode: data.progressBillingMode,
+        fileNamePattern: data.fileNamePattern,
+        attachments: data.attachments,
+      })
+    })
+  const saveButton = (
+    <div className="button-row">
+      <button type="button" className="button primary auto" disabled={save.busy} onClick={store}>
+        {t('common.save')}
+      </button>
+      {save.message}
+    </div>
+  )
+  return (
+    <>
+      <Panel title={t('sd.laborShare')}>
+        <p className="hint">{t('sd.laborShareHint')}</p>
+        <fieldset className="plain">
+          <legend>{t('sd.invoices')}</legend>
+          {matrix('invoice', 'person')}
+          {matrix('invoice', 'organization')}
+        </fieldset>
+        <fieldset className="plain">
+          <legend>{t('sd.offers')}</legend>
+          {matrix('offer', 'person')}
+          {matrix('offer', 'organization')}
+        </fieldset>
+      </Panel>
+      <Panel title={t('sd.progress')}>
+        <fieldset className="plain">
+          <legend className="sr-only">{t('inv.mode')}</legend>
+          {(['cumulative', 'individual'] as const).map((mode) => (
+            <label key={mode} className="check">
+              <input
+                type="radio"
+                name="progressBillingMode"
+                checked={data.progressBillingMode === mode}
+                onChange={() => setData({ ...data, progressBillingMode: mode })}
+              />
+              {t(`inv.mode.${mode}`)}
+            </label>
+          ))}
+        </fieldset>
+        <p className="hint">{t('sd.progressHint')}</p>
+      </Panel>
+      <Panel title={t('sd.fileNames')}>
+        <Input
+          label={t('sd.pattern')}
+          value={data.fileNamePattern}
+          onChange={(fileNamePattern) => setData({ ...data, fileNamePattern })}
+          hint={tf('sd.patternHint', {
+            list: data.placeholders.map((p) => `{${p}}`).join(' '),
+            example: data.example,
+          })}
+        />
+        <button
+          type="button"
+          className="button ghost small"
+          onClick={() => setData({ ...data, fileNamePattern: data.defaultFileNamePattern })}
+        >
+          {t('sd.patternReset')}
+        </button>
+      </Panel>
+      <Panel title={t('sd.attachments')}>
+        <p className="hint">{t('sd.attachmentsHint')}</p>
+        {data.files.length === 0 ? <p className="muted">{t('sd.noFiles')}</p> : null}
+        <ul className="list">
+          {data.files.map((file) => (
+            <li key={file.id} className="list-row attachment-row">
+              <span>
+                <strong>{file.name}</strong>{' '}
+                <a href={`/api/v1/assets/${file.id}`} target="_blank" rel="noreferrer">
+                  {t('sd.view')}
+                </a>
+              </span>
+              <fieldset className="plain attachment-types">
+                <legend>{t('sd.attachTo')}</legend>
+                {DOCUMENT_TYPES.map((type) => (
+                  <Check
+                    key={type}
+                    label={typeLabel(type)}
+                    checked={(data.attachments[type] ?? []).includes(file.id)}
+                    onChange={(v) => toggleAttachment(type, file.id, v)}
+                  />
+                ))}
+              </fieldset>
+            </li>
+          ))}
+        </ul>
+        <div className="row">
+          <Input label={t('sd.uploadName')} value={name} onChange={setName} />
+          <div className="field">
+            <label htmlFor="attachment-upload">{t('sd.upload')}</label>
+            <input
+              id="attachment-upload"
+              ref={fileRef}
+              type="file"
+              accept="application/pdf,.pdf"
+              disabled={upload.busy}
+              onChange={(e) => {
+                const file = e.target.files?.[0]
+                if (file) void send(file)
+              }}
+            />
+          </div>
+        </div>
+        {upload.message}
+      </Panel>
+      {saveButton}
+    </>
+  )
+}
+
+// ---- Feiertage (P2.11) -------------------------------------------------------------------------
+
+function HolidaySettings({ canWrite }: { canWrite: boolean }) {
+  const [year, setYear] = useState(() => new Date().getFullYear())
+  const { data, setData, error } = useResource<HolidayList>(
+    `/api/v1/settings/holidays?year=${year}`,
+  )
+  const save = useSave()
+  const [draft, setDraft] = useState({ date: '', name: '' })
+  const yearId = useId()
+  if (error) return <FormError>{error}</FormError>
+  if (!data) return <p className="muted">{t('common.loading')}</p>
+  const reload = async () =>
+    setData(await api<HolidayList>('GET', `/api/v1/settings/holidays?year=${year}`))
+  return (
+    <Panel
+      title={
+        data.federalState
+          ? tf('hol.state', { state: t(`fs.${data.federalState}` as TextKey) })
+          : t('s.holidays')
+      }
+    >
+      <p className="hint">{t('hol.hint')}</p>
+      {data.federalState ? null : <p className="warning">{t('hol.noState')}</p>}
+      <div className="field narrow">
+        <label htmlFor={yearId}>{t('hol.year')}</label>
+        <select
+          id={yearId}
+          className="select"
+          value={year}
+          onChange={(e) => setYear(Number(e.target.value))}
+        >
+          {Array.from({ length: 5 }, (_, i) => new Date().getFullYear() - 1 + i).map((y) => (
+            <option key={y} value={y}>
+              {y}
+            </option>
+          ))}
+        </select>
+      </div>
+      <ul className="list">
+        {data.holidays.map((day) => (
+          <li key={`${day.date}-${day.id ?? day.name}`} className="list-row">
+            <span>
+              <strong className="tabular">
+                {new Date(`${day.date}T00:00:00`).toLocaleDateString('de-DE', {
+                  weekday: 'short',
+                  day: '2-digit',
+                  month: '2-digit',
+                  year: 'numeric',
+                })}
+              </strong>{' '}
+              {day.name}
+              {day.custom ? <span className="muted"> · {t('hol.own')}</span> : null}
+            </span>
+            {day.custom && day.id && canWrite ? (
+              <button
+                type="button"
+                className="button ghost small"
+                onClick={() => {
+                  if (!window.confirm(t('hol.removeConfirm'))) return
+                  void save.run(async () => {
+                    await api('DELETE', `/api/v1/settings/holidays/${day.id}`)
+                    await reload()
+                  })
+                }}
+              >
+                {t('hol.remove')}
+              </button>
+            ) : null}
+          </li>
+        ))}
+      </ul>
+      <h3>{t('hol.add')}</h3>
+      <div className="row">
+        <Input
+          label={t('hol.date')}
+          type="date"
+          value={draft.date}
+          onChange={(date) => setDraft({ ...draft, date })}
+        />
+        <Input
+          label={t('hol.name')}
+          value={draft.name}
+          onChange={(name) => setDraft({ ...draft, name })}
+        />
+      </div>
+      <div className="button-row">
+        <button
+          type="button"
+          className="button primary auto"
+          disabled={save.busy || !draft.date || !draft.name.trim()}
+          onClick={() =>
+            void save.run(async () => {
+              const list = await api<HolidayList>('POST', '/api/v1/settings/holidays', draft)
+              setDraft({ date: '', name: '' })
+              if (draft.date.startsWith(String(year))) setData(list)
+            })
+          }
+        >
+          {t('hol.add')}
+        </button>
+        {save.message}
+      </div>
+    </Panel>
+  )
+}

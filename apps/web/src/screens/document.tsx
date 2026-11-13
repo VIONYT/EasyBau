@@ -247,6 +247,11 @@ function HeaderForm({
           discountPercent: optional(data, 'discountPercent') ?? null,
           taxMode: value(data, 'taxMode'),
           contactId: value(data, 'contactId') || null,
+          // Another recipient: the server applies the default of the settings (§ 35a matrix).
+          ...(doc.type !== 'delivery_note' &&
+          (value(data, 'contactId') || null) === (doc.contact?.id ?? null)
+            ? { showLaborShare: data.get('showLaborShare') === 'on' }
+            : {}),
           ...(offer ? { validUntil: optional(data, 'validUntil') ?? null } : {}),
           ...(billed
             ? {
@@ -410,6 +415,26 @@ function HeaderForm({
           />
           <TextArea label={t('doc.intro')} name="introText" defaultValue={doc.introText} />
           <TextArea label={t('doc.closing')} name="closingText" defaultValue={doc.closingText} />
+          {doc.type !== 'delivery_note' ? (
+            <>
+              <label className="check">
+                <input
+                  type="checkbox"
+                  name="showLaborShare"
+                  defaultChecked={doc.showLaborShare}
+                  key={String(doc.showLaborShare)}
+                />
+                {t('doc.laborShare')}
+              </label>
+              {doc.showLaborShare ? (
+                <p className="hint">
+                  {doc.totals.laborShare.grossCents
+                    ? `${t('doc.laborShareAmount')}: ${formatCents(doc.totals.laborShare.grossCents)}`
+                    : t('doc.laborShareNone')}
+                </p>
+              ) : null}
+            </>
+          ) : null}
           {editable ? (
             <div className="button-row">
               <button type="submit" className="button primary auto" disabled={form.busy}>

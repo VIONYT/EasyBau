@@ -26,6 +26,7 @@ import { registerContactCsvRoutes } from './routes/contact-csv.js'
 import { registerContactRoutes } from './routes/contacts.js'
 import { registerDashboardRoutes } from './routes/dashboard.js'
 import { registerDocumentEmailRoutes } from './routes/document-email.js'
+import { registerDocumentSettingsRoutes } from './routes/document-settings.js'
 import { registerDocumentRoutes } from './routes/documents.js'
 import { registerDunningRoutes } from './routes/dunning.js'
 import { registerEmailRoutes } from './routes/email.js'
@@ -241,6 +242,7 @@ export function buildApi({
   registerReceivableRoutes(app, services)
   registerDunningRoutes(app, services)
   registerDocumentEmailRoutes(app, services)
+  registerDocumentSettingsRoutes(app, services)
   registerIncomingInvoiceRoutes(app, services)
   registerAuditRoutes(app, services)
   registerSignatureRoutes(app, services)

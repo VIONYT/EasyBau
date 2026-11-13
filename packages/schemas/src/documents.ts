@@ -121,6 +121,8 @@ export const updateDocumentRequest = z
     retentionPercent: percent('Sicherheitseinbehalt').nullable(),
     constructionLevyPercent: percent('Bauumlage').nullable(),
     progressBillingMode: z.enum(['cumulative', 'individual']),
+    /** Lohnkostenanteil nach § 35a EStG ausweisen. */
+    showLaborShare: z.boolean(),
   })
   .partial()
   .superRefine((value, ctx) => {
@@ -379,6 +381,8 @@ export interface DocumentTotals {
   laborHours: string
   /** Counted positions without calculation (price entered directly). */
   uncalculatedCount: number
+  /** Lohnkostenanteil (§ 35a EStG) of the counted positions with calculation. */
+  laborShare: { netCents: number; grossCents: number }
 }
 
 /** Structured address for the e-invoice (EN 16931 BG-5 / BG-8). */
@@ -458,6 +462,8 @@ export interface DocumentDetail extends DocumentSummary {
   retentionPercent: string | null
   constructionLevyPercent: string | null
   progressBillingMode: 'cumulative' | 'individual' | null
+  /** Lohnkostenanteil nach § 35a EStG ausweisen (default from Einstellungen › Dokumente). */
+  showLaborShare: boolean
   /** Fälligkeit: document date + payment term (set when finalized). */
   dueDate: string | null
   cancelReason: string | null

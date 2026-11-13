@@ -10,6 +10,7 @@ import {
   invoiceLegalNotes,
   isCumulativeInvoice,
   type LegalNotesInput,
+  laborShareNote,
   negateQuantity,
 } from './billing.js'
 import { calculateDocumentTotals } from './document.js'
@@ -317,5 +318,33 @@ describe('Pflichthinweise', () => {
     ).toEqual([
       'Diese Stornorechnung hebt die Rechnung R-00101 vollständig auf. Grund: Falscher Empfänger',
     ])
+  })
+})
+
+describe('Lohnkostenanteil § 35a EStG', () => {
+  it('prints the labor costs including VAT and net, not on cancellations', () => {
+    expect(laborShareNote(null)).toBeNull()
+    expect(laborShareNote({ netCents: 0n, grossCents: 0n })).toBeNull()
+    expect(laborShareNote({ netCents: 100_000n, grossCents: 119_000n })).toBe(
+      'Im Betrag enthaltene Arbeitskosten (Lohn-, Maschinen- und Fahrtkosten) nach § 35a EStG: 1.190,00 € inkl. USt (netto 1.000,00 €).',
+    )
+    expect(laborShareNote({ netCents: 50_000n, grossCents: 50_000n })).toBe(
+      'Im Betrag enthaltene Arbeitskosten (Lohn-, Maschinen- und Fahrtkosten) nach § 35a EStG: 500,00 €.',
+    )
+    const base = {
+      kind: 'standard' as const,
+      taxMode: 'standard' as const,
+      recipientIsPrivate: true,
+      documentDate: '2026-11-09',
+      paymentDueDays: null,
+      cashDiscount: null,
+      progressNo: null,
+      cancels: null,
+      laborShare: { netCents: 100n, grossCents: 119n },
+    }
+    expect(invoiceLegalNotes(base)[0]).toMatch(/§ 35a EStG: 1,19 €/)
+    expect(
+      invoiceLegalNotes({ ...base, kind: 'cancellation', cancels: { number: 'R1', reason: 'x' } }),
+    ).toHaveLength(1)
   })
 })

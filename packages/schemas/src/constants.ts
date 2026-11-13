@@ -131,3 +131,34 @@ export const INCOMING_SOURCES = [
 export const COST_TYPES = ['material', 'labor', 'equipment', 'subcontract', 'other'] as const
 /** Received invoices: PDF (also ZUGFeRD), XRechnung XML, photos/scans. */
 export const INCOMING_UPLOAD_EXTENSIONS = ['pdf', 'xml', 'jpg', 'jpeg', 'png'] as const
+
+/** Bundesländer (ISO 3166-2:DE suffix); they select the statutory holidays. */
+export const FEDERAL_STATES = [
+  'BW',
+  'BY',
+  'BE',
+  'BB',
+  'HB',
+  'HH',
+  'HE',
+  'MV',
+  'NI',
+  'NW',
+  'RP',
+  'SL',
+  'SN',
+  'ST',
+  'SH',
+  'TH',
+] as const
+export type FederalStateCode = (typeof FEDERAL_STATES)[number]
+
+/** Placeholders of the Dateinamen-Muster (packages/domain file-names.ts). */
+export const FILE_NAME_PLACEHOLDERS = [
+  'Typ',
+  'Nummer',
+  'Kunde',
+  'Projekt',
+  'Datum',
+  'Jahr',
+] as const

@@ -8,6 +8,7 @@ import {
   type InvoiceKind,
   invoiceLegalNotes,
   isCumulativeInvoice,
+  laborShareNote,
   type ProgressBillingMode,
   type TaxCategory,
   type TaxMode,
@@ -366,8 +367,19 @@ export async function invoiceFinalizeCheck(
 // ---- Pflichthinweise ---------------------------------------------------------------------------------
 
 export function legalNotesOf(detail: DocumentDetail): string[] {
-  if (detail.type !== 'invoice' && detail.type !== 'credit_note') return []
+  const laborShare =
+    detail.showLaborShare && detail.type !== 'delivery_note'
+      ? {
+          netCents: BigInt(detail.totals.laborShare.netCents),
+          grossCents: BigInt(detail.totals.laborShare.grossCents),
+        }
+      : null
+  if (detail.type !== 'invoice' && detail.type !== 'credit_note') {
+    const note = laborShareNote(laborShare)
+    return note ? [note] : []
+  }
   return invoiceLegalNotes({
+    laborShare,
     kind: (detail.invoiceKind ?? 'standard') as InvoiceKind,
     taxMode: detail.taxMode as TaxMode,
     recipientIsPrivate: detail.recipient?.private ?? false,

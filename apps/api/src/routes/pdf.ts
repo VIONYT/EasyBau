@@ -4,7 +4,6 @@ import type { LetterheadValues } from '@opc/domain'
 import { addFacturXMetadata } from '@opc/einvoice'
 import {
   documentLetter,
-  documentTitle,
   isUsableImage,
   type LogoPosition,
   renderLetterPdf,
@@ -24,6 +23,7 @@ import {
   type Services,
 } from '../context.js'
 import { notFound, parse } from '../http.js'
+import { documentFileName } from './document-settings.js'
 import { liveIssuer, liveRecipient, loadDocument } from './documents.js'
 import { loadSheet } from './measurements.js'
 import { loadReport } from './reports.js'
@@ -202,7 +202,7 @@ export async function documentPdf(
   return inTenant(services, auth, async (tx) => {
     const doc = await loadDocument(tx, auth, id)
     if (!doc) return null
-    const filename = `${documentTitle(doc)}${doc.number ? `_${doc.number}` : '_Entwurf'}.pdf`
+    const filename = await documentFileName(tx, doc)
     if (!doc.finalizedAt) {
       return { data: await render(tx, services, doc, 'ENTWURF'), filename }
     }

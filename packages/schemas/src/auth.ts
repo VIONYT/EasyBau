@@ -1,5 +1,6 @@
 import { z } from 'zod'
 import { countryCode, email, id, optionalText, text } from './common.js'
+import { FEDERAL_STATES } from './constants.js'
 
 /** Password policy: length beats complexity rules (NIST SP 800-63B). */
 export const password = z
@@ -84,7 +85,7 @@ export const setupRequest = z.object({
     postalCode: optionalText(20),
     city: optionalText(100),
     countryCode: countryCode.default('DE'),
-    federalState: optionalText(50),
+    federalState: z.enum(FEDERAL_STATES, 'Unbekanntes Bundesland.').nullish(),
     email: email.optional(),
     phone: optionalText(50),
   }),
