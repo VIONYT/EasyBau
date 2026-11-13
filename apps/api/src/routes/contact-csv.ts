@@ -84,11 +84,14 @@ function countryOf(value: string): string {
 function requestOf(get: (column: (typeof CONTACT_CSV_COLUMNS)[number]) => string) {
   const organizationName = get('Firma')
   const typ = get('Typ').toLowerCase()
+  const named = Boolean(get('Vorname') || get('Nachname'))
+  // Without Typ: Firma + Vor-/Nachname is a person of that company (the import asks whether to
+  // create the organization and link the person as Ansprechpartner); Firma alone an organization.
   const kind = typ.startsWith('p')
     ? 'person'
     : typ.startsWith('o') || typ.startsWith('f')
       ? 'organization'
-      : organizationName
+      : organizationName && !named
         ? 'organization'
         : 'person'
   const channels = [
@@ -101,6 +104,7 @@ function requestOf(get: (column: (typeof CONTACT_CSV_COLUMNS)[number]) => string
   return {
     kind,
     organizationName: kind === 'organization' ? empty(organizationName) : null,
+    company: kind === 'person' ? empty(organizationName) : null,
     salutation: empty(get('Anrede')),
     title: empty(get('Titel')),
     firstName: empty(get('Vorname')),
@@ -138,7 +142,12 @@ const validEmail = (value: string) => !value || z.email().safeParse(value).succe
 async function importContacts(
   tx: Tx,
   auth: { tenantId: string; userId: string },
-  input: { csv: string; dryRun: boolean; assignCustomerNumbers: boolean },
+  input: {
+    csv: string
+    dryRun: boolean
+    assignCustomerNumbers: boolean
+    createOrganizations: boolean
+  },
 ): Promise<ContactImportResult> {
   const [header, ...lines] = parseCsv(input.csv)
   if (!header) throw new HttpError(400, 'Die Datei ist leer.', { csv: 'Keine Zeilen gefunden.' })
@@ -160,6 +169,17 @@ async function importContacts(
            where a.contact_id = c.id and a.kind = 'main' limit 1), '') as key
     from contact c`
   const numbers = new Set(existing.map((e) => e.number).filter(Boolean))
+  // Organizations by name (lower case) → id; filled with the ones created by this import.
+  const organizations = new Map(
+    (
+      await tx<{ id: string; name: string }[]>`
+        select id, lower(display_name) as name from contact where kind = 'organization'`
+    ).map((o) => [o.name, o.id as string | null]),
+  )
+  const drawNumber = async (given: string | null) =>
+    given || !input.assignCustomerNumbers
+      ? given
+      : ((await tx<{ n: string }[]>`select next_number('contact') as n`)[0]?.n ?? null)
   const keys = new Set(existing.map((e) => e.key))
   const rows: ContactImportRow[] = []
   for (const [index, line] of lines.entries()) {
@@ -167,8 +187,17 @@ async function importContacts(
       (line[columns.indexOf(column)] ?? '').trim()
     const raw = requestOf(get)
     const name = displayNameOf(raw) || '–'
+    const company = raw.company
+    const known = company ? organizations.has(company.toLowerCase()) : false
     const row = (action: ContactImportRow['action'], message: string | null) =>
-      rows.push({ line: index + 2, name, action, message })
+      rows.push({
+        line: index + 2,
+        name,
+        action,
+        message,
+        organization: action === 'create' ? company : null,
+        organizationAction: action === 'create' && company ? (known ? 'link' : 'create') : null,
+      })
     if (!validEmail(get('E-Mail'))) {
       row('error', `Ungültige E-Mail-Adresse „${get('E-Mail')}“.`)
       continue
@@ -177,7 +206,8 @@ async function importContacts(
       row('error', `Unbekannter Steuerfall „${get('Steuerfall')}“.`)
       continue
     }
-    const parsed = createContactRequest.safeParse({ ...raw, assignCustomerNumber: false })
+    const { company: _, ...fields } = raw
+    const parsed = createContactRequest.safeParse({ ...fields, assignCustomerNumber: false })
     if (!parsed.success) {
       const issue = parsed.error.issues[0]
       row('error', `${issue?.path.join('.') || 'Zeile'}: ${issue?.message ?? 'ungültig'}`)
@@ -196,11 +226,30 @@ async function importContacts(
     if (number) numbers.add(number)
     keys.add(key)
     if (!input.dryRun) {
-      const [drawn] =
-        number || !input.assignCustomerNumbers
-          ? [{ n: number }]
-          : await tx<{ n: string }[]>`select next_number('contact') as n`
-      await insertContact(tx, auth, parsed.data, drawn?.n ?? null)
+      const contactId = await insertContact(tx, auth, parsed.data, await drawNumber(number))
+      if (company && input.createOrganizations) {
+        let organizationId = organizations.get(company.toLowerCase()) ?? null
+        if (!organizationId) {
+          // New organization with the address of the row; the person becomes its Ansprechpartner.
+          organizationId = await insertContact(
+            tx,
+            auth,
+            createContactRequest.parse({
+              kind: 'organization',
+              organizationName: company,
+              addresses: parsed.data.addresses,
+            }),
+            await drawNumber(null),
+          )
+          organizations.set(company.toLowerCase(), organizationId)
+        }
+        await tx`insert into contact_link (tenant_id, person_id, organization_id)
+                 values (${auth.tenantId}, ${contactId}, ${organizationId})
+                 on conflict (person_id, organization_id) do nothing`
+      }
+    } else if (company && !known) {
+      // Preview: the same company in later rows is linked, not created twice.
+      organizations.set(company.toLowerCase(), null)
     }
     row('create', number ? `Kundennummer ${number}` : null)
   }
@@ -209,6 +258,7 @@ async function importContacts(
     created: rows.filter((r) => r.action === 'create').length,
     skipped: rows.filter((r) => r.action === 'skip').length,
     errors: rows.filter((r) => r.action === 'error').length,
+    withOrganization: rows.filter((r) => r.organization).length,
     rows,
   }
 }

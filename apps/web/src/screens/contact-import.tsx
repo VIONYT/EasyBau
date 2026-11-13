@@ -19,6 +19,7 @@ export function ContactImport({
   const [text, setText] = useState<string | null>(null)
   const [filename, setFilename] = useState('')
   const [numbers, setNumbers] = useState(true)
+  const [organizations, setOrganizations] = useState(false)
   const [result, setResult] = useState<ContactImportResult | null>(null)
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -32,6 +33,7 @@ export function ContactImport({
         csv: text,
         dryRun,
         assignCustomerNumbers: numbers,
+        createOrganizations: organizations,
       })
       setResult(res)
       if (!dryRun) onImported()
@@ -83,6 +85,22 @@ export function ContactImport({
         >
           {t('contacts.import.preview')}
         </button>
+        {result?.dryRun && result.withOrganization ? (
+          <fieldset className="panel import-question">
+            <legend>
+              {tf('contacts.import.orgQuestion', { count: String(result.withOrganization) })}
+            </legend>
+            <p className="hint">{t('contacts.import.orgHint')}</p>
+            <label className="check">
+              <input
+                type="checkbox"
+                checked={organizations}
+                onChange={(e) => setOrganizations(e.target.checked)}
+              />
+              <span>{t('contacts.import.orgCreate')}</span>
+            </label>
+          </fieldset>
+        ) : null}
         {result?.dryRun && result.created ? (
           <button
             type="button"
@@ -106,13 +124,23 @@ export function ContactImport({
           </p>
           <ul className="list plain import-rows">
             {result.rows
-              .filter((r) => r.action !== 'create' || r.message)
+              .filter((r) => r.action !== 'create' || r.message || r.organization)
               .slice(0, 200)
               .map((r) => (
                 <li key={r.line} className={`import-${r.action}`}>
                   {tf('contacts.import.line', { line: String(r.line) })} · <strong>{r.name}</strong>{' '}
                   · {t(`contacts.import.action.${r.action}` as TextKey)}
                   {r.message ? ` – ${r.message}` : ''}
+                  {r.organization
+                    ? ` – ${tf(
+                        organizations
+                          ? r.organizationAction === 'link'
+                            ? 'contacts.import.orgLink'
+                            : 'contacts.import.orgNew'
+                          : 'contacts.import.orgOnly',
+                        { name: r.organization },
+                      )}`
+                    : ''}
                 </li>
               ))}
           </ul>

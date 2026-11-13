@@ -201,6 +201,13 @@ const de = {
   'contacts.import.summaryDone':
     '{file}: {created} importiert, {skipped} übersprungen, {errors} fehlerhaft.',
   'contacts.import.line': 'Zeile {line}',
+  'contacts.import.orgQuestion': '{count} Person(en) mit Firma gefunden',
+  'contacts.import.orgHint':
+    'Diese Zeilen haben Vor-/Nachname und Firma. Sie werden als Personen angelegt. Auf Wunsch wird die Firma als Organisation angelegt (oder eine vorhandene gleichen Namens verwendet) und die Person als Ansprechpartner verknüpft.',
+  'contacts.import.orgCreate': 'Organisationen anlegen und Personen als Ansprechpartner verknüpfen',
+  'contacts.import.orgNew': 'Organisation „{name}“ wird angelegt und verknüpft',
+  'contacts.import.orgLink': 'mit vorhandener Organisation „{name}“ verknüpft',
+  'contacts.import.orgOnly': 'Firma „{name}“ (ohne Organisation)',
   'contacts.import.action.create': 'neu',
   'contacts.import.action.skip': 'übersprungen',
   'contacts.import.action.error': 'Fehler',

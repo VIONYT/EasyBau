@@ -128,6 +128,11 @@ export const importContactsRequest = z.object({
   dryRun: z.boolean().default(true),
   /** Draw a Kundennummer for rows without one. */
   assignCustomerNumbers: z.boolean().default(true),
+  /**
+   * Persons with Firma: create the organization (if it does not exist) and link the person as
+   * Ansprechpartner. Off by default – the preview asks.
+   */
+  createOrganizations: z.boolean().default(false),
 })
 
 export interface ContactImportRow {
@@ -136,6 +141,9 @@ export interface ContactImportRow {
   name: string
   action: 'create' | 'skip' | 'error'
   message: string | null
+  /** Person with Firma: the organization and whether it exists (link) or would be created. */
+  organization: string | null
+  organizationAction: 'create' | 'link' | null
 }
 
 export interface ContactImportResult {
@@ -143,6 +151,8 @@ export interface ContactImportResult {
   created: number
   skipped: number
   errors: number
+  /** Persons with Firma (the import asks whether to create/link the organization). */
+  withOrganization: number
   rows: ContactImportRow[]
 }
 

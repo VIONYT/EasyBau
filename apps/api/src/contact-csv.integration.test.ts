@@ -180,4 +180,47 @@ describe.skipIf(!process.env.DATABASE_URL)('Kontakte CSV und Filter (integration
     expect(bad.statusCode).toBe(400)
     expect((await worker.post('/api/v1/contacts/import', { csv: file })).statusCode).toBe(403)
   })
+
+  it('asks before creating organizations for persons with Firma', async () => {
+    const file = [
+      'Firma;Vorname;Nachname;PLZ;Ort',
+      'Holzbau Eiche GmbH;Jan;Eiche;31134;Hildesheim',
+      'Holzbau Eiche GmbH;Mia;Eiche;31134;Hildesheim',
+      'Wohnbau Nord eG;Tom;Kaiser;30159;Hannover',
+    ].join('\n')
+    const preview = (
+      await admin.post('/api/v1/contacts/import', { csv: file })
+    ).json() as ContactImportResult
+    expect(preview.withOrganization).toBe(3)
+    expect(preview.rows.map((r) => [r.name, r.organization, r.organizationAction])).toEqual([
+      ['Eiche, Jan', 'Holzbau Eiche GmbH', 'create'],
+      ['Eiche, Mia', 'Holzbau Eiche GmbH', 'link'],
+      ['Kaiser, Tom', 'Wohnbau Nord eG', 'link'],
+    ])
+
+    // Without the option: only persons, nothing else.
+    const plain = await admin.post('/api/v1/contacts/import', {
+      csv: file.split('\n').slice(0, 2).join('\n'),
+      dryRun: false,
+    })
+    expect(plain.json()).toMatchObject({ created: 1 })
+    expect(await names('q=Holzbau')).toEqual([])
+
+    // With the option: the organization is created once, everyone is linked as Ansprechpartner.
+    const done = await admin.post('/api/v1/contacts/import', {
+      csv: file,
+      dryRun: false,
+      createOrganizations: true,
+    })
+    expect(done.json()).toMatchObject({ created: 2, skipped: 1 })
+    expect(await names('q=Holzbau')).toEqual(['Holzbau Eiche GmbH'])
+    const holzbau = ((await admin.get('/api/v1/contacts?q=Holzbau')).json() as Page<ContactSummary>)
+      .items[0]
+    const detail = (await admin.get(`/api/v1/contacts/${holzbau?.id}`)).json() as ContactDetail
+    expect(detail.number).toMatch(/^K-\d+$/)
+    expect(detail.addresses).toMatchObject([{ postalCode: '31134', city: 'Hildesheim' }])
+    expect(detail.links.map((l) => l.displayName)).toEqual(['Eiche, Mia'])
+    const wohnbau = (await admin.get(`/api/v1/contacts/${customer.id}`)).json() as ContactDetail
+    expect(wohnbau.links.map((l) => l.displayName)).toEqual(['Kaiser, Tom'])
+  })
 })
