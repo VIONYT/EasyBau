@@ -31,7 +31,7 @@ import {
 
 const idParam = z.object({ id: z.uuid('Ungültige ID.') })
 
-const SUMMARY_COLUMNS = (tx: Tx) => tx`
+export const SUMMARY_COLUMNS = (tx: Tx) => tx`
   p.id, p.number, p.name, p.site_city as "siteCity",
   to_char(p.start_date, 'YYYY-MM-DD') as "startDate", to_char(p.end_date, 'YYYY-MM-DD') as "endDate",
   (p.archived_at is not null) as archived,

@@ -56,6 +56,7 @@ import { checkIfMatch, etagOf, HttpError, notFound, parse } from '../http.js'
 import { checkEvidence, resolveEvidence } from './change-orders.js'
 import { finalizeInvoice } from './invoices.js'
 import { companyValues, loadLetterhead } from './letterhead.js'
+import { notify, projectMembersExcept } from './notifications.js'
 import { archiveDocumentPdf } from './pdf.js'
 import { loadReceivable, todayOf } from './receivables.js'
 
@@ -1493,6 +1494,34 @@ export function registerDocumentRoutes(app: FastifyInstance, services: Services)
                  decided_at = ${status === 'sent' ? tx`decided_at` : tx`now()`},
                  decided_by_name = ${status === 'sent' ? tx`decided_by_name` : auth.displayName}
           where document_id = ${id}`
+        if (status !== 'sent') {
+          // Benachrichtigung: Nachtrag beauftragt oder abgelehnt (P2.8).
+          const [co] = await tx<
+            {
+              number: number
+              projectId: string
+              subject: string | null
+              createdBy: string | null
+            }[]
+          >`
+            select m.number, d.project_id as "projectId", d.subject, d.created_by as "createdBy"
+            from change_order_meta m join document d on d.id = m.document_id where m.document_id = ${id}`
+          if (co) {
+            const members = await projectMembersExcept(tx, co.projectId, auth.userId)
+            await notify(
+              tx,
+              auth.tenantId,
+              [...members, ...(co.createdBy && co.createdBy !== auth.userId ? [co.createdBy] : [])],
+              {
+                kind: 'change_order_decided',
+                refId: id,
+                title: `Nachtrag N${String(co.number).padStart(2, '0')} ${status === 'accepted' ? 'beauftragt' : 'abgelehnt'}`,
+                body: co.subject,
+                route: `/dokumente/${id}`,
+              },
+            )
+          }
+        }
       }
       return loadDocument(tx, auth, id)
     })

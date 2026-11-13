@@ -29,6 +29,7 @@ import {
 } from '../context.js'
 import { checkIfMatch, etagOf, HttpError, notFound, parse } from '../http.js'
 import { storeUploadedFile } from './files.js'
+import { notify, projectMembersExcept } from './notifications.js'
 import { ownSignature } from './signatures.js'
 
 const projectParam = z.object({ id: z.uuid('Ungültige ID.') })
@@ -563,6 +564,22 @@ export function registerReportRoutes(app: FastifyInstance, services: Services) {
       // The photos become evidence: they can no longer be deleted or replaced.
       await tx`update file set is_evidence = true
                where id in (select file_id from report_photo where report_id = ${id}) and not is_evidence`
+      // Benachrichtigung for the project team (P2.8).
+      const [info] = await tx<{ name: string; date: string }[]>`
+        select t.name, to_char(r.report_date, 'DD.MM.YYYY') as date
+        from report r join report_template t on t.id = r.template_id where r.id = ${id}`
+      await notify(
+        tx,
+        auth.tenantId,
+        await projectMembersExcept(tx, current.projectId, auth.userId),
+        {
+          kind: 'report_signed',
+          refId: id,
+          title: `${info?.name ?? 'Bericht'} vom ${info?.date ?? ''} unterschrieben`,
+          body: `von ${auth.displayName}`,
+          route: `/berichte/${id}`,
+        },
+      )
       return loadReport(tx, auth, id)
     })
     return sendReport(reply, report)

@@ -117,7 +117,7 @@ test('setup, security key, user management and passwordless login', async ({ bro
   await expect(invitedPage.getByText('Muster Bau GmbH')).toBeVisible()
   await invitedPage.locator('input[name=password]').fill('monteur-passwort-1')
   await invitedPage.getByRole('button', { name: 'Einladung annehmen' }).click()
-  await expect(invitedPage.getByRole('heading', { name: 'Projekte' })).toBeVisible()
+  await expect(invitedPage.getByRole('heading', { name: 'Übersicht' })).toBeVisible()
   await expect(invitedPage.getByRole('button', { name: 'Benutzer' })).toHaveCount(0)
   await invited.close()
 
@@ -128,7 +128,7 @@ test('setup, security key, user management and passwordless login', async ({ bro
   await page.getByRole('button', { name: 'Abmelden' }).click()
   await expect(page.getByRole('heading', { name: 'Anmelden' })).toBeVisible()
   await page.getByRole('button', { name: 'Mit Sicherheitsschlüssel oder Passkey anmelden' }).click()
-  await expect(page.getByRole('heading', { name: 'Projekte' })).toBeVisible()
+  await expect(page.getByRole('heading', { name: 'Übersicht' })).toBeVisible()
 
   // Password + key as second factor.
   await page.getByRole('button', { name: 'Abmelden' }).click()
@@ -138,7 +138,7 @@ test('setup, security key, user management and passwordless login', async ({ bro
   await page.getByRole('button', { name: 'Anmelden', exact: true }).click()
   await expect(page.getByRole('heading', { name: 'Zweiter Schritt' })).toBeVisible()
   await page.getByRole('button', { name: 'Mit Sicherheitsschlüssel bestätigen' }).click()
-  await expect(page.getByRole('heading', { name: 'Projekte' })).toBeVisible()
+  await expect(page.getByRole('heading', { name: 'Übersicht' })).toBeVisible()
 })
 
 const PNG = Buffer.from(
@@ -959,6 +959,38 @@ test('Projektkennzahlen und Filter der Projektliste', async () => {
   await expectNoHorizontalScroll(page)
   await page.getByRole('button', { name: 'Filter zurücksetzen' }).click()
   await expect(page.getByLabel('Zeitraum von')).toHaveValue('')
+})
+
+test('Übersicht, globale Suche und Benachrichtigungen', async () => {
+  test.skip(!SETUP_TOKEN, 'SETUP_TOKEN must be set for a fresh stack')
+
+  await page.getByRole('button', { name: 'Übersicht', exact: true }).first().click()
+  await expect(page.getByRole('heading', { name: 'Übersicht', level: 1 })).toBeVisible()
+  await expect(page.getByRole('heading', { name: 'Offene Forderungen' })).toBeVisible()
+  await expect(page.getByRole('heading', { name: 'Heute auf der Baustelle' })).toBeVisible()
+  await expect(page.getByRole('heading', { name: 'Offene Angebote und Nachträge' })).toBeVisible()
+  await expect(page.getByRole('heading', { name: 'Zuletzt bearbeitete Projekte' })).toBeVisible()
+  // Beträge ausblenden (vor Kunden)
+  await page.getByLabel('Beträge ausblenden').check()
+  await expect(page.locator('.dashboard .amount-big').first()).toHaveText('•••')
+  await expectNoHorizontalScroll(page)
+  if (SCREENSHOTS) await page.screenshot({ path: `${SCREENSHOTS}/uebersicht.png`, fullPage: true })
+  await page.getByLabel('Beträge ausblenden').uncheck()
+
+  // Globale Suche über Projekte, Kontakte, Dokumente
+  await page.getByRole('searchbox', { name: 'Suchen' }).fill('Wohnbau')
+  await page.getByRole('searchbox', { name: 'Suchen' }).press('Enter')
+  await expect(page.getByRole('heading', { name: 'Suche: „Wohnbau“' })).toBeVisible()
+  await expect(page.getByRole('heading', { name: 'Kontakte' })).toBeVisible()
+  await expect(page.getByRole('heading', { name: 'Dokumente' })).toBeVisible()
+  await expectNoHorizontalScroll(page)
+  await page.getByRole('link', { name: /P-00101 · Sanierung Lindenweg/ }).click()
+  await expect(page.getByRole('heading', { name: /Sanierung Lindenweg/, level: 1 })).toBeVisible()
+
+  // Benachrichtigungen
+  await page.getByRole('button', { name: /^Benachrichtigungen/ }).click()
+  await expect(page.getByRole('heading', { name: 'Benachrichtigungen', level: 1 })).toBeVisible()
+  await expectNoHorizontalScroll(page)
 })
 
 test('Briefpapier: WYSIWYG-Editor nach DIN 5008 B und Druckansicht', async () => {

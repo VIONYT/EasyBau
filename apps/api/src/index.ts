@@ -22,6 +22,7 @@ import { authHook, mfaEnforcementHook, registerAuthRoutes } from './routes/auth.
 import { registerCatalogRoutes } from './routes/catalog.js'
 import { registerChangeOrderRoutes } from './routes/change-orders.js'
 import { registerContactRoutes } from './routes/contacts.js'
+import { registerDashboardRoutes } from './routes/dashboard.js'
 import { registerDocumentEmailRoutes } from './routes/document-email.js'
 import { registerDocumentRoutes } from './routes/documents.js'
 import { registerDunningRoutes } from './routes/dunning.js'
@@ -32,6 +33,7 @@ import { registerIncomingInvoiceRoutes } from './routes/incoming-invoices.js'
 import { registerInvoiceRoutes } from './routes/invoices.js'
 import { registerLetterheadRoutes } from './routes/letterhead.js'
 import { registerMeasurementRoutes } from './routes/measurements.js'
+import { registerNotificationRoutes } from './routes/notifications.js'
 import { registerOperationsRoutes } from './routes/operations.js'
 import { registerPdfRoutes } from './routes/pdf.js'
 import { registerProjectFigureRoutes } from './routes/project-figures.js'
@@ -245,6 +247,8 @@ export function buildApi({
   registerReportBillingRoutes(app, services)
   registerChangeOrderRoutes(app, services)
   registerProjectFigureRoutes(app, services)
+  registerDashboardRoutes(app, services)
+  registerNotificationRoutes(app, services)
   registerCatalogRoutes(app, services)
   registerSettingsRoutes(app, services)
   registerEmailRoutes(app, services)

@@ -2,6 +2,9 @@ import { useCallback, useEffect, useState } from 'react'
 
 /** Minimal client-side routing with real URLs, so the browser back button works on phones. */
 export type Route =
+  | { view: 'dashboard' }
+  | { view: 'search'; q: string }
+  | { view: 'notifications' }
   | { view: 'projects' }
   | { view: 'contacts' }
   | { view: 'invoices' }
@@ -35,7 +38,7 @@ const SECTIONS = {
   ablage: 'files',
 } as const
 
-export function parseRoute(path: string): Route {
+export function parseRoute(path: string, search = ''): Route {
   const project = new RegExp(
     `^/projekte/(${UUID})(?:/(dokumente|aufmass|bautagebuch|berichte|ablage))?/?$`,
   ).exec(path)
@@ -59,19 +62,30 @@ export function parseRoute(path: string): Route {
   const report = new RegExp(`^/berichte/(${UUID})/?$`).exec(path)
   if (report) return { view: 'report', id: report[1] as string }
   if (path.startsWith('/stammdaten')) return { view: 'catalog' }
+  if (path.startsWith('/projekte')) return { view: 'projects' }
+  if (path.startsWith('/benachrichtigungen')) return { view: 'notifications' }
+  if (path.startsWith('/suche')) {
+    return { view: 'search', q: new URLSearchParams(search).get('q') ?? '' }
+  }
   if (path.startsWith('/einstellungen')) return { view: 'settings' }
   if (path.startsWith('/kontakte')) return { view: 'contacts' }
   if (path.startsWith('/rechnungen')) return { view: 'invoices' }
   if (path.startsWith('/benutzer')) return { view: 'users' }
   if (path.startsWith('/pruefung')) return { view: 'audit' }
   if (path.startsWith('/sicherheit')) return { view: 'security' }
-  return { view: 'projects' }
+  return { view: 'dashboard' }
 }
 
 export function pathOf(route: Route): string {
   switch (route.view) {
-    case 'projects':
+    case 'dashboard':
       return '/'
+    case 'projects':
+      return '/projekte'
+    case 'notifications':
+      return '/benachrichtigungen'
+    case 'search':
+      return `/suche?q=${encodeURIComponent(route.q)}`
     case 'contacts':
       return '/kontakte'
     case 'catalog':
@@ -115,15 +129,19 @@ export function pathOf(route: Route): string {
 export type Navigate = (route: Route) => void
 
 export function useRoute(): [Route, Navigate] {
-  const [route, setRoute] = useState<Route>(() => parseRoute(window.location.pathname))
+  const [route, setRoute] = useState<Route>(() =>
+    parseRoute(window.location.pathname, window.location.search),
+  )
   useEffect(() => {
-    const onPop = () => setRoute(parseRoute(window.location.pathname))
+    const onPop = () => setRoute(parseRoute(window.location.pathname, window.location.search))
     window.addEventListener('popstate', onPop)
     return () => window.removeEventListener('popstate', onPop)
   }, [])
   const navigate = useCallback((next: Route) => {
     const path = pathOf(next)
-    if (path !== window.location.pathname) window.history.pushState(null, '', path)
+    if (path !== window.location.pathname + window.location.search) {
+      window.history.pushState(null, '', path)
+    }
     setRoute(next)
     window.scrollTo(0, 0)
   }, [])

@@ -111,7 +111,7 @@ const normalizeVatId = (value: string | null) =>
   value ? value.replace(/[\s.-]/g, '').toUpperCase() : null
 
 /** Readers without `incoming_invoice.write` and without all projects see only their projects. */
-function visibility(tx: Tx, auth: AuthContext) {
+export function incomingVisibility(tx: Tx, auth: AuthContext) {
   if (auth.permissions.has('incoming_invoice.write') || auth.permissions.has('project.read_all')) {
     return tx`true`
   }
@@ -228,7 +228,7 @@ export async function loadIncoming(
     join document_artifact a on a.incoming_invoice_id = i.id
     left join app_user up on up.id = i.uploaded_by
     left join app_user cu on cu.id = i.confirmed_by
-    where i.id = ${id} and ${visibility(tx, auth)}`
+    where i.id = ${id} and ${incomingVisibility(tx, auth)}`
   if (!row) return null
   const taxLines = await tx<{ ratePercent: string; net: string; tax: string }[]>`
     select rate_percent::text as "ratePercent", net_cents::text as net, tax_cents::text as tax
@@ -578,7 +578,7 @@ export function registerIncomingInvoiceRoutes(app: FastifyInstance, services: Se
     const cursor = query.cursor ? decodeCursor(query.cursor, 2) : null
     return inTenant(services, auth, async (tx) => {
       const today = todayOf(tx)
-      const conditions = [visibility(tx, auth)]
+      const conditions = [incomingVisibility(tx, auth)]
       if (query.status) conditions.push(tx`i.status = ${query.status}`)
       if (query.payment) {
         conditions.push(tx`i.status = 'confirmed'`)
@@ -619,7 +619,7 @@ export function registerIncomingInvoiceRoutes(app: FastifyInstance, services: Se
       const page = rows.slice(0, query.limit)
       const last = page.at(-1)
       const [count] = await tx<{ n: number }[]>`
-        select count(*)::int as n from incoming_invoice i where i.status = 'review' and ${visibility(tx, auth)}`
+        select count(*)::int as n from incoming_invoice i where i.status = 'review' and ${incomingVisibility(tx, auth)}`
       return {
         items: page.map((row) => toListItem(row, today)),
         nextCursor:

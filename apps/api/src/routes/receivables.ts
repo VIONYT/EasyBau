@@ -168,7 +168,7 @@ interface ListRow {
   notices: { level: DunningLevel; dueDate: string }[]
 }
 
-async function listInvoices(
+export async function listInvoices(
   tx: Tx,
   auth: AuthContext,
   query: InvoiceListQuery,

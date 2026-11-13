@@ -5,10 +5,11 @@ import { Field, FormError, optional, useForm } from '../forms'
 import { t } from '../i18n'
 import { hasWaitingChanges } from '../offline/client'
 import { OfflineBar } from '../offline/OfflineBar'
-import { type Route, useRoute } from '../router'
+import { parseRoute, type Route, useRoute } from '../router'
 import { AuditScreen } from './audit'
 import { Catalog } from './catalog'
 import { ContactEditor } from './contact-editor'
+import { Dashboard } from './dashboard'
 import { DocumentScreen } from './document'
 import { IncomingInvoiceScreen, IncomingInvoices } from './incoming'
 import { Invoices } from './invoices'
@@ -17,11 +18,13 @@ import { PrintScreen } from './print'
 import { ProjectScreen } from './project'
 import { Projects } from './projects'
 import { ReportScreen } from './report'
+import { NotificationsScreen, SearchBox, SearchScreen, useNotifications } from './search'
 import { Security } from './security'
 import { Settings } from './settings'
 import { Users } from './users'
 
 type Tab =
+  | 'dashboard'
   | 'projects'
   | 'invoices'
   | 'incoming'
@@ -52,17 +55,21 @@ export function Workspace({
     if (locked && route.view !== 'security') navigate({ view: 'security' })
   }, [locked, route.view, navigate])
   const current: Route = locked ? { view: 'security' } : route
-  const activeTab: Tab =
-    current.view === 'project' ||
-    current.view === 'document' ||
-    current.view === 'measurement' ||
-    current.view === 'report' ||
-    current.view === 'print'
-      ? 'projects'
-      : current.view === 'incomingInvoice'
-        ? 'incoming'
-        : current.view
+  const notifications = useNotifications()
+  const activeTab: Tab | null =
+    current.view === 'search' || current.view === 'notifications'
+      ? null
+      : current.view === 'project' ||
+          current.view === 'document' ||
+          current.view === 'measurement' ||
+          current.view === 'report' ||
+          current.view === 'print'
+        ? 'projects'
+        : current.view === 'incomingInvoice'
+          ? 'incoming'
+          : current.view
   const tabs: { key: Tab; label: string; visible: boolean }[] = [
+    { key: 'dashboard', label: t('nav.dashboard'), visible: !locked },
     { key: 'projects', label: t('nav.projects'), visible: !locked },
     {
       key: 'invoices',
@@ -121,13 +128,38 @@ export function Workspace({
           current.view === 'print' ||
           current.view === 'incomingInvoice'
         ? `${current.view}-${current.id}`
-        : current.view
+        : current.view === 'search'
+          ? `search-${current.q}`
+          : current.view
+  const unread = notifications.list?.unreadCount ?? 0
   return (
     <div className="workspace">
       <header className="topbar">
         <strong>{me.tenant.name}</strong>
         <span className="muted">{me.user.displayName}</span>
-        <button type="button" className="button ghost" onClick={logout}>
+        {locked ? null : (
+          <>
+            <SearchBox initial={current.view === 'search' ? current.q : ''} navigate={navigate} />
+            <button
+              type="button"
+              className="button ghost bell"
+              aria-current={current.view === 'notifications' ? 'page' : undefined}
+              onClick={() => {
+                notifications.reload()
+                navigate({ view: 'notifications' })
+              }}
+            >
+              {t('notif.title')}
+              {unread ? (
+                <span className="badge-count">
+                  {unread}
+                  <span className="sr-only"> {t('notif.unreadShort')}</span>
+                </span>
+              ) : null}
+            </button>
+          </>
+        )}
+        <button type="button" className="button ghost logout" onClick={logout}>
           {t('auth.logout')}
         </button>
       </header>
@@ -150,6 +182,15 @@ export function Workspace({
       </nav>
       <OfflineBar />
       <main className="content" key={`${routeKey}-${visit}`}>
+        {current.view === 'dashboard' ? <Dashboard me={me} navigate={navigate} /> : null}
+        {current.view === 'search' ? <SearchScreen q={current.q} navigate={navigate} /> : null}
+        {current.view === 'notifications' ? (
+          <NotificationsScreen
+            list={notifications.list}
+            setList={notifications.setList}
+            navigate={(path) => navigate(parseRoute(path))}
+          />
+        ) : null}
         {current.view === 'projects' ? <Projects me={me} navigate={navigate} /> : null}
         {current.view === 'project' ? (
           <ProjectScreen me={me} id={current.id} section={current.section} navigate={navigate} />

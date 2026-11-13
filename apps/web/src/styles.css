@@ -232,8 +232,63 @@ legend {
   border-bottom: 1px solid var(--color-border);
 }
 
-.topbar .button {
+.topbar .logout {
   margin-left: auto;
+}
+
+.topbar-search {
+  flex: 1 1 12rem;
+  min-width: 0;
+}
+
+.bell {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.badge-count {
+  min-width: 1.5rem;
+  padding: 0 var(--space-1);
+  border-radius: 999px;
+  font-size: 0.875rem;
+  font-variant-numeric: tabular-nums;
+  text-align: center;
+  color: #fff;
+  background: var(--color-error);
+}
+
+/* Übersicht (P2.8) */
+.dashboard {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 320px), 1fr));
+  gap: var(--space-4);
+  align-items: start;
+}
+
+.receivable-sums {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(90px, 1fr));
+  gap: var(--space-2);
+  margin: var(--space-2) 0;
+}
+
+.receivable-sum {
+  display: flex;
+  flex-direction: column;
+}
+
+.receivable-sum--overdue strong,
+.receivable-sum--dunned strong {
+  color: var(--color-warning);
+}
+
+.list-link.unread strong {
+  font-weight: 700;
+}
+
+.list-link.unread {
+  border-left: 4px solid var(--color-primary);
 }
 
 .notice {

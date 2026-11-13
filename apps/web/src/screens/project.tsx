@@ -98,7 +98,7 @@ export function ProjectScreen({
     <section aria-labelledby="project-title">
       <a
         className="back"
-        href="/"
+        href="/projekte"
         onClick={(e) => {
           e.preventDefault()
           navigate({ view: 'projects' })
