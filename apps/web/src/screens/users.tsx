@@ -1,4 +1,5 @@
 import type {
+  AdminPasswordReset,
   EmailSettings,
   InvitationSummary,
   InviteResponse,
@@ -28,6 +29,7 @@ export function Users() {
   const [emailQueued, setEmailQueued] = useState(false)
   const [emailEnabled, setEmailEnabled] = useState(false)
   const [inviteRole, setInviteRole] = useState('team_member')
+  const [reset, setReset] = useState<(AdminPasswordReset & { name: string }) | null>(null)
   useEffect(() => {
     api<EmailSettings>('GET', '/api/v1/settings/email')
       .then((s) => setEmailEnabled(s.enabled))
@@ -80,6 +82,16 @@ export function Users() {
     <section aria-labelledby="users-title">
       <h1 id="users-title">{t('users.title')}</h1>
       <FormError>{error}</FormError>
+      {reset ? (
+        <div className="panel">
+          <h2>{tf('users.resetLinkFor', { name: reset.name })}</h2>
+          {reset.emailQueued ? <p role="status">{t('users.resetEmailQueued')}</p> : null}
+          <InviteLink link={reset.resetUrl} intro={t('users.resetLinkIntro')} />
+          <button type="button" className="button ghost" onClick={() => setReset(null)}>
+            {t('contacts.close')}
+          </button>
+        </div>
+      ) : null}
       {!members ? <p className="muted">{t('common.loading')}</p> : null}
       {members ? (
         <ul className="list">
@@ -140,6 +152,23 @@ export function Users() {
                       }}
                     />
                   ) : null}
+                  <button
+                    type="button"
+                    className="button ghost"
+                    onClick={() =>
+                      act(async () => {
+                        const sendEmail = emailEnabled && window.confirm(t('users.resetSendEmail'))
+                        const result = await api<AdminPasswordReset>(
+                          'POST',
+                          `/api/v1/users/${m.userId}/password-reset`,
+                          { sendEmail },
+                        )
+                        setReset({ ...result, name: m.displayName })
+                      })
+                    }
+                  >
+                    {t('users.resetPassword')}
+                  </button>
                   {m.totpEnabled || m.webauthnCount ? (
                     <button
                       type="button"
@@ -316,11 +345,11 @@ function RoleField({
   )
 }
 
-function InviteLink({ link }: { link: string }) {
+function InviteLink({ link, intro }: { link: string; intro?: string }) {
   const [copied, setCopied] = useState(false)
   return (
     <div className="stack" role="status">
-      <p>{t('users.inviteLink')}</p>
+      <p>{intro ?? t('users.inviteLink')}</p>
       <code className="secret">{link}</code>
       <button
         type="button"

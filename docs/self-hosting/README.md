@@ -47,7 +47,10 @@ Danach `https://<APP_DOMAIN>` öffnen, den Code eingeben, die Firma und das erst
 
 ## 3. Anmeldung und Sicherheit
 
-- Passwörter: mindestens 12 Zeichen, gespeichert mit argon2id.
+- Passwörter: mindestens 12 Zeichen, gespeichert mit argon2id nach RFC 9106 (64 MiB Speicher, 3 Durchläufe, 4 Lanes, eigenes Salt je Passwort). Ältere Hashes mit schwächeren Werten werden bei der nächsten Anmeldung automatisch erneuert. Es laufen höchstens 4 Berechnungen gleichzeitig (Spitze ca. 256 MiB RAM), damit auch der kompakte Server (2 GB) bei vielen gleichzeitigen Anmeldungen stabil bleibt.
+- **Passwort vergessen** (Anmeldeseite): Mit eingerichtetem E-Mail-Versand kommt ein Link an die Adresse der Anmeldung (30 Minuten gültig, nur einmal verwendbar). Die Antwort ist für jede Adresse gleich, sodass niemand erfährt, ob es eine Anmeldung gibt. Ohne E-Mail-Versand erstellt ein Admin unter „Benutzer › Passwort-Link“ einen Link zum Übergeben (24 Stunden gültig; nur für Personen, die keiner anderen Firma angehören). Ein neues Passwort beendet alle Sitzungen; der zweite Faktor bleibt bestehen.
+- **E-Mail-Bestätigung** unter „Sicherheit“ (Link 48 Stunden gültig). Annahme einer Einladung und Zurücksetzen per E-Mail bestätigen die Adresse ebenfalls.
+- Einmal-Links enthalten 256 Bit Zufall; in der Datenbank steht nur ihr SHA-256-Hash. Der E-Mail-Text mit dem Link wird nach der Annahme durch den SMTP-Server gelöscht.
 - Sitzungen: Cookie `__Host-sid` (HttpOnly, Secure, SameSite=Lax), 30 Tage gültig, Abmeldung nach 7 Tagen Inaktivität (`SESSION_TTL_DAYS`, `SESSION_IDLE_HOURS`).
 - Schutz vor Durchprobieren: höchstens 10 Anmeldeversuche je E-Mail-Adresse und 50 je IP-Adresse in 15 Minuten.
 - Zwei-Faktor-Anmeldung: Authenticator-App (TOTP) oder Sicherheitsschlüssel/Passkey (WebAuthn/FIDO2, z. B. YubiKey). Einrichtung unter „Sicherheit“. Mit einem Schlüssel ist auch die Anmeldung ohne Passwort möglich (PIN oder Biometrie am Schlüssel).

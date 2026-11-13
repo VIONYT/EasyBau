@@ -12,7 +12,7 @@ export const testEmailRequest = z.object({ to: email.optional() })
 
 export interface EmailMessageSummary {
   id: string
-  kind: 'invitation' | 'test' | 'document' | 'dunning'
+  kind: 'invitation' | 'test' | 'document' | 'dunning' | 'password_reset' | 'email_verify'
   toAddress: string
   subject: string
   status: 'queued' | 'sending' | 'sent' | 'failed'

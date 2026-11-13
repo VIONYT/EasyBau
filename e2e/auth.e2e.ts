@@ -1072,6 +1072,62 @@ test('Kontakte: Kanäle, Rechnungsempfänger, Ansprechpartner, Filter und CSV-Im
   await expectNoHorizontalScroll(page)
 })
 
+test('Konto: Passwort vergessen und Passwort-Link der Administration', async ({ browser }) => {
+  test.skip(!SETUP_TOKEN, 'SETUP_TOKEN must be set for a fresh stack')
+
+  // Administration: Link für den Monteur erstellen (ohne SMTP nur zum Übergeben)
+  await page.getByRole('button', { name: 'Benutzer' }).click()
+  const row = page.locator('li', { hasText: 'Max Monteur' })
+  await row.getByRole('button', { name: 'Passwort-Link' }).click()
+  await expect(page.getByRole('heading', { name: 'Neues Passwort für Max Monteur' })).toBeVisible()
+  const link = (await page.locator('code.secret').textContent()) ?? ''
+  expect(link).toMatch(/\/passwort-zuruecksetzen#[A-Za-z0-9_-]{43}$/)
+  await expectNoHorizontalScroll(page)
+
+  // Der Monteur setzt in einem eigenen Browser ein neues Passwort und meldet sich an.
+  const other = await browser.newContext({ ignoreHTTPSErrors: true })
+  const monteur = await other.newPage()
+  await monteur.goto(new URL(link).pathname + new URL(link).hash)
+  await expect(monteur.getByRole('heading', { name: 'Neues Passwort festlegen' })).toBeVisible()
+  await expect(monteur.getByText('monteur@example.test')).toBeVisible()
+  await monteur.locator('input[name=password]').fill('neues-monteur-passwort')
+  await monteur.locator('input[name=repeat]').fill('anderes-passwort-123')
+  await monteur.getByRole('button', { name: 'Passwort speichern' }).click()
+  await expect(
+    monteur.getByText('Die beiden Passwörter stimmen nicht überein.').first(),
+  ).toBeVisible()
+  await monteur.locator('input[name=repeat]').fill('neues-monteur-passwort')
+  await monteur.getByRole('button', { name: 'Passwort speichern' }).click()
+  await expect(monteur.getByText('Das neue Passwort ist gespeichert.')).toBeVisible()
+  await expect(monteur).toHaveURL(/\/$/)
+  await monteur.getByRole('button', { name: 'Anmelden' }).click()
+  await monteur.getByLabel('E-Mail-Adresse').fill('monteur@example.test')
+  await monteur.locator('input[name=password]').fill('neues-monteur-passwort')
+  await monteur.getByRole('button', { name: 'Anmelden', exact: true }).click()
+  await expect(monteur.getByRole('heading', { name: 'Übersicht' })).toBeVisible()
+
+  // Der Link gilt nur einmal.
+  await monteur.goto(new URL(link).pathname + new URL(link).hash)
+  await expect(
+    monteur.getByText('Der Link ist ungültig oder abgelaufen.', { exact: false }),
+  ).toBeVisible()
+
+  // „Passwort vergessen?“ ohne SMTP: Hinweis auf die Administration (gleich für jede Adresse)
+  await monteur.goto('/')
+  await monteur.getByRole('button', { name: 'Abmelden' }).click()
+  await monteur.getByRole('button', { name: 'Passwort vergessen?' }).click()
+  await monteur.getByLabel('E-Mail-Adresse').fill('monteur@example.test')
+  await monteur.getByRole('button', { name: 'Link anfordern' }).click()
+  await expect(monteur.getByText(/kein E-Mail-Versand eingerichtet/)).toBeVisible()
+  await expectNoHorizontalScroll(monteur)
+  await other.close()
+
+  // Sicherheit: Status der E-Mail-Adresse
+  await page.getByRole('button', { name: 'Sicherheit' }).click()
+  await expect(page.getByRole('heading', { name: 'E-Mail-Adresse' })).toBeVisible()
+  await expect(page.getByText('nicht bestätigt')).toBeVisible()
+})
+
 test('Briefpapier: WYSIWYG-Editor nach DIN 5008 B und Druckansicht', async () => {
   test.skip(!SETUP_TOKEN, 'SETUP_TOKEN must be set for a fresh stack')
   test.setTimeout(120_000)

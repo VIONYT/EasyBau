@@ -30,6 +30,45 @@ export const changePasswordRequest = z.object({
   newPassword: password,
 })
 
+// ---- Konto: Passwort vergessen, Zurücksetzen, E-Mail-Bestätigung (P2.10) ---------------------
+
+/** One-time link token: 256 bit, base64url (43 characters). */
+export const accountToken = z
+  .string()
+  .regex(
+    /^[A-Za-z0-9_-]{43}$/,
+    'Der Link ist ungültig. Bitte den vollständigen Link aus der E-Mail öffnen.',
+  )
+
+export const passwordResetRequest = z.object({ email })
+export const accountTokenRequest = z.object({ token: accountToken })
+export const passwordResetConfirm = z.object({ token: accountToken, password })
+/** Administration: reset link for a person of the company (to hand over or by e-mail). */
+export const adminPasswordResetRequest = z.object({ sendEmail: z.boolean().default(false) })
+
+export interface PasswordResetRequested {
+  /** Without SMTP no e-mail can be sent – the administration creates a link instead. */
+  emailEnabled: boolean
+}
+
+export interface PasswordResetInfo {
+  email: string
+  displayName: string
+  expiresAt: string
+}
+
+export interface AdminPasswordReset {
+  resetUrl: string
+  expiresAt: string
+  emailQueued: boolean
+}
+
+export interface EmailVerificationRequested {
+  emailEnabled: boolean
+  /** Already confirmed: nothing was sent. */
+  alreadyVerified: boolean
+}
+
 /** Ersteinrichtung: first company and its first administrator. */
 export const setupRequest = z.object({
   setupToken: z
@@ -76,6 +115,8 @@ export interface Me {
     displayName: string
     totpEnabled: boolean
     webauthnCount: number
+    /** The e-mail address was confirmed (link in a mail, invitation by mail or password reset). */
+    emailVerified: boolean
   }
   tenant: { id: string; name: string }
   role: { key: string; name: string; access: Membership['access'] }

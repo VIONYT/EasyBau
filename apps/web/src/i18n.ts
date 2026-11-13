@@ -187,6 +187,40 @@ const de = {
   'inv.list.empty': 'Keine Rechnungen für diesen Filter.',
   'inv.list.more': 'Weitere laden',
   'inv.list.due': 'fällig {date}',
+  'account.forgot.link': 'Passwort vergessen?',
+  'account.forgot.title': 'Passwort vergessen',
+  'account.forgot.intro':
+    'Geben Sie die E-Mail-Adresse Ihrer Anmeldung ein. Wir schicken Ihnen einen Link, mit dem Sie ein neues Passwort festlegen.',
+  'account.forgot.submit': 'Link anfordern',
+  'account.forgot.sent':
+    'Wenn zu dieser Adresse eine Anmeldung gehört, ist ein Link unterwegs. Er ist 30 Minuten gültig. Bitte auch im Spam-Ordner nachsehen.',
+  'account.forgot.noEmail':
+    'In diesem System ist kein E-Mail-Versand eingerichtet. Bitte wenden Sie sich an Ihre Administration: Sie kann Ihnen unter „Benutzer“ einen Link zum Zurücksetzen erstellen.',
+  'account.reset.title': 'Neues Passwort festlegen',
+  'account.reset.repeat': 'Neues Passwort wiederholen',
+  'account.reset.mismatch': 'Die beiden Passwörter stimmen nicht überein.',
+  'account.reset.secondFactor':
+    'Ihr zweiter Faktor (Sicherheitsschlüssel oder App) bleibt bestehen. Alle bisherigen Anmeldungen werden beendet.',
+  'account.reset.submit': 'Passwort speichern',
+  'account.reset.done': 'Das neue Passwort ist gespeichert. Bitte melden Sie sich jetzt an.',
+  'account.verify.title': 'E-Mail-Adresse bestätigen',
+  'account.verify.done': 'Vielen Dank, Ihre E-Mail-Adresse ist bestätigt.',
+  'account.verify.continue': 'Weiter',
+  'account.email.title': 'E-Mail-Adresse',
+  'account.email.verified': 'bestätigt',
+  'account.email.unverified': 'nicht bestätigt',
+  'account.email.hint':
+    'Eine bestätigte Adresse stellt sicher, dass Links zum Zurücksetzen des Passworts bei Ihnen ankommen.',
+  'account.email.send': 'Bestätigungs-E-Mail senden',
+  'account.email.sent': 'Die E-Mail ist unterwegs. Der Link darin ist 48 Stunden gültig.',
+  'account.email.noSmtp': 'In diesem System ist kein E-Mail-Versand eingerichtet.',
+  'users.resetPassword': 'Passwort-Link',
+  'users.resetSendEmail':
+    'Den Link zusätzlich per E-Mail an die Person senden? (Abbrechen = nur Link anzeigen, z. B. zum persönlichen Übergeben)',
+  'users.resetLinkFor': 'Neues Passwort für {name}',
+  'users.resetLinkIntro':
+    'Diesen Link der Person persönlich übergeben. Er ist 24 Stunden gültig und nur einmal verwendbar; alle bisherigen Anmeldungen der Person werden beim Festlegen beendet.',
+  'users.resetEmailQueued': 'Der Link wurde auch per E-Mail verschickt.',
   'contacts.new': 'Neuer Kontakt',
   'contacts.export': 'CSV exportieren',
   'contacts.import.title': 'CSV importieren',
