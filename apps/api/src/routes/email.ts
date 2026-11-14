@@ -34,11 +34,11 @@ export async function queueEmail(tx: Tx, auth: AuthContext, mail: QueuedEmail): 
             ${mail.cc ?? []}::text[], ${mail.bcc ?? []}::text[])
     returning id`
   const id = (row as { id: string }).id
-  for (const attachment of mail.attachments ?? []) {
+  for (const [position, attachment] of (mail.attachments ?? []).entries()) {
     await tx`
-      insert into email_attachment (tenant_id, email_message_id, artifact_id, asset_id, filename)
+      insert into email_attachment (tenant_id, email_message_id, artifact_id, asset_id, filename, position)
       values (${auth.tenantId}, ${id}, ${'artifactId' in attachment ? attachment.artifactId : null},
-              ${'assetId' in attachment ? attachment.assetId : null}, ${attachment.filename})`
+              ${'assetId' in attachment ? attachment.assetId : null}, ${attachment.filename}, ${position})`
   }
   return id
 }

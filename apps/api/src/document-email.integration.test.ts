@@ -222,7 +222,7 @@ describe.skipIf(!process.env.DATABASE_URL)('Dokumente per E-Mail (integration)',
       { tenantId },
       (tx) => tx<{ kind: string; validated: boolean }[]>`
         select a.kind, a.validated_at is not null as validated from email_attachment e
-        join document_artifact a on a.id = e.artifact_id order by e.id`,
+        join document_artifact a on a.id = e.artifact_id order by e.position, e.id`,
     )
     expect(kinds).toEqual([
       { kind: 'zugferd_pdf', validated: true },

@@ -122,7 +122,7 @@ async function historyOf(tx: Tx, documentId: string): Promise<DocumentEmailEntry
   return tx<DocumentEmailEntry[]>`
     select m.id, m.to_address as "to", m.cc_addresses as cc, m.bcc_addresses as bcc, m.subject, m.status,
            m.attempts, m.last_error as "lastError",
-           coalesce((select array_agg(e.filename order by e.id) from email_attachment e
+           coalesce((select array_agg(e.filename order by e.position, e.id) from email_attachment e
                      where e.email_message_id = m.id), '{}') as attachments,
            ${ISO(tx, 'm.created_at')} as "createdAt", ${ISO(tx, 'm.sent_at')} as "sentAt",
            u.display_name as "createdBy"
