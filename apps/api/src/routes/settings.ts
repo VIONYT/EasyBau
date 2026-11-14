@@ -50,7 +50,11 @@ const conflict = (field: string, message: string) => (error: { code?: string }) 
   throw error
 }
 
-/** Defaults of the DATEV Standardkontenrahmen (Erlöse, Bank). */
+/**
+ * Defaults of the DATEV Standardkontenrahmen: Erlöse (Automatikkonten), Bank, and for received
+ * invoices the expense accounts per cost type (with BU-Schlüssel for the input tax), the § 13b
+ * Automatikkonto and the Sammelkreditor. The tax advisor confirms the mapping (P1.10).
+ */
 export const DATEV_DEFAULTS = {
   SKR03: {
     standard19: '8400',
@@ -58,6 +62,15 @@ export const DATEV_DEFAULTS = {
     reverseCharge: '8337',
     exempt: '8120',
     bank: '1200',
+    expense: {
+      material: '3200',
+      labor: '3100',
+      equipment: '4960',
+      subcontract: '3100',
+      other: '4900',
+      reverseCharge: '3120',
+    },
+    creditor: '70000',
   },
   SKR04: {
     standard19: '4400',
@@ -65,6 +78,15 @@ export const DATEV_DEFAULTS = {
     reverseCharge: '4337',
     exempt: '4120',
     bank: '1800',
+    expense: {
+      material: '5200',
+      labor: '5900',
+      equipment: '6835',
+      subcontract: '5900',
+      other: '6300',
+      reverseCharge: '5920',
+    },
+    creditor: '70000',
   },
 } as const
 
@@ -76,6 +98,8 @@ export const DEFAULT_DATEV: DatevSettings = {
   accountLength: 4,
   revenueAccounts: {},
   bankAccount: null,
+  expenseAccounts: {},
+  creditorAccount: null,
 }
 
 export async function datevSettings(tx: Tx): Promise<DatevSettings> {

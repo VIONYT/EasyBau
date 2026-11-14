@@ -1,26 +1,35 @@
 import type { ContactDetail, ContactSummary, Me, Page } from '@opc/schemas'
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useId, useState } from 'react'
 import { api } from '../api'
 import { Field, FormError, optional, useForm } from '../forms'
 import { t } from '../i18n'
-import { type Route, useRoute } from '../router'
+import { hasWaitingChanges } from '../offline/client'
+import { OfflineBar } from '../offline/OfflineBar'
+import { type Navigate, parseRoute, type Route, useRoute } from '../router'
 import { AuditScreen } from './audit'
 import { Catalog } from './catalog'
 import { ContactEditor } from './contact-editor'
+import { ContactImport } from './contact-import'
+import { Dashboard } from './dashboard'
 import { DocumentScreen } from './document'
+import { IncomingInvoiceScreen, IncomingInvoices } from './incoming'
 import { Invoices } from './invoices'
 import { MeasurementScreen } from './measurement'
+import { NoticeBar } from './notice-bar'
 import { PrintScreen } from './print'
 import { ProjectScreen } from './project'
 import { Projects } from './projects'
 import { ReportScreen } from './report'
+import { NotificationsScreen, SearchBox, SearchScreen, useNotifications } from './search'
 import { Security } from './security'
 import { Settings } from './settings'
 import { Users } from './users'
 
 type Tab =
+  | 'dashboard'
   | 'projects'
   | 'invoices'
+  | 'incoming'
   | 'contacts'
   | 'catalog'
   | 'audit'
@@ -48,20 +57,31 @@ export function Workspace({
     if (locked && route.view !== 'security') navigate({ view: 'security' })
   }, [locked, route.view, navigate])
   const current: Route = locked ? { view: 'security' } : route
-  const activeTab: Tab =
-    current.view === 'project' ||
-    current.view === 'document' ||
-    current.view === 'measurement' ||
-    current.view === 'report' ||
-    current.view === 'print'
-      ? 'projects'
-      : current.view
+  const notifications = useNotifications()
+  const activeTab: Tab | null =
+    current.view === 'search' || current.view === 'notifications'
+      ? null
+      : current.view === 'project' ||
+          current.view === 'document' ||
+          current.view === 'measurement' ||
+          current.view === 'report' ||
+          current.view === 'print'
+        ? 'projects'
+        : current.view === 'incomingInvoice'
+          ? 'incoming'
+          : current.view
   const tabs: { key: Tab; label: string; visible: boolean }[] = [
+    { key: 'dashboard', label: t('nav.dashboard'), visible: !locked },
     { key: 'projects', label: t('nav.projects'), visible: !locked },
     {
       key: 'invoices',
       label: t('nav.invoices'),
       visible: !locked && me.permissions.includes('document.read'),
+    },
+    {
+      key: 'incoming',
+      label: t('nav.incoming'),
+      visible: !locked && me.permissions.includes('incoming_invoice.read'),
     },
     {
       key: 'contacts',
@@ -91,6 +111,7 @@ export function Workspace({
     { key: 'security', label: t('nav.security'), visible: true },
   ]
   const logout = async () => {
+    if ((await hasWaitingChanges()) && !window.confirm(t('off.logoutWaiting'))) return
     await api('POST', '/api/v1/auth/logout').catch(() => undefined)
     window.history.replaceState(null, '', '/')
     onLogout()
@@ -106,15 +127,41 @@ export function Workspace({
       : current.view === 'document' ||
           current.view === 'measurement' ||
           current.view === 'report' ||
-          current.view === 'print'
+          current.view === 'print' ||
+          current.view === 'incomingInvoice'
         ? `${current.view}-${current.id}`
-        : current.view
+        : current.view === 'search'
+          ? `search-${current.q}`
+          : current.view
+  const unread = notifications.list?.unreadCount ?? 0
   return (
     <div className="workspace">
       <header className="topbar">
         <strong>{me.tenant.name}</strong>
         <span className="muted">{me.user.displayName}</span>
-        <button type="button" className="button ghost" onClick={logout}>
+        {locked ? null : (
+          <>
+            <SearchBox initial={current.view === 'search' ? current.q : ''} navigate={navigate} />
+            <button
+              type="button"
+              className="button ghost bell"
+              aria-current={current.view === 'notifications' ? 'page' : undefined}
+              onClick={() => {
+                notifications.reload()
+                navigate({ view: 'notifications' })
+              }}
+            >
+              {t('notif.title')}
+              {unread ? (
+                <span className="badge-count">
+                  {unread}
+                  <span className="sr-only"> {t('notif.unreadShort')}</span>
+                </span>
+              ) : null}
+            </button>
+          </>
+        )}
+        <button type="button" className="button ghost logout" onClick={logout}>
           {t('auth.logout')}
         </button>
       </header>
@@ -135,7 +182,24 @@ export function Workspace({
             </button>
           ))}
       </nav>
+      <OfflineBar />
+      <NoticeBar
+        reloadKey={routeKey}
+        open={(path) => {
+          const [pathname, search] = path.split('?')
+          navigate(parseRoute(pathname as string, search ? `?${search}` : ''))
+        }}
+      />
       <main className="content" key={`${routeKey}-${visit}`}>
+        {current.view === 'dashboard' ? <Dashboard me={me} navigate={navigate} /> : null}
+        {current.view === 'search' ? <SearchScreen q={current.q} navigate={navigate} /> : null}
+        {current.view === 'notifications' ? (
+          <NotificationsScreen
+            list={notifications.list}
+            setList={notifications.setList}
+            navigate={(path) => navigate(parseRoute(path))}
+          />
+        ) : null}
         {current.view === 'projects' ? <Projects me={me} navigate={navigate} /> : null}
         {current.view === 'project' ? (
           <ProjectScreen me={me} id={current.id} section={current.section} navigate={navigate} />
@@ -151,9 +215,13 @@ export function Workspace({
           <ReportScreen me={me} id={current.id} navigate={navigate} />
         ) : null}
         {current.view === 'catalog' ? <Catalog me={me} /> : null}
-        {current.view === 'settings' ? <Settings me={me} /> : null}
-        {current.view === 'contacts' ? <Contacts me={me} /> : null}
-        {current.view === 'invoices' ? <Invoices navigate={navigate} /> : null}
+        {current.view === 'settings' ? <Settings me={me} initial={current.section} /> : null}
+        {current.view === 'contacts' ? <Contacts me={me} navigate={navigate} /> : null}
+        {current.view === 'invoices' ? <Invoices me={me} navigate={navigate} /> : null}
+        {current.view === 'incoming' ? <IncomingInvoices me={me} navigate={navigate} /> : null}
+        {current.view === 'incomingInvoice' ? (
+          <IncomingInvoiceScreen id={current.id} navigate={navigate} />
+        ) : null}
         {current.view === 'users' ? <Users /> : null}
         {current.view === 'audit' ? <AuditScreen me={me} /> : null}
         {current.view === 'security' ? <Security me={me} onChanged={refreshMe} /> : null}
@@ -174,9 +242,23 @@ function useList<T>(path: string) {
   return { items, error, reload }
 }
 
-function Contacts({ me }: { me: Me }) {
+const NO_CONTACT_FILTER = { kind: '', customer: '', archived: false }
+
+function contactQuery(query: string, filter: typeof NO_CONTACT_FILTER) {
+  const params = new URLSearchParams({ q: query })
+  if (filter.kind) params.set('kind', filter.kind)
+  if (filter.customer) params.set('customer', filter.customer)
+  if (filter.archived) params.set('archived', 'true')
+  return params.toString()
+}
+
+function Contacts({ me, navigate }: { me: Me; navigate: Navigate }) {
   const [query, setQuery] = useState('')
-  const list = useList<ContactSummary>(`/api/v1/contacts?q=${encodeURIComponent(query)}`)
+  const [filter, setFilter] = useState(NO_CONTACT_FILTER)
+  const [importing, setImporting] = useState(false)
+  const filterId = useId()
+  const list = useList<ContactSummary>(`/api/v1/contacts?${contactQuery(query, filter)}`)
+  const canWrite = me.permissions.includes('contacts.write')
   const [kind, setKind] = useState<'organization' | 'person'>('organization')
   const [selected, setSelected] = useState<string | null>(null)
   const form = useForm(
@@ -195,7 +277,26 @@ function Contacts({ me }: { me: Me }) {
   )
   return (
     <section aria-labelledby="contacts-title">
-      <h1 id="contacts-title">{t('nav.contacts')}</h1>
+      <div className="section-head">
+        <h1 id="contacts-title">{t('nav.contacts')}</h1>
+        <div className="button-row">
+          <a
+            className="button ghost auto"
+            href={`/api/v1/contacts/export.csv?${contactQuery('', filter)}`}
+            download
+          >
+            {t('contacts.export')}
+          </a>
+          {canWrite && !importing ? (
+            <button type="button" className="button ghost auto" onClick={() => setImporting(true)}>
+              {t('contacts.import.title')}
+            </button>
+          ) : null}
+        </div>
+      </div>
+      {importing ? (
+        <ContactImport onImported={list.reload} onClose={() => setImporting(false)} />
+      ) : null}
       <input
         type="search"
         className="search"
@@ -204,7 +305,41 @@ function Contacts({ me }: { me: Me }) {
         value={query}
         onChange={(e) => setQuery(e.target.value)}
       />
-      {me.permissions.includes('contacts.write') ? (
+      <div className="row contact-filters">
+        <div className="field">
+          <label htmlFor={`${filterId}-kind`}>{t('contacts.filter.kind')}</label>
+          <select
+            id={`${filterId}-kind`}
+            value={filter.kind}
+            onChange={(e) => setFilter({ ...filter, kind: e.target.value })}
+          >
+            <option value="">{t('contacts.filter.all')}</option>
+            <option value="organization">{t('contacts.kind.organization')}</option>
+            <option value="person">{t('contacts.kind.person')}</option>
+          </select>
+        </div>
+        <div className="field">
+          <label htmlFor={`${filterId}-customer`}>{t('contacts.filter.customer')}</label>
+          <select
+            id={`${filterId}-customer`}
+            value={filter.customer}
+            onChange={(e) => setFilter({ ...filter, customer: e.target.value })}
+          >
+            <option value="">{t('contacts.filter.all')}</option>
+            <option value="true">{t('contacts.filter.customers')}</option>
+            <option value="false">{t('contacts.filter.others')}</option>
+          </select>
+        </div>
+      </div>
+      <label className="check">
+        <input
+          type="checkbox"
+          checked={filter.archived}
+          onChange={(e) => setFilter({ ...filter, archived: e.target.checked })}
+        />
+        <span>{t('contacts.filter.archived')}</span>
+      </label>
+      {canWrite ? (
         <form className="inline-form" onSubmit={form.onSubmit} noValidate>
           <h2>{t('contacts.new')}</h2>
           <FormError>{form.error}</FormError>
@@ -252,9 +387,14 @@ function Contacts({ me }: { me: Me }) {
       {selected ? (
         <ContactEditor
           id={selected}
-          canWrite={me.permissions.includes('contacts.write')}
+          canWrite={canWrite}
+          canReadSettings={me.permissions.includes('settings.read')}
           onSaved={() => list.reload()}
           onClose={() => setSelected(null)}
+          onOpenProject={(projectId) =>
+            navigate({ view: 'project', id: projectId, section: 'overview' })
+          }
+          onOpenContact={(contactId) => setSelected(contactId)}
         />
       ) : null}
       <List

@@ -57,6 +57,22 @@ const cents = z
   .min(-100_000_000_000)
   .max(100_000_000_000)
 
+/** Nachweis eines Nachtrags (P2.6): Bericht, Aufmaßblatt or file of the same project. */
+export const EVIDENCE_KINDS = ['report', 'measurement_sheet', 'file'] as const
+export type EvidenceKind = (typeof EVIDENCE_KINDS)[number]
+export const evidenceRef = z.object({ kind: z.enum(EVIDENCE_KINDS), id })
+export type EvidenceRef = z.infer<typeof evidenceRef>
+export const evidenceList = z.array(evidenceRef).max(30, 'Höchstens 30 Nachweise.')
+
+/** PUT /documents/:id/evidence – replaces the Nachweise of a change order. */
+export const changeOrderEvidenceRequest = z.object({ evidence: evidenceList })
+
+/** Nachtrag aus Mehrmengen eines Leistungsaufmaßes (POST /measurement-sheets/:id/change-order). */
+export const varianceChangeOrderRequest = z.object({
+  /** Only these contract positions; default all with Mehrmenge. */
+  itemIds: z.array(id).max(200).optional(),
+})
+
 export const createDocumentRequest = z
   .object({
     type: z.enum(DOCUMENT_TYPES, 'Unbekannter Dokumenttyp.'),
@@ -67,6 +83,8 @@ export const createDocumentRequest = z
     /** Change orders: legal basis (VOB/B § 2 Abs. 5/6, BGB § 650b) and reason. */
     basis: z.enum(CHANGE_ORDER_BASES).optional(),
     reason: optionalText(2000),
+    /** Change orders: Nachweise (report, Aufmaßblatt, file of the project). */
+    evidence: evidenceList.optional(),
   })
   .superRefine((value, ctx) => {
     if (value.type === 'invoice' && !value.invoiceKind) {
@@ -103,6 +121,8 @@ export const updateDocumentRequest = z
     retentionPercent: percent('Sicherheitseinbehalt').nullable(),
     constructionLevyPercent: percent('Bauumlage').nullable(),
     progressBillingMode: z.enum(['cumulative', 'individual']),
+    /** Lohnkostenanteil nach § 35a EStG ausweisen. */
+    showLaborShare: z.boolean(),
   })
   .partial()
   .superRefine((value, ctx) => {
@@ -143,6 +163,8 @@ export const createItemRequest = z
     positionType: z.enum(EDITABLE_POSITION_TYPES, 'Unbekannter Positionstyp.'),
     /** Enclosing title; omitted or null: top level. */
     parentId: id.nullish(),
+    /** Bild-Position: image file of the project's Ablage (PNG, JPEG, WebP, GIF). */
+    imageFileId: id.nullish(),
     ...itemFields,
   })
   .partial({
@@ -166,6 +188,8 @@ export const createItemRequest = z
       }
     } else if (value.positionType === 'title' && !value.shortText) {
       ctx.addIssue({ code: 'custom', path: ['shortText'], message: 'Titel fehlt.' })
+    } else if (value.positionType === 'image' && !value.imageFileId) {
+      ctx.addIssue({ code: 'custom', path: ['imageFileId'], message: 'Bild fehlt.' })
     }
   })
 export type CreateItemRequest = z.infer<typeof createItemRequest>
@@ -275,7 +299,7 @@ export interface DocumentSummary {
 export interface DocumentItem {
   id: string
   parentId: string | null
-  positionType: EditablePositionType | 'subtotal' | 'image'
+  positionType: EditablePositionType | 'subtotal'
   oz: string | null
   /** Depth in the outline (0 = top level). */
   level: number
@@ -302,6 +326,10 @@ export interface DocumentItem {
     marginPercent: string | null
     laborHours: string
   } | null
+  /** Bild-Position (P2.12): image file of the project's Ablage; caption = shortText. */
+  image: { fileId: string; name: string; url: string } | null
+  /** Taken from or saved to the Stammdaten. */
+  catalogItemId: string | null
 }
 
 export interface CostLine {
@@ -361,6 +389,8 @@ export interface DocumentTotals {
   laborHours: string
   /** Counted positions without calculation (price entered directly). */
   uncalculatedCount: number
+  /** Lohnkostenanteil (§ 35a EStG) of the counted positions with calculation. */
+  laborShare: { netCents: number; grossCents: number }
 }
 
 /** Structured address for the e-invoice (EN 16931 BG-5 / BG-8). */
@@ -440,6 +470,11 @@ export interface DocumentDetail extends DocumentSummary {
   retentionPercent: string | null
   constructionLevyPercent: string | null
   progressBillingMode: 'cumulative' | 'individual' | null
+  /** Lohnkostenanteil nach § 35a EStG ausweisen (default from Einstellungen › Dokumente). */
+  showLaborShare: boolean
+  /** Angebotsversionen (P2.12): 1, 2 … and all versions of the same offer, oldest first. */
+  version: number
+  versions: { id: string; version: number; number: string | null; status: DocumentStatus }[]
   /** Fälligkeit: document date + payment term (set when finalized). */
   dueDate: string | null
   cancelReason: string | null
@@ -461,7 +496,12 @@ export interface DocumentDetail extends DocumentSummary {
   recipient: PartyAddress | null
   finalizedAt: string | null
   /** Change orders: main contract, reason. */
-  changeOrderInfo: { contractId: string; contractLabel: string; reason: string | null } | null
+  changeOrderInfo: {
+    contractId: string
+    contractLabel: string
+    reason: string | null
+    evidence: EvidenceItem[]
+  } | null
   /** Schalter „Nachtragsangebot“ possible (draft quote/change order with a main contract). */
   canConvertToChangeOrder: boolean
   items: DocumentItem[]
@@ -493,3 +533,97 @@ export interface TaxRateSummary {
   categoryCode: string
   isDefault: boolean
 }
+
+/** Resolved Nachweis with a label for the screen. */
+export interface EvidenceItem extends EvidenceRef {
+  label: string
+  /** Report date, sheet date or upload date. */
+  date: string | null
+  /** Report/sheet is signed or the file is locked as evidence. */
+  locked: boolean
+}
+
+/** Vertragssumme eines Projekts (GET /projects/:id/contract, P2.6). */
+export interface ProjectContract {
+  contract: {
+    id: string
+    number: string | null
+    status: DocumentStatus
+    documentDate: string
+    netCents: number
+  } | null
+  changeOrders: {
+    id: string
+    number: string | null
+    /** N01, N02 … */
+    changeOrderNumber: number
+    basis: ChangeOrderBasis
+    status: 'draft' | 'offered' | 'accepted' | 'partially_accepted' | 'rejected'
+    subject: string | null
+    reason: string | null
+    netCents: number
+    /** Counted for the Vertragssumme. */
+    acceptedNetCents: number
+    evidenceCount: number
+    decidedAt: string | null
+  }[]
+  totals: {
+    contractNetCents: number
+    acceptedNetCents: number
+    offeredNetCents: number
+    draftNetCents: number
+    rejectedNetCents: number
+    totalNetCents: number
+    potentialNetCents: number
+  }
+}
+
+/** Mehrmenge of a contract position on a Leistungsaufmaß (GET /measurement-sheets/:id/variances). */
+export interface SheetVariance {
+  itemId: string
+  oz: string | null
+  shortText: string | null
+  unit: string | null
+  orderedQuantity: string
+  measuredQuantity: string
+  /** Already in other change orders (not rejected). */
+  claimedQuantity: string
+  extraQuantity: string
+}
+
+// ---- Zielpreis „Preis anpassen“ (P2.12) ----------------------------------------------------------
+
+export const targetPriceRequest = z.object({
+  /** Desired net total of the document (after Gesamtrabatt), in cents. */
+  targetNetCents: z
+    .number()
+    .int('Betrag in Cent (ganze Zahl) erwartet.')
+    .min(0)
+    .max(100_000_000_000),
+  /** Positions whose price must not change. */
+  lockedItemIds: z.array(z.uuid('Ungültige ID.')).max(2000).default([]),
+  /** false: only preview the effect. */
+  apply: z.boolean().default(false),
+})
+export type TargetPriceRequest = z.infer<typeof targetPriceRequest>
+
+export interface TargetPriceResult {
+  currentNetCents: number
+  targetNetCents: number
+  /** Net total after applying (preview: estimate before rounding of the unit prices). */
+  netCents: number
+  /** target − net (rounding of EP × Menge; never hidden). */
+  residualCents: number
+  adjustedCount: number
+  /** Positions without Kalkulation or locked: price stays. */
+  fixedCount: number
+  /** Positions that would be sold below cost. */
+  belowCost: { id: string; oz: string | null; shortText: string | null }[]
+  applied: boolean
+  document: DocumentDetail | null
+}
+
+/** „In Stammdaten speichern“: the position (with its Kalkulation) as a new Leistung. */
+export const saveToCatalogRequest = z.object({
+  folderId: z.uuid('Ungültige ID.').nullish(),
+})

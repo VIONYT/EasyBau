@@ -1,0 +1,348 @@
+import type {
+  IncomingInvoiceDetail,
+  IncomingInvoiceList,
+  IncomingMailRun,
+  IncomingMailSettings,
+  ProjectFiguresDto,
+} from '@opc/schemas'
+import { afterAll, beforeAll, describe, expect, it } from 'vitest'
+import type { MailboxAccess, MailMessage } from './routes/incoming-mailbox.js'
+import { Client, createHarness, type Harness } from './testing/harness.js'
+
+/**
+ * Eingangsrechnungen ausbauen (P2.4): Rechnungseingang per E-Mail (fake mailbox instead of IMAP),
+ * Kostenzuweisung je Rechnungsposition, Kreditorennummer im DATEV-Export, Projektkosten in den
+ * Kennzahlen, Filter Zeitraum/Zuweisung.
+ */
+const UBL = (
+  number: string,
+  supplier = 'Trockenbau Süd GmbH',
+) => `<?xml version="1.0" encoding="UTF-8"?>
+<Invoice xmlns="urn:oasis:names:specification:ubl:schema:xsd:Invoice-2"
+  xmlns:cac="urn:oasis:names:specification:ubl:schema:xsd:CommonAggregateComponents-2"
+  xmlns:cbc="urn:oasis:names:specification:ubl:schema:xsd:CommonBasicComponents-2">
+  <cbc:CustomizationID>urn:cen.eu:en16931:2017#compliant#urn:xeinkauf.de:kosit:xrechnung_3.0</cbc:CustomizationID>
+  <cbc:ID>${number}</cbc:ID>
+  <cbc:IssueDate>2026-11-03</cbc:IssueDate>
+  <cbc:DueDate>2026-11-17</cbc:DueDate>
+  <cbc:InvoiceTypeCode>380</cbc:InvoiceTypeCode>
+  <cbc:DocumentCurrencyCode>EUR</cbc:DocumentCurrencyCode>
+  <cbc:BuyerReference>Lindenweg</cbc:BuyerReference>
+  <cac:AccountingSupplierParty><cac:Party>
+    <cbc:EndpointID schemeID="EM">rechnung@trockenbau.example</cbc:EndpointID>
+    <cac:PartyName><cbc:Name>${supplier}</cbc:Name></cac:PartyName>
+    <cac:PostalAddress><cbc:StreetName>Gipsweg 3</cbc:StreetName><cbc:CityName>Hildesheim</cbc:CityName>
+      <cbc:PostalZone>31134</cbc:PostalZone><cac:Country><cbc:IdentificationCode>DE</cbc:IdentificationCode></cac:Country></cac:PostalAddress>
+    <cac:PartyTaxScheme><cbc:CompanyID>DE123456789</cbc:CompanyID><cac:TaxScheme><cbc:ID>VAT</cbc:ID></cac:TaxScheme></cac:PartyTaxScheme>
+  </cac:Party></cac:AccountingSupplierParty>
+  <cac:AccountingCustomerParty><cac:Party><cac:PartyName><cbc:Name>Eingang Bau GmbH</cbc:Name></cac:PartyName></cac:Party></cac:AccountingCustomerParty>
+  <cac:TaxTotal><cbc:TaxAmount currencyID="EUR">190.00</cbc:TaxAmount>
+    <cac:TaxSubtotal><cbc:TaxableAmount currencyID="EUR">1000.00</cbc:TaxableAmount><cbc:TaxAmount currencyID="EUR">190.00</cbc:TaxAmount>
+      <cac:TaxCategory><cbc:ID>S</cbc:ID><cbc:Percent>19</cbc:Percent><cac:TaxScheme><cbc:ID>VAT</cbc:ID></cac:TaxScheme></cac:TaxCategory>
+    </cac:TaxSubtotal></cac:TaxTotal>
+  <cac:LegalMonetaryTotal><cbc:LineExtensionAmount currencyID="EUR">1000.00</cbc:LineExtensionAmount>
+    <cbc:TaxExclusiveAmount currencyID="EUR">1000.00</cbc:TaxExclusiveAmount>
+    <cbc:TaxInclusiveAmount currencyID="EUR">1190.00</cbc:TaxInclusiveAmount>
+    <cbc:PayableAmount currencyID="EUR">1190.00</cbc:PayableAmount></cac:LegalMonetaryTotal>
+  <cac:InvoiceLine><cbc:ID>1</cbc:ID><cbc:InvoicedQuantity unitCode="MTK">60</cbc:InvoicedQuantity>
+    <cbc:LineExtensionAmount currencyID="EUR">750.00</cbc:LineExtensionAmount>
+    <cac:Item><cbc:Name>Trockenbauwände</cbc:Name><cac:ClassifiedTaxCategory><cbc:ID>S</cbc:ID><cbc:Percent>19</cbc:Percent>
+      <cac:TaxScheme><cbc:ID>VAT</cbc:ID></cac:TaxScheme></cac:ClassifiedTaxCategory></cac:Item>
+    <cac:Price><cbc:PriceAmount currencyID="EUR">12.50</cbc:PriceAmount></cac:Price></cac:InvoiceLine>
+  <cac:InvoiceLine><cbc:ID>2</cbc:ID><cbc:InvoicedQuantity unitCode="H87">10</cbc:InvoicedQuantity>
+    <cbc:LineExtensionAmount currencyID="EUR">250.00</cbc:LineExtensionAmount>
+    <cac:Item><cbc:Name>Profile</cbc:Name><cac:ClassifiedTaxCategory><cbc:ID>S</cbc:ID><cbc:Percent>19</cbc:Percent>
+      <cac:TaxScheme><cbc:ID>VAT</cbc:ID></cac:TaxScheme></cac:ClassifiedTaxCategory></cac:Item>
+    <cac:Price><cbc:PriceAmount currencyID="EUR">25.00</cbc:PriceAmount></cac:Price></cac:InvoiceLine>
+</Invoice>`
+
+const PNG = Buffer.concat([
+  Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]),
+  Buffer.from('Foto einer Rechnung'),
+])
+
+/** In-memory mailbox: unread messages, processed ones are remembered. */
+const inbox: {
+  messages: MailMessage[]
+  done: number[]
+  access: MailboxAccess | null
+  fail: boolean
+} = {
+  messages: [],
+  done: [],
+  access: null,
+  fail: false,
+}
+
+describe.skipIf(!process.env.DATABASE_URL)('Eingangsrechnungen ausbauen (integration)', () => {
+  let h: Harness
+  let admin: Client
+  let projectId: string
+  let supplierId: string
+
+  beforeAll(async () => {
+    h = await createHarness({
+      requireAdminMfa: false,
+      mailboxConnector: async (access) => {
+        if (inbox.fail) throw Object.assign(new Error('auth'), { authenticationFailed: true })
+        inbox.access = access
+        return {
+          unread: async (limit) =>
+            inbox.messages.filter((m) => !inbox.done.includes(m.uid)).slice(0, limit),
+          done: async (uid) => {
+            inbox.done.push(uid)
+          },
+          close: async () => undefined,
+        }
+      },
+    })
+    admin = new Client(h.app)
+    await admin.post('/api/v1/setup', {
+      setupToken: h.setupToken,
+      company: { name: 'Eingang Bau GmbH' },
+      admin: {
+        email: 'chef@example.test',
+        password: 'ein-sehr-langes-passwort',
+        displayName: 'Chef',
+      },
+    })
+    projectId = (await admin.post('/api/v1/projects', { name: 'Lindenweg' })).json().id
+    supplierId = (
+      await admin.post('/api/v1/contacts', {
+        kind: 'organization',
+        organizationName: 'Trockenbau Süd GmbH',
+        vatId: 'DE123456789',
+      })
+    ).json().id
+  })
+
+  afterAll(async () => {
+    await h?.close()
+  })
+
+  it('stores the mailbox with an encrypted password', async () => {
+    const empty = (await admin.get('/api/v1/settings/incoming-mail')).json() as IncomingMailSettings
+    expect(empty).toMatchObject({ available: true, enabled: false, hasPassword: false, port: 993 })
+    expect(
+      (
+        await admin.put('/api/v1/settings/incoming-mail', {
+          enabled: true,
+          host: 'imap.example.test',
+        })
+      ).statusCode,
+    ).toBe(400)
+    const saved = await admin.put('/api/v1/settings/incoming-mail', {
+      enabled: true,
+      host: 'imap.example.test',
+      user: 'rechnungen@eingang.example',
+      password: 'geheim-123',
+      processedMailbox: 'Verarbeitet',
+    })
+    expect(saved.statusCode, saved.body).toBe(200)
+    expect(saved.json()).toMatchObject({
+      hasPassword: true,
+      mailbox: 'INBOX',
+      processedMailbox: 'Verarbeitet',
+    })
+    expect(JSON.stringify(saved.json())).not.toContain('geheim')
+    const [row] = await h.adminSql<{ settings: string }[]>`select settings::text from tenant`
+    expect(row?.settings).toContain('passwordEnc')
+    expect(row?.settings).not.toContain('geheim-123')
+    // Keep the password when it is left out
+    const kept = await admin.put('/api/v1/settings/incoming-mail', {
+      enabled: true,
+      host: 'imap.example.test',
+      user: 'rechnungen@eingang.example',
+      processedMailbox: 'Verarbeitet',
+    })
+    expect(kept.json().hasPassword).toBe(true)
+  })
+
+  it('takes invoice attachments of unread e-mails into the review', async () => {
+    inbox.messages = [
+      {
+        uid: 11,
+        from: 'Trockenbau Süd <rechnung@trockenbau.example>',
+        subject: 'Rechnung TS-200',
+        attachments: [
+          { filename: 'TS-200.xml', content: Buffer.from(UBL('TS-200')) },
+          { filename: 'AGB.txt', content: Buffer.from('AGB') },
+          { filename: 'logo.png', content: PNG, inline: true },
+        ],
+      },
+      {
+        uid: 12,
+        from: 'Lieferant',
+        subject: 'Foto',
+        attachments: [{ filename: 'beleg.png', content: PNG }],
+      },
+      { uid: 13, from: 'Newsletter', subject: 'Angebote', attachments: [] },
+    ]
+    const res = await admin.post('/api/v1/settings/incoming-mail/run', {})
+    expect(res.statusCode, res.body).toBe(200)
+    expect(res.json()).toMatchObject({
+      messages: 3,
+      imported: 2,
+      duplicates: 0,
+      ignored: 2,
+      failed: 0,
+      error: null,
+    } satisfies Partial<IncomingMailRun>)
+    expect(inbox.done).toEqual([11, 12, 13])
+    expect(inbox.access).toMatchObject({
+      host: 'imap.example.test',
+      password: 'geheim-123',
+      processedMailbox: 'Verarbeitet',
+    })
+    const list = (
+      await admin.get('/api/v1/incoming-invoices?status=review')
+    ).json() as IncomingInvoiceList
+    const fromMail = list.items.find((i) => i.invoiceNumber === 'TS-200')
+    expect(fromMail).toMatchObject({
+      receivedVia: 'email',
+      emailFrom: 'Trockenbau Süd <rechnung@trockenbau.example>',
+      emailSubject: 'Rechnung TS-200',
+      supplierName: 'Trockenbau Süd GmbH',
+    })
+    // Again: already received, nothing twice
+    inbox.done = []
+    const again = (
+      await admin.post('/api/v1/settings/incoming-mail/run', {})
+    ).json() as IncomingMailRun
+    expect(again).toMatchObject({ imported: 0, duplicates: 2 })
+    const settings = (
+      await admin.get('/api/v1/settings/incoming-mail')
+    ).json() as IncomingMailSettings
+    expect(settings.lastRun?.duplicates).toBe(2)
+    // A broken login is reported, nothing is marked as read
+    inbox.fail = true
+    const failed = (
+      await admin.post('/api/v1/settings/incoming-mail/run', {})
+    ).json() as IncomingMailRun
+    expect(failed.error).toBe('Anmeldung am Postfach fehlgeschlagen (Benutzer oder Passwort).')
+    inbox.fail = false
+  })
+
+  it('allocates per invoice line, uses the Kreditorennummer and adds project costs', async () => {
+    const list = (
+      await admin.get('/api/v1/incoming-invoices?status=review')
+    ).json() as IncomingInvoiceList
+    const id = list.items.find((i) => i.invoiceNumber === 'TS-200')?.id as string
+    let detail = await admin.get(`/api/v1/incoming-invoices/${id}`)
+    const invoice = detail.json() as IncomingInvoiceDetail
+    expect(invoice.contactId).toBe(supplierId)
+    expect(invoice.einvoice?.lines.map((l) => [l.id, l.netCents])).toEqual([
+      ['1', 75_000],
+      ['2', 25_000],
+    ])
+    const areas = (await admin.get('/api/v1/business-areas')).json() as {
+      id: string
+      name: string
+    }[]
+    const lager = areas.find((a) => a.name === 'Lager')?.id
+    const patched = await admin.patch(
+      `/api/v1/incoming-invoices/${id}`,
+      {
+        allocations: [
+          {
+            projectId,
+            costType: 'subcontract',
+            ratePercent: '19',
+            netCents: 75_000,
+            lineId: '1',
+            description: '1 Trockenbauwände',
+          },
+          {
+            businessAreaId: lager,
+            costType: 'material',
+            ratePercent: '19',
+            netCents: 25_000,
+            lineId: '2',
+          },
+        ],
+      },
+      { 'if-match': detail.headers.etag as string },
+    )
+    expect(patched.statusCode, patched.body).toBe(200)
+    expect((patched.json() as IncomingInvoiceDetail).allocations.map((a) => a.lineId)).toEqual([
+      '1',
+      '2',
+    ])
+    expect((await admin.post(`/api/v1/incoming-invoices/${id}/confirm`, {})).statusCode).toBe(200)
+    detail = await admin.get(`/api/v1/incoming-invoices/${id}`)
+    const paid = await admin.post(`/api/v1/incoming-invoices/${id}/payment`, {
+      paidOn: '2026-11-07',
+    })
+    expect(paid.statusCode, paid.body).toBe(200)
+
+    // Filter by Zuweisung and period
+    const byProject = (
+      await admin.get(
+        `/api/v1/incoming-invoices?projectId=${projectId}&from=2026-11-01&to=2026-11-30`,
+      )
+    ).json() as IncomingInvoiceList
+    expect(byProject.items.map((i) => i.invoiceNumber)).toEqual(['TS-200'])
+    expect(
+      (
+        (
+          await admin.get(`/api/v1/incoming-invoices?projectId=${projectId}&from=2026-12-01`)
+        ).json() as IncomingInvoiceList
+      ).items,
+    ).toEqual([])
+
+    // Projektkosten
+    const figures = (
+      await admin.get(`/api/v1/projects/${projectId}/figures`)
+    ).json() as ProjectFiguresDto
+    expect(figures.costs).toMatchObject({
+      totalCents: 75_000,
+      byType: { subcontract: 75_000, material: 0 },
+      contributionCents: -75_000,
+      invoiceCount: 1,
+    })
+
+    // Kreditorennummer: unique, used in the DATEV export instead of the Sammelkreditor
+    const contact = await admin.get(`/api/v1/contacts/${supplierId}`)
+    const updated = await admin.patch(
+      `/api/v1/contacts/${supplierId}`,
+      { creditorNumber: '70012' },
+      { 'if-match': contact.headers.etag as string },
+    )
+    expect(updated.statusCode, updated.body).toBe(200)
+    expect(updated.json().creditorNumber).toBe('70012')
+    const other = await admin.post('/api/v1/contacts', {
+      kind: 'organization',
+      organizationName: 'Baustoff Nord',
+      creditorNumber: '70012',
+    })
+    expect(other.statusCode).toBe(400)
+    expect(other.json().errors.creditorNumber).toBe('Diese Kreditorennummer ist schon vergeben.')
+    expect(
+      (
+        await admin.post('/api/v1/contacts', {
+          kind: 'organization',
+          organizationName: 'X',
+          creditorNumber: 'K-1',
+        })
+      ).statusCode,
+    ).toBe(400)
+    await admin.put('/api/v1/settings/datev', {
+      consultantNumber: '1234567',
+      clientNumber: '10001',
+      chart: 'SKR03',
+      fiscalYearStartMonth: 1,
+      accountLength: 4,
+      revenueAccounts: {},
+      bankAccount: null,
+    })
+    const datev = await admin.get('/api/v1/exports/datev?from=2026-11-01&to=2026-11-30')
+    expect(datev.statusCode, datev.body).toBe(200)
+    const lines = datev.rawPayload.toString('latin1').trim().split('\r\n').slice(2)
+    expect(lines).toContain(
+      '892,50;"S";"EUR";;;;3100;70012;"9";0311;"TS-200";"";;"Trockenbau Süd GmbH"',
+    )
+    expect(lines).toContain(
+      '1190,00;"S";"EUR";;;;70012;1200;;0711;"TS-200";"";;"Zahlung Trockenbau Süd GmbH"',
+    )
+  })
+})

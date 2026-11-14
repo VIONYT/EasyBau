@@ -30,6 +30,8 @@ export interface LetterPdfInput {
     items: (
       | { kind: 'title'; oz: string; text: string; total: string }
       | { kind: 'text'; text: string }
+      /** Bild-Position: image file in the virtual file system, optional caption. */
+      | { kind: 'image'; path: string; caption: string | null }
       | {
           kind: 'item'
           oz: string

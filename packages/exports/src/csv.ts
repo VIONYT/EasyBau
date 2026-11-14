@@ -56,3 +56,42 @@ export function encodeWindows1252(text: string): Buffer {
   }
   return Buffer.from(bytes)
 }
+
+/**
+ * Reads CSV as written by Excel/LibreOffice in Germany: separator `;` (or `,`/tab, detected from
+ * the header line), fields in double quotes with doubled quotes inside, CRLF or LF, optional
+ * UTF-8 BOM. Returns the rows as arrays of strings; empty lines are dropped.
+ */
+export function parseCsv(text: string): string[][] {
+  const input = text.replace(/^﻿/, '')
+  const firstLine = input.slice(0, input.search(/\r?\n|$/))
+  const counts = [';', ',', '\t'].map((s) => ({ s, n: firstLine.split(s).length }))
+  const separator = counts.reduce((best, c) => (c.n > best.n ? c : best)).s
+  const rows: string[][] = []
+  let row: string[] = []
+  let field = ''
+  let quoted = false
+  for (let i = 0; i < input.length; i++) {
+    const ch = input[i] as string
+    if (quoted) {
+      if (ch === '"' && input[i + 1] === '"') {
+        field += '"'
+        i++
+      } else if (ch === '"') quoted = false
+      else field += ch
+    } else if (ch === '"' && field === '') quoted = true
+    else if (ch === separator) {
+      row.push(field)
+      field = ''
+    } else if (ch === '\n' || ch === '\r') {
+      if (ch === '\r' && input[i + 1] === '\n') i++
+      row.push(field)
+      if (row.some((v) => v !== '')) rows.push(row)
+      row = []
+      field = ''
+    } else field += ch
+  }
+  row.push(field)
+  if (row.some((v) => v !== '')) rows.push(row)
+  return rows
+}

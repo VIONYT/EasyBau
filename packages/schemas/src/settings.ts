@@ -1,6 +1,6 @@
 import { z } from 'zod'
 import { countryCode, email, id, optionalText, text } from './common.js'
-import { COST_KINDS, DOCUMENT_TYPES } from './constants.js'
+import { COST_KINDS, DOCUMENT_TYPES, FEDERAL_STATES, type FederalStateCode } from './constants.js'
 import { type CostKind, decimalText } from './documents.js'
 
 const percent = (label: string) => decimalText(label, 3, 4)
@@ -32,7 +32,7 @@ export const companyRequest = z
     postalCode: optionalText(20),
     city: optionalText(100),
     countryCode,
-    federalState: optionalText(50),
+    federalState: z.enum(FEDERAL_STATES, 'Unbekanntes Bundesland.').nullable(),
     email: z.union([email, z.literal('')]).transform((v) => v || null),
     phone: optionalText(50),
     website: optionalText(200),
@@ -57,7 +57,7 @@ export interface Company {
   postalCode: string | null
   city: string | null
   countryCode: string
-  federalState: string | null
+  federalState: FederalStateCode | null
   email: string | null
   phone: string | null
   website: string | null
@@ -252,6 +252,8 @@ export const filingTemplateRequest = z.object({
 
 // ---- DATEV ------------------------------------------------------------------------------------
 
+const datevAccount = z.string().regex(/^\d{4,8}$/, 'Konto: 4–8 Ziffern.')
+
 export const datevSettingsRequest = z.object({
   consultantNumber: z
     .string()
@@ -290,6 +292,24 @@ export const datevSettingsRequest = z.object({
     .string()
     .regex(/^\d{4,8}$/)
     .nullable(),
+  /** Eingangsrechnungen: expense account per cost type and for § 13b; empty = chart default. */
+  expenseAccounts: z
+    .object({
+      material: datevAccount.nullable(),
+      labor: datevAccount.nullable(),
+      equipment: datevAccount.nullable(),
+      subcontract: datevAccount.nullable(),
+      other: datevAccount.nullable(),
+      reverseCharge: datevAccount.nullable(),
+    })
+    .partial()
+    .default({}),
+  /** Kreditor for all suppliers (Sammelkreditor); empty = 70000. */
+  creditorAccount: z
+    .string()
+    .regex(/^\d{5,9}$/, 'Kreditorenkonto: 5–9 Ziffern.')
+    .nullable()
+    .default(null),
 })
 export type DatevSettings = z.infer<typeof datevSettingsRequest>
 
@@ -359,4 +379,77 @@ export interface OperationsStatus {
       } | null
     }
   }
+}
+
+// ---- Feiertage (P2.11) --------------------------------------------------------------------------
+
+export const holidayQuery = z.object({
+  year: z.coerce.number().int().min(1995, 'Jahr ab 1995.').max(2199, 'Jahr bis 2199.'),
+})
+
+export const holidayRequest = z.object({
+  date: z.iso.date('Datum im Format JJJJ-MM-TT erwartet.'),
+  name: text(100),
+})
+export type HolidayRequest = z.infer<typeof holidayRequest>
+
+export interface HolidayEntry {
+  /** Own holidays have an id (deletable); statutory ones are computed and have none. */
+  id: string | null
+  date: string
+  name: string
+  custom: boolean
+}
+
+export interface HolidayList {
+  year: number
+  federalState: FederalStateCode | null
+  holidays: HolidayEntry[]
+}
+
+// ---- Dokument-Vorgaben (P2.11) ------------------------------------------------------------------
+
+/** Lohnkostenanteil § 35a: Rechnungen / Angebotsdokumente × Personen / Organisationen. */
+const laborShareRow = z.object({ person: z.boolean(), organization: z.boolean() })
+export const laborShareMatrix = z.object({ invoice: laborShareRow, offer: laborShareRow })
+export type LaborShareMatrix = z.infer<typeof laborShareMatrix>
+
+export const documentSettingsRequest = z.object({
+  laborShare: laborShareMatrix,
+  /** Default Abschlagsart of new progress invoices. */
+  progressBillingMode: z.enum(['cumulative', 'individual']),
+  fileNamePattern: text(200),
+  /** Automatische Anhänge: company files (asset ids) attached per document type. */
+  attachments: z.partialRecord(
+    z.enum(DOCUMENT_TYPES),
+    z.array(id).max(10, 'Höchstens 10 Anhänge.'),
+  ),
+})
+export type DocumentSettingsRequest = z.infer<typeof documentSettingsRequest>
+
+export interface AttachmentFile {
+  id: string
+  name: string
+  sizeBytes: number
+  createdAt: string
+}
+
+export interface DocumentSettings extends DocumentSettingsRequest {
+  placeholders: string[]
+  defaultFileNamePattern: string
+  /** All uploaded attachment files (never deleted, may be unused). */
+  files: AttachmentFile[]
+  /** Example file name for the current pattern. */
+  example: string
+}
+
+export const attachmentUploadQuery = z.object({ name: text(150) })
+
+// ---- Hinweisleiste (P2.11) ----------------------------------------------------------------------
+
+export interface CompanyNoticeEntry {
+  key: string
+  severity: 'required' | 'recommended'
+  message: string
+  route: string
 }

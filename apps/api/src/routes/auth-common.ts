@@ -76,7 +76,8 @@ export async function buildMe(
 ): Promise<Me> {
   const [user] = await services.sql<Me['user'][]>`
     select id, email, display_name as "displayName", (totp_enabled_at is not null) as "totpEnabled",
-           (select count(*)::int from webauthn_credential w where w.user_id = u.id) as "webauthnCount"
+           (select count(*)::int from webauthn_credential w where w.user_id = u.id) as "webauthnCount",
+           (email_verified_at is not null) as "emailVerified"
     from app_user u where id = ${auth.userId}`
   const context = await loadTenantContext(services.sql, auth.userId, auth.tenantId)
   if (!user || !context) throw new HttpError(401, 'Bitte melden Sie sich an.')

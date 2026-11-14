@@ -32,6 +32,7 @@ import {
   insertFromCatalogRequest,
   type SupplierArticle,
   type SupplierCatalog,
+  saveToCatalogRequest,
   supplierArticleQuery,
   takeOverArticleRequest,
   type UpdateCatalogItemRequest,
@@ -158,7 +159,7 @@ function pricesOf(
   }
 }
 
-async function loadItem(tx: Tx, id: string): Promise<CatalogItem | null> {
+export async function loadItem(tx: Tx, id: string): Promise<CatalogItem | null> {
   const [row] = await tx<
     (Omit<CatalogItem, 'components' | 'laborHours'> & { calcModeRaw: string })[]
   >`
@@ -211,7 +212,7 @@ async function unitSymbols(
   return new Map(rows.map((r) => [r.id, r.symbol]))
 }
 
-async function saveItem(
+export async function saveItem(
   tx: Tx,
   auth: AuthContext,
   kind: 'service' | 'material',
@@ -796,6 +797,57 @@ export function registerCatalogRoutes(app: FastifyInstance, services: Services) 
       return loadItem(tx, id)
     })
     return reply.status(201).send(item)
+  })
+
+  /**
+   * „In Stammdaten speichern“ (P2.12): a position with its Kalkulation becomes a new Leistung;
+   * without Kalkulation the EP is the Verkaufspreis. A draft position is linked to the new entry.
+   */
+  app.post('/api/v1/documents/:id/items/:itemId/to-catalog', async (request, reply) => {
+    const auth = requirePermission(request, 'catalog.write')
+    if (!auth.permissions.has('document.read')) {
+      throw new HttpError(403, 'Für diese Aktion fehlt die Berechtigung.')
+    }
+    const { id, itemId } = parse(
+      z.object({ id: z.uuid('Ungültige ID.'), itemId: z.uuid('Ungültige ID.') }),
+      request.params,
+    )
+    const input = parse(saveToCatalogRequest, request.body ?? {})
+    const created = await inTenant(services, auth, async (tx) => {
+      const doc = await loadDocument(tx, auth, id)
+      if (!doc) throw notFound('Das Dokument')
+      const item = doc.items.find((i) => i.id === itemId)
+      if (!item) throw notFound('Die Position')
+      if (!['item', 'alternative', 'optional', 'lump_sum'].includes(item.positionType)) {
+        throw invalid({ itemId: 'Nur Positionen mit Menge und Preis lassen sich speichern.' })
+      }
+      if (!item.unit || !item.shortText) throw invalid({ itemId: 'Kurztext oder Einheit fehlt.' })
+      const calculated = item.costLines.length > 0
+      const catalogId = await saveItem(tx, auth, 'service', {
+        folderId: input.folderId ?? null,
+        shortText: item.shortText,
+        longText: item.longText,
+        unitId: item.unit.id,
+        calcMode: item.calcMode ?? 'unit_price',
+        ...(calculated
+          ? {
+              components: item.costLines.map((l) => ({
+                kind: l.kind,
+                description: l.description,
+                quantity: l.quantity,
+                unitId: l.unit?.id ?? null,
+                unitCostCents: l.unitCostCents,
+                markupPercent: l.markupPercent,
+              })),
+            }
+          : { priceCents: item.unitPriceCents ?? 0 }),
+      })
+      if (doc.status === 'draft') {
+        await tx`update document_item set catalog_item_id = ${catalogId} where id = ${itemId}`
+      }
+      return loadItem(tx, catalogId)
+    })
+    return reply.status(201).send(created)
   })
 
   /** Position from Stammdaten or a catalog article, with its Kalkulation (Kostenzeilen). */

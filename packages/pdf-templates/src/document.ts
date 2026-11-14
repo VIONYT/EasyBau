@@ -64,7 +64,11 @@ const percent = germanPercent
 /** Builds the template data of a document; logo bytes are added by the caller. */
 export function documentLetter(
   doc: DocumentDetail,
-  options: { watermark: string | null },
+  options: {
+    watermark: string | null
+    /** Bild-Positionen: item id → image path (assets); missing images are left out. */
+    images?: ReadonlyMap<string, string>
+  },
 ): Omit<LetterPdfInput, 'logo'> & { logoPosition: LogoPosition | null } {
   const values: LetterheadValues = doc.issuer.values ?? {
     Firma: doc.issuer.name,
@@ -103,7 +107,10 @@ export function documentLetter(
       })
     } else if (item.positionType === 'text') {
       items.push({ kind: 'text', text: item.longText ?? item.shortText ?? '' })
-    } else if (item.positionType !== 'subtotal' && item.positionType !== 'image') {
+    } else if (item.positionType === 'image') {
+      const path = options.images?.get(item.id)
+      if (path) items.push({ kind: 'image', path, caption: item.shortText })
+    } else if (item.positionType !== 'subtotal') {
       const counted = item.positionType === 'item' || item.positionType === 'lump_sum'
       items.push({
         kind: 'item',

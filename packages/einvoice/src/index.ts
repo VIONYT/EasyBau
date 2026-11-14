@@ -16,6 +16,20 @@ export {
   facturXmp,
 } from './facturx.js'
 export { amount } from './format.js'
+export {
+  centsOf,
+  einvoiceSyntaxOf,
+  extractPdfEinvoice,
+  type IncomingEinvoice,
+  IncomingEinvoiceError,
+  type IncomingLine,
+  type IncomingParty,
+  type IncomingProfile,
+  type IncomingSyntax,
+  type IncomingVatBreakdown,
+  profileOf,
+  readIncomingEinvoice,
+} from './incoming.js'
 export { parseKositReport, type ValidationMessage, type ValidationResult } from './kosit.js'
 export * from './model.js'
 export { toUbl } from './ubl.js'

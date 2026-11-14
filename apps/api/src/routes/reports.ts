@@ -13,6 +13,7 @@ import {
   SUPPORTED_SECTION_TYPES,
   signReportRequest,
   updateReportRequest,
+  uploadReportPhotoQuery,
   type WeatherValue,
 } from '@opc/schemas'
 import type { FastifyInstance, FastifyReply } from 'fastify'
@@ -27,6 +28,8 @@ import {
   type Services,
 } from '../context.js'
 import { checkIfMatch, etagOf, HttpError, notFound, parse } from '../http.js'
+import { storeUploadedFile } from './files.js'
+import { notify, projectMembersExcept } from './notifications.js'
 import { ownSignature } from './signatures.js'
 
 const projectParam = z.object({ id: z.uuid('Ungültige ID.') })
@@ -46,7 +49,7 @@ const SUPPORTED = new Set<string>(SUPPORTED_SECTION_TYPES)
 const isSupported = (sections: ReportSection[]) => sections.every((s) => SUPPORTED.has(s.type))
 
 /** Sum of all staff hours of a report (two decimals, exact: hours are stored as text). */
-function totalHours(sections: ReportSection[], data: Record<string, unknown>): string {
+export function totalHours(sections: ReportSection[], data: Record<string, unknown>): string {
   let hundredths = 0
   for (const section of sections.filter((s) => s.type === 'staff')) {
     for (const row of (data[section.id] as StaffValue | undefined)?.rows ?? []) {
@@ -85,6 +88,7 @@ interface ReportRow {
   createdById: string | null
   updatedAt: string
   updatedRaw: Date
+  billedInvoice: ReportSummary['billedInvoice']
 }
 
 function reportColumns(tx: Tx) {
@@ -94,7 +98,9 @@ function reportColumns(tx: Tx) {
     r.template_snapshot as "templateSnapshot",
     (select count(*)::int from report_photo ph where ph.report_id = r.id) as "photoCount",
     case when u.id is null then null else json_build_object('id', u.id, 'displayName', u.display_name) end as "createdBy",
-    r.created_by as "createdById", ${ISO(tx, 'r.updated_at')} as "updatedAt", r.updated_at as "updatedRaw"`
+    r.created_by as "createdById", ${ISO(tx, 'r.updated_at')} as "updatedAt", r.updated_at as "updatedRaw",
+    (select json_build_object('id', b.id, 'number', b.number) from document b
+     where b.id = r.billed_in_invoice_id and b.status <> 'cancelled') as "billedInvoice"`
 }
 
 const fromReports = (tx: Tx) => tx`
@@ -117,6 +123,8 @@ function toSummary(row: ReportRow): ReportSummary {
     weather: weatherOf(sections, row.data),
     createdBy: row.createdBy,
     updatedAt: row.updatedAt,
+    billable: row.billable,
+    billedInvoice: row.billedInvoice,
   }
 }
 
@@ -332,8 +340,19 @@ export function registerReportRoutes(app: FastifyInstance, services: Services) {
     const auth = requirePermission(request, 'report.write')
     const { id } = parse(projectParam, request.params)
     const input = parse(createReportRequest, request.body)
-    const report = await inTenant(services, auth, async (tx) => {
+    const result = await inTenant(services, auth, async (tx) => {
       const project = await requireVisibleProject(tx, auth, id)
+      // Offline capture sends its own id: the same report again (sync retry) changes nothing.
+      if (input.id) {
+        const [existing] = await tx<{ projectId: string }[]>`
+          select project_id as "projectId" from report where id = ${input.id}`
+        if (existing) {
+          if (existing.projectId !== id) {
+            throw new HttpError(409, 'Diese Berichts-ID gehört zu einem anderen Projekt.')
+          }
+          return { report: await loadReport(tx, auth, input.id), created: false }
+        }
+      }
       if (project.archived) {
         throw new HttpError(409, 'Das Projekt ist archiviert. Bitte zuerst wiederherstellen.')
       }
@@ -346,8 +365,9 @@ export function registerReportRoutes(app: FastifyInstance, services: Services) {
       const date = input.reportDate ?? (today as { d: string }).d
       const data = await initialData(tx, id, date, template.sections)
       const [created] = await tx<{ id: string }[]>`
-        insert into report (tenant_id, project_id, template_id, report_date, data, created_by)
-        values (${auth.tenantId}, ${id}, ${template.id}, ${date}, ${tx.json(data as never)}, ${auth.userId})
+        insert into report (id, tenant_id, project_id, template_id, report_date, data, created_by)
+        values (coalesce(${input.id ?? null}::uuid, uuid_v7()), ${auth.tenantId}, ${id}, ${template.id}, ${date},
+                ${tx.json(data as never)}, ${auth.userId})
         returning id`.catch((error: { code?: string }) => {
         if (error.code === '23505') {
           throw new HttpError(
@@ -358,10 +378,10 @@ export function registerReportRoutes(app: FastifyInstance, services: Services) {
         }
         throw error
       })
-      return loadReport(tx, auth, (created as { id: string }).id)
+      return { report: await loadReport(tx, auth, (created as { id: string }).id), created: true }
     })
-    reply.header('location', `/api/v1/reports/${report?.id}`)
-    return sendReport(reply, report, 201)
+    reply.header('location', `/api/v1/reports/${result.report?.id}`)
+    return sendReport(reply, result.report, result.created ? 201 : 200)
   })
 
   app.get('/api/v1/reports/:id', async (request, reply) => {
@@ -448,6 +468,36 @@ export function registerReportRoutes(app: FastifyInstance, services: Services) {
     return sendReport(reply, report, 201)
   })
 
+  // Photo straight from the camera (also from the offline outbox): stored in the Ablage (folder
+  // „Fotos“ if it exists) and attached to the report in one transaction.
+  app.post('/api/v1/reports/:id/photos/upload', async (request, reply) => {
+    const auth = requirePermission(request, 'report.write')
+    const { id } = parse(reportParam, request.params)
+    const query = parse(uploadReportPhotoQuery, request.query)
+    const target = await inTenant(services, auth, async (tx) => {
+      const current = await lockOpen(tx, auth, id)
+      const [folder] = await tx<{ id: string }[]>`
+        select id from project_folder where project_id = ${current.projectId} and name = 'Fotos' limit 1`
+      return { projectId: current.projectId, folderId: folder?.id ?? null }
+    })
+    await storeUploadedFile(services, auth, request, target.projectId, {
+      filename: query.filename,
+      folderId: target.folderId,
+      caption: null,
+      imageOnly: true,
+      onStored: async (tx, fileId) => {
+        await lockOpen(tx, auth, id)
+        await tx`
+          insert into report_photo (tenant_id, report_id, file_id, caption, sort)
+          values (${auth.tenantId}, ${id}, ${fileId}, ${query.caption ?? null},
+                  (select coalesce(max(sort), 0) + 10 from report_photo where report_id = ${id}))`
+        await tx`update report set updated_at = now() where id = ${id}`
+      },
+    })
+    const report = await inTenant(services, auth, (tx) => loadReport(tx, auth, id))
+    return sendReport(reply, report, 201)
+  })
+
   app.delete('/api/v1/reports/:id/photos/:fileId', async (request, reply) => {
     const auth = requirePermission(request, 'report.write')
     const { id, fileId } = parse(photoParam, request.params)
@@ -514,6 +564,22 @@ export function registerReportRoutes(app: FastifyInstance, services: Services) {
       // The photos become evidence: they can no longer be deleted or replaced.
       await tx`update file set is_evidence = true
                where id in (select file_id from report_photo where report_id = ${id}) and not is_evidence`
+      // Benachrichtigung for the project team (P2.8).
+      const [info] = await tx<{ name: string; date: string }[]>`
+        select t.name, to_char(r.report_date, 'DD.MM.YYYY') as date
+        from report r join report_template t on t.id = r.template_id where r.id = ${id}`
+      await notify(
+        tx,
+        auth.tenantId,
+        await projectMembersExcept(tx, current.projectId, auth.userId),
+        {
+          kind: 'report_signed',
+          refId: id,
+          title: `${info?.name ?? 'Bericht'} vom ${info?.date ?? ''} unterschrieben`,
+          body: `von ${auth.displayName}`,
+          route: `/berichte/${id}`,
+        },
+      )
       return loadReport(tx, auth, id)
     })
     return sendReport(reply, report)

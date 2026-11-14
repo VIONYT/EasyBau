@@ -27,6 +27,8 @@ export interface DatevBooking {
   date: string
   documentNo: string
   text: string
+  /** BU-Schlüssel, e.g. "9" (19 % Vorsteuer); empty for Automatikkonten. */
+  taxKey?: string
 }
 
 export interface DatevAccounts {
@@ -181,6 +183,92 @@ export function datevBookings(
   return bookings.filter((b) => b.amountCents !== 0n)
 }
 
+/** Accounts for received invoices (Eingangsrechnungen): expense per cost type, creditor, bank. */
+export interface IncomingAccounts {
+  material: string
+  labor: string
+  equipment: string
+  subcontract: string
+  other: string
+  /** § 13b: Automatikkonto with input and output tax (e.g. SKR03 3120, SKR04 5920). */
+  reverseCharge: string
+  /** Kreditor (Sammelkreditor), e.g. 70000. */
+  creditor: string
+  bank: string
+}
+
+export interface ExportIncoming {
+  invoiceNumber: string
+  date: string
+  supplierName: string
+  creditNote: boolean
+  reverseCharge: boolean
+  /** Kreditorennummer of the supplier; otherwise the Sammelkreditor. */
+  creditorAccount?: string | null
+  allocations: {
+    costType: 'material' | 'labor' | 'equipment' | 'subcontract' | 'other'
+    ratePercent: string
+    netCents: bigint
+    taxCents: bigint
+  }[]
+}
+
+export interface ExportIncomingPayment {
+  invoiceNumber: string
+  date: string
+  supplierName: string
+  /** Gross amount; negative for credit notes. */
+  amountCents: bigint
+  creditorAccount?: string | null
+}
+
+/** DATEV BU-Schlüssel for input tax: 9 = 19 % Vorsteuer, 8 = 7 % Vorsteuer, none for 0 %. */
+export function inputTaxKey(ratePercent: string): string | undefined {
+  const rate = Number(ratePercent)
+  if (rate >= 19) return '9'
+  if (rate > 0) return '8'
+  return undefined
+}
+
+/**
+ * Received invoices: one booking per cost allocation (Aufwand an Kreditor, gross, with the
+ * BU-Schlüssel of the input tax; § 13b on its Automatikkonto without key), one per payment
+ * (Kreditor an Bank). Credit notes are negative (Haben).
+ */
+export function incomingBookings(
+  invoices: readonly ExportIncoming[],
+  payments: readonly ExportIncomingPayment[],
+  accounts: IncomingAccounts,
+): DatevBooking[] {
+  const bookings: DatevBooking[] = []
+  for (const invoice of invoices) {
+    const sign = invoice.creditNote ? -1n : 1n
+    for (const allocation of invoice.allocations) {
+      const taxKey = invoice.reverseCharge ? undefined : inputTaxKey(allocation.ratePercent)
+      bookings.push({
+        amountCents: (allocation.netCents + allocation.taxCents) * sign,
+        account: invoice.reverseCharge ? accounts.reverseCharge : accounts[allocation.costType],
+        contraAccount: invoice.creditorAccount || accounts.creditor,
+        date: invoice.date,
+        documentNo: invoice.invoiceNumber,
+        text: invoice.supplierName,
+        ...(taxKey ? { taxKey } : {}),
+      })
+    }
+  }
+  for (const payment of payments) {
+    bookings.push({
+      amountCents: payment.amountCents,
+      account: payment.creditorAccount || accounts.creditor,
+      contraAccount: accounts.bank,
+      date: payment.date,
+      documentNo: payment.invoiceNumber,
+      text: `Zahlung ${payment.supplierName}`,
+    })
+  }
+  return bookings.filter((b) => b.amountCents !== 0n)
+}
+
 /** The EXTF file as text (CRLF); encode as Windows-1252 before sending. */
 export function datevBookingBatch(header: DatevHeader, bookings: readonly DatevBooking[]): string {
   const created = header.createdAt
@@ -231,7 +319,7 @@ export function datevBookingBatch(header: DatevHeader, bookings: readonly DatevB
       '',
       b.account,
       b.contraAccount,
-      '',
+      b.taxKey ? csvField(b.taxKey, true) : '',
       `${day}${month}`,
       text(b.documentNo, 36),
       '""',

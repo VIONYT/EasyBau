@@ -29,6 +29,7 @@ import {
   type DocumentTotals,
   documentStatusRequest,
   type EinvoiceFormat,
+  type EvidenceRef,
   finalizeRequest,
   moveItemRequest,
   PRICED_POSITION_TYPES,
@@ -52,8 +53,11 @@ import {
 } from '../context.js'
 import { einvoiceSummary } from '../einvoice.js'
 import { checkIfMatch, etagOf, HttpError, notFound, parse } from '../http.js'
+import { checkEvidence, resolveEvidence } from './change-orders.js'
+import { documentSettings, laborShareDefault } from './document-settings.js'
 import { finalizeInvoice } from './invoices.js'
 import { companyValues, loadLetterhead } from './letterhead.js'
+import { notify, projectMembersExcept } from './notifications.js'
 import { archiveDocumentPdf } from './pdf.js'
 import { loadReceivable, todayOf } from './receivables.js'
 
@@ -120,6 +124,9 @@ interface ItemRow {
   calcMode: 'unit_price' | 'total_price' | null
   cumulativeQuantity: string | null
   previouslyBilledQuantity: string | null
+  imageFileId: string | null
+  imageName: string | null
+  catalogItemId: string | null
 }
 
 interface CostRow {
@@ -145,7 +152,9 @@ async function loadItems(tx: Tx, documentId: string): Promise<ItemRow[]> {
            total_cents::text as "totalCents", trim_scale(tax_rate_percent)::text as "taxRatePercent",
            tax_category as "taxCategory", quantity_from_measurement as "fromMeasurement",
            calc_mode as "calcMode", trim_scale(cumulative_quantity)::text as "cumulativeQuantity",
-           trim_scale(previously_billed_quantity)::text as "previouslyBilledQuantity"
+           trim_scale(previously_billed_quantity)::text as "previouslyBilledQuantity",
+           image_file_id as "imageFileId", catalog_item_id as "catalogItemId",
+           (select f.filename from file f where f.id = image_file_id) as "imageName"
     from document_item where document_id = ${documentId}`
 }
 
@@ -345,14 +354,22 @@ function totalsOf(
   const totals = calculateDocumentTotals({
     ...totalsInput(doc),
     deductions: deductions.inputs,
-    lines: rows.map((row) => ({
-      id: row.id,
-      parentId: row.parentId,
-      positionType: row.positionType as PositionType,
-      ...(row.totalCents === null ? {} : { totalCents: BigInt(row.totalCents) }),
-      ...(row.taxRatePercent ? { taxRatePercent: row.taxRatePercent } : {}),
-      ...(row.taxCategory ? { taxCategory: row.taxCategory } : {}),
-    })),
+    lines: rows.map((row) => {
+      const lines = costs.get(row.id)
+      // Lohnkostenanteil (§ 35a) only from positions with Kalkulation.
+      const labor = lines?.length
+        ? ((priceOf(row, lines) as ReturnType<typeof calculateItem> | null)?.laborShareCents ?? 0n)
+        : 0n
+      return {
+        id: row.id,
+        parentId: row.parentId,
+        positionType: row.positionType as PositionType,
+        ...(row.totalCents === null ? {} : { totalCents: BigInt(row.totalCents) }),
+        ...(row.taxRatePercent ? { taxRatePercent: row.taxRatePercent } : {}),
+        ...(row.taxCategory ? { taxCategory: row.taxCategory } : {}),
+        ...(labor ? { laborShareCents: labor } : {}),
+      }
+    }),
   })
   // Kalkulation of the counted positions (Soll-Kosten, Soll-Stunden).
   let costCents = 0n
@@ -402,6 +419,10 @@ function totalsOf(
     marginCents: Number(totals.netCents - costCents),
     laborHours: roundTo(new Decimal(laborHundredths.toString()).div(100), 2),
     uncalculatedCount,
+    laborShare: {
+      netCents: Number(totals.laborShare.netCents),
+      grossCents: Number(totals.laborShare.grossCents),
+    },
   }
 }
 
@@ -564,6 +585,7 @@ type DocumentRow = Omit<
     issuerSnapshot: Issuer | null
     recipientSnapshot: DocumentDetail['recipient'] | null
     storedNotes: string[] | null
+    hasVersions: boolean
   }
 
 export async function loadDocument(
@@ -587,14 +609,25 @@ export async function loadDocument(
            trim_scale(d.retention_percent)::text as "retentionPercent",
            trim_scale(d.construction_levy_percent)::text as "constructionLevyPercent",
            d.progress_billing_mode as "progressBillingMode", ${DATE(tx, 'd.due_date')} as "dueDate",
-           d.cancel_reason as "cancelReason", d.legal_notes as "storedNotes"
+           d.cancel_reason as "cancelReason", d.legal_notes as "storedNotes",
+           d.show_labor_share as "showLaborShare", d.version,
+           d.previous_version_id is not null or exists (
+             select 1 from document v where v.previous_version_id = d.id) as "hasVersions"
     from ${fromDocuments(tx)}
     left join contact c on c.id = d.contact_id
     where d.id = ${id} and ${projectVisibility(tx, auth)}`
   if (!row) return null
   const rows = await loadItems(tx, id)
   const costs = await loadCostLines(tx, id)
-  const { updatedRaw, contactId, issuerSnapshot, recipientSnapshot, storedNotes, ...doc } = row
+  const {
+    updatedRaw,
+    contactId,
+    issuerSnapshot,
+    recipientSnapshot,
+    storedNotes,
+    hasVersions,
+    ...doc
+  } = row
   const items: DocumentItem[] = outline(rows).map(({ row: r, level }) => {
     const lines = costs.get(r.id) ?? []
     const calc = lines.length ? (priceOf(r, lines) as ReturnType<typeof calculateItem>) : null
@@ -637,11 +670,26 @@ export async function loadDocument(
             laborHours: roundTo(calc.laborHours, 2),
           }
         : null,
+      image: r.imageFileId
+        ? {
+            fileId: r.imageFileId,
+            name: r.imageName ?? '',
+            url: `/api/v1/files/${r.imageFileId}/content`,
+          }
+        : null,
+      catalogItemId: r.catalogItemId,
     }
   })
-  const [info] = await tx<{ contractId: string; contractLabel: string; reason: string | null }[]>`
+  const [info] = await tx<
+    {
+      contractId: string
+      contractLabel: string
+      reason: string | null
+      evidence: EvidenceRef[]
+    }[]
+  >`
     select m.contract_document_id as "contractId",
-           coalesce(c.number, 'Auftragsbestätigung (Entwurf)') as "contractLabel", m.reason
+           coalesce(c.number, 'Auftragsbestätigung (Entwurf)') as "contractLabel", m.reason, m.evidence
     from change_order_meta m join document c on c.id = m.contract_document_id
     where m.document_id = ${id}`
   const canConvert =
@@ -652,11 +700,12 @@ export async function loadDocument(
     ...doc,
     issuer: issuerSnapshot ?? (await liveIssuer(tx)),
     recipient: recipientSnapshot ?? (await liveRecipient(tx, contactId)),
-    changeOrderInfo: info ?? null,
+    changeOrderInfo: info ? { ...info, evidence: await resolveEvidence(tx, info.evidence) } : null,
     canConvertToChangeOrder: canConvert,
     items,
     totals: totalsOf(rows, costs, doc, await loadDeductions(tx, id)),
     legalNotes: [],
+    versions: hasVersions ? await versionsOf(tx, id) : [],
     einvoice: doc.status === 'draft' ? null : await einvoiceSummary(tx, id),
     archive: doc.status === 'draft' ? null : await archiveSummary(tx, id),
   }
@@ -664,6 +713,22 @@ export async function loadDocument(
   detail.legalNotes = storedNotes ?? (doc.status === 'draft' ? legalNotesOf(detail) : [])
   detail.receivable = await loadReceivable(tx, detail, todayOf(tx))
   return { ...detail, etag: etagOf(updatedRaw) }
+}
+
+/** All versions of an offer (Angebotsversionen, P2.12), oldest first. */
+async function versionsOf(tx: Tx, id: string): Promise<DocumentDetail['versions']> {
+  return tx<DocumentDetail['versions']>`
+    with recursive up as (
+      select id, previous_version_id from document where id = ${id}
+      union all
+      select d.id, d.previous_version_id from document d join up on d.id = up.previous_version_id
+    ), chain as (
+      select d.id, d.version, d.number, d.status from document d
+      where d.id = (select id from up where previous_version_id is null)
+      union all
+      select d.id, d.version, d.number, d.status from document d join chain on d.previous_version_id = chain.id
+    )
+    select id, version, number, status from chain order by version`
 }
 
 /** Locks a draft for changes; finalized documents are immutable (rule 2). */
@@ -763,7 +828,7 @@ function siteLine(site: {
   return [site.street, place].filter(Boolean).join(', ') || null
 }
 
-async function createDocument(
+export async function createDocument(
   tx: Tx,
   auth: AuthContext,
   projectId: string,
@@ -822,12 +887,13 @@ async function createDocument(
     ? await tx<
         {
           taxMode: string
+          kind: string
           dueDays: number | null
           discountPercent: string | null
           discountDays: number | null
         }[]
       >`
-        select c.tax_mode as "taxMode", pt.due_days as "dueDays",
+        select c.tax_mode as "taxMode", c.kind, pt.due_days as "dueDays",
                pt.cash_discount_percent::text as "discountPercent", pt.cash_discount_days as "discountDays"
         from contact c left join payment_term pt on pt.id = c.payment_term_id where c.id = ${contactId}`
     : []
@@ -838,6 +904,7 @@ async function createDocument(
            cash_discount_days as "discountDays"
     from payment_term where is_default limit 1`
   const term = contact?.dueDays != null ? contact : defaultTerm
+  const defaults = await documentSettings(tx)
   const billed = input.type === 'invoice' || input.type === 'credit_note'
   const templates = await tx<{ placement: 'intro' | 'closing'; body: string }[]>`
     select placement, body from text_template where document_type = ${input.type} and is_default`
@@ -850,7 +917,8 @@ async function createDocument(
     type: input.type,
     invoice_kind: input.invoiceKind ?? null,
     progress_no: input.invoiceKind === 'progress' ? facts.nextProgressNo : null,
-    progress_billing_mode: input.invoiceKind === 'progress' ? 'cumulative' : null,
+    progress_billing_mode: input.invoiceKind === 'progress' ? defaults.progressBillingMode : null,
+    show_labor_share: laborShareDefault(defaults, input.type, contact?.kind ?? null),
     subject: input.subject ?? source?.subject ?? project.name,
     place_of_performance: source ? source.placeOfPerformance : siteLine(project),
     contact_id: contactId,
@@ -870,12 +938,13 @@ async function createDocument(
   const documentId = (created as { id: string }).id
 
   if (input.type === 'change_order') {
+    const evidence = await checkEvidence(tx, projectId, input.evidence ?? [])
     // The latest order confirmation is the main contract (Hauptauftrag).
     await tx`
-      insert into change_order_meta (document_id, tenant_id, contract_document_id, number, basis, reason)
+      insert into change_order_meta (document_id, tenant_id, contract_document_id, number, basis, reason, evidence)
       select ${documentId}, ${auth.tenantId}, c.id,
              (select coalesce(max(m.number), 0) + 1 from change_order_meta m where m.contract_document_id = c.id),
-             ${input.basis ?? 'additional_work'}, ${input.reason ?? null}
+             ${input.basis ?? 'additional_work'}, ${input.reason ?? null}, ${tx.json(evidence as never)}
       from document c
       where c.project_id = ${projectId} and c.type = 'order_confirmation' and c.status <> 'cancelled'
       order by c.created_at desc limit 1`
@@ -895,11 +964,11 @@ export async function copyItems(tx: Tx, fromId: string, toId: string) {
       insert into document_item (tenant_id, document_id, parent_id, sort, position_type, oz, quantity, unit_id,
                                  unit_symbol, unit_unece_code, short_text, long_text, show_long_text, calc_mode,
                                  unit_price_cents, discount_percent, total_cents, tax_rate_percent, tax_category,
-                                 catalog_item_id, source_item_id, image_file_id)
+                                 catalog_item_id, source_item_id, image_file_id, source_report_id)
       select tenant_id, ${toId}, ${row.parentId ? (newIds.get(row.parentId) ?? null) : null}, sort, position_type, oz,
              quantity, unit_id, unit_symbol, unit_unece_code, short_text, long_text, show_long_text, calc_mode,
              unit_price_cents, discount_percent, total_cents, tax_rate_percent, tax_category,
-             catalog_item_id, id, image_file_id
+             catalog_item_id, id, image_file_id, source_report_id
       from document_item where id = ${row.id}
       returning id`
     const newId = (created as { id: string }).id
@@ -915,6 +984,28 @@ export async function copyItems(tx: Tx, fromId: string, toId: string) {
 }
 
 // ---- Items ----------------------------------------------------------------------------------------
+
+const IMAGE_TYPES = ['image/png', 'image/jpeg', 'image/webp', 'image/gif']
+
+/** Bild-Position: an image of the Ablage of the document's project. */
+async function imageFileOf(tx: Tx, documentId: string, fileId: string | null | undefined) {
+  const [file] = fileId
+    ? await tx<{ mime: string }[]>`
+        select f.mime_type as mime from file f join document d on d.project_id = f.project_id
+        where f.id = ${fileId} and d.id = ${documentId}`
+    : []
+  if (!file) {
+    throw new HttpError(400, 'Die Eingaben sind unvollständig oder ungültig.', {
+      imageFileId: 'Das Bild gehört nicht zur Ablage dieses Projekts.',
+    })
+  }
+  if (!IMAGE_TYPES.includes(file.mime)) {
+    throw new HttpError(400, 'Die Eingaben sind unvollständig oder ungültig.', {
+      imageFileId: 'Als Bild sind PNG, JPEG, WebP und GIF möglich.',
+    })
+  }
+  return fileId
+}
 
 export async function unitSnapshot(tx: Tx, unitId: string) {
   const [unit] = await tx<{ symbol: string; unece: string; decimals: number }[]>`
@@ -1062,11 +1153,26 @@ export function registerDocumentRoutes(app: FastifyInstance, services: Services)
         retentionPercent: 'retention_percent',
         constructionLevyPercent: 'construction_levy_percent',
         progressBillingMode: 'progress_billing_mode',
+        showLaborShare: 'show_labor_share',
       }
       const columns: Record<string, unknown> = {}
       for (const [key, column] of Object.entries(map)) {
         const value = input[key as keyof typeof input]
         if (value !== undefined) columns[column] = value
+      }
+      // Another recipient brings the default of „Lohnkostenanteil ausweisen“ (person/organization).
+      if (input.contactId !== undefined && input.showLaborShare === undefined) {
+        const [row] = await tx<{ type: string; kind: string | null; changed: boolean }[]>`
+          select d.type, (select kind from contact where id = ${input.contactId}) as kind,
+                 d.contact_id is distinct from ${input.contactId}::uuid as changed
+          from document d where d.id = ${id}`
+        if (row?.changed) {
+          columns.show_labor_share = laborShareDefault(
+            await documentSettings(tx),
+            row.type,
+            row.kind,
+          )
+        }
       }
       if (Object.keys(columns).length) {
         await tx`update document set ${tx(columns)} where id = ${id}`.catch(
@@ -1170,6 +1276,8 @@ export function registerDocumentRoutes(app: FastifyInstance, services: Services)
           discount_percent: priced ? (input.discountPercent ?? null) : null,
           tax_rate_percent: priced ? taxRate : null,
           calc_mode: priced ? 'unit_price' : null,
+          image_file_id:
+            input.positionType === 'image' ? await imageFileOf(tx, id, input.imageFileId) : null,
         })}`
       await recalculate(tx, id)
       return loadDocument(tx, auth, id)
@@ -1389,8 +1497,10 @@ export function registerDocumentRoutes(app: FastifyInstance, services: Services)
     const { id } = parse(documentParam, request.params)
     const doc = await inTenant(services, auth, async (tx) => {
       const current = await lockDraft(tx, auth, id)
-      const [d] = await tx<{ type: string; contactId: string | null; documentDate: string }[]>`
-        select type, contact_id as "contactId", to_char(document_date, 'YYYY-MM-DD') as "documentDate"
+      const [d] = await tx<
+        { type: string; contactId: string | null; documentDate: string; version: number }[]
+      >`
+        select type, contact_id as "contactId", to_char(document_date, 'YYYY-MM-DD') as "documentDate", version
         from document where id = ${id}`
       if (!d) throw notFound('Das Dokument')
       if (d.type === 'invoice' || d.type === 'credit_note') {
@@ -1420,6 +1530,17 @@ export function registerDocumentRoutes(app: FastifyInstance, services: Services)
           )
         }
         number = `${meta.contractNumber}/N${String(meta.n).padStart(2, '0')}`
+      } else if (d.version > 1) {
+        // Angebotsversion: number of version 1 with "-V2", "-V3" … (no new number from the sequence).
+        const [root] = await tx<{ number: string | null }[]>`
+          with recursive up as (
+            select id, previous_version_id, number from document where id = ${id}
+            union all
+            select p.id, p.previous_version_id, p.number from document p join up on p.id = up.previous_version_id
+          )
+          select number from up where previous_version_id is null`
+        if (!root?.number) throw new HttpError(409, 'Die erste Version hat noch keine Nummer.')
+        number = `${root.number}-V${d.version}`
       } else {
         const [next] = await tx<
           { n: string }[]
@@ -1435,7 +1556,8 @@ export function registerDocumentRoutes(app: FastifyInstance, services: Services)
         update document set number = ${number}, status = 'finalized', finalized_at = now(),
                finalized_by = ${auth.userId}, content_hash = ${hash},
                issuer_snapshot = ${tx.json(preview.issuer as never)},
-               recipient_snapshot = ${tx.json(preview.recipient as never)}
+               recipient_snapshot = ${tx.json(preview.recipient as never)},
+               legal_notes = ${tx.json(legalNotesOf(preview))}
         where id = ${id} and project_id = ${current.projectId}`
       return loadDocument(tx, auth, id)
     })
@@ -1483,6 +1605,34 @@ export function registerDocumentRoutes(app: FastifyInstance, services: Services)
                  decided_at = ${status === 'sent' ? tx`decided_at` : tx`now()`},
                  decided_by_name = ${status === 'sent' ? tx`decided_by_name` : auth.displayName}
           where document_id = ${id}`
+        if (status !== 'sent') {
+          // Benachrichtigung: Nachtrag beauftragt oder abgelehnt (P2.8).
+          const [co] = await tx<
+            {
+              number: number
+              projectId: string
+              subject: string | null
+              createdBy: string | null
+            }[]
+          >`
+            select m.number, d.project_id as "projectId", d.subject, d.created_by as "createdBy"
+            from change_order_meta m join document d on d.id = m.document_id where m.document_id = ${id}`
+          if (co) {
+            const members = await projectMembersExcept(tx, co.projectId, auth.userId)
+            await notify(
+              tx,
+              auth.tenantId,
+              [...members, ...(co.createdBy && co.createdBy !== auth.userId ? [co.createdBy] : [])],
+              {
+                kind: 'change_order_decided',
+                refId: id,
+                title: `Nachtrag N${String(co.number).padStart(2, '0')} ${status === 'accepted' ? 'beauftragt' : 'abgelehnt'}`,
+                body: co.subject,
+                route: `/dokumente/${id}`,
+              },
+            )
+          }
+        }
       }
       return loadDocument(tx, auth, id)
     })

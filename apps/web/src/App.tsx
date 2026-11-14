@@ -2,6 +2,8 @@ import type { Me, SetupStatus } from '@opc/schemas'
 import { useEffect, useState } from 'react'
 import { ApiError, api } from './api'
 import { t } from './i18n'
+import { clearOfflineData, setOfflineOwner } from './offline/client'
+import { EmailVerifyScreen, PasswordResetScreen } from './screens/account'
 import { LoginScreen, SetupScreen } from './screens/auth'
 import { InvitationScreen } from './screens/invitation'
 import { Workspace } from './screens/workspace'
@@ -13,6 +15,8 @@ type State =
   | { screen: 'login' }
   | { screen: 'workspace'; me: Me }
   | { screen: 'invitation' }
+  | { screen: 'passwordReset' }
+  | { screen: 'emailVerify' }
 
 /** Start: setup required? → Ersteinrichtung; session valid? → workspace; otherwise login. */
 export function App() {
@@ -30,11 +34,26 @@ export function App() {
       setState({ screen: 'invitation' })
       return
     }
+    if (window.location.pathname === '/passwort-zuruecksetzen') {
+      setState({ screen: 'passwordReset' })
+      return
+    }
+    if (window.location.pathname === '/email-bestaetigen') {
+      setState({ screen: 'emailVerify' })
+      return
+    }
     ;(async () => {
       try {
-        const status = await api<SetupStatus>('GET', '/api/v1/setup/status')
+        const status = await api<SetupStatus>('GET', '/api/v1/setup/status').catch(
+          (error: unknown) => {
+            // Without network the app opens with the data stored on the device (ADR 0010).
+            if (error instanceof ApiError && error.status === 0) return { setupRequired: false }
+            throw error
+          },
+        )
         if (status.setupRequired) return setState({ screen: 'setup' })
         const me = await api<Me>('GET', '/api/v1/auth/me')
+        await setOfflineOwner(me)
         setState({ screen: 'workspace', me })
       } catch (error) {
         if (error instanceof ApiError && error.status === 401) setState({ screen: 'login' })
@@ -56,16 +75,29 @@ export function App() {
       return <SetupScreen onDone={(me) => setState({ screen: 'workspace', me })} />
     case 'login':
       return (
-        <LoginScreen appName={appName} onDone={(me) => setState({ screen: 'workspace', me })} />
+        <LoginScreen
+          appName={appName}
+          onDone={(me) => {
+            void setOfflineOwner(me)
+            setState({ screen: 'workspace', me })
+          }}
+        />
       )
     case 'workspace':
       return (
         <Workspace
           me={state.me}
-          onLogout={() => setState({ screen: 'login' })}
+          onLogout={() => {
+            void clearOfflineData()
+            setState({ screen: 'login' })
+          }}
           onMeChanged={(me) => setState({ screen: 'workspace', me })}
         />
       )
+    case 'passwordReset':
+      return <PasswordResetScreen appName={appName} onLogin={() => setState({ screen: 'login' })} />
+    case 'emailVerify':
+      return <EmailVerifyScreen appName={appName} onContinue={() => window.location.assign('/')} />
     case 'invitation':
       return (
         <InvitationScreen

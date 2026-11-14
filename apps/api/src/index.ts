@@ -17,22 +17,35 @@ import { registerEinvoiceRoutes } from './einvoice.js'
 import { HttpError, problem, sendProblem } from './http.js'
 import { idempotencyHooks } from './idempotency.js'
 import { type EinvoiceValidator, kositValidator } from './kosit.js'
+import { registerAccountRoutes } from './routes/account.js'
 import { registerAuditRoutes } from './routes/audit.js'
 import { authHook, mfaEnforcementHook, registerAuthRoutes } from './routes/auth.js'
 import { registerCatalogRoutes } from './routes/catalog.js'
+import { registerCatalogCsvRoutes } from './routes/catalog-csv.js'
+import { registerChangeOrderRoutes } from './routes/change-orders.js'
+import { registerContactCsvRoutes } from './routes/contact-csv.js'
 import { registerContactRoutes } from './routes/contacts.js'
+import { registerDashboardRoutes } from './routes/dashboard.js'
+import { registerDocumentEmailRoutes } from './routes/document-email.js'
+import { registerDocumentSettingsRoutes } from './routes/document-settings.js'
 import { registerDocumentRoutes } from './routes/documents.js'
 import { registerDunningRoutes } from './routes/dunning.js'
 import { registerEmailRoutes } from './routes/email.js'
 import { registerExportRoutes } from './routes/exports.js'
 import { registerFileRoutes } from './routes/files.js'
+import { registerIncomingInvoiceRoutes } from './routes/incoming-invoices.js'
+import { type MailboxConnector, registerIncomingMailboxRoutes } from './routes/incoming-mailbox.js'
 import { registerInvoiceRoutes } from './routes/invoices.js'
 import { registerLetterheadRoutes } from './routes/letterhead.js'
 import { registerMeasurementRoutes } from './routes/measurements.js'
+import { registerNotificationRoutes } from './routes/notifications.js'
+import { registerOfferToolRoutes } from './routes/offer-tools.js'
 import { registerOperationsRoutes } from './routes/operations.js'
 import { registerPdfRoutes } from './routes/pdf.js'
+import { registerProjectFigureRoutes } from './routes/project-figures.js'
 import { registerProjectRoutes } from './routes/projects.js'
 import { registerReceivableRoutes } from './routes/receivables.js'
+import { registerReportBillingRoutes } from './routes/report-billing.js'
 import { registerReportRoutes } from './routes/reports.js'
 import { registerSettingsRoutes } from './routes/settings.js'
 import { registerSignatureRoutes } from './routes/signatures.js'
@@ -58,6 +71,8 @@ export interface ApiDeps {
         | 'UPLOAD_MAX_MB'
         | 'SMTP_HOST'
         | 'SMTP_FROM'
+        | 'INCOMING_MAIL_ENABLED'
+        | 'INCOMING_MAIL_INTERVAL_MINUTES'
         | 'KOSIT_URL'
         | 'KOSIT_TIMEOUT_MS'
         | 'ARCHIVE_S3_ENDPOINT'
@@ -84,6 +99,10 @@ export interface ApiDeps {
   einvoiceValidator?: EinvoiceValidator | null
   /** WORM archive (ADR 0008); defaults to the S3 bucket from ARCHIVE_S3_* (none without it). */
   archive?: ArchiveStore | null
+  /** Fetch the companies' invoice mailboxes periodically (only the process serving the API). */
+  pollMailboxes?: boolean
+  /** Tests: replaces the IMAP connection. */
+  mailboxConnector?: MailboxConnector
 }
 
 const MUTATING = new Set(['POST', 'PUT', 'PATCH', 'DELETE'])
@@ -98,6 +117,8 @@ export function buildApi({
   now = Date.now,
   einvoiceValidator,
   archive,
+  pollMailboxes = false,
+  mailboxConnector,
 }: ApiDeps): FastifyInstance {
   const app = Fastify({ logger, trustProxy: true, bodyLimit: 1024 * 1024 })
 
@@ -164,6 +185,7 @@ export function buildApi({
       UPLOAD_MAX_MB: config.UPLOAD_MAX_MB ?? 50,
       SMTP_ENABLED: Boolean(config.SMTP_HOST && config.SMTP_FROM),
       SMTP_FROM: config.SMTP_FROM,
+      INCOMING_MAIL_ENABLED: config.INCOMING_MAIL_ENABLED ?? false,
       KOSIT_URL: config.KOSIT_URL,
     },
     storage: storage ?? new FsObjectStore(config.STORAGE_DIR ?? '/data/files'),
@@ -231,10 +253,27 @@ export function buildApi({
   registerEinvoiceRoutes(app, services)
   registerReceivableRoutes(app, services)
   registerDunningRoutes(app, services)
+  registerDocumentEmailRoutes(app, services)
+  registerDocumentSettingsRoutes(app, services)
+  registerOfferToolRoutes(app, services)
+  registerCatalogCsvRoutes(app, services)
+  registerIncomingInvoiceRoutes(app, services)
+  registerIncomingMailboxRoutes(app, services, {
+    poll: pollMailboxes,
+    intervalMinutes: config.INCOMING_MAIL_INTERVAL_MINUTES ?? 5,
+    ...(mailboxConnector ? { connector: mailboxConnector } : {}),
+  })
   registerAuditRoutes(app, services)
   registerSignatureRoutes(app, services)
   registerMeasurementRoutes(app, services)
   registerReportRoutes(app, services)
+  registerReportBillingRoutes(app, services)
+  registerChangeOrderRoutes(app, services)
+  registerAccountRoutes(app, services)
+  registerContactCsvRoutes(app, services)
+  registerProjectFigureRoutes(app, services)
+  registerDashboardRoutes(app, services)
+  registerNotificationRoutes(app, services)
   registerCatalogRoutes(app, services)
   registerSettingsRoutes(app, services)
   registerEmailRoutes(app, services)

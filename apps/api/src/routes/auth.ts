@@ -16,7 +16,7 @@ import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify'
 import { mfaSetupRequired, requireAuth, type Services, sessionCookieName } from '../context.js'
 import { HttpError, parse } from '../http.js'
 import { generateTotpSecret, safeEqual, totpUri, verifyTotp } from '../security/crypto.js'
-import { hashPassword, verifyDummy, verifyPassword } from '../security/passwords.js'
+import { hashPassword, needsRehash, verifyDummy, verifyPassword } from '../security/passwords.js'
 import {
   createSession,
   deleteSession,
@@ -128,6 +128,10 @@ export function registerAuthRoutes(app: FastifyInstance, services: Services) {
     }
 
     await resetRateLimit(sql, `login:email:${input.email}`)
+    // Stronger argon2id parameters since the hash was stored: upgrade it now (the password is known).
+    if (needsRehash(user.passwordHash)) {
+      await sql`update app_user set password_hash = ${await hashPassword(input.password)} where id = ${user.id}`
+    }
     const methods = await mfaMethodsOf(services, user.id)
     if (methods.length === 0) {
       return finishLogin(services, request, reply, {

@@ -2,12 +2,15 @@ import type { Me, ProjectDetail } from '@opc/schemas'
 import { useCallback, useEffect, useState } from 'react'
 import { type ApiError, apiWithEtag } from '../api'
 import { FormError } from '../forms'
-import { t } from '../i18n'
+import { t, tf } from '../i18n'
+import { prepareProjectOffline } from '../offline/prefetch'
 import type { Navigate, ProjectSection } from '../router'
-import { ProjectDiary } from './diary'
+import { ContractPanel } from './contract'
+import { ProjectDiary, ProjectReports } from './diary'
 import { ProjectDocuments } from './documents'
 import { ProjectFiles } from './files'
 import { ProjectMeasurements } from './measurements'
+import { ProjectFiguresPanel } from './project-figures'
 import { ProjectForm, period, StatusBadge, useStatuses } from './projects'
 
 type Section = ProjectSection
@@ -30,6 +33,18 @@ export function ProjectScreen({
   const [editing, setEditing] = useState(false)
   const statuses = useStatuses()
   const canWrite = me.permissions.includes('project.write')
+  const siteWork =
+    me.permissions.includes('measurement.write') || me.permissions.includes('report.write')
+  const [offline, setOffline] = useState<string | null>(null)
+  const prepare = async () => {
+    setOffline(t('off.preparing'))
+    try {
+      const n = await prepareProjectOffline(id)
+      setOffline(tf('off.prepared', { n: String(n) }))
+    } catch (err) {
+      setOffline((err as Error).message)
+    }
+  }
 
   const load = useCallback(() => {
     apiWithEtag<ProjectDetail>('GET', `/api/v1/projects/${id}`)
@@ -69,6 +84,7 @@ export function ProjectScreen({
     },
     { key: 'measurements', label: t('m.title'), visible: true },
     { key: 'diary', label: t('d.title'), visible: true },
+    { key: 'reports', label: t('rep.title'), visible: true },
     { key: 'files', label: t('files.title'), visible: true },
   ]
   const site = [
@@ -82,7 +98,7 @@ export function ProjectScreen({
     <section aria-labelledby="project-title">
       <a
         className="back"
-        href="/"
+        href="/projekte"
         onClick={(e) => {
           e.preventDefault()
           navigate({ view: 'projects' })
@@ -122,6 +138,18 @@ export function ProjectScreen({
         {project.archived ? <span className="badge">{t('projects.archived')}</span> : null}
       </div>
       <FormError>{error}</FormError>
+      {siteWork && !project.archived ? (
+        <div className="offline-prepare">
+          <button type="button" className="button ghost auto" onClick={prepare}>
+            {t('off.prepare')}
+          </button>
+          {offline ? (
+            <p className="hint" role="status">
+              {offline}
+            </p>
+          ) : null}
+        </div>
+      ) : null}
       {editing ? (
         <ProjectForm
           project={project}
@@ -183,6 +211,12 @@ export function ProjectScreen({
           ) : null}
         </div>
       ) : null}
+      {section === 'overview' && me.permissions.includes('document.read') ? (
+        <>
+          <ProjectFiguresPanel projectId={project.id} />
+          <ContractPanel projectId={project.id} navigate={navigate} />
+        </>
+      ) : null}
       {section === 'documents' ? (
         <ProjectDocuments me={me} project={project} navigate={navigate} />
       ) : null}
@@ -196,6 +230,15 @@ export function ProjectScreen({
       ) : null}
       {section === 'diary' ? (
         <ProjectDiary
+          me={me}
+          projectId={project.id}
+          archived={project.archived}
+          navigate={navigate}
+        />
+      ) : null}
+      {section === 'reports' ? (
+        <ProjectReports
+          kind="reports"
           me={me}
           projectId={project.id}
           archived={project.archived}

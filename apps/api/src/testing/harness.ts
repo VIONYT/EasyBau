@@ -6,6 +6,7 @@ import { type ArchiveStore, FsObjectStore } from '@opc/storage'
 import type { FastifyInstance, LightMyRequestResponse } from 'fastify'
 import { buildApi } from '../index.js'
 import { type EinvoiceValidator, kositValidator } from '../kosit.js'
+import type { MailboxConnector } from '../routes/incoming-mailbox.js'
 
 /** Test harness: a fresh database per test file and an API instance talking to it. */
 export interface Harness {
@@ -28,6 +29,8 @@ export async function createHarness(
     einvoiceValidator?: EinvoiceValidator | null
     /** WORM archive; default none (originals only in the files volume). */
     archive?: ArchiveStore | null
+    /** Rechnungseingang per E-Mail: allowed, with a fake mailbox instead of IMAP. */
+    mailboxConnector?: MailboxConnector
   } = {},
 ): Promise<Harness> {
   const baseUrl = process.env.DATABASE_URL as string
@@ -58,7 +61,9 @@ export async function createHarness(
       ...(options.smtp
         ? { SMTP_HOST: 'smtp.test', SMTP_FROM: 'Test-ERP <noreply@example.test>' }
         : {}),
+      ...(options.mailboxConnector ? { INCOMING_MAIL_ENABLED: true } : {}),
     },
+    ...(options.mailboxConnector ? { mailboxConnector: options.mailboxConnector } : {}),
     storage: new FsObjectStore(storageDir),
     isReady: async () => true,
     einvoiceValidator:
@@ -117,7 +122,8 @@ export class Client {
   get = (url: string) => this.request('GET', url)
   post = (url: string, body: unknown = {}, headers?: Record<string, string>) =>
     this.request('POST', url, body, headers)
-  patch = (url: string, body: unknown) => this.request('PATCH', url, body)
+  patch = (url: string, body: unknown, headers?: Record<string, string>) =>
+    this.request('PATCH', url, body, headers)
   put = (url: string, body: unknown) => this.request('PUT', url, body)
   delete = (url: string) => this.request('DELETE', url)
   /** Raw upload like the web app does it (application/octet-stream, metadata in the query). */

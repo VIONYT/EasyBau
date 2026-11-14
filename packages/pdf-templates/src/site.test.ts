@@ -145,6 +145,8 @@ const report: ReportDetail = {
     ],
   },
   reportDate: '2026-11-06',
+  billable: false,
+  billedInvoice: null,
   status: 'draft',
   totalHours: '18',
   staffCount: 2,

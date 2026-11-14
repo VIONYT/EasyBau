@@ -41,6 +41,13 @@ const contactFields = {
   taxMode: taxMode.optional(),
   vatId: optionalText(30),
   buyerReference: optionalText(100),
+  /** Kreditorennummer (DATEV Personenkonto, e.g. 70001) of a supplier. */
+  creditorNumber: z
+    .string()
+    .trim()
+    .regex(/^\d{5,9}$/, 'Kreditorennummer: 5 bis 9 Ziffern, z. B. 70001.')
+    .or(z.literal('').transform(() => null))
+    .nullish(),
   einvoiceEmail: email.nullish(),
   einvoiceFormat: einvoiceFormat.nullish(),
   /** Replaces all channels / addresses when given. */
@@ -90,7 +97,71 @@ export const contactListQuery = listQuery.extend({
   kind: contactKind.optional(),
   color: color.optional(),
   archived: z.enum(['true', 'false']).default('false'),
+  /** Kunden = Kontakte mit Kundennummer; false = ohne (z. B. Lieferanten, Ansprechpartner). */
+  customer: z.enum(['true', 'false']).optional(),
 })
+
+/** Columns of the contact CSV (export and import, German headers). */
+export const CONTACT_CSV_COLUMNS = [
+  'Typ',
+  'Kundennummer',
+  'Firma',
+  'Anrede',
+  'Titel',
+  'Vorname',
+  'Nachname',
+  'Straße',
+  'Adresszusatz',
+  'PLZ',
+  'Ort',
+  'Land',
+  'E-Mail',
+  'Telefon',
+  'Mobil',
+  'Website',
+  'USt-IdNr.',
+  'Steuerfall',
+  'Leitweg-ID',
+  'E-Mail für E-Rechnungen',
+  'Beschreibung',
+] as const
+
+/** CSV-Import (POST /contacts/import): preview first (dryRun), then import. */
+export const importContactsRequest = z.object({
+  csv: z
+    .string()
+    .min(1, 'Die Datei ist leer.')
+    .max(5_000_000, 'Die Datei ist zu groß (max. 5 MB).'),
+  dryRun: z.boolean().default(true),
+  /** Draw a Kundennummer for rows without one. */
+  assignCustomerNumbers: z.boolean().default(true),
+  /**
+   * Persons with Firma: create the organization (if it does not exist) and link the person as
+   * Ansprechpartner. Off by default – the preview asks.
+   */
+  createOrganizations: z.boolean().default(false),
+})
+
+export interface ContactImportRow {
+  /** Line in the file (header = 1). */
+  line: number
+  name: string
+  action: 'create' | 'skip' | 'error'
+  message: string | null
+  /** Person with Firma: the organization and whether it exists (link) or would be created. */
+  organization: string | null
+  organizationAction: 'create' | 'link' | null
+}
+
+export interface ContactImportResult {
+  dryRun: boolean
+  created: number
+  skipped: number
+  errors: number
+  /** Persons with Firma (the import asks whether to create/link the organization). */
+  withOrganization: number
+  rows: ContactImportRow[]
+}
 
 export const linkContactRequest = z.object({
   organizationId: id,
@@ -123,6 +194,7 @@ export interface ContactDetail
   taxMode: z.infer<typeof taxMode>
   vatId: string | null
   buyerReference: string | null
+  creditorNumber: string | null
   einvoiceEmail: string | null
   einvoiceFormat: z.infer<typeof einvoiceFormat> | null
   channels: (z.infer<typeof contactChannel> & { id: string })[]

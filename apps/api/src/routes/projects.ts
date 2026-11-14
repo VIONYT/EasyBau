@@ -6,6 +6,7 @@ import {
   type ProjectStatus,
   type ProjectSummary,
   projectListQuery,
+  type TeamMember,
   type UpdateProjectRequest,
   updateProjectRequest,
 } from '@opc/schemas'
@@ -30,7 +31,7 @@ import {
 
 const idParam = z.object({ id: z.uuid('Ungültige ID.') })
 
-const SUMMARY_COLUMNS = (tx: Tx) => tx`
+export const SUMMARY_COLUMNS = (tx: Tx) => tx`
   p.id, p.number, p.name, p.site_city as "siteCity",
   to_char(p.start_date, 'YYYY-MM-DD') as "startDate", to_char(p.end_date, 'YYYY-MM-DD') as "endDate",
   (p.archived_at is not null) as archived,
@@ -139,6 +140,20 @@ export function registerProjectRoutes(app: FastifyInstance, services: Services) 
     )
   })
 
+  // Names of the people who can work on projects (team, filter „Mitarbeitende“); no e-mail, no role.
+  app.get('/api/v1/team', async (request): Promise<TeamMember[]> => {
+    const auth = requirePermission(request)
+    return inTenant(
+      services,
+      auth,
+      (tx) => tx<TeamMember[]>`
+        select u.id, u.display_name as "displayName"
+        from membership m join app_user u on u.id = m.user_id join role r on r.id = m.role_id
+        where r.key <> 'auditor' and (m.valid_until is null or m.valid_until >= current_date)
+        order by lower(u.display_name), u.id`,
+    )
+  })
+
   app.get('/api/v1/projects', async (request): Promise<Page<ProjectSummary>> => {
     const auth = requirePermission(request)
     const query = parse(projectListQuery, request.query)
@@ -158,6 +173,12 @@ export function registerProjectRoutes(app: FastifyInstance, services: Services) 
         and (${query.customerId ?? null}::uuid is null or p.customer_id = ${query.customerId ?? null})
         and (${query.memberId ?? null}::uuid is null or exists (
                select 1 from project_member m where m.project_id = p.id and m.user_id = ${query.memberId ?? null}))
+        and (${query.from ?? null}::date is null
+             or ((p.start_date is not null or p.end_date is not null)
+                 and (p.end_date is null or p.end_date >= ${query.from ?? null}::date)))
+        and (${query.to ?? null}::date is null
+             or ((p.start_date is not null or p.end_date is not null)
+                 and (p.start_date is null or p.start_date <= ${query.to ?? null}::date)))
         and (${search}::text is null
              or lower(p.name) like ${search}
              or lower(coalesce(p.number, '')) like ${search}

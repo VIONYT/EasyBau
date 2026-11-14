@@ -103,7 +103,7 @@ Alle Kästen laufen als Container im selben `docker compose`-Stack beim Betreibe
 | Jobs | **pg-boss** (Warteschlange in PostgreSQL) | Kein eigener Queue-Container. Jobs werden **in derselben Transaktion** wie die fachliche Änderung angelegt (z. B. Festschreiben → „PDF/E-Rechnung erzeugen“) und können nicht verloren gehen. Wiederholungen, Zeitpläne (Cron) und Singleton-Jobs sind eingebaut |
 | PDF | **Typst**: Vorlagen in `packages/pdf-templates` (Typst-Markup + JSON-Daten), Erzeugung über die Typst-CLI im Worker-Image; Ausgabe **PDF/A-3b** mit eingebetteter E-Rechnungs-XML (`pdf.embed`); Schriften im Image gebündelt | Ein PDF dauert typischerweise Millisekunden statt Sekunden, und der Speicherbedarf liegt bei wenigen MB statt 300–500 MB für Chromium. Dieselben Vorlagen können per WebAssembly auch für die Live-Vorschau im Browser genutzt werden. Fallback: Nachbearbeitung mit der E-Rechnungs-Bibliothek, falls eine PDF/A-Prüfung (veraPDF in CI) fehlschlägt |
 | E-Rechnung | Eigenes Paket **`packages/einvoice`** (EN 16931 → ZUGFeRD/Factur-X CII, XRechnung UBL/CII, Factur-X-XMP); Validierung jeder Datei mit dem **KoSIT-Validator** (Container `kosit`) beim Festschreiben, siehe [ADR 0007](docs/adr/0007-e-rechnung-kosit.md) | Keine Abhängigkeit mit nicht OSI-anerkannter Lizenz; offizieller Prüfer |
-| Dateien | **S3-kompatibel**: standardmäßig **RustFS** im Stack (ADR 0009; bis 11/2026 MinIO, eingestellt), alternativ jeder externe S3-Speicher des Betreibers; **Object Lock (Compliance-Modus)** für Archivbuckets | WORM-Speicherung für GoBD ohne Cloud-Zwang |
+| Dateien | **S3-kompatibel**: standardmäßig **RustFS** im Stack (ADR 0009), alternativ jeder externe S3-Speicher des Betreibers; **Object Lock (Compliance-Modus)** für Archivbuckets | WORM-Speicherung für GoBD ohne Cloud-Zwang |
 | Frontend | **React 19 + Vite**, **TanStack Router + Query**, **Tailwind CSS 4**, **Radix UI / shadcn-Komponenten** | Schnell, zugänglich, eigenes Designsystem möglich |
 | Formulare | React Hook Form + Zod | Gleiche Schemas wie API |
 | Offline | **vite-plugin-pwa** (Workbox) + **Dexie** (IndexedDB) + Outbox-Sync | Bautagebuch und Fotos ohne Netz |
@@ -561,7 +561,7 @@ invoice ─┬─ payment (date, amount_cents, method, reference)
 ### 7.4 Navigation & Einstellungen (Informationsarchitektur)
 
 **Hauptnavigation** (Desktop-Seitenleiste; mobil: 4 Hauptpunkte + „Mehr“):
-Suchen · Benachrichtigungen · Übersicht · Projekte · Angebote · Ausgangsrechnungen · Kontakte · Stammdaten · *(Phase 2: Plantafel · Zeiten · Eingangsrechnungen)* · unten Hilfe, Neuigkeiten, Profil, Firmenwechsel (ein Nutzer kann mehreren Firmen angehören).
+Suchen · Benachrichtigungen · Übersicht · Projekte · Angebote · Ausgangsrechnungen · Kontakte · Stammdaten · Eingangsrechnungen · *(Phase 2: Plantafel · Zeiten)* · unten Hilfe, Neuigkeiten, Profil, Firmenwechsel (ein Nutzer kann mehreren Firmen angehören).
 
 **Einstellungen**, gruppiert:
 | Gruppe | Punkte |
@@ -627,9 +627,9 @@ Suchen · Benachrichtigungen · Übersicht · Projekte · Angebote · Ausgangsre
 ## 9. Offene Fragen
 1. ~~Hosting-Anbieter~~ → entschieden: Open Source, Self-Hosting per Docker (§1, §3.5). Lizenz AGPL-3.0-or-later; der Projektname „OpenPlancraft“ ist nur Arbeitstitel und wird vor dem ersten Release ersetzt (ADR 0001).
 2. ~~Preismodell~~ → entfällt als Lizenzthema. Optional später: bezahlter Support oder Hosting-Angebot durch Dritte.
-3. Österreich bereits im MVP oder erst in Phase 2?
-4. Formale GoBD-Testierung (IDW PS 880) anstreben?
+3. ~~Österreich bereits im MVP?~~ → entschieden (2026-11-12): nein, vorerst nicht; später Phase 2/3.
+4. ~~Formale GoBD-Testierung (IDW PS 880)?~~ → entschieden (2026-11-12): nein. Die Software ist Open Source und wird selbst betrieben; ein Testat gälte nur für eine bestimmte Version und Umgebung, die Kosten sind zu hoch. Stattdessen Vorlage Verfahrensdokumentation für Betreiber.
 5. Die Anforderung „…für die Finanzverwaltung so gespeichert, dass man Daten …“ war im Auftrag abgeschnitten. Angenommen wurde: **jederzeit vollständig und maschinell auswertbar exportieren kann** (Z3/DATEV, siehe 5.3). Bitte bestätigen oder ergänzen.
-6. **Eingangsrechnungen** schon ins MVP? Seit 2025 müssen alle Betriebe E-Rechnungen empfangen können; eine einfache Ablage mit lesbarer Darstellung, Projektzuordnung und Archiv wäre ein starkes Argument. Vorschlag: Basisversion ans Ende des MVP.
+6. ~~**Eingangsrechnungen** schon ins MVP?~~ → entschieden (2026-11-12): ja, Basisversion (Upload PDF/XML, lesbare Darstellung, Zuordnung Projekt/Betriebsbereich, Prüfung bestätigen, Archiv) in der ersten Version; volle Ausbaustufe (§2 Phase 2) und KI-Auslesen später.
 7. **Projekt-Chat** im MVP oder Phase 2? (Vorschlag: Phase 2; im MVP Kommentare an Dokumenten und Berichten.)
-8. **Schlussrechnung & Abschläge**: Bitte mit dem Steuerberater bestätigen, dass in der Schlussrechnung alle gestellten Abschlagsrechnungen (nicht nur die bezahlten) mit Steuerbetrag abgezogen werden (DESIGN.md §4.1). Alternative: nur vereinnahmte Teilentgelte abziehen. Beides ist konfigurierbar vorgesehen.
+8. **Schlussrechnung & Abschläge** (wird später geklärt): Bitte mit dem Steuerberater bestätigen, dass in der Schlussrechnung alle gestellten Abschlagsrechnungen (nicht nur die bezahlten) mit Steuerbetrag abgezogen werden (DESIGN.md §4.1). Alternative: nur vereinnahmte Teilentgelte abziehen. Beides ist konfigurierbar vorgesehen.

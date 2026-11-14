@@ -155,6 +155,8 @@ export interface LegalNotesInput {
   progressNo: number | null
   /** Cancelled invoice and reason (Stornorechnung). */
   cancels: { number: string; reason: string } | null
+  /** Lohnkostenanteil to print (§ 35a EStG), null when not shown. */
+  laborShare?: { netCents: bigint; grossCents: bigint } | null
 }
 
 const TAX_MODE_NOTE: Partial<Record<TaxMode, string>> = {
@@ -194,12 +196,26 @@ export function invoiceLegalNotes(input: LegalNotesInput): string[] {
       notes.push(`Zahlbar ohne Abzug bis ${due}.`)
     }
   }
+  const labor = laborShareNote(input.laborShare ?? null)
+  if (labor && input.kind !== 'cancellation') notes.push(labor)
   if (input.recipientIsPrivate && input.kind !== 'cancellation') {
     notes.push(
       'Als Privatperson sind Sie verpflichtet, diese Rechnung, einen Zahlungsbeleg oder eine andere beweiskräftige Unterlage zwei Jahre lang aufzubewahren (§ 14b Abs. 1 Satz 5 UStG).',
     )
   }
   return notes
+}
+
+/**
+ * Ausweis der Arbeitskosten für die Steuerermäßigung nach § 35a Abs. 3 EStG (Handwerkerleistungen):
+ * labor, machine and travel costs including VAT, without material. Null when there is nothing.
+ */
+export function laborShareNote(
+  share: { netCents: bigint; grossCents: bigint } | null,
+): string | null {
+  if (!share || share.grossCents <= 0n) return null
+  const net = share.grossCents === share.netCents ? '' : ` (netto ${formatEuro(share.netCents)})`
+  return `Im Betrag enthaltene Arbeitskosten (Lohn-, Maschinen- und Fahrtkosten) nach § 35a EStG: ${formatEuro(share.grossCents)}${share.grossCents === share.netCents ? '' : ' inkl. USt'}${net}.`
 }
 
 /** Negates a decimal text quantity ("12.5" → "-12.5"), used for Stornorechnungen. */

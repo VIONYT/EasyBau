@@ -6,8 +6,9 @@ import type {
   ProjectDetail,
   ProjectStatus,
   ProjectSummary,
+  TeamMember,
 } from '@opc/schemas'
-import { useEffect, useState } from 'react'
+import { useEffect, useId, useState } from 'react'
 import { type ApiError, api } from '../api'
 import { formatDateTime } from '../format'
 import { Field, FormError, optional, SelectField, TextArea, useForm, value } from '../forms'
@@ -24,21 +25,47 @@ export function useStatuses() {
   return statuses
 }
 
-/** Project list with search and the form for a new project. */
+const NO_FILTER = { statusId: '', memberId: '', from: '', to: '', archived: false }
+type Filter = typeof NO_FILTER
+
+/** Query of the project list; without filters exactly `?q=…` (kept for offline use, ADR 0010). */
+export function projectListPath(query: string, filter: Filter): string {
+  const params = new URLSearchParams({ q: query })
+  for (const key of ['statusId', 'memberId', 'from', 'to'] as const) {
+    if (filter[key]) params.set(key, filter[key])
+  }
+  if (filter.archived) params.set('archived', 'true')
+  return `/api/v1/projects?${params.toString()}`
+}
+
+/** Project list with search, filters (Status, Mitarbeitende, Zeitraum, archiviert) and the form for a new project. */
 export function Projects({ me, navigate }: { me: Me; navigate: Navigate }) {
   const [query, setQuery] = useState('')
+  const [filter, setFilter] = useState<Filter>(NO_FILTER)
   const [items, setItems] = useState<ProjectSummary[] | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [creating, setCreating] = useState(false)
+  const statuses = useStatuses()
+  const [team, setTeam] = useState<TeamMember[]>([])
+  const filterId = useId()
+
+  useEffect(() => {
+    api<TeamMember[]>('GET', '/api/v1/team')
+      .then(setTeam)
+      .catch(() => undefined)
+  }, [])
 
   useEffect(() => {
     const timer = setTimeout(() => {
-      api<Page<ProjectSummary>>('GET', `/api/v1/projects?q=${encodeURIComponent(query)}`)
+      setError(null)
+      api<Page<ProjectSummary>>('GET', projectListPath(query, filter))
         .then((page) => setItems(page.items))
         .catch((err: ApiError) => setError(err.message))
     }, 200)
     return () => clearTimeout(timer)
-  }, [query])
+  }, [query, filter])
+  const set = (patch: Partial<Filter>) => setFilter({ ...filter, ...patch })
+  const active = Object.entries(filter).filter(([, v]) => v).length
 
   return (
     <section aria-labelledby="projects-title">
@@ -64,6 +91,78 @@ export function Projects({ me, navigate }: { me: Me; navigate: Navigate }) {
         value={query}
         onChange={(e) => setQuery(e.target.value)}
       />
+      <details className="panel filters" open={active > 0 || undefined}>
+        <summary>
+          {t('projects.filter.title')}
+          {active ? ` (${active})` : ''}
+        </summary>
+        <div className="row">
+          <div className="field">
+            <label htmlFor={`${filterId}-status`}>{t('projects.filter.status')}</label>
+            <select
+              id={`${filterId}-status`}
+              value={filter.statusId}
+              onChange={(e) => set({ statusId: e.target.value })}
+            >
+              <option value="">{t('projects.filter.allStatuses')}</option>
+              {statuses.map((s) => (
+                <option key={s.id} value={s.id}>
+                  {s.label}
+                </option>
+              ))}
+            </select>
+          </div>
+          <div className="field">
+            <label htmlFor={`${filterId}-member`}>{t('projects.filter.member')}</label>
+            <select
+              id={`${filterId}-member`}
+              value={filter.memberId}
+              onChange={(e) => set({ memberId: e.target.value })}
+            >
+              <option value="">{t('projects.filter.allMembers')}</option>
+              <option value={me.user.id}>{t('projects.filter.mine')}</option>
+              {team
+                .filter((p) => p.id !== me.user.id)
+                .map((p) => (
+                  <option key={p.id} value={p.id}>
+                    {p.displayName}
+                  </option>
+                ))}
+            </select>
+          </div>
+          <div className="field">
+            <label htmlFor={`${filterId}-from`}>{t('projects.filter.from')}</label>
+            <input
+              id={`${filterId}-from`}
+              type="date"
+              value={filter.from}
+              onChange={(e) => set({ from: e.target.value })}
+            />
+          </div>
+          <div className="field">
+            <label htmlFor={`${filterId}-to`}>{t('projects.filter.to')}</label>
+            <input
+              id={`${filterId}-to`}
+              type="date"
+              value={filter.to}
+              onChange={(e) => set({ to: e.target.value })}
+            />
+          </div>
+        </div>
+        <label className="check">
+          <input
+            type="checkbox"
+            checked={filter.archived}
+            onChange={(e) => set({ archived: e.target.checked })}
+          />
+          <span>{t('projects.filter.archived')}</span>
+        </label>
+        {active ? (
+          <button type="button" className="button ghost small" onClick={() => setFilter(NO_FILTER)}>
+            {t('projects.filter.reset')}
+          </button>
+        ) : null}
+      </details>
       <FormError>{error}</FormError>
       {!items ? <p className="muted">{t('common.loading')}</p> : null}
       {items && !items.length ? <p className="muted">{t('common.empty')}</p> : null}

@@ -15,7 +15,7 @@ import {
   TooLargeError,
   typeOfMime,
 } from '@opc/storage'
-import type { FastifyInstance } from 'fastify'
+import type { FastifyInstance, FastifyRequest } from 'fastify'
 import { z } from 'zod'
 import {
   type AuthContext,
@@ -100,9 +100,91 @@ function uniqueFolderName(error: unknown): never {
 }
 
 /** RFC 6266: ASCII fallback plus UTF-8 name, so umlauts survive. */
-function contentDisposition(kind: 'inline' | 'attachment', filename: string) {
+export function contentDisposition(kind: 'inline' | 'attachment', filename: string) {
   const ascii = filename.replace(/[^\x20-\x7e]/g, '_').replace(/["\\]/g, '_')
   return `${kind}; filename="${ascii}"; filename*=UTF-8''${encodeURIComponent(filename)}`
+}
+
+/**
+ * Stores an uploaded file (raw bytes, streamed) in the project's Ablage: size and type checked
+ * (extension + content), row and object written together. `onStored` runs in the same transaction
+ * (e.g. to attach the file as a report photo); if it fails, the file is not kept.
+ */
+export async function storeUploadedFile(
+  services: Services,
+  auth: AuthContext,
+  request: FastifyRequest,
+  projectId: string,
+  options: {
+    filename: string
+    folderId: string | null
+    caption: string | null
+    imageOnly?: boolean
+    onStored?: (tx: Tx, fileId: string) => Promise<void>
+  },
+): Promise<string> {
+  const body = request.body
+  const drain = () => {
+    if (body instanceof Readable) body.resume()
+  }
+  let pending: Awaited<ReturnType<typeof services.storage.receive>> | undefined
+  let committedKey: string | undefined
+  try {
+    requireWriter(auth)
+    if (!(body instanceof Readable)) {
+      throw new HttpError(415, 'Bitte die Datei als application/octet-stream senden.')
+    }
+    const maxBytes = services.config.UPLOAD_MAX_MB * 1024 * 1024
+    const tooLarge = () =>
+      new HttpError(413, `Die Datei ist zu groß (höchstens ${services.config.UPLOAD_MAX_MB} MB).`)
+    if (Number(request.headers['content-length'] ?? 0) > maxBytes) throw tooLarge()
+    await inTenant(services, auth, async (tx) => {
+      await requireVisibleProject(tx, auth, projectId)
+      await checkFolder(tx, projectId, options.folderId)
+    })
+
+    try {
+      pending = await services.storage.receive(body, { maxBytes })
+    } catch (error) {
+      if (error instanceof TooLargeError) throw tooLarge()
+      throw error
+    }
+    if (pending.sizeBytes === 0) throw new HttpError(400, 'Die Datei ist leer.')
+    const filename = sanitizeFilename(options.filename)
+    const type = detectFileType(filename, pending.head)
+    if (!type) {
+      throw new HttpError(
+        415,
+        'Dieser Dateityp ist nicht erlaubt oder der Inhalt passt nicht zur Dateiendung. ' +
+          'Erlaubt sind z. B. PDF, Fotos (JPG, PNG, HEIC), Videos, Office-Dateien, Pläne (DWG, DXF) und GAEB.',
+      )
+    }
+    if (options.imageOnly && type.category !== 'image') {
+      throw new HttpError(415, 'Bitte ein Foto (JPG, PNG, HEIC …) hochladen.')
+    }
+    const upload = pending
+    return await inTenant(services, auth, async (tx) => {
+      await requireVisibleProject(tx, auth, projectId)
+      const [ids] = await tx<{ id: string }[]>`select uuid_v7() as id`
+      const fileId = (ids as { id: string }).id
+      const key = `${auth.tenantId}/files/${fileId}`
+      await tx`
+        insert into file (id, tenant_id, project_id, folder_id, filename, mime_type, size_bytes,
+                          sha256, storage_key, caption, uploaded_by)
+        values (${fileId}, ${auth.tenantId}, ${projectId}, ${options.folderId}, ${filename}, ${type.mime},
+                ${upload.sizeBytes}, ${upload.sha256}, ${key}, ${options.caption}, ${auth.userId})`
+      if (options.onStored) await options.onStored(tx, fileId)
+      // Move the object into place last: if the transaction fails afterwards it is removed again.
+      await upload.commit(key)
+      committedKey = key
+      return fileId
+    })
+  } catch (error) {
+    drain()
+    await pending?.discard()
+    if (committedKey) await services.storage.delete(committedKey).catch(() => undefined)
+    throw error
+  }
 }
 
 export function registerFileRoutes(app: FastifyInstance, services: Services) {
@@ -207,67 +289,15 @@ export function registerFileRoutes(app: FastifyInstance, services: Services) {
 
   app.post('/api/v1/projects/:id/files', async (request, reply) => {
     const auth = requireAuth(request)
-    const body = request.body
-    const drain = () => {
-      if (body instanceof Readable) body.resume()
-    }
-    let pending: Awaited<ReturnType<typeof services.storage.receive>> | undefined
-    let committedKey: string | undefined
-    try {
-      requireWriter(auth)
-      const { id } = parse(projectParam, request.params)
-      const query = parse(uploadQuery, request.query)
-      if (!(body instanceof Readable)) {
-        throw new HttpError(415, 'Bitte die Datei als application/octet-stream senden.')
-      }
-      const maxBytes = services.config.UPLOAD_MAX_MB * 1024 * 1024
-      const tooLarge = () =>
-        new HttpError(413, `Die Datei ist zu groß (höchstens ${services.config.UPLOAD_MAX_MB} MB).`)
-      if (Number(request.headers['content-length'] ?? 0) > maxBytes) throw tooLarge()
-      await inTenant(services, auth, async (tx) => {
-        await requireVisibleProject(tx, auth, id)
-        await checkFolder(tx, id, query.folderId)
-      })
-
-      try {
-        pending = await services.storage.receive(body, { maxBytes })
-      } catch (error) {
-        if (error instanceof TooLargeError) throw tooLarge()
-        throw error
-      }
-      if (pending.sizeBytes === 0) throw new HttpError(400, 'Die Datei ist leer.')
-      const filename = sanitizeFilename(query.filename)
-      const type = detectFileType(filename, pending.head)
-      if (!type) {
-        throw new HttpError(
-          415,
-          'Dieser Dateityp ist nicht erlaubt oder der Inhalt passt nicht zur Dateiendung. ' +
-            'Erlaubt sind z. B. PDF, Fotos (JPG, PNG, HEIC), Videos, Office-Dateien, Pläne (DWG, DXF) und GAEB.',
-        )
-      }
-      const upload = pending
-      const row = await inTenant(services, auth, async (tx) => {
-        await requireVisibleProject(tx, auth, id)
-        const [ids] = await tx<{ id: string }[]>`select uuid_v7() as id`
-        const fileId = (ids as { id: string }).id
-        const key = `${auth.tenantId}/files/${fileId}`
-        await tx`
-          insert into file (id, tenant_id, project_id, folder_id, filename, mime_type, size_bytes,
-                            sha256, storage_key, caption, uploaded_by)
-          values (${fileId}, ${auth.tenantId}, ${id}, ${query.folderId ?? null}, ${filename}, ${type.mime},
-                  ${upload.sizeBytes}, ${upload.sha256}, ${key}, ${query.caption ?? null}, ${auth.userId})`
-        // Move the object into place last: if the transaction fails afterwards it is removed again.
-        await upload.commit(key)
-        committedKey = key
-        return loadFile(tx, auth, fileId)
-      })
-      return reply.status(201).send(toSummary(auth, row as FileRow))
-    } catch (error) {
-      drain()
-      await pending?.discard()
-      if (committedKey) await services.storage.delete(committedKey).catch(() => undefined)
-      throw error
-    }
+    const { id } = parse(projectParam, request.params)
+    const query = parse(uploadQuery, request.query)
+    const fileId = await storeUploadedFile(services, auth, request, id, {
+      filename: query.filename,
+      folderId: query.folderId ?? null,
+      caption: query.caption ?? null,
+    })
+    const row = await inTenant(services, auth, (tx) => loadFile(tx, auth, fileId))
+    return reply.status(201).send(toSummary(auth, row as FileRow))
   })
 
   app.get('/api/v1/files/:id', async (request) => {
@@ -354,7 +384,15 @@ export function registerFileRoutes(app: FastifyInstance, services: Services) {
       }
       if (!canModify(auth, current))
         throw new HttpError(403, 'Diese Datei dürfen Sie nicht löschen.')
-      await tx`delete from file where id = ${id}`
+      await tx`delete from file where id = ${id}`.catch((error: { code?: string }) => {
+        if (error.code === '23503') {
+          throw new HttpError(
+            409,
+            'Diese Datei wird als Bild in einem Dokument verwendet und kann nicht gelöscht werden.',
+          )
+        }
+        throw error
+      })
       return current.storageKey
     })
     // Only after the deletion is committed (an orphaned object is harmless, a missing one is not).

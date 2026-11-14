@@ -117,7 +117,7 @@ test('setup, security key, user management and passwordless login', async ({ bro
   await expect(invitedPage.getByText('Muster Bau GmbH')).toBeVisible()
   await invitedPage.locator('input[name=password]').fill('monteur-passwort-1')
   await invitedPage.getByRole('button', { name: 'Einladung annehmen' }).click()
-  await expect(invitedPage.getByRole('heading', { name: 'Projekte' })).toBeVisible()
+  await expect(invitedPage.getByRole('heading', { name: 'Übersicht' })).toBeVisible()
   await expect(invitedPage.getByRole('button', { name: 'Benutzer' })).toHaveCount(0)
   await invited.close()
 
@@ -128,7 +128,7 @@ test('setup, security key, user management and passwordless login', async ({ bro
   await page.getByRole('button', { name: 'Abmelden' }).click()
   await expect(page.getByRole('heading', { name: 'Anmelden' })).toBeVisible()
   await page.getByRole('button', { name: 'Mit Sicherheitsschlüssel oder Passkey anmelden' }).click()
-  await expect(page.getByRole('heading', { name: 'Projekte' })).toBeVisible()
+  await expect(page.getByRole('heading', { name: 'Übersicht' })).toBeVisible()
 
   // Password + key as second factor.
   await page.getByRole('button', { name: 'Abmelden' }).click()
@@ -138,7 +138,7 @@ test('setup, security key, user management and passwordless login', async ({ bro
   await page.getByRole('button', { name: 'Anmelden', exact: true }).click()
   await expect(page.getByRole('heading', { name: 'Zweiter Schritt' })).toBeVisible()
   await page.getByRole('button', { name: 'Mit Sicherheitsschlüssel bestätigen' }).click()
-  await expect(page.getByRole('heading', { name: 'Projekte' })).toBeVisible()
+  await expect(page.getByRole('heading', { name: 'Übersicht' })).toBeVisible()
 })
 
 const PNG = Buffer.from(
@@ -645,8 +645,8 @@ test('Rechnung: Pflichtangaben, Festschreiben und Korrigieren per Storno', async
   expect((await noticeFile.body()).subarray(0, 5).toString()).toBe('%PDF-')
 
   // Rechnungsliste mit Status, Summen und Filter
-  await page.getByRole('button', { name: 'Rechnungen' }).click()
-  await expect(page.getByRole('heading', { name: 'Rechnungen' })).toBeVisible()
+  await page.getByRole('button', { name: 'Rechnungen', exact: true }).click()
+  await expect(page.getByRole('heading', { name: 'Rechnungen', exact: true })).toBeVisible()
   await expect(page.getByRole('link', { name: /R-00101/ })).toContainText('angemahnt')
   await page.getByLabel('Status').selectOption('dunned')
   await expect(page.getByText('Rechnungen: 1')).toBeVisible()
@@ -676,11 +676,674 @@ test('Rechnung: Pflichtangaben, Festschreiben und Korrigieren per Storno', async
     await page.screenshot({ path: `${SCREENSHOTS}/rechnung-storno.png`, fullPage: true })
 })
 
+/** XRechnung (UBL) of a supplier as received by e-mail or download. */
+const SUPPLIER_XRECHNUNG = `<?xml version="1.0" encoding="UTF-8"?>
+<Invoice xmlns="urn:oasis:names:specification:ubl:schema:xsd:Invoice-2"
+  xmlns:cac="urn:oasis:names:specification:ubl:schema:xsd:CommonAggregateComponents-2"
+  xmlns:cbc="urn:oasis:names:specification:ubl:schema:xsd:CommonBasicComponents-2">
+  <cbc:CustomizationID>urn:cen.eu:en16931:2017#compliant#urn:xeinkauf.de:kosit:xrechnung_3.0</cbc:CustomizationID>
+  <cbc:ID>HS-2026-0815</cbc:ID>
+  <cbc:IssueDate>2026-11-02</cbc:IssueDate>
+  <cbc:DueDate>2026-12-02</cbc:DueDate>
+  <cbc:InvoiceTypeCode>380</cbc:InvoiceTypeCode>
+  <cbc:DocumentCurrencyCode>EUR</cbc:DocumentCurrencyCode>
+  <cbc:BuyerReference>Lindenweg</cbc:BuyerReference>
+  <cac:AccountingSupplierParty><cac:Party>
+    <cac:PartyName><cbc:Name>Holzhandel Süd GmbH</cbc:Name></cac:PartyName>
+    <cac:PostalAddress><cbc:StreetName>Sägewerk 1</cbc:StreetName><cbc:CityName>Celle</cbc:CityName>
+      <cbc:PostalZone>29221</cbc:PostalZone><cac:Country><cbc:IdentificationCode>DE</cbc:IdentificationCode></cac:Country></cac:PostalAddress>
+    <cac:PartyTaxScheme><cbc:CompanyID>DE811111111</cbc:CompanyID><cac:TaxScheme><cbc:ID>VAT</cbc:ID></cac:TaxScheme></cac:PartyTaxScheme>
+  </cac:Party></cac:AccountingSupplierParty>
+  <cac:AccountingCustomerParty><cac:Party><cac:PartyName><cbc:Name>Muster Bau GmbH</cbc:Name></cac:PartyName></cac:Party></cac:AccountingCustomerParty>
+  <cac:PaymentMeans><cbc:PaymentMeansCode>58</cbc:PaymentMeansCode>
+    <cac:PayeeFinancialAccount><cbc:ID>DE02120300000000202051</cbc:ID></cac:PayeeFinancialAccount></cac:PaymentMeans>
+  <cac:TaxTotal><cbc:TaxAmount currencyID="EUR">76.00</cbc:TaxAmount>
+    <cac:TaxSubtotal><cbc:TaxableAmount currencyID="EUR">400.00</cbc:TaxableAmount><cbc:TaxAmount currencyID="EUR">76.00</cbc:TaxAmount>
+      <cac:TaxCategory><cbc:ID>S</cbc:ID><cbc:Percent>19</cbc:Percent><cac:TaxScheme><cbc:ID>VAT</cbc:ID></cac:TaxScheme></cac:TaxCategory>
+    </cac:TaxSubtotal></cac:TaxTotal>
+  <cac:LegalMonetaryTotal><cbc:LineExtensionAmount currencyID="EUR">400.00</cbc:LineExtensionAmount>
+    <cbc:TaxExclusiveAmount currencyID="EUR">400.00</cbc:TaxExclusiveAmount>
+    <cbc:TaxInclusiveAmount currencyID="EUR">476.00</cbc:TaxInclusiveAmount>
+    <cbc:PayableAmount currencyID="EUR">476.00</cbc:PayableAmount></cac:LegalMonetaryTotal>
+  <cac:InvoiceLine><cbc:ID>1</cbc:ID><cbc:InvoicedQuantity unitCode="MTQ">2</cbc:InvoicedQuantity>
+    <cbc:LineExtensionAmount currencyID="EUR">400.00</cbc:LineExtensionAmount>
+    <cac:Item><cbc:Name>Konstruktionsvollholz 60×120</cbc:Name><cac:ClassifiedTaxCategory><cbc:ID>S</cbc:ID>
+      <cbc:Percent>19</cbc:Percent><cac:TaxScheme><cbc:ID>VAT</cbc:ID></cac:TaxScheme></cac:ClassifiedTaxCategory></cac:Item>
+    <cac:Price><cbc:PriceAmount currencyID="EUR">200.00</cbc:PriceAmount></cac:Price></cac:InvoiceLine>
+</Invoice>`
+
+test('Eingangsrechnung: XRechnung empfangen, prüfen, zuweisen, bestätigen und bezahlen', async () => {
+  test.skip(!SETUP_TOKEN, 'SETUP_TOKEN must be set for a fresh stack')
+  test.setTimeout(90_000)
+  await page.getByRole('button', { name: 'Eingangsrechnungen' }).click()
+  await expect(page.getByRole('heading', { name: 'Eingangsrechnungen' })).toBeVisible()
+  await expect(page.getByText('Nichts zu prüfen.')).toBeVisible()
+  await page.locator('input[type="file"]').setInputFiles({
+    name: 'xrechnung-holz.xml',
+    mimeType: 'application/xml',
+    buffer: Buffer.from(SUPPLIER_XRECHNUNG),
+  })
+
+  // One file: straight into the review, prefilled from the XML and shown readable
+  await expect(
+    page.getByRole('heading', { name: 'Holzhandel Süd GmbH · HS-2026-0815' }),
+  ).toBeVisible()
+  await expect(page.getByText(/E-Rechnung: XRechnung 3\.0/)).toBeVisible()
+  await expect(page.getByRole('cell', { name: /Konstruktionsvollholz/ })).toBeVisible()
+  await expect(page.getByLabel('Name des Lieferanten')).toHaveValue('Holzhandel Süd GmbH')
+  await expect(page.getByLabel('Rechnungsnummer')).toHaveValue('HS-2026-0815')
+  await expect(page.getByLabel('Brutto')).toHaveValue('476,00')
+  await expect(
+    page.getByText('Die Kosten sind noch keinem Projekt oder Betriebsbereich zugewiesen.'),
+  ).toBeVisible()
+
+  // Kostenzuweisung: the open net amount goes to the project
+  await page.getByRole('button', { name: 'Zuweisung hinzufügen' }).click()
+  const target = page.getByLabel('Zuweisung 1')
+  const project = await target
+    .locator('option', { hasText: 'Sanierung Lindenweg' })
+    .getAttribute('value')
+  await target.selectOption(project as string)
+  await page.getByLabel('Kostenart').selectOption('material')
+  await expect(page.getByLabel('Netto-Betrag')).toHaveValue('400,00')
+  await expectNoHorizontalScroll(page)
+  if (SCREENSHOTS)
+    await page.screenshot({ path: `${SCREENSHOTS}/eingangsrechnung-pruefen.png`, fullPage: true })
+  await page.getByRole('button', { name: 'Prüfung bestätigen' }).click()
+  await expect(page.locator('.invoice-head .chip')).toHaveText('offen')
+  await expect(page.getByText('Sanierung Lindenweg').first()).toBeVisible()
+
+  // Zahlstatus
+  await page.getByRole('button', { name: 'Als bezahlt markieren' }).click()
+  await expect(page.locator('.invoice-head .chip')).toHaveText('bezahlt')
+  await expect(page.getByText(/Bezahlt am/)).toBeVisible()
+  const original = await page.request.get(
+    `${new URL(page.url()).pathname.replace('/eingangsrechnungen/', '/api/v1/incoming-invoices/')}/original`,
+  )
+  expect(original.status()).toBe(200)
+  expect((await original.body()).toString()).toBe(SUPPLIER_XRECHNUNG)
+
+  // List with filter
+  await page.getByRole('link', { name: '← Eingangsrechnungen' }).click()
+  await page.getByRole('button', { name: 'Bezahlt' }).click()
+  await expect(page.getByRole('link', { name: /Holzhandel Süd GmbH/ })).toContainText('bezahlt')
+  await expectNoHorizontalScroll(page)
+  if (SCREENSHOTS)
+    await page.screenshot({ path: `${SCREENSHOTS}/eingangsrechnungen.png`, fullPage: true })
+
+  // Filter Zuweisung and Zeitraum (P2.4)
+  const filterTarget = page.getByLabel('Zuweisung', { exact: true })
+  const lindenweg = await filterTarget
+    .locator('option', { hasText: 'Sanierung Lindenweg' })
+    .getAttribute('value')
+  await filterTarget.selectOption(lindenweg as string)
+  await expect(page.getByRole('link', { name: /Holzhandel Süd GmbH/ })).toBeVisible()
+  await page.getByLabel('Rechnungsdatum von').fill('2030-01-01')
+  await expect(page.getByRole('link', { name: /Holzhandel Süd GmbH/ })).toHaveCount(0)
+  await page.getByLabel('Rechnungsdatum von').fill('')
+  await filterTarget.selectOption('')
+
+  // PDF: preview next to the data (frame allowed by the proxy only for the original)
+  await page.getByRole('button', { name: 'Alle' }).click()
+  await page.locator('input[type="file"]').setInputFiles({
+    name: 'lieferschein-rechnung.pdf',
+    mimeType: 'application/pdf',
+    buffer: Buffer.from(
+      '%PDF-1.4\n1 0 obj<</Type/Catalog/Pages 2 0 R>>endobj\n2 0 obj<</Type/Pages/Kids[]/Count 0>>endobj\ntrailer<</Root 1 0 R>>\n%%EOF\n',
+    ),
+  })
+  const frame = page.locator('iframe.incoming-pdf')
+  await expect(frame).toBeVisible()
+  const framed = await page.request.get((await frame.getAttribute('src')) as string)
+  expect(framed.headers()['x-frame-options']).toBe('SAMEORIGIN')
+  expect(framed.headers()['content-security-policy']).toContain("frame-ancestors 'self'")
+  const app = await page.request.get('/')
+  expect(app.headers()['x-frame-options']).toBe('DENY')
+  await expectNoHorizontalScroll(page)
+
+  // Rechnungseingang per E-Mail: not enabled by the operator in this stack
+  await page.getByRole('button', { name: 'Einstellungen' }).click()
+  await page.locator('#settings-section').selectOption({ label: 'Rechnungseingang (E-Mail)' })
+  await expect(page.getByText(/nicht freigeschaltet/)).toBeVisible()
+  await expect(page.getByRole('button', { name: 'Jetzt abrufen' })).toHaveCount(0)
+  await expectNoHorizontalScroll(page)
+})
+
 // Smallest valid PNG (1 × 1 px) as logo.
 const LOGO_PNG = Buffer.from(
   'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==',
   'base64',
 )
+
+test('Offline auf der Baustelle: Aufmaß und Bautagebuch ohne Netz, danach übertragen', async () => {
+  test.skip(!SETUP_TOKEN, 'SETUP_TOKEN must be set for a fresh stack')
+  test.setTimeout(120_000)
+
+  // In the office: a Leistungsaufmaß, then everything for the site onto the device
+  await page.getByRole('button', { name: 'Projekte' }).click()
+  await page.getByRole('link', { name: /Sanierung Lindenweg/ }).click()
+  await page.getByRole('button', { name: 'Aufmaß', exact: true }).click()
+  await page.getByRole('button', { name: 'Neues Aufmaßblatt' }).click()
+  await page.getByRole('radio', { name: /Leistungsaufmaß/ }).check()
+  await page.getByRole('button', { name: 'Aufmaßblatt anlegen' }).click()
+  await expect(page.getByRole('heading', { name: 'Leistungsaufmaß 1' })).toBeVisible()
+  const sheetUrl = page.url()
+  await page.getByRole('link', { name: /Sanierung Lindenweg/ }).click()
+  await page.getByRole('button', { name: 'Offline verfügbar machen' }).click()
+  await expect(page.getByText(/sind auf dem Gerät gespeichert/)).toBeVisible()
+
+  // On site without network: a measurement line …
+  await context.setOffline(true)
+  await page.getByRole('button', { name: 'Aufmaß', exact: true }).click()
+  await page.getByRole('link', { name: /Leistungsaufmaß 1/ }).click()
+  await page.getByRole('button', { name: '+ Zeile erfassen' }).click()
+  await page.getByLabel('Beschreibung').fill('Decke Flur')
+  await page.getByLabel(/Formel oder Zahl/).fill('3,5*2')
+  await page.getByRole('button', { name: 'Hinzufügen', exact: true }).click()
+  await expect(page.getByText('Decke Flur')).toBeVisible()
+  await expect(page.locator('.m-line .result').first()).toContainText('7')
+  await expect(page.getByText('noch nicht übertragen')).toBeVisible()
+  await expect(page.getByText(/^Offline – /)).toBeVisible()
+  await expect(page.getByText('1 Änderung(en) warten auf Übertragung.')).toBeVisible()
+
+  // … and a new Bautagesbericht
+  await page.getByRole('link', { name: /Sanierung Lindenweg/ }).click()
+  await page.getByRole('button', { name: 'Bautagebuch', exact: true }).click()
+  await page.getByRole('button', { name: 'Neuer Tagesbericht' }).click()
+  await page.getByLabel('Datum').fill('2026-11-10')
+  await page.getByRole('button', { name: 'Tagesbericht anlegen' }).click()
+  await expect(page.getByRole('heading', { name: /Bautagesbericht – 10\.11\.2026/ })).toBeVisible()
+  await page.getByText('Sonnig', { exact: true }).click()
+  await page.getByRole('button', { name: 'Bericht speichern' }).click()
+  await expect(page.getByText('Gespeichert.')).toBeVisible()
+  await expect(page.getByText('3 Änderung(en) warten auf Übertragung.')).toBeVisible()
+  await expectNoHorizontalScroll(page)
+  if (SCREENSHOTS) await page.screenshot({ path: `${SCREENSHOTS}/offline.png`, fullPage: true })
+
+  // Back online: the outbox is sent in order, the server has everything
+  await context.setOffline(false)
+  await expect(page.locator('.offline-bar')).toHaveCount(0, { timeout: 30_000 })
+  await page.goto(sheetUrl)
+  await expect(page.getByText('Decke Flur')).toBeVisible()
+  await expect(page.locator('.m-line .result').first()).toContainText('7')
+  await expect(page.getByText('noch nicht übertragen')).toHaveCount(0)
+  await page.getByRole('link', { name: /Sanierung Lindenweg/ }).click()
+  await page.getByRole('button', { name: 'Bautagebuch', exact: true }).click()
+  await expect(page.getByText(/Di\.?, 10\.11\.2026/)).toBeVisible()
+  await expect(page.getByText(/^Sonnig/)).toBeVisible()
+})
+
+test('E-Mail-Vorlagen und Versand am Dokument', async () => {
+  test.skip(!SETUP_TOKEN, 'SETUP_TOKEN must be set for a fresh stack')
+  await page.getByRole('button', { name: 'Einstellungen' }).click()
+  await page.locator('#settings-section').selectOption({ label: 'E-Mail-Vorlagen' })
+  await expect(page.getByRole('heading', { name: 'E-Mail-Vorlagen' })).toBeVisible()
+  await expect(page.getByLabel('Betreff')).toHaveValue('{Dokument} {Nummer} – {Firma}')
+  await page.getByLabel('Betreff').fill('Ihre {Dokument} {Nummer}')
+  await page
+    .getByLabel('Blindkopie jeder Dokument-E-Mail an (z. B. Büro-Postfach)')
+    .fill('buero@muster-bau.example')
+  await page.getByRole('button', { name: 'Speichern' }).click()
+  await expect(page.getByText('Gespeichert.')).toBeVisible()
+  await expect(page.getByLabel('Dokumentart')).toContainText('Rechnung (eigene Vorlage)')
+  await expectNoHorizontalScroll(page)
+
+  // At the finalized Stornorechnung: the panel explains that SMTP is not set up in this stack
+  await page.getByRole('button', { name: 'Rechnungen', exact: true }).click()
+  await page.getByRole('link', { name: /R-00102/ }).click()
+  await expect(page.getByRole('heading', { name: 'Per E-Mail senden' })).toBeVisible()
+  await expect(page.getByText(/E-Mail-Versand ist nicht eingerichtet/)).toBeVisible()
+  await expectNoHorizontalScroll(page)
+
+  // Mahnvorschläge: nothing due in this stack (the dunned invoice was cancelled)
+  await page.getByRole('button', { name: 'Rechnungen', exact: true }).click()
+  await page.getByLabel('Mahnung fällig (Mahnvorschläge)').check()
+  await expect(page.getByText('Keine Rechnungen für diesen Filter.')).toBeVisible()
+  await expect(page.getByRole('button', { name: /Mahnlauf starten/ })).toHaveCount(0)
+  await expectNoHorizontalScroll(page)
+})
+
+test('Regiebericht in die Rechnung, Nachtrag aus dem Bautagebuch, Vertragssumme', async () => {
+  test.skip(!SETUP_TOKEN, 'SETUP_TOKEN must be set for a fresh stack')
+  test.setTimeout(120_000)
+
+  // Regiebericht: Stunden, Leistungszeitraum, Unterschrift von Auftragnehmer und Auftraggeber
+  await page.getByRole('button', { name: 'Projekte' }).click()
+  await page.getByRole('link', { name: /Sanierung Lindenweg/ }).click()
+  await page.getByRole('button', { name: 'Berichte', exact: true }).click()
+  await page.getByRole('button', { name: 'Neuer Bericht' }).click()
+  await page.getByLabel('Art des Berichts').selectOption({ label: 'Regiebericht' })
+  await page.getByLabel('Datum').fill('2026-11-10')
+  await page.getByRole('button', { name: 'Bericht anlegen' }).click()
+  await expect(page.getByRole('heading', { name: /Regiebericht – 10\.11\.2026/ })).toBeVisible()
+  await page.getByLabel('Leistungszeitraum von').fill('2026-11-10')
+  await page.getByLabel('Leistungszeitraum bis').fill('2026-11-10')
+  await page.getByLabel('Stunden', { exact: true }).first().fill('6')
+  await page.getByLabel('Tätigkeit').first().fill('Rohrbruch freigelegt')
+  await page.getByRole('button', { name: 'Bericht speichern' }).click()
+  await expect(page.getByText('Gespeichert.')).toBeVisible()
+  await page.getByLabel('Name Auftraggeber').fill('Frau Berger')
+  page.once('dialog', (dialog) => dialog.accept())
+  await page.getByRole('button', { name: 'Unterschreiben und abschließen' }).click()
+  await expect(page.getByText('Dieser Bericht ist unterschrieben und gesperrt.')).toBeVisible()
+  await expectNoHorizontalScroll(page)
+  await page.getByRole('link', { name: /Sanierung Lindenweg/ }).click()
+  await expect(page.getByText('noch nicht abgerechnet')).toBeVisible()
+
+  // Rechnung: Bericht übernehmen → Titel mit Stunden je Lohngruppe
+  await page.getByRole('button', { name: 'Dokumente' }).click()
+  await page.getByRole('button', { name: 'Neues Dokument' }).click()
+  await page.getByRole('radio', { name: 'Rechnung', exact: true }).check()
+  await page.getByRole('button', { name: 'Dokument erstellen' }).click()
+  await expect(page.getByRole('heading', { name: 'Rechnung', exact: true })).toBeVisible()
+  await page.getByRole('button', { name: 'Berichte übernehmen' }).click()
+  await page.getByLabel(/Regiebericht · 10\.11\.2026/).check()
+  await page.getByRole('button', { name: 'Ausgewählte übernehmen' }).click()
+  await expect(page.getByText('Regiebericht vom 10.11.2026').first()).toBeVisible()
+  await expect(page.getByText(/Stundenlohnarbeiten/).first()).toBeVisible()
+  await expectNoHorizontalScroll(page)
+  // Draft removed again (later tests open the last invoice of the project); the report is free again.
+  const draftId = page.url().split('/').pop() as string
+  expect((await page.request.delete(`/api/v1/documents/${draftId}`)).status()).toBe(204)
+
+  // Nachtrag aus „Besondere Vorkommnisse“ des Bautagebuchs, der Bericht ist Nachweis
+  await page.getByRole('link', { name: /Sanierung Lindenweg/ }).click()
+  await page.getByRole('button', { name: 'Bautagebuch' }).click()
+  await page.getByText(/Mo\.?, 09\.11\.2026/).click()
+  await page.getByRole('button', { name: 'Nachtrag anlegen' }).click()
+  await expect(page.getByRole('heading', { name: 'Nachweise' })).toBeVisible()
+  await expect(page.getByRole('link', { name: 'Bautagesbericht vom 09.11.2026' })).toBeVisible()
+  await expect(page.getByText(/Wasserleitung undicht/).first()).toBeVisible()
+  await expectNoHorizontalScroll(page)
+
+  // Projektübersicht: Vertragssumme mit dem Nachtrag (Entwurf zählt nicht)
+  await page.getByRole('link', { name: /Sanierung Lindenweg/ }).click()
+  await page.locator('nav.tabs.sub').getByRole('button', { name: 'Übersicht' }).click()
+  const contract = page.locator('section.contract')
+  await expect(contract.getByRole('heading', { name: 'Vertragssumme' })).toBeVisible()
+  await expect(contract.getByText('Hauptauftrag', { exact: true })).toBeVisible()
+  await expect(contract.getByText(/N0\d/).first()).toBeVisible()
+  await expectNoHorizontalScroll(page)
+  if (SCREENSHOTS)
+    await page.screenshot({ path: `${SCREENSHOTS}/vertragssumme.png`, fullPage: true })
+})
+
+test('Projektkennzahlen und Filter der Projektliste', async () => {
+  test.skip(!SETUP_TOKEN, 'SETUP_TOKEN must be set for a fresh stack')
+
+  // Kennzahlen in der Projektübersicht
+  await page.getByRole('button', { name: 'Projekte' }).click()
+  await page.getByRole('link', { name: /Sanierung Lindenweg/ }).click()
+  const figures = page.locator('section.figures')
+  await expect(figures.getByRole('heading', { name: 'Kennzahlen' })).toBeVisible()
+  await expect(figures.getByRole('heading', { name: 'Soll-Stunden' })).toBeVisible()
+  await expect(figures.getByText(/aus der Kalkulation von AB-00101/)).toBeVisible()
+  await expect(figures.getByRole('heading', { name: 'Auftragssumme' })).toBeVisible()
+  await expect(figures.getByRole('heading', { name: 'Abgerechnet' })).toBeVisible()
+  await expect(figures.getByRole('heading', { name: 'Offene Forderungen' })).toBeVisible()
+  await expectNoHorizontalScroll(page)
+  if (SCREENSHOTS) await page.screenshot({ path: `${SCREENSHOTS}/kennzahlen.png`, fullPage: true })
+
+  // Filter: Zeitraum und Mitarbeitende
+  await page.getByRole('button', { name: 'Projekte' }).click()
+  await page.getByText('Filter', { exact: true }).click()
+  await page.getByLabel('Mitarbeitende').selectOption({ label: 'Nur meine Projekte' })
+  await page.getByLabel('Zeitraum von').fill('2020-01-01')
+  await page.getByLabel('Zeitraum bis').fill('2020-12-31')
+  await expect(page.getByText('Noch keine Einträge.')).toBeVisible()
+  await page.getByLabel('Zeitraum bis').fill('2030-12-31')
+  await expect(page.getByRole('link', { name: /Sanierung Lindenweg/ })).toBeVisible()
+  await expectNoHorizontalScroll(page)
+  await page.getByRole('button', { name: 'Filter zurücksetzen' }).click()
+  await expect(page.getByLabel('Zeitraum von')).toHaveValue('')
+})
+
+test('Übersicht, globale Suche und Benachrichtigungen', async () => {
+  test.skip(!SETUP_TOKEN, 'SETUP_TOKEN must be set for a fresh stack')
+
+  await page.getByRole('button', { name: 'Übersicht', exact: true }).first().click()
+  await expect(page.getByRole('heading', { name: 'Übersicht', level: 1 })).toBeVisible()
+  await expect(page.getByRole('heading', { name: 'Offene Forderungen' })).toBeVisible()
+  await expect(page.getByRole('heading', { name: 'Heute auf der Baustelle' })).toBeVisible()
+  await expect(page.getByRole('heading', { name: 'Offene Angebote und Nachträge' })).toBeVisible()
+  await expect(page.getByRole('heading', { name: 'Zuletzt bearbeitete Projekte' })).toBeVisible()
+  // Beträge ausblenden (vor Kunden)
+  await page.getByLabel('Beträge ausblenden').check()
+  await expect(page.locator('.dashboard .amount-big').first()).toHaveText('•••')
+  await expectNoHorizontalScroll(page)
+  if (SCREENSHOTS) await page.screenshot({ path: `${SCREENSHOTS}/uebersicht.png`, fullPage: true })
+  await page.getByLabel('Beträge ausblenden').uncheck()
+
+  // Globale Suche über Projekte, Kontakte, Dokumente
+  await page.getByRole('searchbox', { name: 'Suchen' }).fill('Wohnbau')
+  await page.getByRole('searchbox', { name: 'Suchen' }).press('Enter')
+  await expect(page.getByRole('heading', { name: 'Suche: „Wohnbau“' })).toBeVisible()
+  await expect(page.getByRole('heading', { name: 'Kontakte' })).toBeVisible()
+  await expect(page.getByRole('heading', { name: 'Dokumente' })).toBeVisible()
+  await expectNoHorizontalScroll(page)
+  await page.getByRole('searchbox', { name: 'Suchen' }).fill('Lindenweg')
+  await page.getByRole('searchbox', { name: 'Suchen' }).press('Enter')
+  await page
+    .getByRole('region', { name: 'Projekte' })
+    .getByRole('link', { name: /P-00101 · Sanierung Lindenweg/ })
+    .click()
+  await expect(page.getByRole('heading', { name: /Sanierung Lindenweg/, level: 1 })).toBeVisible()
+
+  // Benachrichtigungen
+  await page.getByRole('button', { name: /^Benachrichtigungen/ }).click()
+  await expect(page.getByRole('heading', { name: 'Benachrichtigungen', level: 1 })).toBeVisible()
+  await expectNoHorizontalScroll(page)
+})
+
+test('Kontakte: Kanäle, Rechnungsempfänger, Ansprechpartner, Filter und CSV-Import', async () => {
+  test.skip(!SETUP_TOKEN, 'SETUP_TOKEN must be set for a fresh stack')
+  test.setTimeout(90_000)
+  await page.getByRole('button', { name: 'Kontakte' }).click()
+  const create = page.locator('form.inline-form')
+  const editor = page.locator('.contact-editor')
+
+  // Neue Organisation mit E-Mail, Telefon und abweichendem Rechnungsempfänger
+  await create.getByLabel('Name der Organisation').fill('Hausverwaltung Klee GmbH')
+  await create.getByRole('button', { name: 'Speichern' }).click()
+  await expect(editor.getByRole('heading', { name: /Hausverwaltung Klee GmbH/ })).toBeVisible()
+  await editor.getByRole('button', { name: '+ E-Mail oder Telefon' }).click()
+  await editor.getByLabel('Adresse / Nummer').fill('info@klee.example')
+  await editor.getByLabel('Straße und Hausnummer').first().fill('Gartenstraße 9')
+  await editor.getByLabel('PLZ').first().fill('30161')
+  await editor.getByLabel('Ort').first().fill('Hannover')
+  await editor.getByLabel('Abweichender Rechnungsempfänger').check()
+  await editor
+    .getByLabel('Empfängerblock (Name, Abteilung, z. Hd.)')
+    .fill('Hausverwaltung Klee GmbH\nBuchhaltung')
+  await editor.locator('.billing-address').getByLabel('Straße und Hausnummer').fill('Postfach 4711')
+  await editor.locator('.billing-address').getByLabel('PLZ').fill('30001')
+  await editor.locator('.billing-address').getByLabel('Ort').fill('Hannover')
+  await editor.getByRole('button', { name: 'Speichern' }).click()
+  await expect(page.getByText('Kontakt gespeichert.')).toBeVisible()
+  await expect(editor.getByLabel('Adresse / Nummer')).toHaveValue('info@klee.example')
+  await expectNoHorizontalScroll(page)
+  if (SCREENSHOTS) await page.screenshot({ path: `${SCREENSHOTS}/kontakt.png`, fullPage: true })
+
+  // Ansprechpartnerin anlegen und verknüpfen
+  const organizationUrl = page.url()
+  await editor.getByRole('button', { name: 'Schließen' }).click()
+  await create.getByText('Person', { exact: true }).click()
+  await create.getByLabel('Vorname').fill('Klara')
+  await create.getByLabel('Nachname').fill('Klee')
+  await create.getByRole('button', { name: 'Speichern' }).click()
+  await expect(editor.getByRole('heading', { name: /Klee, Klara/ })).toBeVisible()
+  await editor.getByRole('button', { name: '+ Organisation' }).click()
+  await editor.getByLabel('Suchen', { exact: true }).fill('Klee')
+  await editor
+    .getByLabel('Organisation', { exact: true })
+    .selectOption({ label: 'Hausverwaltung Klee GmbH' })
+  await editor.getByLabel('Funktion').fill('Buchhaltung')
+  await editor.getByRole('button', { name: 'Verknüpfen' }).click()
+  await expect(editor.getByText('· Buchhaltung')).toBeVisible()
+  expect(organizationUrl).toContain('/kontakte')
+
+  // Filter: nur Personen
+  await page.getByLabel('Art', { exact: true }).selectOption({ label: 'Person' })
+  await expect(page.getByRole('button', { name: /Klee, Klara/ })).toBeVisible()
+  await expect(page.getByRole('button', { name: /Wohnbau Nord eG/ })).toHaveCount(0)
+  await page.getByLabel('Art', { exact: true }).selectOption({ label: 'Alle' })
+
+  // CSV: Export-Link und Import mit Vorschau
+  await expect(page.getByRole('link', { name: 'CSV exportieren' })).toHaveAttribute(
+    'href',
+    /\/api\/v1\/contacts\/export\.csv/,
+  )
+  await page.getByRole('button', { name: 'CSV importieren' }).click()
+  await page.getByLabel('CSV-Datei').setInputFiles({
+    name: 'kontakte.csv',
+    mimeType: 'text/csv',
+    buffer: Buffer.from(
+      'Firma;Straße;PLZ;Ort;E-Mail\r\nDachdecker Wind KG;Am Deich 2;26122;Oldenburg;post@wind.example\r\nHausverwaltung Klee GmbH;Gartenstraße 9;30161;Hannover;\r\n',
+    ),
+  })
+  await page.getByRole('button', { name: 'Vorschau' }).click()
+  await expect(page.getByText(/1 neu, 1 übersprungen, 0 fehlerhaft/)).toBeVisible()
+  await page.getByRole('button', { name: '1 Kontakte importieren' }).click()
+  await expect(page.getByText(/1 importiert/)).toBeVisible()
+  await expect(page.getByRole('button', { name: /Dachdecker Wind KG/ })).toBeVisible()
+  await expectNoHorizontalScroll(page)
+})
+
+test('Konto: Passwort vergessen und Passwort-Link der Administration', async ({ browser }) => {
+  test.skip(!SETUP_TOKEN, 'SETUP_TOKEN must be set for a fresh stack')
+
+  // Administration: Link für den Monteur erstellen (ohne SMTP nur zum Übergeben)
+  await page.getByRole('button', { name: 'Benutzer' }).click()
+  const row = page.locator('li', { hasText: 'Max Monteur' })
+  await row.getByRole('button', { name: 'Passwort-Link' }).click()
+  await expect(page.getByRole('heading', { name: 'Neues Passwort für Max Monteur' })).toBeVisible()
+  const link = (await page.locator('code.secret').textContent()) ?? ''
+  expect(link).toMatch(/\/passwort-zuruecksetzen#[A-Za-z0-9_-]{43}$/)
+  await expectNoHorizontalScroll(page)
+
+  // Der Monteur setzt in einem eigenen Browser ein neues Passwort und meldet sich an.
+  const other = await browser.newContext({ ignoreHTTPSErrors: true })
+  const monteur = await other.newPage()
+  await monteur.goto(new URL(link).pathname + new URL(link).hash)
+  await expect(monteur.getByRole('heading', { name: 'Neues Passwort festlegen' })).toBeVisible()
+  await expect(monteur.getByText('monteur@example.test')).toBeVisible()
+  await monteur.locator('input[name=password]').fill('neues-monteur-passwort')
+  await monteur.locator('input[name=repeat]').fill('anderes-passwort-123')
+  await monteur.getByRole('button', { name: 'Passwort speichern' }).click()
+  await expect(
+    monteur.getByText('Die beiden Passwörter stimmen nicht überein.').first(),
+  ).toBeVisible()
+  await monteur.locator('input[name=repeat]').fill('neues-monteur-passwort')
+  await monteur.getByRole('button', { name: 'Passwort speichern' }).click()
+  await expect(monteur.getByText('Das neue Passwort ist gespeichert.')).toBeVisible()
+  await expect(monteur).toHaveURL(/\/$/)
+  await monteur.getByRole('button', { name: 'Anmelden' }).click()
+  await monteur.getByLabel('E-Mail-Adresse').fill('monteur@example.test')
+  await monteur.locator('input[name=password]').fill('neues-monteur-passwort')
+  await monteur.getByRole('button', { name: 'Anmelden', exact: true }).click()
+  await expect(monteur.getByRole('heading', { name: 'Übersicht' })).toBeVisible()
+
+  // Der Link gilt nur einmal.
+  await monteur.goto(new URL(link).pathname + new URL(link).hash)
+  await expect(
+    monteur.getByText('Der Link ist ungültig oder abgelaufen.', { exact: false }),
+  ).toBeVisible()
+
+  // „Passwort vergessen?“ ohne SMTP: Hinweis auf die Administration (gleich für jede Adresse)
+  await monteur.goto('/')
+  await monteur.getByRole('button', { name: 'Abmelden' }).click()
+  await monteur.getByRole('button', { name: 'Passwort vergessen?' }).click()
+  await monteur.getByLabel('E-Mail-Adresse').fill('monteur@example.test')
+  await monteur.getByRole('button', { name: 'Link anfordern' }).click()
+  await expect(monteur.getByText(/kein E-Mail-Versand eingerichtet/)).toBeVisible()
+  await expectNoHorizontalScroll(monteur)
+  await other.close()
+
+  // Sicherheit: Status der E-Mail-Adresse
+  await page.getByRole('button', { name: 'Sicherheit' }).click()
+  await expect(page.getByRole('heading', { name: 'E-Mail-Adresse' })).toBeVisible()
+  await expect(page.getByText('nicht bestätigt')).toBeVisible()
+})
+
+test('Einstellungen: Hinweisleiste, Feiertage, Lohnkostenanteil, Dateinamen und Anhänge', async () => {
+  test.skip(!SETUP_TOKEN, 'SETUP_TOKEN must be set for a fresh stack')
+  // Hinweisleiste: only the federal state is still missing; „Beheben“ opens the company settings
+  await page.getByRole('button', { name: 'Projekte' }).click()
+  const notices = page.getByRole('region', { name: 'Hinweise' })
+  await expect(notices).toContainText('Bundesland fehlt')
+  await expectNoHorizontalScroll(page)
+  await notices.getByRole('link', { name: 'Beheben' }).click()
+  await expect(page.locator('#settings-section')).toHaveValue('company')
+  await page.getByLabel('Bundesland').selectOption({ label: 'Niedersachsen' })
+  await page.getByRole('button', { name: 'Speichern' }).click()
+  await expect(page.getByText('Gespeichert.')).toBeVisible()
+  await page.getByRole('button', { name: 'Projekte' }).click()
+  await expect(page.getByRole('region', { name: 'Hinweise' })).toHaveCount(0)
+
+  // Feiertage: computed for Niedersachsen, plus an own day
+  await page.getByRole('button', { name: 'Einstellungen' }).click()
+  await page.locator('#settings-section').selectOption({ label: 'Feiertage' })
+  await expect(
+    page.getByRole('heading', { name: 'Gesetzliche Feiertage in Niedersachsen' }),
+  ).toBeVisible()
+  const days = page.getByRole('listitem')
+  await expect(days.filter({ hasText: 'Reformationstag' })).toBeVisible()
+  // Not statutory in Niedersachsen (the hint text mentions it as a local holiday elsewhere)
+  await expect(days.filter({ hasText: 'Fronleichnam' })).toHaveCount(0)
+  await page.getByLabel('Datum').fill(`${new Date().getFullYear()}-12-24`)
+  await page.getByLabel('Bezeichnung').fill('Betriebsruhe')
+  await page.getByRole('button', { name: 'Eigenen Tag hinzufügen' }).click()
+  await expect(page.getByText(/Betriebsruhe · eigener Eintrag/)).toBeVisible()
+  await expectNoHorizontalScroll(page)
+
+  // Dokumente: § 35a also for organizations, file names, AGB as automatic attachment of quotes
+  await page.locator('#settings-section').selectOption({ label: 'Dokumente' })
+  await expect(
+    page.getByRole('heading', { name: 'Lohnkostenanteil ausweisen (§ 35a EStG)' }),
+  ).toBeVisible()
+  await page
+    .getByRole('group', { name: 'Rechnungen', exact: true })
+    .getByLabel('an Organisationen')
+    .check()
+  await page.getByLabel('Muster für PDF-Dateien und E-Mail-Anhänge').fill('{Typ}_{Nummer}_{Kunde}')
+  await page.getByLabel('Bezeichnung (wird Dateiname)').fill('AGB Muster Bau')
+  await page.getByLabel('PDF hochladen').setInputFiles({
+    name: 'agb.pdf',
+    mimeType: 'application/pdf',
+    buffer: Buffer.from('%PDF-1.7\n1 0 obj<<>>endobj\ntrailer<<>>\n%%EOF\n'),
+  })
+  await expect(page.getByText('AGB Muster Bau.pdf')).toBeVisible()
+  await page
+    .getByRole('group', { name: 'Anhängen an' })
+    .getByLabel('Angebot', { exact: true })
+    .check()
+  await page.getByRole('button', { name: 'Speichern' }).click()
+  await expect(page.getByText('Gespeichert.')).toBeVisible()
+  await expect(page.getByText('Beispiel: Rechnung_R2026-00101_Mustermann,_Max.pdf')).toBeVisible()
+  await expectNoHorizontalScroll(page)
+  // back to the default, so later steps see the usual file names
+  await page.getByRole('button', { name: 'Standard' }).click()
+  await page.getByRole('button', { name: 'Speichern' }).click()
+  await expect(page.getByText('Beispiel: Rechnung_R2026-00101.pdf')).toBeVisible()
+})
+
+test('Angebot: Bild-Position, Zielpreis, in Stammdaten speichern, Versionen, Stammdaten-CSV', async () => {
+  test.skip(!SETUP_TOKEN, 'SETUP_TOKEN must be set for a fresh stack')
+  test.setTimeout(120_000)
+  // Setup via API: customer, project, quote with one calculated position
+  const units = (await (await page.request.get('/api/v1/units')).json()) as {
+    id: string
+    symbol: string
+  }[]
+  const unit = (symbol: string) => units.find((u) => u.symbol === symbol)?.id
+  const customer = await (
+    await page.request.post('/api/v1/contacts', {
+      data: {
+        kind: 'person',
+        firstName: 'Paula',
+        lastName: 'Preis',
+        addresses: [{ kind: 'main', street: 'Am Markt 1', postalCode: '30159', city: 'Hannover' }],
+      },
+    })
+  ).json()
+  const project = await (
+    await page.request.post('/api/v1/projects', {
+      data: { name: 'Bad Preis', customerId: customer.id },
+    })
+  ).json()
+  const quote = await (
+    await page.request.post(`/api/v1/projects/${project.id}/documents`, { data: { type: 'quote' } })
+  ).json()
+  const withItem = await (
+    await page.request.post(`/api/v1/documents/${quote.id}/items`, {
+      data: {
+        positionType: 'item',
+        shortText: 'Fliesen verlegen',
+        quantity: '20',
+        unitId: unit('m²'),
+      },
+    })
+  ).json()
+  const calc = await page.request.post(
+    `/api/v1/documents/${quote.id}/items/${withItem.items[0].id}/calculation`,
+    {
+      data: {
+        lines: [
+          {
+            kind: 'labor',
+            description: 'Fliesenleger',
+            quantity: '60',
+            unitId: unit('min'),
+            unitCostCents: 5000,
+          },
+          {
+            kind: 'material',
+            description: 'Fliesen',
+            quantity: '1',
+            unitId: unit('m²'),
+            unitCostCents: 2000,
+          },
+        ],
+      },
+    },
+  )
+  expect(calc.status()).toBe(200)
+  await page.goto(`/dokumente/${quote.id}`)
+  await expect(page.getByRole('heading', { name: 'Angebot', exact: true })).toBeVisible()
+
+  // Bild-Position: upload into the project's Ablage and insert with caption
+  await page.getByRole('button', { name: '+ Bild' }).click()
+  await page.getByLabel('Oder neues Bild hochladen').setInputFiles({
+    name: 'muster.png',
+    mimeType: 'image/png',
+    buffer: PNG,
+  })
+  await expect(page.getByLabel('Bild aus der Projektablage')).toHaveValue(/[0-9a-f-]{36}/)
+  await page.getByLabel('Bildunterschrift (optional)').fill('Fliesenmuster')
+  await page.getByRole('button', { name: 'Bild einfügen' }).click()
+  await expect(page.getByRole('img', { name: 'Fliesenmuster' })).toBeVisible()
+
+  // Zielpreis: preview, then apply
+  await page.getByText('Preis anpassen (Zielpreis)').click()
+  await page.getByLabel('Ziel-Nettosumme').fill('1.500,00')
+  await page.getByRole('button', { name: 'Vorschau' }).click()
+  await expect(page.getByText(/danach etwa 1\.500,00/)).toBeVisible()
+  await page.getByRole('button', { name: 'Zielpreis übernehmen' }).click()
+  await expect(page.getByText(/^Übernommen: netto/)).toBeVisible()
+  await expectNoHorizontalScroll(page)
+
+  // In Stammdaten speichern
+  await page.getByRole('button', { name: 'In Stammdaten speichern: Fliesen verlegen' }).click()
+  await expect(page.getByText('In Stammdaten', { exact: true })).toBeVisible()
+
+  // Fertigstellen, then a new version
+  page.once('dialog', (dialog) => dialog.accept())
+  await page.getByRole('button', { name: 'Fertigstellen' }).click()
+  await expect(page.getByRole('heading', { name: 'Versionen' })).toBeVisible()
+  await page.getByRole('button', { name: 'Neue Version anlegen' }).click()
+  await expect(page.getByText('Version 2 · Entwurf')).toBeVisible()
+  await expect(page.getByRole('link', { name: /^Version 1 · A/ })).toBeVisible()
+  await expectNoHorizontalScroll(page)
+
+  // Stammdaten: the saved Leistung, CSV import of materials
+  await page.getByRole('button', { name: 'Stammdaten', exact: true }).click()
+  await expect(page.getByRole('listitem').filter({ hasText: 'Fliesen verlegen' })).toBeVisible()
+  await page.getByRole('button', { name: 'Materialien' }).click()
+  await page.getByRole('button', { name: 'CSV importieren' }).click()
+  await page.getByLabel('CSV-Datei').setInputFiles({
+    name: 'material.csv',
+    mimeType: 'text/csv',
+    buffer: Buffer.from(
+      'Art;Artikelnummer;Kurztext;Einheit;EK;VK\r\nMaterial;FK-1;Fliesenkleber;kg;1,20;2,10\r\n',
+    ),
+  })
+  await page.getByRole('button', { name: 'Vorschau' }).click()
+  await expect(page.getByText('1 neu, 0 aktualisiert, 0 übersprungen, 0 Fehler')).toBeVisible()
+  await page.getByRole('button', { name: 'Importieren' }).click()
+  await expect(page.getByText(/Import abgeschlossen/)).toBeVisible()
+  await expect(page.getByRole('listitem').filter({ hasText: 'Fliesenkleber' })).toBeVisible()
+  await expectNoHorizontalScroll(page)
+})
 
 test('Briefpapier: WYSIWYG-Editor nach DIN 5008 B und Druckansicht', async () => {
   test.skip(!SETUP_TOKEN, 'SETUP_TOKEN must be set for a fresh stack')

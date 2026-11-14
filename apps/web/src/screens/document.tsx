@@ -33,9 +33,20 @@ import { Field, FormError, optional, SelectField, TextArea, useForm, value } fro
 import { type TextKey, t, tf } from '../i18n'
 import type { Navigate } from '../router'
 import { articlePrice } from './catalog'
+import { DocumentEmailPanel } from './document-email'
 import { documentLabel, StatusChip } from './documents'
 import { DunningPanel } from './dunning'
+import { EvidencePanel } from './evidence'
+import {
+  ImagePositionForm,
+  ImagePositionView,
+  SaveToCatalogButton,
+  TARGET_PRICE_TYPES,
+  TargetPricePanel,
+  VersionsPanel,
+} from './offer-tools'
 import { ReceivablePanel } from './payments'
+import { ReportApplyPanel } from './report-apply'
 
 type Doc = DocumentDetail
 type Apply = (result: { data: Doc; etag: string | null }) => void
@@ -140,6 +151,19 @@ export function DocumentScreen({ me, id, navigate }: { me: Me; id: string; navig
       {doc.type === 'quote' || doc.type === 'change_order' ? (
         <ChangeOrderSwitch doc={doc} editable={editable} apply={apply} />
       ) : null}
+      {doc.type === 'change_order' && doc.changeOrderInfo ? (
+        <EvidencePanel
+          doc={doc}
+          canWrite={me.permissions.includes('document.write')}
+          apply={apply}
+          navigate={navigate}
+        />
+      ) : null}
+      <VersionsPanel
+        doc={doc}
+        canWrite={me.permissions.includes('document.write')}
+        navigate={navigate}
+      />
       <DocumentActions
         doc={doc}
         canWrite={me.permissions.includes('document.write')}
@@ -148,6 +172,17 @@ export function DocumentScreen({ me, id, navigate }: { me: Me; id: string; navig
         apply={apply}
         navigate={navigate}
       />
+      {doc.finalizedAt ? (
+        <DocumentEmailPanel
+          doc={doc}
+          canWrite={me.permissions.includes('document.write')}
+          onSent={() =>
+            apiWithEtag<Doc>('GET', `/api/v1/documents/${id}`)
+              .then(apply)
+              .catch((err: ApiError) => setError(err.message))
+          }
+        />
+      ) : null}
       {doc.receivable ? (
         <ReceivablePanel
           doc={doc}
@@ -175,8 +210,14 @@ export function DocumentScreen({ me, id, navigate }: { me: Me; id: string; navig
         rates={rates}
         apply={apply}
         canUseCatalog={me.permissions.includes('catalog.read')}
+        canSaveCatalog={me.permissions.includes('catalog.write')}
       />
       <Totals doc={doc} />
+      {editable &&
+      TARGET_PRICE_TYPES.includes(doc.type) &&
+      me.permissions.includes('price.view') ? (
+        <TargetPricePanel doc={doc} apply={apply} />
+      ) : null}
       {me.permissions.includes('price.view') ? <InternalCalculation doc={doc} /> : null}
 
       {editable ? (
@@ -225,6 +266,11 @@ function HeaderForm({
           discountPercent: optional(data, 'discountPercent') ?? null,
           taxMode: value(data, 'taxMode'),
           contactId: value(data, 'contactId') || null,
+          // Another recipient: the server applies the default of the settings (§ 35a matrix).
+          ...(doc.type !== 'delivery_note' &&
+          (value(data, 'contactId') || null) === (doc.contact?.id ?? null)
+            ? { showLaborShare: data.get('showLaborShare') === 'on' }
+            : {}),
           ...(offer ? { validUntil: optional(data, 'validUntil') ?? null } : {}),
           ...(billed
             ? {
@@ -388,6 +434,26 @@ function HeaderForm({
           />
           <TextArea label={t('doc.intro')} name="introText" defaultValue={doc.introText} />
           <TextArea label={t('doc.closing')} name="closingText" defaultValue={doc.closingText} />
+          {doc.type !== 'delivery_note' ? (
+            <>
+              <label className="check">
+                <input
+                  type="checkbox"
+                  name="showLaborShare"
+                  defaultChecked={doc.showLaborShare}
+                  key={String(doc.showLaborShare)}
+                />
+                {t('doc.laborShare')}
+              </label>
+              {doc.showLaborShare ? (
+                <p className="hint">
+                  {doc.totals.laborShare.grossCents
+                    ? `${t('doc.laborShareAmount')}: ${formatCents(doc.totals.laborShare.grossCents)}`
+                    : t('doc.laborShareNone')}
+                </p>
+              ) : null}
+            </>
+          ) : null}
           {editable ? (
             <div className="button-row">
               <button type="submit" className="button primary auto" disabled={form.busy}>
@@ -413,6 +479,7 @@ function Positions({
   rates,
   apply,
   canUseCatalog,
+  canSaveCatalog,
 }: {
   doc: Doc
   editable: boolean
@@ -420,6 +487,7 @@ function Positions({
   rates: TaxRateSummary[]
   apply: Apply
   canUseCatalog: boolean
+  canSaveCatalog: boolean
 }) {
   const [adding, setAdding] = useState<EditablePositionType | null>(null)
   const [editingId, setEditingId] = useState<string | null>(null)
@@ -489,6 +557,9 @@ function Positions({
               ) : (
                 <>
                   <PositionView item={item} subtotal={doc.totals.titleSubtotals[item.id]} />
+                  {canSaveCatalog && isPriced(item.positionType) && doc.type !== 'invoice' ? (
+                    <SaveToCatalogButton doc={doc} item={item} />
+                  ) : null}
                   {editable ? (
                     <span className="actions">
                       {isPriced(item.positionType) ? (
@@ -501,14 +572,16 @@ function Positions({
                           {t('q.calc')}
                         </button>
                       ) : null}
-                      <button
-                        type="button"
-                        className="button ghost icon"
-                        aria-label={`${t('common.edit')}: ${item.shortText ?? t('doc.pos.text')}`}
-                        onClick={() => setEditingId(item.id)}
-                      >
-                        ✎
-                      </button>
+                      {item.positionType !== 'image' ? (
+                        <button
+                          type="button"
+                          className="button ghost icon"
+                          aria-label={`${t('common.edit')}: ${item.shortText ?? t('doc.pos.text')}`}
+                          onClick={() => setEditingId(item.id)}
+                        >
+                          ✎
+                        </button>
+                      ) : null}
                       <button
                         type="button"
                         className="button ghost icon"
@@ -541,7 +614,17 @@ function Positions({
           ))}
         </ol>
       ) : null}
-      {editable && adding ? (
+      {editable && adding === 'image' ? (
+        <ImagePositionForm
+          doc={doc}
+          onDone={(result) => {
+            apply(result)
+            setAdding(null)
+          }}
+          onCancel={() => setAdding(null)}
+        />
+      ) : null}
+      {editable && adding && adding !== 'image' ? (
         <ItemForm
           doc={doc}
           positionType={adding}
@@ -566,6 +649,9 @@ function Positions({
           {t('doc.applyMeasurements')}
         </button>
       ) : null}
+      {editable && !adding && doc.type === 'invoice' && doc.invoiceKind !== 'cancellation' ? (
+        <ReportApplyPanel doc={doc} apply={apply} />
+      ) : null}
       {editable && picking ? (
         <CatalogPicker doc={doc} titles={titles} apply={apply} onClose={() => setPicking(false)} />
       ) : null}
@@ -577,7 +663,7 @@ function Positions({
       {editable && !adding ? (
         <fieldset className="add-bar">
           <legend className="muted">{t('doc.addPosition')}</legend>
-          {(['title', 'item', 'lump_sum', 'optional', 'alternative', 'text'] as const).map(
+          {(['title', 'item', 'lump_sum', 'optional', 'alternative', 'text', 'image'] as const).map(
             (type) => (
               <button
                 key={type}
@@ -606,6 +692,7 @@ function PositionView({ item, subtotal }: { item: DocumentItem; subtotal: number
       </div>
     )
   }
+  if (item.positionType === 'image') return <ImagePositionView item={item} />
   if (!isPriced(item.positionType)) {
     return <p className="position-text pre">{item.longText ?? item.shortText}</p>
   }

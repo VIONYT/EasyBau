@@ -7,6 +7,7 @@ import { t } from '../i18n'
 import { QrCode } from '../qr'
 import { MySignatureCard } from '../signature'
 import { registerKey, webauthnSupported } from '../webauthn'
+import { EmailVerificationCard } from './account'
 
 const formatDate = (iso: string) => formatDateTime(iso)
 
@@ -39,6 +40,7 @@ export function Security({ me, onChanged }: { me: Me; onChanged: () => void }) {
           <SecurityKeys overview={overview} onChanged={changed} />
           <TotpCard enabled={overview.totpEnabled} onChanged={changed} />
           <MySignatureCard />
+          <EmailVerificationCard me={me} />
           <PasswordCard />
         </>
       ) : (

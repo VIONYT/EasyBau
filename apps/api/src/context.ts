@@ -46,6 +46,8 @@ export interface Services {
     /** SMTP configured: e-mails are queued in the outbox and sent by the worker. */
     SMTP_ENABLED: boolean
     SMTP_FROM?: string | undefined
+    /** Rechnungseingang per E-Mail allowed by the operator (INCOMING_MAIL_ENABLED). */
+    INCOMING_MAIL_ENABLED?: boolean
     /** KoSIT validator (ADR 0007), for the Betriebs-Check. */
     KOSIT_URL?: string | undefined
   }
@@ -112,13 +114,18 @@ export function servicesOf(tx: Tx): Services | undefined {
 
 export function inTenant<T>(
   services: Services,
-  auth: AuthContext,
+  /** A logged-in person, or a system process (e-mail inbox) with `userId: null`. */
+  auth: Pick<AuthContext, 'tenantId'> & { userId: string | null },
   fn: (tx: Tx) => Promise<T>,
 ): Promise<T> {
-  return withTenant(services.sql, { tenantId: auth.tenantId, userId: auth.userId }, (tx) => {
-    transactionServices.set(tx, services)
-    return fn(tx)
-  })
+  return withTenant(
+    services.sql,
+    { tenantId: auth.tenantId, userId: auth.userId ?? undefined },
+    (tx) => {
+      transactionServices.set(tx, services)
+      return fn(tx)
+    },
+  )
 }
 
 export type Handler = (request: FastifyRequest, reply: FastifyReply) => Promise<unknown>

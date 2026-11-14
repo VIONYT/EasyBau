@@ -1,10 +1,13 @@
 import { Readable } from 'node:stream'
 import type { Tx } from '@opc/db'
+import { allocationTax, type CostType } from '@opc/domain'
 import {
   customerAccount,
   datevBookingBatch,
   datevBookings,
   type ExportAdjustment,
+  type ExportIncoming,
+  type ExportIncomingPayment,
   type ExportInvoice,
   type ExportPayment,
   encodeWindows1252,
@@ -14,6 +17,7 @@ import {
   germanDate,
   gobdIndexXml,
   gobdTableCsv,
+  incomingBookings,
   type ZipEntry,
   zipStream,
 } from '@opc/exports'
@@ -88,15 +92,32 @@ function sendFile(
     .send(body)
 }
 
+const INCOMING_STATUS: Record<string, string> = {
+  review: 'in Prüfung',
+  confirmed: 'geprüft',
+  cancelled: 'storniert',
+  discarded: 'verworfen',
+}
+
 const isoNow = () => new Date().toISOString().slice(0, 10)
 
 // ---- Belege: archived originals (ADR 0008) for exports --------------------------------------------
 
 interface BelegRow {
-  documentId: string
+  documentId: string | null
   number: string
-  kind: 'pdf' | 'zugferd_pdf' | 'zugferd_xml' | 'xrechnung_xml' | 'validation_report'
+  kind:
+    | 'pdf'
+    | 'zugferd_pdf'
+    | 'zugferd_xml'
+    | 'xrechnung_xml'
+    | 'validation_report'
+    | 'incoming_original'
   format: string | null
+  /** Eingangsrechnung: supplier, original file name and id (for a unique file name). */
+  supplier?: string | null
+  filename?: string
+  incomingId?: string
   key: string
   sha256: string
   sizeBytes: string
@@ -110,10 +131,21 @@ const BELEG_KIND: Record<BelegRow['kind'], string> = {
   zugferd_xml: 'E-Rechnung ZUGFeRD (CII)',
   xrechnung_xml: 'E-Rechnung XRechnung',
   validation_report: 'Prüfbericht KoSIT',
+  incoming_original: 'Eingangsrechnung (Original wie empfangen)',
 }
 
 /** File name inside the export, e.g. R-00101.pdf, R-00101_zugferd.xml, R-00101_pruefbericht_zugferd.xml. */
 function belegFile(row: BelegRow): string {
+  if (row.kind === 'incoming_original') {
+    const ext = /\.([a-z0-9]{1,5})$/i.exec(row.filename ?? '')?.[1]?.toLowerCase() ?? 'bin'
+    const name =
+      [row.supplier, row.number]
+        .filter(Boolean)
+        .join('_')
+        .replace(/[\\/:*?"<>|\s]+/g, '_')
+        .slice(0, 80) || 'Eingangsrechnung'
+    return `eingang/${name}_${(row.incomingId ?? '').slice(0, 8)}.${ext}`
+  }
   const number = row.number.replace(/[^A-Za-z0-9._-]+/g, '_')
   switch (row.kind) {
     case 'pdf':
@@ -142,6 +174,107 @@ async function belegeOf(tx: Tx, documentIds: string[]): Promise<BelegRow[]> {
     where a.document_id in ${tx(documentIds)}
       and a.kind in ('pdf', 'zugferd_pdf', 'zugferd_xml', 'xrechnung_xml', 'validation_report')
     order by d.document_date, d.number, a.created_at`
+}
+
+/** Originals of received invoices (as received, ADR 0008). */
+async function incomingBelegeOf(tx: Tx, ids: string[]): Promise<BelegRow[]> {
+  if (!ids.length) return []
+  return tx<BelegRow[]>`
+    select null as "documentId", coalesce(i.invoice_number, '') as number, a.kind, null as format,
+           a.storage_key as key, encode(a.sha256, 'hex') as sha256, a.size_bytes::text as "sizeBytes",
+           to_char(a.locked_until, 'YYYY-MM-DD') as "lockedUntil",
+           to_char(r.archived_at at time zone 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS"Z"') as "archivedAt",
+           i.supplier_name as supplier, i.filename, i.id as "incomingId"
+    from document_artifact a
+    join incoming_invoice i on i.id = a.incoming_invoice_id
+    left join artifact_archive r on r.artifact_id = a.id
+    where a.incoming_invoice_id in ${tx(ids)}
+    order by i.invoice_date nulls last, i.received_at`
+}
+
+interface IncomingRow {
+  id: string
+  status: string
+  documentKind: 'invoice' | 'credit_note'
+  source: string
+  supplierName: string | null
+  supplierVatId: string | null
+  invoiceNumber: string | null
+  invoiceDate: string | null
+  dueDate: string | null
+  net: string
+  tax: string
+  gross: string
+  reverseCharge: boolean
+  receivedAt: string
+  confirmedAt: string | null
+  paidOn: string | null
+  closeReason: string | null
+  filename: string
+  creditorNumber: string | null
+}
+
+/**
+ * Received invoices of a period (by invoice date; not yet dated ones by the day of receipt) with
+ * their tax lines and allocations (input tax split per allocation, exact per rate).
+ */
+async function incomingOf(tx: Tx, from: string, to: string, statuses: string[]) {
+  const invoices = await tx<IncomingRow[]>`
+    select i.id, i.status, i.document_kind as "documentKind", i.source, i.supplier_name as "supplierName",
+           i.supplier_vat_id as "supplierVatId", i.invoice_number as "invoiceNumber",
+           to_char(i.invoice_date, 'YYYY-MM-DD') as "invoiceDate", to_char(i.due_date, 'YYYY-MM-DD') as "dueDate",
+           i.net_cents::text as net, i.tax_cents::text as tax, i.gross_cents::text as gross,
+           i.reverse_charge as "reverseCharge",
+           to_char(i.received_at at time zone 'Europe/Berlin', 'YYYY-MM-DD') as "receivedAt",
+           to_char(i.confirmed_at at time zone 'Europe/Berlin', 'YYYY-MM-DD') as "confirmedAt",
+           to_char(i.paid_on, 'YYYY-MM-DD') as "paidOn", i.close_reason as "closeReason", i.filename,
+           (select c.creditor_number from contact c where c.id = i.contact_id) as "creditorNumber"
+    from incoming_invoice i
+    where i.status in ${tx(statuses)}
+      and coalesce(i.invoice_date, (i.received_at at time zone 'Europe/Berlin')::date)
+          between ${from}::date and ${to}::date
+    order by coalesce(i.invoice_date, (i.received_at at time zone 'Europe/Berlin')::date), i.received_at`
+  const ids = invoices.length ? invoices.map((i) => i.id) : ['00000000-0000-0000-0000-000000000000']
+  const taxes = await tx<{ invoiceId: string; rate: string; net: string; tax: string }[]>`
+    select incoming_invoice_id as "invoiceId", rate_percent::text as rate, net_cents::text as net,
+           tax_cents::text as tax
+    from incoming_invoice_tax where incoming_invoice_id in ${tx(ids)} order by position`
+  const allocationRows = await tx<
+    {
+      invoiceId: string
+      project: string | null
+      projectNumber: string | null
+      area: string | null
+      costType: CostType
+      rate: string
+      net: string
+      description: string | null
+    }[]
+  >`
+    select a.incoming_invoice_id as "invoiceId", p.name as project, p.number as "projectNumber",
+           b.name as area, a.cost_type as "costType", a.rate_percent::text as rate, a.net_cents::text as net,
+           a.description
+    from incoming_invoice_allocation a
+    left join project p on p.id = a.project_id
+    left join business_area b on b.id = a.business_area_id
+    where a.incoming_invoice_id in ${tx(ids)} order by a.position`
+  const allocations = invoices.flatMap((invoice) => {
+    const own = allocationRows.filter((a) => a.invoiceId === invoice.id)
+    const tax = allocationTax(
+      own.map((a) => ({
+        projectId: null,
+        businessAreaId: null,
+        costType: a.costType,
+        ratePercent: a.rate,
+        netCents: BigInt(a.net),
+      })),
+      taxes
+        .filter((t) => t.invoiceId === invoice.id)
+        .map((t) => ({ ratePercent: t.rate, netCents: BigInt(t.net), taxCents: BigInt(t.tax) })),
+    )
+    return own.map((a, index) => ({ ...a, taxCents: tax[index] as bigint }))
+  })
+  return { invoices, taxes, allocations }
 }
 
 /** Renders and archives the PDF original of documents that have none yet (e.g. render failed once). */
@@ -206,6 +339,16 @@ export function registerExportRoutes(app: FastifyInstance, services: Services) {
         )
       }
       const defaults = DATEV_DEFAULTS[settings.chart]
+      const incomingAccounts = {
+        material: settings.expenseAccounts.material ?? defaults.expense.material,
+        labor: settings.expenseAccounts.labor ?? defaults.expense.labor,
+        equipment: settings.expenseAccounts.equipment ?? defaults.expense.equipment,
+        subcontract: settings.expenseAccounts.subcontract ?? defaults.expense.subcontract,
+        other: settings.expenseAccounts.other ?? defaults.expense.other,
+        reverseCharge: settings.expenseAccounts.reverseCharge ?? defaults.expense.reverseCharge,
+        creditor: settings.creditorAccount ?? defaults.creditor,
+        bank: settings.bankAccount ?? defaults.bank,
+      }
       const accounts = {
         standard19: settings.revenueAccounts.standard19 ?? defaults.standard19,
         reduced7: settings.revenueAccounts.reduced7 ?? defaults.reduced7,
@@ -309,6 +452,48 @@ export function registerExportRoutes(app: FastifyInstance, services: Services) {
             taxCents: BigInt(l.tax),
           })),
       }))
+      // Eingangsrechnungen: confirmed ones by invoice date, payments by payment date.
+      const incoming = await incomingOf(tx, from, to, ['confirmed'])
+      const exportIncoming: ExportIncoming[] = incoming.invoices.map((i) => ({
+        invoiceNumber: i.invoiceNumber ?? '',
+        date: i.invoiceDate ?? i.receivedAt,
+        supplierName: i.supplierName ?? '',
+        creditNote: i.documentKind === 'credit_note',
+        reverseCharge: i.reverseCharge,
+        creditorAccount: i.creditorNumber,
+        allocations: incoming.allocations
+          .filter((a) => a.invoiceId === i.id)
+          .map((a) => ({
+            costType: a.costType,
+            ratePercent: a.rate,
+            netCents: BigInt(a.net),
+            taxCents: a.taxCents,
+          })),
+      }))
+      const incomingPayments: ExportIncomingPayment[] = (
+        await tx<
+          {
+            number: string | null
+            date: string
+            gross: string
+            kind: string
+            supplier: string | null
+            creditor: string | null
+          }[]
+        >`
+          select invoice_number as number, to_char(paid_on, 'YYYY-MM-DD') as date, gross_cents::text as gross,
+                 document_kind as kind, supplier_name as supplier,
+                 (select c.creditor_number from contact c where c.id = incoming_invoice.contact_id) as creditor
+          from incoming_invoice
+          where status = 'confirmed' and paid_on between ${from}::date and ${to}::date
+          order by paid_on, received_at`
+      ).map((p) => ({
+        invoiceNumber: p.number ?? '',
+        date: p.date,
+        supplierName: p.supplier ?? '',
+        amountCents: BigInt(p.gross) * (p.kind === 'credit_note' ? -1n : 1n),
+        creditorAccount: p.creditor,
+      }))
       const csv = datevBookingBatch(
         {
           consultantNumber: settings.consultantNumber,
@@ -317,10 +502,13 @@ export function registerExportRoutes(app: FastifyInstance, services: Services) {
           accountLength: settings.accountLength,
           from,
           to,
-          description: `Ausgangsrechnungen ${germanDate(from)}-${germanDate(to)}`,
+          description: `Rechnungen ${germanDate(from)}-${germanDate(to)}`,
           createdAt: new Date(),
         },
-        datevBookings(exportInvoices, payments, accounts, adjustments),
+        [
+          ...datevBookings(exportInvoices, payments, accounts, adjustments),
+          ...incomingBookings(exportIncoming, incomingPayments, incomingAccounts),
+        ],
       )
       // Belege: only the PDF originals (Belegfeld 1 = file name), as DATEV expects images/PDFs.
       const originals = withBelege
@@ -329,7 +517,14 @@ export function registerExportRoutes(app: FastifyInstance, services: Services) {
               tx,
               invoices.map((i) => i.id),
             )
-          ).filter((b) => b.kind === 'pdf' || b.kind === 'zugferd_pdf')
+          )
+            .filter((b) => b.kind === 'pdf' || b.kind === 'zugferd_pdf')
+            .concat(
+              await incomingBelegeOf(
+                tx,
+                incoming.invoices.map((i) => i.id),
+              ),
+            )
         : []
       return { file: csv, originals }
     })
@@ -366,10 +561,22 @@ export function registerExportRoutes(app: FastifyInstance, services: Services) {
       const [company] = await tx<{ name: string; city: string | null }[]>`
         select name, city from tenant where id = current_tenant_id()`
       const invoices = await invoicesOf(tx, from, to)
-      const originals = await belegeOf(
-        tx,
-        invoices.map((i) => i.id),
-      )
+      const incoming = await incomingOf(tx, from, to, [
+        'review',
+        'confirmed',
+        'cancelled',
+        'discarded',
+      ])
+      const originals = [
+        ...(await belegeOf(
+          tx,
+          invoices.map((i) => i.id),
+        )),
+        ...(await incomingBelegeOf(
+          tx,
+          incoming.invoices.map((i) => i.id),
+        )),
+      ]
       const ids = invoices.length
         ? invoices.map((i) => i.id)
         : ['00000000-0000-0000-0000-000000000000']
@@ -434,7 +641,8 @@ export function registerExportRoutes(app: FastifyInstance, services: Services) {
                entity_id::text as "entityId", encode(hash, 'hex') as hash
         from audit_event
         where created_at >= ${from}::date and created_at < ${to}::date + 1
-          and entity in ('document', 'document_item', 'payment', 'receivable_adjustment', 'dunning_notice')
+          and entity in ('document', 'document_item', 'payment', 'receivable_adjustment', 'dunning_notice',
+                         'incoming_invoice', 'incoming_invoice_tax', 'incoming_invoice_allocation')
         order by seq`
       const tables: GobdTable[] = [
         {
@@ -540,6 +748,96 @@ export function registerExportRoutes(app: FastifyInstance, services: Services) {
           ]),
         },
         {
+          file: 'eingangsrechnungen.csv',
+          name: 'Rechnungseingang',
+          description:
+            'Empfangene Rechnungen und Gutschriften (Eingangsrechnungen) mit Prüf- und Zahlstatus',
+          columns: [
+            { name: 'ID', type: 'text', primaryKey: true },
+            { name: 'Lieferant', type: 'text' },
+            { name: 'USt_IdNr', type: 'text' },
+            { name: 'Rechnungsnummer', type: 'text' },
+            { name: 'Rechnungsdatum', type: 'date' },
+            { name: 'Faelligkeit', type: 'date' },
+            { name: 'Belegart', type: 'text' },
+            { name: 'Format', type: 'text' },
+            { name: 'Netto', type: 'numeric', accuracy: 2 },
+            { name: 'Umsatzsteuer', type: 'numeric', accuracy: 2 },
+            { name: 'Brutto', type: 'numeric', accuracy: 2 },
+            { name: 'Steuerschuldnerschaft_13b', type: 'text' },
+            { name: 'Status', type: 'text' },
+            { name: 'Eingang_am', type: 'date' },
+            { name: 'Geprueft_am', type: 'date' },
+            { name: 'Bezahlt_am', type: 'date' },
+            { name: 'Grund_Storno_Verworfen', type: 'text' },
+            { name: 'Datei', type: 'text' },
+          ],
+          rows: incoming.invoices.map((i) => [
+            i.id,
+            i.supplierName ?? '',
+            i.supplierVatId ?? '',
+            i.invoiceNumber ?? '',
+            i.invoiceDate ? germanDate(i.invoiceDate) : '',
+            i.dueDate ? germanDate(i.dueDate) : '',
+            i.documentKind === 'credit_note' ? 'Gutschrift' : 'Rechnung',
+            i.source,
+            germanAmount(i.net),
+            germanAmount(i.tax),
+            germanAmount(i.gross),
+            i.reverseCharge ? 'ja' : 'nein',
+            INCOMING_STATUS[i.status] ?? i.status,
+            germanDate(i.receivedAt),
+            i.confirmedAt ? germanDate(i.confirmedAt) : '',
+            i.paidOn ? germanDate(i.paidOn) : '',
+            i.closeReason ?? '',
+            i.filename,
+          ]),
+        },
+        {
+          file: 'eingangsrechnungen_steuer.csv',
+          name: 'Vorsteuer',
+          description: 'Umsatzsteuer der Eingangsrechnungen je Steuersatz',
+          columns: [
+            { name: 'ID', type: 'text' },
+            { name: 'Steuersatz', type: 'numeric', accuracy: 2 },
+            { name: 'Netto', type: 'numeric', accuracy: 2 },
+            { name: 'Steuer', type: 'numeric', accuracy: 2 },
+          ],
+          rows: incoming.taxes.map((t) => [
+            t.invoiceId,
+            t.rate.replace('.', ','),
+            germanAmount(t.net),
+            germanAmount(t.tax),
+          ]),
+        },
+        {
+          file: 'eingangsrechnungen_zuweisung.csv',
+          name: 'Kostenzuweisung',
+          description: 'Zuweisung der Eingangsrechnungen auf Projekte und Betriebsbereiche',
+          columns: [
+            { name: 'ID', type: 'text' },
+            { name: 'Projektnummer', type: 'text' },
+            { name: 'Projekt', type: 'text' },
+            { name: 'Betriebsbereich', type: 'text' },
+            { name: 'Kostenart', type: 'text' },
+            { name: 'Steuersatz', type: 'numeric', accuracy: 2 },
+            { name: 'Netto', type: 'numeric', accuracy: 2 },
+            { name: 'Vorsteuer', type: 'numeric', accuracy: 2 },
+            { name: 'Beschreibung', type: 'text' },
+          ],
+          rows: incoming.allocations.map((a) => [
+            a.invoiceId,
+            a.projectNumber ?? '',
+            a.project ?? '',
+            a.area ?? '',
+            a.costType,
+            a.rate.replace('.', ','),
+            germanAmount(a.net),
+            germanAmount(a.taxCents.toString()),
+            a.description ?? '',
+          ]),
+        },
+        {
           file: 'kunden.csv',
           name: 'Debitoren',
           description: 'Kunden (Debitoren) mit Kundennummer',
@@ -580,7 +878,7 @@ export function registerExportRoutes(app: FastifyInstance, services: Services) {
           file: 'belege.csv',
           name: 'Belege',
           description:
-            'Unveränderte Originale der Rechnungen (PDF/A, E-Rechnung, Prüfbericht) im Ordner belege, mit SHA-256',
+            'Unveränderte Originale der Ausgangsrechnungen (PDF/A, E-Rechnung, Prüfbericht) und der Eingangsrechnungen (wie empfangen) im Ordner belege, mit SHA-256',
           columns: [
             { name: 'Rechnungsnummer', type: 'text' },
             { name: 'Datei', type: 'text', primaryKey: true },
@@ -660,6 +958,10 @@ export function registerExportRoutes(app: FastifyInstance, services: Services) {
       'receivable_adjustment',
       'dunning_notice',
       'base_interest_rate',
+      'business_area',
+      'incoming_invoice',
+      'incoming_invoice_tax',
+      'incoming_invoice_allocation',
       'file',
       'catalog_folder',
       'catalog_item',
@@ -702,10 +1004,17 @@ export function registerExportRoutes(app: FastifyInstance, services: Services) {
         order by f.created_at`
       const documents = await tx<{ id: string }[]>`
         select id from document where finalized_at is not null`
-      const originals = await belegeOf(
-        tx,
-        documents.map((d) => d.id),
-      )
+      const received = await tx<{ id: string }[]>`select id from incoming_invoice`
+      const originals = [
+        ...(await belegeOf(
+          tx,
+          documents.map((d) => d.id),
+        )),
+        ...(await incomingBelegeOf(
+          tx,
+          received.map((r) => r.id),
+        )),
+      ]
       return { tables, files, originals }
     })
     await logExport(auth, 'full')

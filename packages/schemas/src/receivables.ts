@@ -132,6 +132,8 @@ export const invoiceListQuery = listQuery.extend({
   projectId: id.optional(),
   /** Only invoices with a Sicherheitseinbehalt (planned or withheld). */
   retention: z.enum(['true', 'false']).optional(),
+  /** Mahnvorschläge: only invoices whose next Mahnstufe can be issued today. */
+  dunning: z.enum(['due']).optional(),
 })
 export type InvoiceListQuery = z.infer<typeof invoiceListQuery>
 
@@ -156,6 +158,10 @@ export interface InvoiceListItem {
   status: ReceivableStatus | 'draft'
   overdueDays: number
   hasEinvoice: boolean
+  /** Last issued Mahnstufe. */
+  dunningLevel: 'reminder' | 'first' | 'final' | null
+  /** Next Mahnstufe and from when it can be issued (due = today, Mahnvorschlag). */
+  nextDunning: { level: 'reminder' | 'first' | 'final'; possibleFrom: string; due: boolean } | null
 }
 
 export interface InvoiceList {

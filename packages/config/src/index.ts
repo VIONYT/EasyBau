@@ -74,6 +74,17 @@ const envSchema = z.object({
   /** Sender, e.g. "Muster Bau GmbH <buero@muster-bau.de>". Required with SMTP_HOST. */
   SMTP_FROM: z.string().min(3).optional(),
   /**
+   * Rechnungseingang per E-Mail (P2.4, optional, off by default): the app fetches attachments
+   * from the IMAP mailbox each company enters under Einstellungen › Rechnungseingang. Off: no
+   * connection to any mail server is ever made.
+   */
+  INCOMING_MAIL_ENABLED: z
+    .enum(['true', 'false'])
+    .default('false')
+    .transform((v) => v === 'true'),
+  /** How often the mailboxes are checked, in minutes. */
+  INCOMING_MAIL_INTERVAL_MINUTES: z.coerce.number().int().min(1).max(1440).default(5),
+  /**
    * KoSIT validator daemon (ADR 0007), e.g. http://kosit:8080 in the Docker stack. Every e-invoice
    * (ZUGFeRD/Factur-X CII, XRechnung UBL) must pass it before an invoice is finalized (rule 8).
    * Without it, invoices cannot be finalized.
@@ -116,7 +127,7 @@ const envSchema = z.object({
   /** COMPLIANCE: nobody can delete before the end of the retention period (GoBD); GOVERNANCE only for tests. */
   ARCHIVE_RETENTION_MODE: z.enum(['COMPLIANCE', 'GOVERNANCE']).default('COMPLIANCE'),
   /**
-   * Previous archive while moving to another S3 (e.g. former MinIO → RustFS, or → external provider): the
+   * Previous archive while moving to another S3 (e.g. bundled RustFS → external provider): the
    * archive reconciliation copies originals from here when the working copy is missing. Optional,
    * only during the move; reading only.
    */

@@ -4,6 +4,7 @@ import { api } from '../api'
 import { Field, FormError, optional, useForm, value } from '../forms'
 import { t } from '../i18n'
 import { loginWithKeyAsSecondFactor, loginWithPasskey, webauthnSupported } from '../webauthn'
+import { ForgotPassword } from './account'
 
 export function SetupScreen({ onDone }: { onDone: (me: Me) => void }) {
   const form = useForm(
@@ -111,6 +112,7 @@ export function LoginScreen({ appName, onDone }: { appName: string; onDone: (me:
   const [methods, setMethods] = useState<MfaMethod[] | null>(null)
   const [keyError, setKeyError] = useState<string | null>(null)
   const [keyBusy, setKeyBusy] = useState(false)
+  const [forgot, setForgot] = useState(false)
 
   const handle = (result: LoginResponse) => {
     if (result.status === 'ok') onDone(result.me)
@@ -145,7 +147,9 @@ export function LoginScreen({ appName, onDone }: { appName: string; onDone: (me:
       <div className="card">
         <h1>{appName}</h1>
         <p className="lead">{t('app.tagline')}</p>
-        {methods ? (
+        {forgot ? (
+          <ForgotPassword onBack={() => setForgot(false)} />
+        ) : methods ? (
           <>
             <h2>{t('auth.secondFactor')}</h2>
             <p>{t('auth.secondFactorIntro')}</p>
@@ -209,6 +213,9 @@ export function LoginScreen({ appName, onDone }: { appName: string; onDone: (me:
                 {t('auth.submit')}
               </button>
             </form>
+            <button type="button" className="link-button" onClick={() => setForgot(true)}>
+              {t('account.forgot.link')}
+            </button>
             {webauthnSupported() ? (
               <div className="stack">
                 <p className="divider">{t('auth.or')}</p>

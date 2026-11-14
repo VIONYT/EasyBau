@@ -1,10 +1,16 @@
 import { checkNumberPattern, formatNumber } from '@opc/domain'
 import type {
   BaseInterestRate,
+  BusinessArea,
   Company,
   DatevSettings,
+  DocumentSettings,
   DunningLevel,
   DunningSettings,
+  EmailTemplateSettings,
+  HolidayList,
+  IncomingMailRun,
+  IncomingMailSettings,
   Me,
   NumberSequence,
   PaymentTerm,
@@ -15,9 +21,9 @@ import type {
   WageGroup,
   WorkingDay,
 } from '@opc/schemas'
-import { COST_KINDS, DOCUMENT_TYPES } from '@opc/schemas/constants'
+import { COST_KINDS, DOCUMENT_TYPES, FEDERAL_STATES } from '@opc/schemas/constants'
 import { type ReactNode, useCallback, useEffect, useId, useRef, useState } from 'react'
-import { ApiError, api } from '../api'
+import { ApiError, api, uploadFile } from '../api'
 import { formatCents, formatInputNumber, parseEuro } from '../format'
 import { FormError } from '../forms'
 import { type TextKey, t, tf } from '../i18n'
@@ -34,9 +40,14 @@ type Section =
   | 'units'
   | 'workingHours'
   | 'texts'
+  | 'documents'
+  | 'holidays'
   | 'letterhead'
   | 'filing'
   | 'datev'
+  | 'areas'
+  | 'mail'
+  | 'incomingMail'
   | 'dunning'
   | 'system'
 
@@ -49,17 +60,24 @@ const SECTIONS: { key: Section; label: TextKey }[] = [
   { key: 'wageGroups', label: 's.wageGroups' },
   { key: 'units', label: 's.units' },
   { key: 'workingHours', label: 's.workingHours' },
+  { key: 'holidays', label: 's.holidays' },
   { key: 'texts', label: 's.texts' },
+  { key: 'documents', label: 's.documents' },
   { key: 'letterhead', label: 'lh.title' },
   { key: 'filing', label: 's.filing' },
   { key: 'datev', label: 's.datev' },
+  { key: 'areas', label: 's.areas' },
+  { key: 'mail', label: 's.mail' },
+  { key: 'incomingMail', label: 's.incomingMail' },
   { key: 'dunning', label: 'sys.dunning' },
   { key: 'system', label: 'sys.title' },
 ]
 
 /** Einstellungen (DESIGN.md §7.4): company, numbering, prices, units, texts, exports, operation. */
-export function Settings({ me }: { me: Me }) {
-  const [section, setSection] = useState<Section>('company')
+export function Settings({ me, initial }: { me: Me; initial?: string | undefined }) {
+  const [section, setSection] = useState<Section>(
+    SECTIONS.find((s) => s.key === initial)?.key ?? 'company',
+  )
   const canWrite = me.permissions.includes('settings.write')
   return (
     <section aria-labelledby="settings-title">
@@ -95,10 +113,15 @@ export function Settings({ me }: { me: Me }) {
         {section === 'units' ? <UnitSettings /> : null}
         {section === 'workingHours' ? <WorkingHourSettings /> : null}
         {section === 'texts' ? <TextSettings /> : null}
+        {section === 'documents' ? <DocumentDefaultsForm /> : null}
+        {section === 'holidays' ? <HolidaySettings canWrite={canWrite} /> : null}
         {section === 'letterhead' ? <LetterheadEditor canEdit={canWrite} /> : null}
         {section === 'filing' ? <FilingSettings /> : null}
         {section === 'datev' ? <DatevSettingsForm /> : null}
+        {section === 'areas' ? <BusinessAreaSettings /> : null}
+        {section === 'mail' ? <EmailTemplateForm /> : null}
         {section === 'dunning' ? <DunningSettingsForm /> : null}
+        {section === 'incomingMail' ? <IncomingMailForm /> : null}
         {section === 'system' ? <SystemSettings me={me} /> : null}
       </fieldset>
     </section>
@@ -242,21 +265,28 @@ function CompanySettings({ canEdit }: { canEdit: boolean }) {
   const save = useSave()
   if (error) return <FormError>{error}</FormError>
   if (!data) return <p className="muted">{t('common.loading')}</p>
-  const field = (key: keyof Company) => (
-    <Input
-      key={key}
-      label={t(COMPANY_FIELDS.find((f) => f.key === key)?.label as TextKey)}
-      value={(data[key] as string | null) ?? ''}
-      onChange={(v) => setData({ ...data, [key]: v })}
-      {...(key === 'iban' ? { hint: t('s.c.ibanHint') } : {})}
-    />
-  )
+  const field = (key: keyof Company) =>
+    key === 'federalState' ? (
+      <FederalStateSelect
+        key={key}
+        value={data.federalState}
+        onChange={(federalState) => setData({ ...data, federalState })}
+      />
+    ) : (
+      <Input
+        key={key}
+        label={t(COMPANY_FIELDS.find((f) => f.key === key)?.label as TextKey)}
+        value={(data[key] as string | null) ?? ''}
+        onChange={(v) => setData({ ...data, [key]: v })}
+        {...(key === 'iban' ? { hint: t('s.c.ibanHint') } : {})}
+      />
+    )
   const submit = () =>
     save.run(async () => {
       const body = Object.fromEntries(
         COMPANY_FIELDS.map(({ key }) => [
           key,
-          key === 'name' || key === 'countryCode'
+          key === 'name' || key === 'countryCode' || key === 'federalState'
             ? data[key]
             : (nullable(String(data[key] ?? '')) ??
               (key === 'email' || key === 'iban' ? '' : null)),
@@ -1138,6 +1168,16 @@ function DatevSettingsForm() {
       }
     />
   )
+  const expense = (key: keyof DatevSettings['expenseAccounts']) => (
+    <Input
+      label={t(`s.d.expense.${key}` as TextKey)}
+      inputMode="numeric"
+      value={data.expenseAccounts[key] ?? ''}
+      onChange={(v) =>
+        setData({ ...data, expenseAccounts: { ...data.expenseAccounts, [key]: nullable(v) } })
+      }
+    />
+  )
   return (
     <Panel title={t('s.datev')}>
       <p className="hint">{t('s.d.hint')}</p>
@@ -1191,6 +1231,22 @@ function DatevSettingsForm() {
           onChange={(v) => setData({ ...data, bankAccount: nullable(v) })}
         />
       </div>
+      <h3>{t('s.d.incoming')}</h3>
+      <p className="hint">{t('s.d.incomingHint')}</p>
+      <div className="row">
+        {expense('material')}
+        {expense('labor')}
+        {expense('equipment')}
+        {expense('subcontract')}
+        {expense('other')}
+        {expense('reverseCharge')}
+        <Input
+          label={t('s.d.creditor')}
+          inputMode="numeric"
+          value={data.creditorAccount ?? ''}
+          onChange={(v) => setData({ ...data, creditorAccount: nullable(v) })}
+        />
+      </div>
       <div className="button-row">
         <button
           type="button"
@@ -1203,6 +1259,176 @@ function DatevSettingsForm() {
           }
         >
           {t('common.save')}
+        </button>
+        {save.message}
+      </div>
+    </Panel>
+  )
+}
+
+// ---- E-Mail-Vorlagen --------------------------------------------------------------------------
+
+type MailType = (typeof DOCUMENT_TYPES)[number]
+
+function EmailTemplateForm() {
+  const { data, setData, error } = useResource<EmailTemplateSettings>(
+    '/api/v1/settings/email-templates',
+  )
+  const save = useSave()
+  const [type, setType] = useState<MailType>('invoice')
+  if (error) return <FormError>{error}</FormError>
+  if (!data) return <p className="muted">{t('common.loading')}</p>
+  const current = data.templates[type]
+  const setTemplate = (patch: Partial<{ subject: string; body: string }>) =>
+    setData({
+      ...data,
+      templates: { ...data.templates, [type]: { ...current, ...patch, custom: true } },
+    })
+  return (
+    <Panel title={t('s.mail')}>
+      <p className="hint">{t('s.mail.hint')}</p>
+      <Input
+        label={t('s.mail.bcc')}
+        type="email"
+        value={data.bcc ?? ''}
+        onChange={(v) => setData({ ...data, bcc: nullable(v) })}
+      />
+      <div className="field">
+        <label htmlFor="mail-type">{t('s.mail.type')}</label>
+        <select
+          id="mail-type"
+          className="select"
+          value={type}
+          onChange={(e) => setType(e.target.value as MailType)}
+        >
+          {DOCUMENT_TYPES.map((d) => (
+            <option key={d} value={d}>
+              {t((d === 'invoice' ? 'doc.invoice.standard' : `doc.type.${d}`) as TextKey)}
+              {data.templates[d].custom ? ` (${t('s.mail.custom')})` : ''}
+            </option>
+          ))}
+        </select>
+      </div>
+      <Input
+        label={t('s.mail.subject')}
+        value={current.subject}
+        onChange={(v) => setTemplate({ subject: v })}
+      />
+      <div className="field">
+        <label htmlFor="mail-body">{t('s.mail.body')}</label>
+        <textarea
+          id="mail-body"
+          rows={10}
+          value={current.body}
+          onChange={(e) => setTemplate({ body: e.target.value })}
+        />
+        <p className="hint">
+          {tf('s.mail.placeholders', { list: data.placeholders.map((p) => `{${p}}`).join(' ') })}
+        </p>
+      </div>
+      <div className="button-row">
+        <button
+          type="button"
+          className="button primary auto"
+          disabled={save.busy}
+          onClick={() =>
+            save.run(async () => {
+              const templates = Object.fromEntries(
+                DOCUMENT_TYPES.filter((d) => data.templates[d].custom).map((d) => [
+                  d,
+                  { subject: data.templates[d].subject, body: data.templates[d].body },
+                ]),
+              )
+              const saved = await api<EmailTemplateSettings>(
+                'PUT',
+                '/api/v1/settings/email-templates',
+                {
+                  bcc: data.bcc,
+                  templates,
+                },
+              )
+              setData(saved)
+            })
+          }
+        >
+          {t('common.save')}
+        </button>
+        {current.custom ? (
+          <button
+            type="button"
+            className="button ghost auto"
+            onClick={() =>
+              setData({
+                ...data,
+                templates: { ...data.templates, [type]: { ...data.defaults[type], custom: false } },
+              })
+            }
+          >
+            {t('s.mail.reset')}
+          </button>
+        ) : null}
+        {save.message}
+      </div>
+    </Panel>
+  )
+}
+
+// ---- Betriebsbereiche -------------------------------------------------------------------------
+
+function BusinessAreaSettings() {
+  const { data, error, reload } = useResource<BusinessArea[]>('/api/v1/business-areas')
+  const save = useSave()
+  const [name, setName] = useState('')
+  if (error) return <FormError>{error}</FormError>
+  if (!data) return <p className="muted">{t('common.loading')}</p>
+  return (
+    <Panel title={t('s.areas')}>
+      <p className="hint">{t('s.areas.hint')}</p>
+      <ul className="list">
+        {data.map((area) => (
+          <li key={area.id} className="list-row">
+            <span>
+              <strong>{area.name}</strong>
+              {area.archived ? <span className="tag">{t('s.areas.archived')}</span> : null}
+            </span>
+            <span className="actions">
+              <button
+                type="button"
+                className="button ghost small"
+                onClick={() =>
+                  save
+                    .run(() =>
+                      api('PATCH', `/api/v1/business-areas/${area.id}`, {
+                        archived: !area.archived,
+                      }),
+                    )
+                    .then(reload)
+                }
+              >
+                {t(area.archived ? 's.areas.restore' : 's.areas.archive')}
+              </button>
+            </span>
+          </li>
+        ))}
+      </ul>
+      <div className="row">
+        <Input label={t('s.areas.new')} value={name} onChange={setName} />
+      </div>
+      <div className="button-row">
+        <button
+          type="button"
+          className="button ghost"
+          disabled={!name.trim()}
+          onClick={() =>
+            save
+              .run(() => api('POST', '/api/v1/business-areas', { name }))
+              .then((created) => {
+                if (created) setName('')
+                reload()
+              })
+          }
+        >
+          {t('s.add')}
         </button>
         {save.message}
       </div>
@@ -1383,3 +1609,441 @@ function BaseRateSettings() {
 }
 
 const formatDate = (iso: string) => iso.split('-').reverse().join('.')
+
+function FederalStateSelect({
+  value,
+  onChange,
+}: {
+  value: Company['federalState']
+  onChange: (value: Company['federalState']) => void
+}) {
+  const id = useId()
+  return (
+    <div className="field">
+      <label htmlFor={id}>{t('s.c.federalState')}</label>
+      <select
+        id={id}
+        className="select"
+        value={value ?? ''}
+        onChange={(e) => onChange((e.target.value || null) as Company['federalState'])}
+      >
+        <option value="">{t('s.c.federalStateNone')}</option>
+        {FEDERAL_STATES.map((code) => (
+          <option key={code} value={code}>
+            {t(`fs.${code}` as TextKey)}
+          </option>
+        ))}
+      </select>
+      <p className="hint">{t('s.c.federalStateHint')}</p>
+    </div>
+  )
+}
+
+// ---- Dokumente (P2.11): § 35a, Abschläge, Dateinamen, automatische Anhänge -------------------
+
+const typeLabel = (type: string) =>
+  t((type === 'invoice' ? 'doc.invoice.standard' : `doc.type.${type}`) as TextKey)
+
+function DocumentDefaultsForm() {
+  const { data, setData, error } = useResource<DocumentSettings>('/api/v1/settings/documents')
+  const save = useSave()
+  const upload = useSave()
+  const [name, setName] = useState('')
+  const fileRef = useRef<HTMLInputElement>(null)
+  if (error) return <FormError>{error}</FormError>
+  if (!data) return <p className="muted">{t('common.loading')}</p>
+  const store = () =>
+    save.run(async () =>
+      setData(
+        await api<DocumentSettings>('PUT', '/api/v1/settings/documents', {
+          laborShare: data.laborShare,
+          progressBillingMode: data.progressBillingMode,
+          fileNamePattern: data.fileNamePattern,
+          attachments: data.attachments,
+        }),
+      ),
+    )
+  const matrix = (row: 'invoice' | 'offer', column: 'person' | 'organization') => (
+    <Check
+      label={t(column === 'person' ? 'sd.persons' : 'sd.organizations')}
+      checked={data.laborShare[row][column]}
+      onChange={(v) =>
+        setData({
+          ...data,
+          laborShare: { ...data.laborShare, [row]: { ...data.laborShare[row], [column]: v } },
+        })
+      }
+    />
+  )
+  const toggleAttachment = (type: string, fileId: string, on: boolean) => {
+    const current = data.attachments[type as keyof typeof data.attachments] ?? []
+    setData({
+      ...data,
+      attachments: {
+        ...data.attachments,
+        [type]: on ? [...current, fileId] : current.filter((id) => id !== fileId),
+      },
+    })
+  }
+  const send = (file: File) =>
+    upload.run(async () => {
+      const label = name.trim() || file.name
+      await uploadFile(`/api/v1/settings/attachments?name=${encodeURIComponent(label)}`, file)
+      setName('')
+      if (fileRef.current) fileRef.current.value = ''
+      setData({
+        ...(await api<DocumentSettings>('GET', '/api/v1/settings/documents')),
+        // keep unsaved changes of the form
+        laborShare: data.laborShare,
+        progressBillingMode: data.progressBillingMode,
+        fileNamePattern: data.fileNamePattern,
+        attachments: data.attachments,
+      })
+    })
+  const saveButton = (
+    <div className="button-row">
+      <button type="button" className="button primary auto" disabled={save.busy} onClick={store}>
+        {t('common.save')}
+      </button>
+      {save.message}
+    </div>
+  )
+  return (
+    <>
+      <Panel title={t('sd.laborShare')}>
+        <p className="hint">{t('sd.laborShareHint')}</p>
+        <fieldset className="plain">
+          <legend>{t('sd.invoices')}</legend>
+          {matrix('invoice', 'person')}
+          {matrix('invoice', 'organization')}
+        </fieldset>
+        <fieldset className="plain">
+          <legend>{t('sd.offers')}</legend>
+          {matrix('offer', 'person')}
+          {matrix('offer', 'organization')}
+        </fieldset>
+      </Panel>
+      <Panel title={t('sd.progress')}>
+        <fieldset className="plain">
+          <legend className="sr-only">{t('inv.mode')}</legend>
+          {(['cumulative', 'individual'] as const).map((mode) => (
+            <label key={mode} className="check">
+              <input
+                type="radio"
+                name="progressBillingMode"
+                checked={data.progressBillingMode === mode}
+                onChange={() => setData({ ...data, progressBillingMode: mode })}
+              />
+              {t(`inv.mode.${mode}`)}
+            </label>
+          ))}
+        </fieldset>
+        <p className="hint">{t('sd.progressHint')}</p>
+      </Panel>
+      <Panel title={t('sd.fileNames')}>
+        <Input
+          label={t('sd.pattern')}
+          value={data.fileNamePattern}
+          onChange={(fileNamePattern) => setData({ ...data, fileNamePattern })}
+          hint={tf('sd.patternHint', {
+            list: data.placeholders.map((p) => `{${p}}`).join(' '),
+            example: data.example,
+          })}
+        />
+        <button
+          type="button"
+          className="button ghost small"
+          onClick={() => setData({ ...data, fileNamePattern: data.defaultFileNamePattern })}
+        >
+          {t('sd.patternReset')}
+        </button>
+      </Panel>
+      <Panel title={t('sd.attachments')}>
+        <p className="hint">{t('sd.attachmentsHint')}</p>
+        {data.files.length === 0 ? <p className="muted">{t('sd.noFiles')}</p> : null}
+        <ul className="list">
+          {data.files.map((file) => (
+            <li key={file.id} className="list-row attachment-row">
+              <span>
+                <strong>{file.name}</strong>{' '}
+                <a href={`/api/v1/assets/${file.id}`} target="_blank" rel="noreferrer">
+                  {t('sd.view')}
+                </a>
+              </span>
+              <fieldset className="plain attachment-types">
+                <legend>{t('sd.attachTo')}</legend>
+                {DOCUMENT_TYPES.map((type) => (
+                  <Check
+                    key={type}
+                    label={typeLabel(type)}
+                    checked={(data.attachments[type] ?? []).includes(file.id)}
+                    onChange={(v) => toggleAttachment(type, file.id, v)}
+                  />
+                ))}
+              </fieldset>
+            </li>
+          ))}
+        </ul>
+        <div className="row">
+          <Input label={t('sd.uploadName')} value={name} onChange={setName} />
+          <div className="field">
+            <label htmlFor="attachment-upload">{t('sd.upload')}</label>
+            <input
+              id="attachment-upload"
+              ref={fileRef}
+              type="file"
+              accept="application/pdf,.pdf"
+              disabled={upload.busy}
+              onChange={(e) => {
+                const file = e.target.files?.[0]
+                if (file) void send(file)
+              }}
+            />
+          </div>
+        </div>
+        {upload.message}
+      </Panel>
+      {saveButton}
+    </>
+  )
+}
+
+// ---- Feiertage (P2.11) -------------------------------------------------------------------------
+
+function HolidaySettings({ canWrite }: { canWrite: boolean }) {
+  const [year, setYear] = useState(() => new Date().getFullYear())
+  const { data, setData, error } = useResource<HolidayList>(
+    `/api/v1/settings/holidays?year=${year}`,
+  )
+  const save = useSave()
+  const [draft, setDraft] = useState({ date: '', name: '' })
+  const yearId = useId()
+  if (error) return <FormError>{error}</FormError>
+  if (!data) return <p className="muted">{t('common.loading')}</p>
+  const reload = async () =>
+    setData(await api<HolidayList>('GET', `/api/v1/settings/holidays?year=${year}`))
+  return (
+    <Panel
+      title={
+        data.federalState
+          ? tf('hol.state', { state: t(`fs.${data.federalState}` as TextKey) })
+          : t('s.holidays')
+      }
+    >
+      <p className="hint">{t('hol.hint')}</p>
+      {data.federalState ? null : <p className="warning">{t('hol.noState')}</p>}
+      <div className="field narrow">
+        <label htmlFor={yearId}>{t('hol.year')}</label>
+        <select
+          id={yearId}
+          className="select"
+          value={year}
+          onChange={(e) => setYear(Number(e.target.value))}
+        >
+          {Array.from({ length: 5 }, (_, i) => new Date().getFullYear() - 1 + i).map((y) => (
+            <option key={y} value={y}>
+              {y}
+            </option>
+          ))}
+        </select>
+      </div>
+      <ul className="list">
+        {data.holidays.map((day) => (
+          <li key={`${day.date}-${day.id ?? day.name}`} className="list-row">
+            <span>
+              <strong className="tabular">
+                {new Date(`${day.date}T00:00:00`).toLocaleDateString('de-DE', {
+                  weekday: 'short',
+                  day: '2-digit',
+                  month: '2-digit',
+                  year: 'numeric',
+                })}
+              </strong>{' '}
+              {day.name}
+              {day.custom ? <span className="muted"> · {t('hol.own')}</span> : null}
+            </span>
+            {day.custom && day.id && canWrite ? (
+              <button
+                type="button"
+                className="button ghost small"
+                onClick={() => {
+                  if (!window.confirm(t('hol.removeConfirm'))) return
+                  void save.run(async () => {
+                    await api('DELETE', `/api/v1/settings/holidays/${day.id}`)
+                    await reload()
+                  })
+                }}
+              >
+                {t('hol.remove')}
+              </button>
+            ) : null}
+          </li>
+        ))}
+      </ul>
+      <h3>{t('hol.add')}</h3>
+      <div className="row">
+        <Input
+          label={t('hol.date')}
+          type="date"
+          value={draft.date}
+          onChange={(date) => setDraft({ ...draft, date })}
+        />
+        <Input
+          label={t('hol.name')}
+          value={draft.name}
+          onChange={(name) => setDraft({ ...draft, name })}
+        />
+      </div>
+      <div className="button-row">
+        <button
+          type="button"
+          className="button primary auto"
+          disabled={save.busy || !draft.date || !draft.name.trim()}
+          onClick={() =>
+            void save.run(async () => {
+              const list = await api<HolidayList>('POST', '/api/v1/settings/holidays', draft)
+              setDraft({ date: '', name: '' })
+              if (draft.date.startsWith(String(year))) setData(list)
+            })
+          }
+        >
+          {t('hol.add')}
+        </button>
+        {save.message}
+      </div>
+    </Panel>
+  )
+}
+
+// ---- Rechnungseingang per E-Mail (P2.4) ---------------------------------------------------------
+
+function IncomingMailForm() {
+  const { data, setData, error } = useResource<IncomingMailSettings>(
+    '/api/v1/settings/incoming-mail',
+  )
+  const [password, setPassword] = useState('')
+  const save = useSave()
+  const fetchNow = useSave()
+  if (error) return <FormError>{error}</FormError>
+  if (!data) return <p className="muted">{t('common.loading')}</p>
+  const run = data.lastRun
+  return (
+    <Panel title={t('s.incomingMail')}>
+      <p className="hint">{t('im.hint')}</p>
+      {!data.available ? <p className="warning">{t('im.unavailable')}</p> : null}
+      <Check
+        label={t('im.enabled')}
+        checked={data.enabled}
+        onChange={(enabled) => setData({ ...data, enabled })}
+      />
+      <div className="row">
+        <Input
+          label={t('im.host')}
+          value={data.host ?? ''}
+          onChange={(host) => setData({ ...data, host })}
+        />
+        <Input
+          label={t('im.port')}
+          type="number"
+          inputMode="numeric"
+          value={String(data.port)}
+          onChange={(port) => setData({ ...data, port: Number(port) || 993 })}
+        />
+      </div>
+      <Check
+        label={t('im.secure')}
+        checked={data.secure}
+        onChange={(secure) => setData({ ...data, secure })}
+      />
+      <div className="row">
+        <Input
+          label={t('im.user')}
+          value={data.user ?? ''}
+          onChange={(user) => setData({ ...data, user })}
+        />
+        <div className="field">
+          <label htmlFor="incoming-mail-password">{t('im.password')}</label>
+          <input
+            id="incoming-mail-password"
+            type="password"
+            autoComplete="new-password"
+            value={password}
+            onChange={(e) => setPassword(e.target.value)}
+          />
+          {data.hasPassword ? <p className="hint">{t('im.passwordStored')}</p> : null}
+        </div>
+      </div>
+      <div className="row">
+        <Input
+          label={t('im.mailbox')}
+          value={data.mailbox}
+          onChange={(mailbox) => setData({ ...data, mailbox })}
+        />
+        <Input
+          label={t('im.processed')}
+          value={data.processedMailbox ?? ''}
+          onChange={(processedMailbox) => setData({ ...data, processedMailbox })}
+        />
+      </div>
+      <p className="hint" role="status">
+        {run
+          ? `${tf('im.lastRun', {
+              at: new Date(run.at).toLocaleString('de-DE'),
+              messages: String(run.messages),
+              imported: String(run.imported),
+              duplicates: String(run.duplicates),
+              ignored: String(run.ignored),
+              failed: String(run.failed),
+            })}${run.error ? ` ${run.error}` : ''}`
+          : t('im.never')}
+      </p>
+      <div className="button-row">
+        <button
+          type="button"
+          className="button primary auto"
+          disabled={save.busy}
+          onClick={() =>
+            save.run(async () => {
+              setData(
+                await api<IncomingMailSettings>('PUT', '/api/v1/settings/incoming-mail', {
+                  enabled: data.enabled,
+                  host: nullable(data.host ?? ''),
+                  port: data.port,
+                  secure: data.secure,
+                  user: nullable(data.user ?? ''),
+                  ...(password ? { password } : {}),
+                  mailbox: data.mailbox || 'INBOX',
+                  processedMailbox: nullable(data.processedMailbox ?? ''),
+                }),
+              )
+              setPassword('')
+            })
+          }
+        >
+          {t('common.save')}
+        </button>
+        {data.available ? (
+          <button
+            type="button"
+            className="button ghost auto"
+            disabled={fetchNow.busy}
+            onClick={() =>
+              fetchNow.run(async () => {
+                const result = await api<IncomingMailRun>(
+                  'POST',
+                  '/api/v1/settings/incoming-mail/run',
+                  {},
+                )
+                setData({ ...data, lastRun: result })
+              })
+            }
+          >
+            {t('im.run')}
+          </button>
+        ) : null}
+        {save.message}
+        {fetchNow.message}
+      </div>
+    </Panel>
+  )
+}

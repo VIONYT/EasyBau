@@ -1,18 +1,10 @@
-import type {
-  FileSummary,
-  FolderSummary,
-  Me,
-  ReportDetail,
-  ReportSection,
-  SignerRole,
-  UnitSummary,
-} from '@opc/schemas'
+import type { Me, ReportDetail, ReportSection, SignerRole, UnitSummary } from '@opc/schemas'
 import { WEATHER_CONDITIONS } from '@opc/schemas/constants'
 import { type ChangeEvent, useCallback, useEffect, useMemo, useState } from 'react'
-import { ApiError, api, apiWithEtag, uploadFile } from '../api'
+import { ApiError, api, apiWithEtag, mutate } from '../api'
 import { formatDateTime, formatInputNumber } from '../format'
 import { FormError } from '../forms'
-import { type TextKey, t } from '../i18n'
+import { type TextKey, t, tf } from '../i18n'
 import type { Navigate } from '../router'
 import {
   initialChoice,
@@ -24,6 +16,9 @@ import {
 } from '../signature'
 
 type Data = Record<string, Record<string, unknown>>
+/** A photo taken offline that waits in the outbox (ADR 0010). */
+type LocalPhoto = ReportDetail['photos'][number] & { pending?: boolean }
+const reportPath = (id: string) => `/api/v1/reports/${id}`
 type Row = Record<string, string | null | undefined>
 
 const EDITABLE = new Set([
@@ -92,10 +87,13 @@ function toRequest(sections: ReportSection[], data: Data): Data {
 /** A report (Bautagesbericht and other templates), rendered from the template's sections. */
 export function ReportScreen({ me, id, navigate }: { me: Me; id: string; navigate: Navigate }) {
   const [report, setReport] = useState<ReportDetail | null>(null)
-  const [etag, setEtag] = useState<string | null>(null)
+  const [, setEtag] = useState<string | null>(null)
   const [data, setData] = useState<Data>({})
   const [reportDate, setReportDate] = useState('')
+  const [period, setPeriod] = useState({ from: '', to: '' })
   const [dirty, setDirty] = useState(false)
+  // Sections changed since the last save: only these are sent (others keep the server state).
+  const [touched, setTouched] = useState<Set<string>>(new Set())
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({})
@@ -108,7 +106,9 @@ export function ReportScreen({ me, id, navigate }: { me: Me; id: string; navigat
       setEtag(tag)
       setData(toInput(next.data as Data))
       setReportDate(next.reportDate)
+      setPeriod({ from: next.serviceFrom ?? '', to: next.serviceTo ?? '' })
       setDirty(false)
+      setTouched(new Set())
     },
     [],
   )
@@ -153,24 +153,46 @@ export function ReportScreen({ me, id, navigate }: { me: Me; id: string; navigat
 
   const editable = report.status === 'draft' && me.permissions.includes('report.write')
   const sections = report.template.sections
+  const servicePeriod = sections.some((s) => s.type === 'header' && s.servicePeriod)
   const update = (sectionId: string, value: Record<string, unknown>) => {
+    setTouched((current) => new Set(current).add(sectionId))
     setData((d) => ({ ...d, [sectionId]: value }))
     setDirty(true)
     setSaved(false)
   }
   const save = async () => {
+    // Offline as well (ADR 0010): each section is replaced as a whole, last change wins.
+    const changed = toRequest(sections, data)
+    const body = {
+      reportDate,
+      ...(servicePeriod ? { serviceFrom: period.from || null, serviceTo: period.to || null } : {}),
+      data: Object.fromEntries(Object.entries(changed).filter(([key]) => touched.has(key))),
+    }
     const ok = await run(() =>
-      apiWithEtag<ReportDetail>(
-        'PATCH',
-        `/api/v1/reports/${report.id}`,
-        { reportDate, data: toRequest(sections, data) },
-        etag,
-      ),
+      mutate<ReportDetail>({
+        method: 'PATCH',
+        path: reportPath(report.id),
+        json: body,
+        resource: reportPath(report.id),
+        label: `${report.template.name} ${formatDateTime(reportDate, 'date')}`,
+        optimistic: (current) => {
+          const base = current ?? report
+          return {
+            ...base,
+            reportDate,
+            serviceFrom: servicePeriod ? period.from || null : base.serviceFrom,
+            serviceTo: servicePeriod ? period.to || null : base.serviceTo,
+            data: { ...base.data, ...body.data },
+          }
+        },
+      }),
     )
     if (ok) setSaved(true)
     return ok
   }
-  const back = () => navigate({ view: 'project', id: report.project.id, section: 'diary' })
+  const diary = report.template.key === 'daily_site_report'
+  const back = () =>
+    navigate({ view: 'project', id: report.project.id, section: diary ? 'diary' : 'reports' })
   const remove = async () => {
     if (!window.confirm(t('d.deleteConfirm'))) return
     try {
@@ -186,7 +208,7 @@ export function ReportScreen({ me, id, navigate }: { me: Me; id: string; navigat
     <section className="site report" aria-labelledby="report-title">
       <a
         className="back"
-        href={`/projekte/${report.project.id}/bautagebuch`}
+        href={`/projekte/${report.project.id}/${diary ? 'bautagebuch' : 'berichte'}`}
         onClick={(e) => {
           e.preventDefault()
           back()
@@ -203,6 +225,20 @@ export function ReportScreen({ me, id, navigate }: { me: Me; id: string; navigat
           {t(`d.status.${report.status}` as TextKey)}
         </span>
       </div>
+      {report.billedInvoice ? (
+        <p className="notice inline" role="status">
+          {t('rep.billedIn')}{' '}
+          <a
+            href={`/dokumente/${report.billedInvoice.id}`}
+            onClick={(e) => {
+              e.preventDefault()
+              if (report.billedInvoice) navigate({ view: 'document', id: report.billedInvoice.id })
+            }}
+          >
+            {report.billedInvoice.number}
+          </a>
+        </p>
+      ) : null}
       <div className="button-row">
         <a
           className="button ghost"
@@ -241,6 +277,24 @@ export function ReportScreen({ me, id, navigate }: { me: Me; id: string; navigat
               }}
             />
           </div>
+          {servicePeriod ? (
+            <div className="row">
+              {(['from', 'to'] as const).map((key) => (
+                <div key={key} className="field">
+                  <label htmlFor={`period-${key}`}>{t(`rep.period.${key}` as TextKey)}</label>
+                  <input
+                    id={`period-${key}`}
+                    type="date"
+                    value={period[key]}
+                    onChange={(e) => {
+                      setPeriod({ ...period, [key]: e.target.value })
+                      setDirty(true)
+                    }}
+                  />
+                </div>
+              ))}
+            </div>
+          ) : null}
         </div>
 
         {sections.map((section) => {
@@ -313,6 +367,23 @@ export function ReportScreen({ me, id, navigate }: { me: Me; id: string; navigat
           }
         })}
       </fieldset>
+
+      {me.permissions.includes('report.write')
+        ? sections
+            .filter((s) => s.type === 'text' && s.actions?.length)
+            .map((section) => (
+              <FollowUps
+                key={section.id}
+                report={report}
+                label={sectionTitle(section)}
+                text={((data[section.id] as { text?: string } | undefined)?.text ?? '').trim()}
+                actions={section.actions ?? []}
+                me={me}
+                navigate={navigate}
+                setError={setError}
+              />
+            ))
+        : null}
 
       {sections.some((s) => s.type === 'photos') ? (
         <Photos report={report} editable={editable} apply={applyPhotos} setError={setError} />
@@ -613,22 +684,27 @@ function Photos({
     setUploading(true)
     setError(null)
     try {
-      // Photos are stored in the project's Ablage (folder „Fotos“ if it exists).
-      const folders = await api<FolderSummary[]>(
-        'GET',
-        `/api/v1/projects/${report.projectId}/folders`,
-      )
-      const folder = folders.find((f) => f.name === 'Fotos')
+      // Straight into the report (stored in the Ablage, folder „Fotos“); offline into the outbox.
       let latest: { data: ReportDetail; etag: string | null } | null = null
       for (const file of files) {
-        const query = new URLSearchParams({ filename: file.name || 'Foto.jpg' })
-        if (folder) query.set('folderId', folder.id)
-        const stored = await uploadFile<FileSummary>(
-          `/api/v1/projects/${report.projectId}/files?${query}`,
-          file,
-        )
-        latest = await apiWithEtag<ReportDetail>('POST', `/api/v1/reports/${report.id}/photos`, {
-          fileId: stored.id,
+        const filename = file.name || 'Foto.jpg'
+        latest = await mutate<ReportDetail>({
+          method: 'POST',
+          path: `${reportPath(report.id)}/photos/upload?${new URLSearchParams({ filename })}`,
+          blob: file,
+          resource: reportPath(report.id),
+          label: `${t('d.photo')}: ${filename}`,
+          optimistic: (current) => {
+            const base = current ?? report
+            const photo: LocalPhoto = {
+              fileId: `local-${crypto.randomUUID()}`,
+              filename,
+              caption: null,
+              isEvidence: false,
+              pending: true,
+            }
+            return { ...base, photos: [...base.photos, photo], photoCount: base.photoCount + 1 }
+          },
         })
       }
       if (latest) apply(latest)
@@ -652,32 +728,42 @@ function Photos({
       <h2>{t('d.section.photos')}</h2>
       {report.photos.length ? (
         <ul className="file-grid">
-          {report.photos.map((p) => (
-            <li key={p.fileId} className="file-card">
-              <a
-                className="file-preview"
-                href={`/api/v1/files/${p.fileId}/content`}
-                target="_blank"
-                rel="noopener"
-              >
-                <img
-                  src={`/api/v1/files/${p.fileId}/content`}
-                  alt={p.caption ?? p.filename}
-                  loading="lazy"
-                />
-              </a>
-              <span className="file-info">{p.caption ?? p.filename}</span>
-              {editable ? (
-                <button
-                  type="button"
-                  className="button ghost small danger"
-                  onClick={() => remove(p.fileId)}
+          {report.photos.map((p) =>
+            (p as LocalPhoto).pending ? (
+              <li key={p.fileId} className="file-card">
+                <span className="file-preview file-kind">{t('d.photo')}</span>
+                <span className="file-info">
+                  {p.filename}
+                  <span className="not-synced block">{t('off.notSynced')}</span>
+                </span>
+              </li>
+            ) : (
+              <li key={p.fileId} className="file-card">
+                <a
+                  className="file-preview"
+                  href={`/api/v1/files/${p.fileId}/content`}
+                  target="_blank"
+                  rel="noopener"
                 >
-                  {t('d.photo.remove')}
-                </button>
-              ) : null}
-            </li>
-          ))}
+                  <img
+                    src={`/api/v1/files/${p.fileId}/content`}
+                    alt={p.caption ?? p.filename}
+                    loading="lazy"
+                  />
+                </a>
+                <span className="file-info">{p.caption ?? p.filename}</span>
+                {editable ? (
+                  <button
+                    type="button"
+                    className="button ghost small danger"
+                    onClick={() => remove(p.fileId)}
+                  >
+                    {t('d.photo.remove')}
+                  </button>
+                ) : null}
+              </li>
+            ),
+          )}
         </ul>
       ) : null}
       {editable ? (
@@ -716,11 +802,13 @@ function Signatures({
   save: (() => Promise<boolean>) | null
   run: (call: () => Promise<{ data: ReportDetail; etag: string | null }>) => Promise<boolean>
 }) {
-  const roles: SignerRole[] = [
+  const required: SignerRole[] = [
     ...new Set(
       report.template.sections.filter((s) => s.type === 'signatures').flatMap((s) => s.roles ?? []),
     ),
   ]
+  // Anzeigen (Bedenken, Behinderung) have no signature section: the contractor signs to freeze them.
+  const roles: SignerRole[] = required.length ? required : ['contractor']
   const [names, setNames] = useState<Record<string, string>>({ contractor: me.user.displayName })
   const [mine] = useMySignature()
   // The signed-in user signs as Auftragnehmer; everyone else draws on this device.
@@ -748,8 +836,7 @@ function Signatures({
       </div>
     )
   }
-  if (report.status !== 'draft' || !me.permissions.includes('report.sign') || !roles.length)
-    return null
+  if (report.status !== 'draft' || !me.permissions.includes('report.sign')) return null
   const sign = async () => {
     if (save && !(await save())) return
     if (!window.confirm(t('d.signConfirm'))) return
@@ -793,6 +880,90 @@ function Signatures({
       <button type="button" className="button primary auto" disabled={busy} onClick={sign}>
         {t('d.sign')}
       </button>
+    </div>
+  )
+}
+
+/**
+ * Folgedokumente aus „Besondere Vorkommnisse“ (P2.5/P2.6): a Behinderungsanzeige (VOB/B § 6) or a
+ * Nachtrag, prefilled with the text and linked to this report as evidence.
+ */
+function FollowUps({
+  report,
+  label,
+  text,
+  actions,
+  me,
+  navigate,
+  setError,
+}: {
+  report: ReportDetail
+  label: string
+  text: string
+  actions: NonNullable<ReportSection['actions']>
+  me: Me
+  navigate: Navigate
+  setError: (message: string | null) => void
+}) {
+  const [busy, setBusy] = useState(false)
+  const start = async (action: (typeof actions)[number]) => {
+    setBusy(true)
+    setError(null)
+    try {
+      if (action === 'obstruction_notice') {
+        const created = await api<ReportDetail>(
+          'POST',
+          `/api/v1/projects/${report.project.id}/reports`,
+          { templateKey: 'obstruction_notice', reportDate: report.reportDate },
+        )
+        if (text) {
+          await api('PATCH', `/api/v1/reports/${created.id}`, {
+            data: {
+              obstruction: {
+                text: `${text}\n\n${t('rep.fromReport')} ${report.template.name} ${formatDateTime(report.reportDate, 'date')}`,
+              },
+            },
+          })
+        }
+        navigate({ view: 'report', id: created.id })
+      } else {
+        const created = await api<{ id: string }>(
+          'POST',
+          `/api/v1/projects/${report.project.id}/documents`,
+          {
+            type: 'change_order',
+            basis: 'additional_work',
+            reason: text || null,
+            evidence: [{ kind: 'report', id: report.id }],
+          },
+        )
+        navigate({ view: 'document', id: created.id })
+      }
+    } catch (err) {
+      setError((err as ApiError).message)
+    } finally {
+      setBusy(false)
+    }
+  }
+  return (
+    <div className="panel">
+      <h2>{tf('rep.followUps', { section: label })}</h2>
+      <p className="hint">{t('rep.followUpsHint')}</p>
+      <div className="button-row">
+        {actions
+          .filter((a) => a !== 'change_order' || me.permissions.includes('document.write'))
+          .map((action) => (
+            <button
+              key={action}
+              type="button"
+              className="button ghost auto"
+              disabled={busy}
+              onClick={() => start(action)}
+            >
+              {t(`rep.action.${action}` as TextKey)}
+            </button>
+          ))}
+      </div>
     </div>
   )
 }

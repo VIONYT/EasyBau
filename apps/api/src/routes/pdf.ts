@@ -4,7 +4,6 @@ import type { LetterheadValues } from '@opc/domain'
 import { addFacturXMetadata } from '@opc/einvoice'
 import {
   documentLetter,
-  documentTitle,
   isUsableImage,
   type LogoPosition,
   renderLetterPdf,
@@ -24,6 +23,7 @@ import {
   type Services,
 } from '../context.js'
 import { notFound, parse } from '../http.js'
+import { documentFileName } from './document-settings.js'
 import { liveIssuer, liveRecipient, loadDocument } from './documents.js'
 import { loadSheet } from './measurements.js'
 import { loadReport } from './reports.js'
@@ -62,10 +62,30 @@ async function render(
   watermark: string | null,
   einvoiceXml?: Buffer,
 ): Promise<Buffer> {
-  const { logoPosition, ...letter } = documentLetter(doc, { watermark })
+  // Bild-Positionen (P2.12): images of the Ablage; unreadable ones are left out.
+  const images = new Map<string, string>()
+  const assets: { path: string; data: Buffer }[] = []
+  const pictures = doc.items.filter((i) => i.positionType === 'image' && i.image)
+  const files = pictures.length
+    ? await tx<{ id: string; key: string; mime: string }[]>`
+        select id, storage_key as key, mime_type as mime from file
+        where id in ${tx(pictures.map((p) => p.image?.fileId as string))}`
+    : []
+  for (const [index, item] of pictures.entries()) {
+    const file = files.find((f) => f.id === item.image?.fileId)
+    const extension = file ? PHOTO_TYPES[file.mime] : undefined
+    if (!file || !extension) continue
+    const path = `/item-${index + 1}.${extension}`
+    const data = await readAll(services.storage.read(file.key))
+    if (!isUsableImage(path, data)) continue
+    assets.push({ path, data })
+    images.set(item.id, path)
+  }
+  const { logoPosition, ...letter } = documentLetter(doc, { watermark, images })
   const pdf = renderLetterPdf(
     { ...letter, logo: await logoFor(tx, services, logoPosition) },
     {
+      assets,
       ...(doc.finalizedAt ? { createdAt: new Date(doc.finalizedAt) } : {}),
       ...(einvoiceXml ? { einvoiceXml } : {}),
     },
@@ -202,7 +222,7 @@ export async function documentPdf(
   return inTenant(services, auth, async (tx) => {
     const doc = await loadDocument(tx, auth, id)
     if (!doc) return null
-    const filename = `${documentTitle(doc)}${doc.number ? `_${doc.number}` : '_Entwurf'}.pdf`
+    const filename = await documentFileName(tx, doc)
     if (!doc.finalizedAt) {
       return { data: await render(tx, services, doc, 'ENTWURF'), filename }
     }

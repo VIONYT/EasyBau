@@ -189,3 +189,54 @@ export const insertFromCatalogRequest = z
     (v) => Boolean(v.catalogItemId) !== Boolean(v.supplierArticleId),
     'Bitte genau einen Eintrag aus Stammdaten oder Katalog wählen.',
   )
+
+// ---- Stammdaten als CSV (P2.12) -------------------------------------------------------------------
+
+/** Columns of the Stammdaten CSV (export and import, German headers). */
+export const CATALOG_CSV_COLUMNS = [
+  'Art',
+  'Ordner',
+  'Artikelnummer',
+  'Hersteller',
+  'EAN',
+  'Kurztext',
+  'Langtext',
+  'Einheit',
+  'EK',
+  'Zuschlag %',
+  'VK',
+  'Gebindeinhalt',
+] as const
+
+export const catalogExportQuery = z.object({ kind: z.enum(CATALOG_KINDS).optional() })
+
+export const importCatalogCsvRequest = z.object({
+  csv: z
+    .string()
+    .min(1, 'Die Datei ist leer.')
+    .max(10_000_000, 'Die Datei ist zu groß (max. 10 MB).'),
+  dryRun: z.boolean().default(true),
+  /** Kind for rows without „Art“. */
+  kind: z.enum(CATALOG_KINDS).default('material'),
+  /** Same Artikelnummer (or Kurztext + Einheit): update texts and prices instead of skipping. */
+  updateExisting: z.boolean().default(false),
+})
+
+export interface CatalogImportRow {
+  /** Line in the file (header = 1). */
+  line: number
+  name: string
+  action: 'create' | 'update' | 'skip' | 'error'
+  message: string | null
+}
+
+export interface CatalogImportResult {
+  dryRun: boolean
+  created: number
+  updated: number
+  skipped: number
+  errors: number
+  /** Folders that are (or would be) created. */
+  newFolders: string[]
+  rows: CatalogImportRow[]
+}

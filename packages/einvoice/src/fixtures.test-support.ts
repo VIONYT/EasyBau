@@ -53,6 +53,8 @@ export function item(input: ItemInput): DocumentItem {
     calcMode: null,
     costLines: [],
     calculation: null,
+    image: null,
+    catalogItemId: null,
   }
 }
 
@@ -136,6 +138,9 @@ export function invoice(items: DocumentItem[], options: InvoiceOptions = {}): Do
     retentionPercent: options.retentionPercent ?? null,
     constructionLevyPercent: options.constructionLevyPercent ?? null,
     progressBillingMode: null,
+    showLaborShare: false,
+    version: 1,
+    versions: [],
     dueDate: '2026-12-05',
     cancelReason: options.cancels ? 'Falscher Leistungszeitraum' : null,
     legalNotes: ['Bitte bewahren Sie diese Rechnung zwei Jahre auf.'],
@@ -225,6 +230,7 @@ export function invoice(items: DocumentItem[], options: InvoiceOptions = {}): Do
       marginCents: 0,
       laborHours: '0',
       uncalculatedCount: 0,
+      laborShare: { netCents: 0, grossCents: 0 },
     },
   }
 }
