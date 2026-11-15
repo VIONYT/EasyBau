@@ -169,6 +169,35 @@ describe.skipIf(!process.env.DATABASE_URL)('Nachträge und Vertragssumme (integr
     expect(result.totals).toMatchObject({ acceptedNetCents: 12_500, totalNetCents: 212_500 })
   })
 
+  it('bills the Mehrmenge only via the beauftragten Nachtrag, not again via the Aufmaß', async () => {
+    const invoice = await create({
+      type: 'invoice',
+      invoiceKind: 'standard',
+      sourceDocumentId: contract.id,
+    })
+    const applied = await admin.post(`/api/v1/documents/${invoice.id}/apply-measurements`)
+    expect(applied.statusCode, applied.body).toBe(200)
+    const doc = applied.json() as DocumentDetail
+    const wall = doc.items.find((i) => i.shortText === 'Wand streichen')
+    // Measured 112,5 m², LV 100 m², 12,5 m² in the beauftragten Nachtrag N01.
+    expect(wall).toMatchObject({ quantity: '100', cumulativeQuantity: '100' })
+    expect(doc.items.find((i) => i.shortText === 'Fliesen verlegen')?.quantity).toBe('18')
+    const checkOf = async () =>
+      (await admin.get(`/api/v1/documents/${invoice.id}/finalize-check`)).json() as {
+        errors: { message: string }[]
+      }
+    expect(JSON.stringify((await checkOf()).errors)).not.toContain('Mehrmengen-Nachtrag')
+    // Typed in by hand: the Mehrmenge would be on two invoices.
+    const typed = await admin.patch(`/api/v1/documents/${invoice.id}/items/${wall?.id}`, {
+      quantity: '112.5',
+    })
+    expect(typed.statusCode, typed.body).toBe(200)
+    expect(JSON.stringify((await checkOf()).errors)).toContain(
+      'Abgerechnet wären 112,5, laut Aufmaß stehen der Position aber nur 100 zu – 12,5 sind bereits im beauftragten Mehrmengen-Nachtrag',
+    )
+    await admin.delete(`/api/v1/documents/${invoice.id}`)
+  })
+
   it('keeps Nachweise of the same project with a change order', async () => {
     const order = await create({
       type: 'change_order',

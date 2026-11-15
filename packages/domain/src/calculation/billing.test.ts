@@ -12,6 +12,7 @@ import {
   type LegalNotesInput,
   laborShareNote,
   negateQuantity,
+  ownMeasuredQuantity,
 } from './billing.js'
 import { calculateDocumentTotals } from './document.js'
 
@@ -138,6 +139,36 @@ describe('Mengenfortschreibung', () => {
     expect(
       billingQuantity({ measured: 70, previouslyBilled: 80, cumulative: false }).toString(),
     ).toBe('-10')
+  })
+
+  it('leaves Mehrmengen of beauftragten Nachträgen to the Nachtrag (no double billing)', () => {
+    // LV 100, measured 120, Nachtrag over 20: the contract position bills 100.
+    expect(
+      billingQuantity({
+        measured: 120,
+        previouslyBilled: 0,
+        cumulative: false,
+        inChangeOrders: 20,
+      }).toString(),
+    ).toBe('100')
+    // Already billed 120 before the Nachtrag was accepted: correction −20.
+    expect(
+      billingQuantity({
+        measured: 120,
+        previouslyBilled: 120,
+        cumulative: false,
+        inChangeOrders: '20',
+      }).toString(),
+    ).toBe('-20')
+    expect(
+      billingQuantity({
+        measured: '130',
+        previouslyBilled: 0,
+        cumulative: true,
+        inChangeOrders: '20',
+      }).toString(),
+    ).toBe('110')
+    expect(ownMeasuredQuantity({ measured: 10, inChangeOrders: 25 }).toString()).toBe('0')
   })
 
   it('derives what an invoice contributed to the billed quantity', () => {
