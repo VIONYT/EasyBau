@@ -48,6 +48,9 @@ export interface DashboardDto {
   }[]
 }
 
+/** Übersicht ohne Beträge (GET /dashboard/site): offline auf dem Gerät gespeichert. */
+export type DashboardSiteDto = Pick<DashboardDto, 'today' | 'recentProjects' | 'todaysSites'>
+
 /** Globale Suche (GET /search). */
 export const searchQuery = z.object({
   q: z.string().trim().min(2, 'Bitte mindestens 2 Zeichen eingeben.').max(200),
