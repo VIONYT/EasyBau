@@ -1,3 +1,4 @@
+import { generateKeyPairSync } from 'node:crypto'
 import type {
   IncomingInvoiceDetail,
   IncomingInvoiceList,
@@ -307,6 +308,65 @@ describe.skipIf(!process.env.DATABASE_URL)('Eingangsrechnungen ausbauen (integra
       processedMailbox: 'Verarbeitet',
     })
     expect(back.json()).toMatchObject({ auth: 'password', hasPassword: true })
+  })
+
+  it('logs in to Google Workspace with a service account (domain-wide delegation)', async () => {
+    const { privateKey } = generateKeyPairSync('rsa', { modulusLength: 2048 })
+    const keyFile = JSON.stringify({
+      type: 'service_account',
+      private_key: privateKey.export({ type: 'pkcs8', format: 'pem' }).toString(),
+      client_email: 'eingang@rechnungen.iam.gserviceaccount.com',
+    })
+    expect(
+      (
+        await admin.put('/api/v1/settings/incoming-mail', {
+          enabled: true,
+          auth: 'google',
+          user: 'rechnungen@eingang.example',
+          googleServiceAccountKey: '{"type":"authorized_user"}',
+        })
+      ).statusCode,
+    ).toBe(400)
+    const saved = await admin.put('/api/v1/settings/incoming-mail', {
+      enabled: true,
+      auth: 'google',
+      user: 'rechnungen@eingang.example',
+      googleServiceAccountKey: keyFile,
+    })
+    expect(saved.statusCode, saved.body).toBe(200)
+    expect(saved.json()).toMatchObject({
+      auth: 'google',
+      googleClientEmail: 'eingang@rechnungen.iam.gserviceaccount.com',
+    } satisfies Partial<IncomingMailSettings>)
+    expect(saved.body).not.toContain('PRIVATE KEY')
+    const [row] = await h.adminSql<{ settings: string }[]>`select settings::text from tenant`
+    expect(row?.settings).not.toContain('PRIVATE KEY')
+    inbox.messages = []
+    const run = (
+      await admin.post('/api/v1/settings/incoming-mail/run', {})
+    ).json() as IncomingMailRun
+    expect(run.error).toBeNull()
+    expect(inbox.access).toMatchObject({
+      host: 'imap.gmail.com',
+      user: 'rechnungen@eingang.example',
+      password: null,
+      oauth: null,
+      google: { clientEmail: 'eingang@rechnungen.iam.gserviceaccount.com' },
+    })
+    expect(inbox.access?.google?.privateKey).toContain('BEGIN PRIVATE KEY')
+    // Kept when saved again without a new key file.
+    const kept = await admin.put('/api/v1/settings/incoming-mail', {
+      enabled: true,
+      auth: 'google',
+      user: 'rechnungen@eingang.example',
+    })
+    expect(kept.json().googleClientEmail).toBe('eingang@rechnungen.iam.gserviceaccount.com')
+    await admin.put('/api/v1/settings/incoming-mail', {
+      enabled: true,
+      host: 'imap.example.test',
+      user: 'rechnungen@eingang.example',
+      processedMailbox: 'Verarbeitet',
+    })
   })
 
   it('allocates per invoice line, uses the Kreditorennummer and adds project costs', async () => {

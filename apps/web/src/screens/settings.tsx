@@ -1923,12 +1923,14 @@ function IncomingMailForm() {
   )
   const [password, setPassword] = useState('')
   const [clientSecret, setClientSecret] = useState('')
+  const [googleKey, setGoogleKey] = useState<{ name: string; json: string } | null>(null)
   const save = useSave()
   const fetchNow = useSave()
   if (error) return <FormError>{error}</FormError>
   if (!data) return <p className="muted">{t('common.loading')}</p>
   const run = data.lastRun
   const m365 = data.auth === 'microsoft365'
+  const google = data.auth === 'google'
   return (
     <Panel title={t('s.incomingMail')}>
       <p className="hint">{t('im.hint')}</p>
@@ -1950,6 +1952,7 @@ function IncomingMailForm() {
         >
           <option value="password">{t('im.auth.password')}</option>
           <option value="microsoft365">{t('im.auth.microsoft365')}</option>
+          <option value="google">{t('im.auth.google')}</option>
         </select>
       </div>
       {m365 ? (
@@ -1992,6 +1995,31 @@ function IncomingMailForm() {
               setData({ ...data, clientSecretExpiresOn: clientSecretExpiresOn || null })
             }
           />
+        </>
+      ) : google ? (
+        <>
+          <p className="hint">{t('im.googleHint')}</p>
+          <Input
+            label={t('im.mailboxAddress')}
+            type="email"
+            value={data.user ?? ''}
+            onChange={(user) => setData({ ...data, user })}
+          />
+          <div className="field">
+            <label htmlFor="incoming-mail-google-key">{t('im.googleKey')}</label>
+            <input
+              id="incoming-mail-google-key"
+              type="file"
+              accept="application/json,.json"
+              onChange={async (e) => {
+                const file = e.target.files?.[0]
+                setGoogleKey(file ? { name: file.name, json: await file.text() } : null)
+              }}
+            />
+            {data.googleClientEmail ? (
+              <p className="hint">{tf('im.googleKeyStored', { email: data.googleClientEmail })}</p>
+            ) : null}
+          </div>
         </>
       ) : (
         <>
@@ -2073,6 +2101,7 @@ function IncomingMailForm() {
                   clientId: nullable(data.clientId ?? ''),
                   ...(clientSecret ? { clientSecret } : {}),
                   clientSecretExpiresOn: data.clientSecretExpiresOn || null,
+                  ...(googleKey ? { googleServiceAccountKey: googleKey.json } : {}),
                   host: nullable(data.host ?? ''),
                   port: data.port,
                   secure: data.secure,
@@ -2084,6 +2113,7 @@ function IncomingMailForm() {
               )
               setPassword('')
               setClientSecret('')
+              setGoogleKey(null)
             })
           }
         >

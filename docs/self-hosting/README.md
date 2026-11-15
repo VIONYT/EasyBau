@@ -85,6 +85,17 @@ Danach `https://<APP_DOMAIN>` öffnen, den Code eingeben, die Firma und das erst
 - Der Server muss den IMAP-Server erreichen dürfen (ausgehend Port 993 bzw. 143).
 - Bitte ein eigenes Postfach nur für Rechnungen verwenden: jeder PDF-/Bild-Anhang wird als mögliche Rechnung übernommen.
 
+#### Google Workspace
+
+Google lässt IMAP mit dem normalen Passwort nicht zu (Gmail nur mit App-Passwort). Für Firmenpostfächer gibt es unter Einstellungen › Rechnungseingang die Anmeldung „Google Workspace (Dienstkonto, OAuth2)“. Einmal einrichten (Super-Admin der Google-Workspace-Domain nötig):
+
+1. **Dienstkonto anlegen:** Google Cloud Console › Projekt wählen oder anlegen › IAM und Verwaltung › Dienstkonten › Dienstkonto erstellen (keine Rollen nötig). Unter „Schlüssel“ einen neuen JSON-Schlüssel erstellen und herunterladen. Die „Eindeutige ID“ (Client-ID) des Dienstkontos notieren.
+2. **Domainweite Delegierung:** Google-Admin-Konsole › Sicherheit › Zugriffs- und Datenverwaltung › API-Steuerung › Domainweite Delegierung › Neu hinzufügen: Client-ID des Dienstkontos, Bereich `https://mail.google.com/`.
+3. **IMAP erlauben:** Admin-Konsole › Apps › Google Workspace › Gmail › Endnutzerzugriff › IMAP-Zugriff aktivieren (für die Organisationseinheit des Postfachs).
+4. In OpenPlancraft Postfach-Adresse eintragen, die JSON-Schlüsseldatei hochladen und „Jetzt abrufen“ testen.
+
+Gespeichert werden nur E-Mail-Adresse und privater Schlüssel des Dienstkontos (verschlüsselt mit `APP_SECRET`, nie angezeigt). Bei jedem Abruf signiert der Server ein Token für das Postfach, tauscht es bei `oauth2.googleapis.com` gegen ein Zugriffstoken und meldet sich per IMAP (XOAUTH2) bei `imap.gmail.com:993` an – beide Adressen müssen ausgehend erreichbar sein. Hinweis: Die domainweite Delegierung mit `https://mail.google.com/` erlaubt dem Dienstkonto den Zugriff auf **alle** Postfächer der Domain; die Schlüsseldatei daher wie ein Administratorpasswort behandeln und nach dem Hochladen löschen.
+
 #### Microsoft 365 / Exchange Online
 
 Microsoft 365 nimmt IMAP nicht mehr mit Passwort an. Dafür gibt es unter Einstellungen › Rechnungseingang die Anmeldung „Microsoft 365 (App-Registrierung, OAuth2)“. Die Firma richtet einmal ein (Administratorrechte im Microsoft-365-Mandanten nötig):

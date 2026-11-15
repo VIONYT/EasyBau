@@ -1642,6 +1642,11 @@ const de = {
   'im.auth': 'Anmeldung',
   'im.auth.password': 'Benutzername und Passwort (IMAP)',
   'im.auth.microsoft365': 'Microsoft 365 (App-Registrierung, OAuth2)',
+  'im.auth.google': 'Google Workspace (Dienstkonto, OAuth2)',
+  'im.googleHint':
+    'Legen Sie in der Google Cloud Console ein Dienstkonto mit JSON-Schlüssel an und erlauben Sie ihm in der Google-Admin-Konsole die domainweite Delegierung mit dem Bereich https://mail.google.com/ (Anleitung in der Betriebsdokumentation). Der Server verbindet sich dafür mit oauth2.googleapis.com und imap.gmail.com.',
+  'im.googleKey': 'Schlüsseldatei des Dienstkontos (JSON)',
+  'im.googleKeyStored': 'Gespeichert für {email} – nur für einen neuen Schlüssel erneut hochladen.',
   'im.m365Hint':
     'Microsoft 365 erlaubt den Abruf per IMAP nicht mehr mit Passwort. Legen Sie in Microsoft Entra eine App-Registrierung mit der Berechtigung IMAP.AccessAsApp an und geben Sie das Postfach für die App frei (Anleitung in der Betriebsdokumentation). Der Server verbindet sich dafür mit login.microsoftonline.com und outlook.office365.com.',
   'im.mailboxAddress': 'Postfach-Adresse',

@@ -275,10 +275,11 @@ export interface IncomingInvoiceDetail extends IncomingInvoiceListItem {
 // ---- Rechnungseingang per E-Mail (P2.4) -------------------------------------------------------
 
 /**
- * Anmeldung am Postfach: password = IMAP LOGIN; microsoft365 = OAuth2 client credentials (App
+ * Anmeldung am Postfach: password = IMAP LOGIN; google = service account with domain-wide
+ * delegation (JWT bearer, RFC 7523), IMAP XOAUTH2; microsoft365 = OAuth2 client credentials (App
  * registration in Microsoft Entra with the IMAP permission), IMAP XOAUTH2.
  */
-export const INCOMING_MAIL_AUTH = ['password', 'microsoft365'] as const
+export const INCOMING_MAIL_AUTH = ['password', 'microsoft365', 'google'] as const
 export type IncomingMailAuth = (typeof INCOMING_MAIL_AUTH)[number]
 
 export const incomingMailSettingsRequest = z.object({
@@ -298,6 +299,11 @@ export const incomingMailSettingsRequest = z.object({
   clientId: optionalText(100),
   /** Microsoft 365: client secret; undefined keeps the stored one, '' or null removes it. */
   clientSecret: z.string().max(500).nullable().optional(),
+  /**
+   * Google Workspace: JSON key of the service account (as downloaded from the Google Cloud
+   * console); undefined keeps the stored one, '' or null removes it.
+   */
+  googleServiceAccountKey: z.string().max(10_000).nullable().optional(),
   /** Microsoft 365: Ablaufdatum of the secret (shown in Entra), for the reminder bar. */
   clientSecretExpiresOn: isoDate.nullable().optional(),
   mailbox: text(200).default('INBOX'),
@@ -334,6 +340,8 @@ export interface IncomingMailSettings {
   clientId: string | null
   hasClientSecret: boolean
   clientSecretExpiresOn: string | null
+  /** Google Workspace: e-mail address of the stored service account (not secret). */
+  googleClientEmail: string | null
   mailbox: string
   processedMailbox: string | null
   lastRun: IncomingMailRun | null

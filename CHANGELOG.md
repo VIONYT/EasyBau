@@ -13,6 +13,7 @@ Alle wesentlichen Änderungen, vor allem solche, die Betreiber betreffen (neue V
 - **Basis-Images aktualisiert:** App und Web laufen auf **Node 26** (vorher 22). Node 26 enthält kein corepack mehr; die Images installieren pnpm jetzt direkt in der Version aus `package.json` → `packageManager`. KoSIT-Validator auf **Eclipse Temurin 25** (vorher 21), Download-Stufe auf **Alpine 3.24**. CI-Actions auf die aktuellen Hauptversionen (checkout/setup-node v7, Docker-Actions v4/v6/v7). Für Betreiber ändert sich nichts außer neuen Images (`docker compose pull` bzw. `--build`); Entwickler brauchen lokal Node 26 (`.nvmrc`).
 
 ### Neu
+- **Rechnungseingang mit Google Workspace:** Anmeldung am Postfach per Dienstkonto mit domainweiter Delegierung (OAuth2, JSON-Schlüsseldatei verschlüsselt gespeichert). Einrichtung in `docs/self-hosting/`.
 - **Nachträge teilweise beauftragen:** „Teilweise beauftragt“ am Nachtrag mit Auswahl der beauftragten Positionen; nur diese zählen zur Vertragssumme und dürfen abgerechnet werden.
 - **Kontakte mit eigener Adresse:** Ein geöffneter Kontakt hat die URL `/kontakte/<id>` (Lesezeichen, Zurück-Knopf); Treffer der globalen Suche öffnen den Kontakt direkt.
 - **Übersicht offline:** Ohne Verbindung zeigt die Startseite „Heute auf der Baustelle“ und die zuletzt bearbeiteten Projekte vom Gerät (neuer Endpunkt `GET /dashboard/site` ohne Beträge); Forderungen, Angebote und Eingangsrechnungen erscheinen wieder mit Verbindung.
