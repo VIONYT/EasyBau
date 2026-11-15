@@ -36,7 +36,15 @@ jobs:
     steps:
       - uses: actions/checkout@v7
       - name: Prepare site source
-        run: sh docs/site/build.sh _handbook "${{ github.server_url }}/${{ github.repository }}"
+        # url/baseurl are set here, so the build does not need to read the Pages API.
+        run: |
+          owner=$(printf '%s' "$OWNER" | tr '[:upper:]' '[:lower:]')
+          sh docs/site/build.sh _handbook "$SERVER/$REPOSITORY" "https://$owner.github.io/$NAME"
+        env:
+          OWNER: ${{ github.repository_owner }}
+          NAME: ${{ github.event.repository.name }}
+          SERVER: ${{ github.server_url }}
+          REPOSITORY: ${{ github.repository }}
       - name: Build with Jekyll
         uses: actions/jekyll-build-pages@v1
         with:
