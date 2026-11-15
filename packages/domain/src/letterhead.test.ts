@@ -4,6 +4,7 @@ import {
   DIN5008B,
   defaultLetterhead,
   fillPlaceholders,
+  footerColumnWeights,
   formatIban,
   LETTERHEAD_FIELDS,
   PAPER_FORMATS,
@@ -62,5 +63,16 @@ describe('Briefpapier DIN 5008 B', () => {
     expect(clampToPage(-5, 50, 40)).toEqual({ x: 0, y: 45 })
     expect(clampToPage(190.04, -1, 40)).toEqual({ x: 170, y: 0 })
     expect(clampToPage(12.345, 20.06, 40, 250)).toEqual({ x: 12.3, y: 20.1 })
+  })
+
+  it('sizes footer columns by their longest line', () => {
+    expect(
+      footerColumnWeights([
+        'Muster Bau GmbH\nWerkstraße 2\n30169 Hannover',
+        'Sparkasse\nIBAN DE89 3704 0044 0532 0130 00\nBIC COBADEFFXXX',
+        'Tel.',
+      ]),
+    ).toEqual([15, 32, 10])
+    expect(footerColumnWeights([])).toEqual([])
   })
 })

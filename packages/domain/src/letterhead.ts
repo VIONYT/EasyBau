@@ -116,6 +116,17 @@ export function fillPlaceholders(text: string, values: LetterheadValues): string
     .join('\n')
 }
 
+/**
+ * Relative widths of the filled footer columns: the length of each column's longest line (at
+ * least 10 characters). A column with the IBAN gets the room for it instead of a fixed quarter of
+ * the width, so the IBAN stays on one line. Used by the PDF (Typst) and the print view alike.
+ */
+export function footerColumnWeights(columns: readonly string[]): number[] {
+  return columns.map((column) =>
+    Math.max(10, ...column.split('\n').map((line) => [...line.trim()].length)),
+  )
+}
+
 /** DE89370400440532013000 → „DE89 3704 0044 0532 0130 00“ (print format). */
 export function formatIban(iban: string): string {
   return iban.replace(/\s+/g, '').replace(/(.{4})(?=.)/g, '$1 ')

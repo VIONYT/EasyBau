@@ -21,6 +21,8 @@ export interface LetterPdfInput {
   recipient: string[]
   info: { label: string; value: string }[]
   footer: string[]
+  /** Relative column widths of the footer (footerColumnWeights). */
+  footerWeights: number[]
   body: {
     heading: string
     subject: string | null

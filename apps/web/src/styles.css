@@ -1542,7 +1542,8 @@ legend.h2 + * {
 }
 
 .letter-footer__column {
-  flex: 1;
+  /* flex-grow comes from footerColumnWeights() (longest line), like the columns in the PDF. */
+  flex: 1 1 0;
   min-width: 0;
   white-space: pre-line;
 }
