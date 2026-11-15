@@ -1,0 +1,20 @@
+name: Frage
+description: Frage zur Bedienung oder zum Betrieb, die das Handbuch nicht beantwortet.
+labels: [frage]
+body:
+  - type: textarea
+    id: question
+    attributes:
+      label: Ihre Frage
+    validations:
+      required: true
+  - type: textarea
+    id: context
+    attributes:
+      label: Was haben Sie schon versucht?
+      description: Welche Stelle im Handbuch oder in der Betriebsdokumentation haben Sie gelesen?
+  - type: input
+    id: version
+    attributes:
+      label: Version
+      placeholder: z. B. v0.1.0, latest

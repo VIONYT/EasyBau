@@ -1,0 +1,47 @@
+name: Funktion wünschen
+description: Idee für eine neue Funktion oder Verbesserung.
+labels: [wunsch]
+body:
+  - type: markdown
+    attributes:
+      value: Bitte beschreiben Sie zuerst das **Problem aus Ihrem Arbeitsalltag** – die beste Lösung finden wir dann gemeinsam.
+  - type: textarea
+    id: problem
+    attributes:
+      label: Welches Problem soll gelöst werden?
+      placeholder: Wenn ich auf der Baustelle …, muss ich heute …
+    validations:
+      required: true
+  - type: textarea
+    id: proposal
+    attributes:
+      label: Wie stellen Sie sich die Lösung vor?
+    validations:
+      required: true
+  - type: textarea
+    id: workaround
+    attributes:
+      label: Wie lösen Sie es heute?
+  - type: dropdown
+    id: who
+    attributes:
+      label: Wer nutzt die Funktion?
+      multiple: true
+      options:
+        - Büro / Verwaltung
+        - Projekt- und Bauleitung
+        - Baustelle (Handy/Tablet)
+        - Steuerberatung / Prüfung
+        - Betreiber (Server, Docker)
+  - type: textarea
+    id: legal
+    attributes:
+      label: Rechtliche oder fachliche Grundlage
+      description: Falls zutreffend – z. B. VOB/B, UStG, GoBD, DIN-Norm, Vorgabe des Steuerberaters.
+  - type: checkboxes
+    id: checks
+    attributes:
+      label: Vorab geprüft
+      options:
+        - label: Ich habe in den offenen Issues und im Handbuch nach einer ähnlichen Idee gesucht.
+          required: true
