@@ -2,6 +2,7 @@ import { mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { createSql, migrate, type Sql } from '@opc/db'
+import { ensureAppRole } from '@opc/db/test-support'
 import { type ArchiveStore, FsObjectStore } from '@opc/storage'
 import type { FastifyInstance, LightMyRequestResponse } from 'fastify'
 import { buildApi } from '../index.js'
@@ -37,6 +38,7 @@ export async function createHarness(
   const root = createSql({ DATABASE_URL: baseUrl, DATABASE_POOL_MAX: 1 }, { mode: 'admin' })
   const name = `opc_api_test_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 6)}`
   await root.unsafe(`create database ${name}`)
+  await ensureAppRole(root)
   const url = new URL(baseUrl)
   url.pathname = `/${name}`
   const adminSql = createSql(

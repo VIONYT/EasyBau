@@ -3,7 +3,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
 import { createSql, MIGRATIONS_DIR, migrate, type Sql, withTenant } from './index.js'
-import { testDatabaseUrl } from './test-support.js'
+import { ensureAppRole, testDatabaseUrl } from './test-support.js'
 
 /**
  * Migration 0008 (project filing) on a database that already has a company with a project:
@@ -39,6 +39,7 @@ describe.skipIf(!testDatabaseUrl)('project filing (integration)', () => {
       { mode: 'admin' },
     )
     await root.unsafe(`create database ${name}`)
+    await ensureAppRole(root)
     const url = new URL(testDatabaseUrl as string)
     url.pathname = `/${name}`
     admin = createSql({ DATABASE_URL: url.toString(), DATABASE_POOL_MAX: 2 }, { mode: 'admin' })
