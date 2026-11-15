@@ -179,6 +179,9 @@ describe.skipIf(!process.env.DATABASE_URL)('Regieberichte in Rechnung (integrati
     ])
     expect(doc.items[1]?.longText).toBe('Chef: 2,5 Std. – Wand gestemmt')
     expect(doc.totals.netCents).toBe(30_000)
+    // Stundenlohn counts as Lohnkosten (§ 35a): one labor line per hour from the Lohngruppe.
+    expect(doc.items[1]?.calculation?.costCents).toBe(12_500)
+    expect(doc.totals.laborShare.netCents).toBe(30_000)
     expect((await candidates(draft.id))[0]).toMatchObject({ inThisDocument: true, blocked: null })
 
     // Not twice, not unsigned, not from another project.
@@ -202,6 +205,10 @@ describe.skipIf(!process.env.DATABASE_URL)('Regieberichte in Rechnung (integrati
   it('marks the report as billed at Festschreiben and releases it after a Storno', async () => {
     const check = (await admin.get(`/api/v1/documents/${draft.id}/finalize-check`)).json()
     expect(JSON.stringify(check.warnings)).toContain('Stundenlohnarbeiten sind nur abrechenbar')
+    // Leistungen/Material/Geräte come over at 0 €: the office has to add the prices.
+    expect(JSON.stringify(check.warnings)).toContain(
+      '3 Positionen haben keinen Preis (0,00 €): Position 1.3 „Schlitz gestemmt“',
+    )
     const finalized = await admin.post(`/api/v1/documents/${draft.id}/finalize`, {
       acknowledgeWarnings: true,
     })

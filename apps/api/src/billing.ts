@@ -358,6 +358,21 @@ export async function invoiceFinalizeCheck(
       })
     }
   }
+  // Positions without a price (e.g. Leistungen/Material/Geräte taken over from a Regiebericht at
+  // 0 €) would be billed for free without anyone noticing.
+  const unpriced = priced.filter(
+    (i) =>
+      (i.unitPriceCents ?? 0) === 0 && (i.quantity === null || !new Decimal(i.quantity).isZero()),
+  )
+  if (unpriced.length) {
+    const shown = unpriced.slice(0, 5).map((i) => label(i.id))
+    const more =
+      unpriced.length > shown.length ? ` und ${unpriced.length - shown.length} weitere` : ''
+    warnings.push({
+      field: 'items',
+      message: `${unpriced.length} Position${unpriced.length === 1 ? ' hat' : 'en haben'} keinen Preis (0,00 €): ${shown.join(', ')}${more}. Bitte Preise prüfen, sonst werden sie kostenlos berechnet.`,
+    })
+  }
   if (detail.totals.grossCents === 0 && detail.totals.deductions.length === 0) {
     warnings.push({ field: 'items', message: 'Der Rechnungsbetrag ist 0,00 €.' })
   }
