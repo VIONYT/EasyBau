@@ -28,6 +28,7 @@ import { TooLargeError } from '@opc/storage'
 import type { FastifyInstance } from 'fastify'
 import { inTenant, requireAuth, requirePermission, type Services } from '../context.js'
 import { HttpError, notFound, parse } from '../http.js'
+import { todayOf } from './receivables.js'
 
 /**
  * Einstellungen ergänzen (P2.11): Dokument-Vorgaben (Lohnkostenanteil § 35a, Abschlagsart,
@@ -305,10 +306,36 @@ export function registerDocumentSettingsRoutes(app: FastifyInstance, services: S
         select email_verified_at is not null as verified from app_user where id = ${auth.userId}`
       if (!company) return []
       const { hasIban, ...rest } = company
+      // Rechnungseingang: only for people who may fix the settings and while it is fetched.
+      const [mail] =
+        services.config.INCOMING_MAIL_ENABLED && auth.permissions.has('settings.write')
+          ? await tx<
+              {
+                mailbox: {
+                  enabled?: boolean
+                  auth?: string
+                  clientSecretExpiresOn?: string
+                  lastRun?: { error: string | null; failedRuns?: number }
+                } | null
+              }[]
+            >`select settings -> 'incomingMail' as mailbox from tenant where id = current_tenant_id()`
+          : []
+      const mailbox = mail?.mailbox?.enabled ? mail.mailbox : null
       return companyNotices({
         company: { ...rest, iban: hasIban ? 'set' : null },
         canManageCompany: auth.permissions.has('tenant.manage'),
         emailVerified: services.config.SMTP_ENABLED ? (user?.verified ?? false) : null,
+        ...(mailbox
+          ? {
+              incomingMail: {
+                failedRuns: mailbox.lastRun?.error ? (mailbox.lastRun.failedRuns ?? 1) : 0,
+                lastError: mailbox.lastRun?.error ?? null,
+                secretExpiresOn:
+                  mailbox.auth === 'microsoft365' ? (mailbox.clientSecretExpiresOn ?? null) : null,
+                today: todayOf(tx),
+              },
+            }
+          : {}),
       })
     })
   })

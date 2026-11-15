@@ -247,6 +247,7 @@ describe.skipIf(!process.env.DATABASE_URL)('Eingangsrechnungen ausbauen (integra
       tenantId: '0b2c6d8e-1f3a-4b5c-9d7e-123456789abc',
       clientId: '6a7b8c9d-0e1f-4a2b-8c3d-abcdef012345',
       clientSecret: 'client-geheim-456',
+      clientSecretExpiresOn: '2026-11-30',
     })
     expect(saved.statusCode, saved.body).toBe(200)
     expect(saved.json()).toMatchObject({
@@ -276,12 +277,28 @@ describe.skipIf(!process.env.DATABASE_URL)('Eingangsrechnungen ausbauen (integra
         clientSecret: 'client-geheim-456',
       },
     } satisfies Partial<MailboxAccess>)
+    const notices = async () =>
+      ((await admin.get('/api/v1/notices')).json() as { key: string; message: string }[]).filter(
+        (n) => n.key.startsWith('incoming_mail'),
+      )
+    // Harness clock: 2026-11-08 → the secret expires within 30 days.
+    expect((await notices()).map((n) => n.key)).toEqual(['incoming_mail_secret_expiring'])
     inbox.fail = true
-    const refused = (
-      await admin.post('/api/v1/settings/incoming-mail/run', {})
-    ).json() as IncomingMailRun
-    expect(refused.error).toMatch(/^Microsoft 365 hat die Anmeldung am Postfach abgelehnt/)
+    let refused: IncomingMailRun | undefined
+    for (let i = 0; i < 3; i++) {
+      refused = (await admin.post('/api/v1/settings/incoming-mail/run', {})).json()
+    }
+    expect(refused?.error).toMatch(/^Microsoft 365 hat die Anmeldung am Postfach abgelehnt/)
+    expect(refused?.failedRuns).toBe(3)
+    expect((await notices())[0]?.message).toMatch(
+      /^Der Rechnungseingang per E-Mail schlägt seit 3 Abrufen fehl: Microsoft 365 hat/,
+    )
     inbox.fail = false
+    expect(
+      ((await admin.post('/api/v1/settings/incoming-mail/run', {})).json() as IncomingMailRun)
+        .failedRuns,
+    ).toBe(0)
+    expect((await notices()).map((n) => n.key)).toEqual(['incoming_mail_secret_expiring'])
     // Back to the password login of the first test (kept encrypted meanwhile).
     const back = await admin.put('/api/v1/settings/incoming-mail', {
       enabled: true,

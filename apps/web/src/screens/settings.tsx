@@ -1984,6 +1984,14 @@ function IncomingMailForm() {
             />
             {data.hasClientSecret ? <p className="hint">{t('im.passwordStored')}</p> : null}
           </div>
+          <Input
+            label={t('im.clientSecretExpiresOn')}
+            type="date"
+            value={data.clientSecretExpiresOn ?? ''}
+            onChange={(clientSecretExpiresOn) =>
+              setData({ ...data, clientSecretExpiresOn: clientSecretExpiresOn || null })
+            }
+          />
         </>
       ) : (
         <>
@@ -2064,6 +2072,7 @@ function IncomingMailForm() {
                   tenantId: nullable(data.tenantId ?? ''),
                   clientId: nullable(data.clientId ?? ''),
                   ...(clientSecret ? { clientSecret } : {}),
+                  clientSecretExpiresOn: data.clientSecretExpiresOn || null,
                   host: nullable(data.host ?? ''),
                   port: data.port,
                   secure: data.secure,

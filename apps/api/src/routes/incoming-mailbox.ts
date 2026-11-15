@@ -161,6 +161,7 @@ interface StoredMailbox {
   tenantId?: string
   clientId?: string
   clientSecretEnc?: string
+  clientSecretExpiresOn?: string
   host?: string
   port?: number
   secure?: boolean
@@ -190,6 +191,7 @@ function view(services: Services, stored: StoredMailbox): IncomingMailSettings {
     tenantId: stored.tenantId ?? null,
     clientId: stored.clientId ?? null,
     hasClientSecret: Boolean(stored.clientSecretEnc),
+    clientSecretExpiresOn: stored.clientSecretExpiresOn ?? null,
     mailbox: stored.mailbox ?? 'INBOX',
     processedMailbox: stored.processedMailbox ?? null,
     lastRun: stored.lastRun ?? null,
@@ -266,6 +268,7 @@ export async function pollMailbox(
     ignored: 0,
     failed: 0,
     error: null,
+    failedRuns: 0,
   }
   if (!access) {
     run.error = 'Das Postfach ist nicht vollständig eingerichtet.'
@@ -310,6 +313,8 @@ export async function pollMailbox(
       await connection?.close().catch(() => undefined)
     }
   }
+  // Failed runs in a row, for the reminder in the Hinweisleiste.
+  if (run.error) run.failedRuns = stored.lastRun?.error ? (stored.lastRun.failedRuns ?? 1) + 1 : 1
   await inTenant(services, system, async (tx) => {
     await tx`update tenant set settings = jsonb_set(settings, '{incomingMail,lastRun}', ${tx.json(run as never)})
              where id = current_tenant_id() and settings ? 'incomingMail'`
@@ -398,6 +403,11 @@ export function registerIncomingMailboxRoutes(
         ...(input.tenantId ? { tenantId: input.tenantId } : {}),
         ...(input.clientId ? { clientId: input.clientId } : {}),
         ...(clientSecretEnc ? { clientSecretEnc } : {}),
+        ...(input.clientSecretExpiresOn
+          ? { clientSecretExpiresOn: input.clientSecretExpiresOn }
+          : input.clientSecretExpiresOn === undefined && current.clientSecretExpiresOn
+            ? { clientSecretExpiresOn: current.clientSecretExpiresOn }
+            : {}),
         ...(input.host ? { host: input.host } : {}),
         port: input.port,
         secure: input.secure,

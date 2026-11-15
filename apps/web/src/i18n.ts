@@ -1640,6 +1640,7 @@ const de = {
   'im.tenantId': 'Verzeichnis-ID (Mandanten-ID)',
   'im.clientId': 'Anwendungs-ID (Client-ID)',
   'im.clientSecret': 'Geheimer Clientschlüssel',
+  'im.clientSecretExpiresOn': 'Schlüssel gültig bis (für eine Erinnerung 30 Tage vorher)',
 } as const
 
 export type TextKey = keyof typeof de

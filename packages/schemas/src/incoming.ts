@@ -298,6 +298,8 @@ export const incomingMailSettingsRequest = z.object({
   clientId: optionalText(100),
   /** Microsoft 365: client secret; undefined keeps the stored one, '' or null removes it. */
   clientSecret: z.string().max(500).nullable().optional(),
+  /** Microsoft 365: Ablaufdatum of the secret (shown in Entra), for the reminder bar. */
+  clientSecretExpiresOn: isoDate.nullable().optional(),
   mailbox: text(200).default('INBOX'),
   /** Move processed messages there (e.g. „Verarbeitet“); empty: only mark as read. */
   processedMailbox: optionalText(200),
@@ -314,6 +316,8 @@ export interface IncomingMailRun {
   /** Temporary errors: the message stays unread and is tried again. */
   failed: number
   error: string | null
+  /** Runs with an error in a row (0 after a successful run). */
+  failedRuns: number
 }
 
 export interface IncomingMailSettings {
@@ -329,6 +333,7 @@ export interface IncomingMailSettings {
   tenantId: string | null
   clientId: string | null
   hasClientSecret: boolean
+  clientSecretExpiresOn: string | null
   mailbox: string
   processedMailbox: string | null
   lastRun: IncomingMailRun | null
