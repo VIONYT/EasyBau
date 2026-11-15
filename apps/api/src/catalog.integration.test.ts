@@ -188,9 +188,11 @@ describe.skipIf(!process.env.DATABASE_URL)('Stammdaten und DATANORM-Kataloge (in
         deleted: 0,
         prices: 0,
         texts: 2,
-        skipped: 1,
+        skipped: 0,
         encoding: 'cp850',
         unknownUnits: ['Fass'],
+        discounts: 0,
+        discountsWithoutValue: 1,
       })
     })
 
@@ -286,6 +288,71 @@ describe.skipIf(!process.env.DATABASE_URL)('Stammdaten und DATANORM-Kataloge (in
       expect(res.json().detail).toMatch(/^DATANORM: Zeile 1: Keine DATANORM-4\/5-Datei/)
       expect((await admin.get('/api/v1/supplier-catalogs')).json()).toHaveLength(before)
       expect((await importFile(Buffer.alloc(0), 'filename=leer.dat')).statusCode).toBe(400)
+    })
+  })
+
+  describe('DATANORM 4 mit Rabattdatei (Aufbau wie beim Großhandel)', () => {
+    // Fixed-width header as in real DATANORM 4 files (128 characters, no semicolons).
+    const header = (info2: string) =>
+      `V 191026${'Antriebe Süd'.padEnd(40)}${info2.padEnd(40)}${''.padEnd(35)}04EUR`
+    let dn4: string
+
+    it('imports a DATANORM 4 file with fixed-width header, product and discount groups', async () => {
+      const file = [
+        header('ab 01.01.2027'),
+        'T;N;T9220;;1;;Differenzdruckschalter;2;;Messbereich 200...1000 Pa;',
+        'T;N;T9220;;3;;Fabrikat Süd;;;;',
+        'A;N;01APS-101;30;Differenzdruckschalter;200...1000 Pa;1;0;Stck;3990;80;S8;T9220;',
+        'B;N;01APS-101; ; ; ;0;0;0;7630498100000; ;KanalSenso;0;1; ; ;',
+        'A;N;LM24A;30;Drehantrieb;5 Nm;1;0;Stck;12850;W5;S2;;',
+        '',
+      ].join('\r\n')
+      const res = await importFile(cp850(file), 'filename=DATANORM.001')
+      expect(res.statusCode, res.body).toBe(201)
+      const result: ImportResult = res.json()
+      dn4 = result.catalog.id
+      expect(result.catalog).toMatchObject({
+        name: 'Antriebe Süd',
+        supplier: 'Antriebe Süd',
+        version: '04',
+        articleCount: 2,
+      })
+      expect(result.stats).toMatchObject({ articles: 2, texts: 3, encoding: 'cp850' })
+      const [sensor] = await search('7630498100000')
+      expect(sensor).toMatchObject({
+        articleNo: '01APS-101',
+        longText: 'Differenzdruckschalter\nMessbereich 200...1000 Pa\nFabrikat Süd',
+        unitCostCents: '3990',
+      })
+    })
+
+    it('applies the discount file (*.RAB) to the catalog, keeping own values for 0 %', async () => {
+      await admin.patch(`/api/v1/supplier-catalogs/${dn4}`, {
+        discounts: [{ discountGroup: '80', percent: '25' }],
+      })
+      const rab = [header('ab 01.11.2026'), 'R;;80;1;0;Gueltig fuer S8;', 'R;;W5;1;3550;S5;'].join(
+        '\r\n',
+      )
+      const res = await importFile(Buffer.from(rab), `filename=DATANORM.RAB&catalogId=${dn4}`)
+      expect(res.statusCode, res.body).toBe(201)
+      expect(res.json().stats).toMatchObject({ discounts: 1, discountsWithoutValue: 1 })
+      expect(res.json().catalog.discounts).toEqual([
+        { discountGroup: '80', percent: '25' },
+        { discountGroup: 'W5', percent: '35.5' },
+      ])
+      expect((await search('LM24A'))[0]?.unitCostCents).toBe('8288.25')
+      expect((await search('01APS-101'))[0]?.unitCostCents).toBe('2992.5')
+    })
+
+    it('does not create an empty catalog from a discount or product group file', async () => {
+      const before = (await admin.get('/api/v1/supplier-catalogs')).json().length
+      const wrg = [header(''), 'S;;S2;HLK-Antriebe;;;', 'S;;S2;;AntriebeFU;Antriebe;'].join('\r\n')
+      const res = await importFile(Buffer.from(wrg), 'filename=DATANORM.WRG')
+      expect(res.statusCode).toBe(400)
+      expect(res.json().detail).toMatch(/in einen vorhandenen Katalog importieren/)
+      expect((await admin.get('/api/v1/supplier-catalogs')).json()).toHaveLength(before)
+      const ok = await importFile(Buffer.from(wrg), `filename=DATANORM.WRG&catalogId=${dn4}`)
+      expect(ok.json().stats).toMatchObject({ skipped: 2 })
     })
   })
 

@@ -1079,7 +1079,7 @@ const de = {
   'c.fromDatanorm': 'aus Katalog',
   'c.import': 'DATANORM-Datei importieren',
   'c.importHint':
-    'DATANORM 4 oder 5 vom Großhändler (z. B. *.001, *.DAT). Updates mit Neu/Ändern/Löschen und Preisänderungen werden auf den gewählten Katalog angewendet.',
+    'DATANORM 4 oder 5 vom Großhändler (z. B. *.001, *.DAT; ZIP-Archive bitte vorher entpacken). Updates mit Neu/Ändern/Löschen und Preisänderungen werden auf den gewählten Katalog angewendet. Rabattgruppen (*.RAB) und Warengruppen (*.WRG) in den vorhandenen Katalog importieren.',
   'c.importName': 'Name des Katalogs',
   'c.importTarget': 'Importieren in',
   'c.importNew': 'Neuer Katalog',
@@ -1088,6 +1088,9 @@ const de = {
   'c.imported':
     'Importiert: {articles} Artikel, {deleted} gelöscht, {prices} Preise, {texts} Langtextzeilen ({encoding}).',
   'c.unknownUnits': 'Einheiten ohne Zuordnung (beim Übernehmen bitte Einheit wählen):',
+  'c.importedDiscounts': 'Rabattgruppen übernommen: {count}.',
+  'c.discountsWithoutValue':
+    '{count} Rabattgruppen ohne Rabatt in der Datei (0 %) – Ihre eigenen Werte bleiben erhalten; Rabatte bitte unter „Bearbeiten“ eintragen.',
   'c.noCatalogs': 'Noch keine Kataloge importiert.',
   'c.articles': 'Artikel',
   'c.importedAt': 'importiert',

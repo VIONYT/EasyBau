@@ -22,7 +22,10 @@ Jeder geöffnete Kontakt hat eine eigene Adresse (`/kontakte/…`), die Sie z. B
 **Stammdaten** sind Ihre wiederkehrenden **Leistungen** (mit Kalkulation aus Lohn, Material, Gerät, Fremdleistung) und **Materialien** (mit Einkaufspreis, Gebinde, Lieferant).
 
 - **Neue Leistung** / **Neues Material** anlegen, in Ordnern sortieren.
-- **Kataloge:** DATANORM-Dateien Ihres Großhändlers importieren – Artikel, Preise, Rabattgruppen.
+- **Kataloge:** DATANORM-Dateien (Version 4 oder 5) Ihres Großhändlers importieren – Artikel, Preise, Langtexte, EAN, Rabattgruppen. Ein ZIP vom Großhändler zuerst entpacken, dann
+  1. die Artikeldatei (meist `DATANORM.001`) als **neuen Katalog** importieren – der Katalog heißt dann wie der Lieferant,
+  2. die Rabattdatei (`DATANORM.RAB`) **in diesen Katalog** importieren. Enthält sie keine Rabatte (0 %, wie bei vielen Herstellern – Ihre Konditionen sind individuell), tragen Sie Ihre Rabatte je Rabattgruppe unter **Bearbeiten** ein; eigene Werte werden von der Datei nie mit 0 % überschrieben,
+  3. die Warengruppendatei (`DATANORM.WRG`) können Sie weglassen.
 - **CSV importieren / exportieren** für Preislisten.
 - Aus einem Angebot heraus: **In Stammdaten speichern** übernimmt eine gut kalkulierte Position mit ihrer Kalkulation.
 

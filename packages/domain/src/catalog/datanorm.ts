@@ -2,12 +2,15 @@
  * DATANORM 4 / 5 reader (Großhandels-Artikelstamm), pure and streaming-friendly.
  *
  * Records are semicolon separated, one per line. Supported record types:
- *   V  Vorlaufsatz:  V;Version;Datum;Info 1 (Lieferant);Info 2;Info 3;Währung
+ *   V  Vorlaufsatz:  DATANORM 5: V;Version;Datum;Info 1 (Lieferant);Info 2;Info 3;Währung
+ *                    DATANORM 4: fixed width (no semicolons), see parseFixedHeader()
  *   A  Artikel:      A;VKZ;Artikelnr;Textkz;Kurztext 1;Kurztext 2;Preiskz;Preiseinheit;Mengeneinheit;
  *                    Preis;Rabattgruppe;Warengruppe;Langtextschlüssel
  *   B  Artikel 2:    B;VKZ;Artikelnr;Matchcode;… (EAN is recognised by its format)
  *   T  Langtext:     T;VKZ;Textschlüssel;Zeilennr;Kz;Text[;Zeilennr;Kz;Text]
  *   P  Preis:        P;VKZ;Artikelnr;Preiskz;Preis[;…]
+ *   R  Rabatt:       R;VKZ;Rabattgruppe;Rabattkennzeichen;Rabatt;Bezeichnung (file *.RAB)
+ *   S  Warengruppe:  S;VKZ;Hauptgruppe;Bezeichnung;Gruppe;Bezeichnung (file *.WRG) – skipped
  * VKZ (Verarbeitungskennzeichen): N = neu, A = ändern, L = löschen.
  * Unknown record types are counted and skipped. DATANORM 3 (fixed record length) is rejected.
  */
@@ -61,12 +64,23 @@ export interface DatanormPrice {
   priceCents: string
 }
 
+export interface DatanormDiscount {
+  action: DatanormAction
+  discountGroup: string
+  /** Rabattkennzeichen: 1 = discount in percent; 2 (multiplier) and 3 (surcharge) are not applied. */
+  kind: 'percent' | 'other'
+  /** Percent (exact text) for kind = percent; null otherwise. */
+  percent: string | null
+  text: string | null
+}
+
 export type DatanormRecord =
   | { type: 'header'; header: DatanormHeader }
   | { type: 'article'; article: DatanormArticle }
   | { type: 'extra'; extra: DatanormArticleExtra }
   | { type: 'text'; texts: DatanormText[] }
   | { type: 'price'; prices: DatanormPrice[] }
+  | { type: 'discount'; discount: DatanormDiscount }
   | { type: 'skip'; recordType: string }
 
 export class DatanormError extends Error {
@@ -219,10 +233,55 @@ export function mapDatanormUnit(raw: string): string | null {
   return UNIT_MAP[raw.trim().toLowerCase()] ?? null
 }
 
+/**
+ * DATANORM 4 Vorlaufsatz with fixed columns (1-based): 1 „V“, 3–8 Datum TTMMJJ, 9–48 Info 1
+ * (Lieferant), 49–88 Info 2, 89–123 Info 3, 124–125 Version („04“), 126–128 Währung.
+ * DATANORM 3 has the same header but fixed-width records throughout, so it is rejected here.
+ */
+function parseFixedHeader(raw: string, line: number): DatanormRecord {
+  const field = (from: number, to: number) => raw.slice(from - 1, to).trim()
+  const version = field(124, 125)
+  if (version && version !== '04') {
+    throw new DatanormError(
+      `DATANORM-Version ${version} wird nicht unterstützt (nur DATANORM 4 und 5).`,
+      line,
+    )
+  }
+  const date = field(3, 8)
+  const info = [field(9, 48), field(49, 88), field(89, 123)]
+  return {
+    type: 'header',
+    header: {
+      version: version || '04',
+      date: /^\d{6}$/.test(date) ? date : null,
+      supplier: info[0] || null,
+      info: info.filter(Boolean),
+      currency: field(126, 128).toUpperCase() || 'EUR',
+    },
+  }
+}
+
+/**
+ * Discount value of an R record: whole number with two implied decimals („3550“ = 35,50 %) or a
+ * decimal with comma/point. Returns null for an empty field.
+ */
+export function parseDatanormDiscount(value: string, line?: number): string | null {
+  const text = value.trim()
+  if (!text) return null
+  let percent: Decimal
+  if (/^\d+$/.test(text)) percent = new Decimal(text).div(100)
+  else if (/^\d+[.,]\d+$/.test(text)) percent = toDecimal(text)
+  else throw new DatanormError(`Ungültiger Rabatt „${value}“.`, line)
+  if (percent.gte(100)) throw new DatanormError(`Rabatt „${value}“ ist 100 % oder mehr.`, line)
+  return percent.toString()
+}
+
 /** Parses one line (without line break). Empty lines yield null. */
 export function parseDatanormLine(text: string, line: number): DatanormRecord | null {
-  const raw = text.replace(/\r$/, '')
+  // Ctrl-Z (0x1A) is the DOS end-of-file mark that many wholesaler files still end with.
+  const raw = text.replace(/\r$/, '').replaceAll('\u001a', '')
   if (!raw.trim()) return null
+  if (!raw.includes(';') && raw.startsWith('V')) return parseFixedHeader(raw, line)
   if (!raw.includes(';')) {
     throw new DatanormError(
       'Keine DATANORM-4/5-Datei (Felder mit Semikolon). DATANORM 3 mit fester Satzlänge wird nicht unterstützt.',
@@ -284,8 +343,10 @@ export function parseDatanormLine(text: string, line: number): DatanormRecord | 
       const key = clean(f[2])
       if (!key) throw new DatanormError('Textschlüssel fehlt.', line)
       const texts: DatanormText[] = []
-      // Groups of (Zeilennummer; Kennzeichen; Text), usually two per record.
-      for (let i = 3; i < f.length; i += 3) {
+      // Groups of (Zeilennummer; Kennzeichen; Text), usually two per record. Some wholesalers put
+      // an empty field after the key (T;N;T9220;;1;;Text;2;;Text): then the groups start one later.
+      const start = !clean(f[3]) && /^\d+$/.test(clean(f[4])) ? 4 : 3
+      for (let i = start; i < f.length; i += 3) {
         const number = Number.parseInt(clean(f[i]), 10)
         const value = (f[i + 2] ?? '').replace(/\s+$/, '')
         if (Number.isNaN(number)) continue
@@ -306,6 +367,21 @@ export function parseDatanormLine(text: string, line: number): DatanormRecord | 
         })
       }
       return { type: 'price', prices }
+    }
+    case 'R': {
+      const discountGroup = clean(f[2])
+      if (!discountGroup) throw new DatanormError('Rabattgruppe fehlt.', line)
+      const percentKind = clean(f[3]) === '1'
+      return {
+        type: 'discount',
+        discount: {
+          action: actionOf(f[1], line),
+          discountGroup,
+          kind: percentKind ? 'percent' : 'other',
+          percent: percentKind ? parseDatanormDiscount(f[4] ?? '', line) : null,
+          text: orNull(f[5]),
+        },
+      }
     }
     default:
       return { type: 'skip', recordType: type }

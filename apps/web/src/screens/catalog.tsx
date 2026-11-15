@@ -633,6 +633,16 @@ function SupplierCatalogs({ canWrite, units }: { canWrite: boolean; units: UnitS
                   encoding: result.stats.encoding,
                 })}
               </p>
+              {result.stats.discounts ? (
+                <p>{tf('c.importedDiscounts', { count: String(result.stats.discounts) })}</p>
+              ) : null}
+              {result.stats.discountsWithoutValue ? (
+                <p className="hint">
+                  {tf('c.discountsWithoutValue', {
+                    count: String(result.stats.discountsWithoutValue),
+                  })}
+                </p>
+              ) : null}
               {result.stats.unknownUnits.length ? (
                 <p className="warning">
                   {t('c.unknownUnits')} {result.stats.unknownUnits.join(', ')}
