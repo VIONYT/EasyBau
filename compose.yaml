@@ -36,7 +36,7 @@ x-app: &app
       required: false
 
 x-app-env: &app-env
-  APP_NAME: ${APP_NAME:-OpenPlancraft}
+  APP_NAME: ${APP_NAME:-EasyBau}
   APP_VERSION: ${APP_VERSION:-0.0.0-dev}
   PROFILE: ${PROFILE:-compact}
   LOG_LEVEL: ${LOG_LEVEL:-info}
@@ -207,7 +207,13 @@ services:
 
   # Daily backup of database and Ablage (ADR 0005). Same image as db, idles in a sleep loop.
   backup:
-    image: postgres:17-alpine
+    # PostgreSQL client tools + restic for the encrypted copy off site (ADR 0005, 0011).
+    image: ${IMAGE_PREFIX:-ghcr.io/vionyt/openplancraft}-backup:${APP_VERSION:-latest}
+    build:
+      context: .
+      dockerfile: docker/backup.Dockerfile
+      target: runtime
+      secrets: [extra_ca]
     restart: unless-stopped
     entrypoint: ["sh", "/opt/backup/backup.sh"]
     command: ["daemon"]
@@ -221,6 +227,19 @@ services:
       BACKUP_TIME: ${BACKUP_TIME:-02:30}
       BACKUP_KEEP_DAYS: ${BACKUP_KEEP_DAYS:-14}
       TZ: ${TZ:-Europe/Berlin}
+      # Sicherung außer Haus (optional, ADR 0011): restic, verschlüsselt auf diesem Server.
+      RESTIC_REPOSITORY: ${RESTIC_REPOSITORY:-}
+      RESTIC_PASSWORD: ${RESTIC_PASSWORD:-}
+      RESTIC_PASSWORD_FILE: ${RESTIC_PASSWORD_FILE:-}
+      AWS_ACCESS_KEY_ID: ${OFFSITE_S3_ACCESS_KEY:-}
+      AWS_SECRET_ACCESS_KEY: ${OFFSITE_S3_SECRET_KEY:-}
+      AWS_SECRET_ACCESS_KEY_FILE: ${OFFSITE_S3_SECRET_KEY_FILE:-}
+      AWS_DEFAULT_REGION: ${OFFSITE_S3_REGION:-}
+      B2_ACCOUNT_ID: ${OFFSITE_B2_ACCOUNT_ID:-}
+      B2_ACCOUNT_KEY: ${OFFSITE_B2_ACCOUNT_KEY:-}
+      OFFSITE_KEEP_DAILY: ${OFFSITE_KEEP_DAILY:-14}
+      OFFSITE_KEEP_WEEKLY: ${OFFSITE_KEEP_WEEKLY:-8}
+      OFFSITE_KEEP_MONTHLY: ${OFFSITE_KEEP_MONTHLY:-24}
       PATH: /opt/backup:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
     volumes:
       # Directory, not file: an updated script (git pull) is used without recreating the container.
@@ -229,6 +248,8 @@ services:
       - files:/data/files
       # Named volume "backups" or a host path such as /mnt/nas/openplancraft.
       - ${BACKUP_DIR:-backups}:/backups
+      # Files for *_FILE secrets (restic password, S3 key) and SSH keys for sftp: targets.
+      - ${OFFSITE_SECRETS_DIR:-./infra/backup/secrets}:/run/offsite:ro
     depends_on:
       db:
         condition: service_healthy

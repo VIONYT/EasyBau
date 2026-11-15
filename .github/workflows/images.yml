@@ -43,6 +43,9 @@ jobs:
           - image: kosit
             dockerfile: docker/kosit.Dockerfile
             target: runtime
+          - image: backup
+            dockerfile: docker/backup.Dockerfile
+            target: runtime
     steps:
       - uses: actions/checkout@v7
         with:

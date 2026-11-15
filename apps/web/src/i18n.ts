@@ -1143,6 +1143,11 @@ const de = {
   'sys.backup': 'Sicherung',
   'sys.backupLast': 'Letzte erfolgreiche Sicherung:',
   'sys.backupOld': 'älter als ein Tag',
+  'sys.offsite': 'Sicherung außer Haus',
+  'sys.offsiteOff':
+    'Nicht eingerichtet – die Sicherungen liegen nur auf diesem Server und gehen bei Brand, Diebstahl oder Plattendefekt mit verloren. Verschlüsselte Kopie außer Haus mit RESTIC_REPOSITORY in der .env einrichten (Betriebsdokumentation, Abschnitt Sicherung).',
+  'sys.offsiteFailed': 'Die letzte verschlüsselte Kopie außer Haus ist fehlgeschlagen: {message}',
+  'sys.offsiteOk': 'Verschlüsselt kopiert nach {target} am {at}.',
   'sys.backupNone':
     'Noch keine erfolgreiche Sicherung. Läuft der Dienst „backup“? Sofort sichern: docker compose exec backup backup.sh run',
   'sys.backupRecent': 'Letzte Sicherungen',

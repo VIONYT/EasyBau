@@ -238,6 +238,23 @@ function Check({ state, title, children }: { state: CheckState; title: string; c
   )
 }
 
+/** Sicherung außer Haus (ADR 0011): only a copy on a second place protects against fire or theft. */
+function offsiteState(last: BackupRunSummary | null): 'ok' | 'warning' {
+  return last?.offsite?.status === 'ok' ? 'ok' : 'warning'
+}
+
+function offsiteText(last: BackupRunSummary | null): string {
+  const offsite = last?.offsite
+  if (!offsite || offsite.status === 'off') return t('sys.offsiteOff')
+  if (offsite.status === 'failed') {
+    return tf('sys.offsiteFailed', { message: offsite.message ?? '' })
+  }
+  return tf('sys.offsiteOk', {
+    target: offsite.target ?? '',
+    at: offsite.at ? formatDateTime(offsite.at) : '',
+  })
+}
+
 /** Betriebs-Check: is the installation backed up, can it send e-mails, is it secure? */
 function OperationsPanel({ canWrite }: { canWrite: boolean }) {
   const [status, setStatus] = useState<OperationsStatus | null>(null)
@@ -268,6 +285,9 @@ function OperationsPanel({ canWrite }: { canWrite: boolean }) {
           {last
             ? `${t('sys.backupLast')} ${describe(last)}${backupFresh ? '' : ` – ${t('sys.backupOld')}`}`
             : t('sys.backupNone')}
+        </Check>
+        <Check state={offsiteState(last)} title={t('sys.offsite')}>
+          {offsiteText(last)}
         </Check>
         <Check
           state={!status.email.enabled ? 'off' : status.email.failed ? 'warning' : 'ok'}

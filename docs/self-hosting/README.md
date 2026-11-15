@@ -176,12 +176,37 @@ docker compose exec backup backup.sh verify <Name>    # Sicherung prüfen
 docker compose logs backup                            # Protokoll
 ```
 
-**Ziel:** Standard ist das Docker-Volume `backups` auf demselben Server. Das schützt vor Bedienfehlern, nicht vor einem Plattendefekt oder Einbruch. Deshalb:
+**Ziel:** Standard ist das Docker-Volume `backups` auf demselben Server. Das schützt vor Bedienfehlern, nicht vor einem Plattendefekt, Brand, Diebstahl oder Verschlüsselungstrojaner. Deshalb zusätzlich die **verschlüsselte Sicherung außer Haus** einrichten (unten) und/oder `BACKUP_DIR` auf einen anderen Datenträger legen (z. B. `BACKUP_DIR=/mnt/nas/easybau`).
 
-- `BACKUP_DIR` auf einen anderen Datenträger oder ein NAS legen (z. B. `BACKUP_DIR=/mnt/nas/openplancraft`), **und/oder**
-- die Sicherungen regelmäßig außer Haus kopieren, am besten verschlüsselt (z. B. mit restic oder borg auf ein zweites Gerät oder einen Speicherdienst in der EU). Das Volume liegt unter `docker volume inspect openplancraft_backups`.
 - Die **`.env` getrennt sichern** (Passwortmanager oder Tresor). Ohne denselben `APP_SECRET` sind Zwei-Faktor-Geheimnisse und IBAN nach einer Wiederherstellung nicht lesbar.
-- Die Sicherungen sind nicht verschlüsselt: Zugriff auf das Sicherungsziel wie auf den Server selbst beschränken.
+- Die lokalen Sicherungen sind nicht verschlüsselt: Zugriff auf `BACKUP_DIR` wie auf den Server selbst beschränken.
+
+### 6a. Verschlüsselte Sicherung außer Haus (restic)
+
+Optional ([ADR 0011](../adr/0011-sicherung-ausser-haus.md)): Nach jeder erfolgreichen Sicherung kopiert der Dienst `backup` sie mit [restic](https://restic.net) an einen zweiten Ort. Verschlüsselt wird **auf Ihrem Server** (AES-256); der Speicherort sieht nur verschlüsselte Daten. Nach der ersten Kopie werden nur noch Änderungen übertragen.
+
+1. Ziel wählen, z. B. einen S3-Speicher in der EU (Hetzner Object Storage, IONOS, AWS Frankfurt, Wasabi), Backblaze B2, einen SFTP-Zugang (NAS bei einer anderen Person, Speicherbox) oder einen restic REST-Server.
+2. In der `.env` eintragen (Beispiele in `.env.example`):
+   ```bash
+   RESTIC_REPOSITORY=s3:https://fsn1.your-objectstorage.com/firma-sicherung
+   RESTIC_PASSWORD=<langes zufälliges Passwort, z. B. openssl rand -base64 32>
+   OFFSITE_S3_ACCESS_KEY=…
+   OFFSITE_S3_SECRET_KEY=…
+   ```
+   Für SFTP: `RESTIC_REPOSITORY=sftp:nutzer@host:/pfad`, privaten SSH-Schlüssel als `id_ed25519` und den Host-Schlüssel als `known_hosts` in `OFFSITE_SECRETS_DIR` (Standard `infra/backup/secrets/`) ablegen (`ssh-keyscan host > infra/backup/secrets/known_hosts`).
+3. `docker compose up -d backup`, dann einmal testen: `docker compose exec backup backup.sh run`. Der Betriebs-Check zeigt „Sicherung außer Haus: Verschlüsselt kopiert nach …“.
+
+> **Das restic-Passwort getrennt vom Server aufbewahren** (Passwort-Manager, Ausdruck im Tresor). Ohne dieses Passwort lassen sich die Kopien nicht mehr öffnen – auch nicht vom Anbieter.
+
+Aufbewahrung außer Haus: `OFFSITE_KEEP_DAILY` (14), `OFFSITE_KEEP_WEEKLY` (8), `OFFSITE_KEEP_MONTHLY` (24). Schutz gegen Löschen durch einen Angreifer auf dem Server: ein Ziel mit eigener Löschsperre wählen (S3 mit Versionierung/Object Lock und Lebenszyklus-Regel, restic REST-Server mit `--append-only`).
+
+```bash
+docker compose exec backup backup.sh offsite-list          # Stände außer Haus anzeigen
+docker compose exec backup backup.sh offsite-check         # Repository prüfen (5 % der Daten gelesen)
+docker compose exec backup backup.sh offsite-fetch <Name>  # Stand zurückholen und prüfen, danach restore.sh <Name>
+```
+
+Auf einem neuen Server: Repository klonen, `.env` (mit `APP_SECRET` und `RESTIC_*`) einrichten, `docker compose up -d db backup`, `offsite-list`, `offsite-fetch <Name>`, dann `sh infra/restore.sh <Name>`.
 
 **Wiederherstellen** (z. B. nach einem Fehler oder auf einem neuen Server mit derselben `.env`):
 
