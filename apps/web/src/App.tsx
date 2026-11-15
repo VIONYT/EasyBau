@@ -21,7 +21,7 @@ type State =
 /** Start: setup required? → Ersteinrichtung; session valid? → workspace; otherwise login. */
 export function App() {
   const [state, setState] = useState<State>({ screen: 'loading' })
-  const [appName, setAppName] = useState('OpenPlancraft')
+  const [appName, setAppName] = useState('EasyBau')
 
   useEffect(() => {
     api<{ name: string }>('GET', '/api/v1/meta')
