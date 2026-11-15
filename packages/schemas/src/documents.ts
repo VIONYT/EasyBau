@@ -261,9 +261,16 @@ export interface FinalizeCheck {
 }
 
 /** After completion: sent → accepted / rejected (quotes, cost estimates, change orders). */
-export const documentStatusRequest = z.object({
-  status: z.enum(['sent', 'accepted', 'rejected']),
-})
+export const documentStatusRequest = z
+  .object({
+    status: z.enum(['sent', 'accepted', 'partially_accepted', 'rejected']),
+    /** Teilbeauftragung (Nachträge): the positions the client ordered; all others are rejected. */
+    acceptedItemIds: z.array(id).max(1000).optional(),
+  })
+  .refine((v) => v.status !== 'partially_accepted' || (v.acceptedItemIds?.length ?? 0) > 0, {
+    message: 'Bitte mindestens eine beauftragte Position auswählen.',
+    path: ['acceptedItemIds'],
+  })
 
 export interface DocumentOption {
   type: DocumentType
@@ -501,6 +508,8 @@ export interface DocumentDetail extends DocumentSummary {
     contractLabel: string
     reason: string | null
     evidence: EvidenceItem[]
+    /** Teilbeauftragung: ids of the ordered positions; null unless partially accepted. */
+    acceptedItemIds: string[] | null
   } | null
   /** Schalter „Nachtragsangebot“ possible (draft quote/change order with a main contract). */
   canConvertToChangeOrder: boolean

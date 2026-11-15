@@ -242,4 +242,63 @@ describe.skipIf(!process.env.DATABASE_URL)('Nachträge und Vertragssumme (integr
       (await admin.put(`/api/v1/documents/${contract.id}/evidence`, { evidence: [] })).statusCode,
     ).toBe(404)
   })
+
+  it('accepts a change order in part (Teilbeauftragung)', async () => {
+    const order = await create({ type: 'change_order', basis: 'additional_work' })
+    await addItem(order.id, {
+      shortText: 'Steckdosen',
+      quantity: '4',
+      unitId: unit('m²'),
+      unitPriceCents: 5000,
+    })
+    const withBoth = await addItem(order.id, {
+      shortText: 'Leuchten',
+      quantity: '2',
+      unitId: unit('m²'),
+      unitPriceCents: 10_000,
+    })
+    const [sockets, lights] = withBoth.items.filter((i) => i.positionType === 'item')
+    await finalize(order.id)
+    const before = (await contractOf()).totals.acceptedNetCents
+    // All positions → please use „beauftragt“; foreign ids are refused.
+    expect(
+      (
+        await admin.post(`/api/v1/documents/${order.id}/status`, {
+          status: 'partially_accepted',
+          acceptedItemIds: [sockets?.id, lights?.id],
+        })
+      ).statusCode,
+    ).toBe(409)
+    expect(
+      (
+        await admin.post(`/api/v1/documents/${order.id}/status`, {
+          status: 'partially_accepted',
+          acceptedItemIds: [contract.items[0]?.id],
+        })
+      ).statusCode,
+    ).toBe(400)
+    expect(
+      (await admin.post(`/api/v1/documents/${order.id}/status`, { status: 'partially_accepted' }))
+        .statusCode,
+    ).toBe(400)
+    const res = await admin.post(`/api/v1/documents/${order.id}/status`, {
+      status: 'partially_accepted',
+      acceptedItemIds: [sockets?.id],
+    })
+    expect(res.statusCode, res.body).toBe(200)
+    const decided = res.json() as DocumentDetail
+    expect(decided.status).toBe('partially_accepted')
+    expect(decided.changeOrderInfo?.acceptedItemIds).toEqual([sockets?.id])
+    const result = await contractOf()
+    expect(result.changeOrders.find((c) => c.id === order.id)).toMatchObject({
+      status: 'partially_accepted',
+      netCents: 40_000,
+      acceptedNetCents: 20_000,
+    })
+    expect(result.totals.acceptedNetCents).toBe(before + 20_000)
+    // Decided: no further change.
+    expect(
+      (await admin.post(`/api/v1/documents/${order.id}/status`, { status: 'accepted' })).statusCode,
+    ).toBe(409)
+  })
 })

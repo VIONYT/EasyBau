@@ -1204,6 +1204,7 @@ function DocumentActions({
   const [busy, setBusy] = useState(false)
   const [finalizing, setFinalizing] = useState(false)
   const [cancelling, setCancelling] = useState<'cancel' | 'correct' | null>(null)
+  const [partial, setPartial] = useState<string[] | null>(null)
   const cancellable =
     canCancel &&
     doc.type === 'invoice' &&
@@ -1283,6 +1284,16 @@ function DocumentActions({
           >
             {t('q.markAccepted')}
           </button>
+          {doc.type === 'change_order' && partial === null ? (
+            <button
+              type="button"
+              className="button ghost"
+              disabled={busy}
+              onClick={() => setPartial([])}
+            >
+              {t('q.markPartial')}
+            </button>
+          ) : null}
           <button
             type="button"
             className="button ghost danger"
@@ -1292,6 +1303,57 @@ function DocumentActions({
             {t('q.markRejected')}
           </button>
         </>
+      ) : null}
+      {partial !== null ? (
+        <fieldset className="panel partial-acceptance">
+          <legend>{t('q.partialTitle')}</legend>
+          <p className="hint">{t('q.partialHint')}</p>
+          {doc.items
+            .filter((i) => i.positionType === 'item' || i.positionType === 'lump_sum')
+            .map((i) => (
+              <label key={i.id} className="check">
+                <input
+                  type="checkbox"
+                  checked={partial.includes(i.id)}
+                  onChange={(e) =>
+                    setPartial(
+                      e.target.checked ? [...partial, i.id] : partial.filter((x) => x !== i.id),
+                    )
+                  }
+                />
+                <span>
+                  {[i.oz, i.shortText].filter(Boolean).join(' ')}
+                  {i.totalCents !== null ? ` · ${formatCents(i.totalCents)}` : ''}
+                </span>
+              </label>
+            ))}
+          <div className="button-row">
+            <button
+              type="button"
+              className="button primary auto"
+              disabled={busy || partial.length === 0}
+              onClick={async () => {
+                await run('status', { status: 'partially_accepted', acceptedItemIds: partial })
+                setPartial(null)
+              }}
+            >
+              {t('q.partialConfirm')}
+            </button>
+            <button type="button" className="button ghost auto" onClick={() => setPartial(null)}>
+              {t('common.cancel')}
+            </button>
+          </div>
+        </fieldset>
+      ) : null}
+      {doc.status === 'partially_accepted' && doc.changeOrderInfo?.acceptedItemIds ? (
+        <p className="hint" role="status">
+          {tf('q.partialSummary', {
+            list: doc.items
+              .filter((i) => doc.changeOrderInfo?.acceptedItemIds?.includes(i.id))
+              .map((i) => [i.oz, i.shortText].filter(Boolean).join(' '))
+              .join(', '),
+          })}
+        </p>
       ) : null}
       {canFinalize && billed && doc.status === 'draft' && !finalizing ? (
         <button type="button" className="button primary auto" onClick={() => setFinalizing(true)}>

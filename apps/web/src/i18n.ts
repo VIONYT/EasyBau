@@ -949,6 +949,12 @@ const de = {
   'q.markSent': 'Als versendet markieren',
   'q.markAccepted': 'Beauftragt',
   'q.markRejected': 'Abgelehnt',
+  'q.markPartial': 'Teilweise beauftragt',
+  'q.partialTitle': 'Welche Positionen hat der Kunde beauftragt?',
+  'q.partialHint':
+    'Nur die ausgewählten Positionen zählen zur Vertragssumme und dürfen abgerechnet werden; die übrigen gelten als abgelehnt.',
+  'q.partialConfirm': 'Teilbeauftragung speichern',
+  'q.partialSummary': 'Beauftragt: {list}. Alle anderen Positionen sind abgelehnt.',
   'q.calc': 'Kalkulation',
   'q.calcTitle': 'Kalkulation der Position',
   'q.calcMode': 'Kostenzeilen gelten für',
