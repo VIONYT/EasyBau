@@ -169,6 +169,35 @@ describe.skipIf(!process.env.DATABASE_URL)('Nachträge und Vertragssumme (integr
     expect(result.totals).toMatchObject({ acceptedNetCents: 12_500, totalNetCents: 212_500 })
   })
 
+  it('bills the Mehrmenge only via the beauftragten Nachtrag, not again via the Aufmaß', async () => {
+    const invoice = await create({
+      type: 'invoice',
+      invoiceKind: 'standard',
+      sourceDocumentId: contract.id,
+    })
+    const applied = await admin.post(`/api/v1/documents/${invoice.id}/apply-measurements`)
+    expect(applied.statusCode, applied.body).toBe(200)
+    const doc = applied.json() as DocumentDetail
+    const wall = doc.items.find((i) => i.shortText === 'Wand streichen')
+    // Measured 112,5 m², LV 100 m², 12,5 m² in the beauftragten Nachtrag N01.
+    expect(wall).toMatchObject({ quantity: '100', cumulativeQuantity: '100' })
+    expect(doc.items.find((i) => i.shortText === 'Fliesen verlegen')?.quantity).toBe('18')
+    const checkOf = async () =>
+      (await admin.get(`/api/v1/documents/${invoice.id}/finalize-check`)).json() as {
+        errors: { message: string }[]
+      }
+    expect(JSON.stringify((await checkOf()).errors)).not.toContain('Mehrmengen-Nachtrag')
+    // Typed in by hand: the Mehrmenge would be on two invoices.
+    const typed = await admin.patch(`/api/v1/documents/${invoice.id}/items/${wall?.id}`, {
+      quantity: '112.5',
+    })
+    expect(typed.statusCode, typed.body).toBe(200)
+    expect(JSON.stringify((await checkOf()).errors)).toContain(
+      'Abgerechnet wären 112,5, laut Aufmaß stehen der Position aber nur 100 zu – 12,5 sind bereits im beauftragten Mehrmengen-Nachtrag',
+    )
+    await admin.delete(`/api/v1/documents/${invoice.id}`)
+  })
+
   it('keeps Nachweise of the same project with a change order', async () => {
     const order = await create({
       type: 'change_order',
@@ -212,5 +241,64 @@ describe.skipIf(!process.env.DATABASE_URL)('Nachträge und Vertragssumme (integr
     expect(
       (await admin.put(`/api/v1/documents/${contract.id}/evidence`, { evidence: [] })).statusCode,
     ).toBe(404)
+  })
+
+  it('accepts a change order in part (Teilbeauftragung)', async () => {
+    const order = await create({ type: 'change_order', basis: 'additional_work' })
+    await addItem(order.id, {
+      shortText: 'Steckdosen',
+      quantity: '4',
+      unitId: unit('m²'),
+      unitPriceCents: 5000,
+    })
+    const withBoth = await addItem(order.id, {
+      shortText: 'Leuchten',
+      quantity: '2',
+      unitId: unit('m²'),
+      unitPriceCents: 10_000,
+    })
+    const [sockets, lights] = withBoth.items.filter((i) => i.positionType === 'item')
+    await finalize(order.id)
+    const before = (await contractOf()).totals.acceptedNetCents
+    // All positions → please use „beauftragt“; foreign ids are refused.
+    expect(
+      (
+        await admin.post(`/api/v1/documents/${order.id}/status`, {
+          status: 'partially_accepted',
+          acceptedItemIds: [sockets?.id, lights?.id],
+        })
+      ).statusCode,
+    ).toBe(409)
+    expect(
+      (
+        await admin.post(`/api/v1/documents/${order.id}/status`, {
+          status: 'partially_accepted',
+          acceptedItemIds: [contract.items[0]?.id],
+        })
+      ).statusCode,
+    ).toBe(400)
+    expect(
+      (await admin.post(`/api/v1/documents/${order.id}/status`, { status: 'partially_accepted' }))
+        .statusCode,
+    ).toBe(400)
+    const res = await admin.post(`/api/v1/documents/${order.id}/status`, {
+      status: 'partially_accepted',
+      acceptedItemIds: [sockets?.id],
+    })
+    expect(res.statusCode, res.body).toBe(200)
+    const decided = res.json() as DocumentDetail
+    expect(decided.status).toBe('partially_accepted')
+    expect(decided.changeOrderInfo?.acceptedItemIds).toEqual([sockets?.id])
+    const result = await contractOf()
+    expect(result.changeOrders.find((c) => c.id === order.id)).toMatchObject({
+      status: 'partially_accepted',
+      netCents: 40_000,
+      acceptedNetCents: 20_000,
+    })
+    expect(result.totals.acceptedNetCents).toBe(before + 20_000)
+    // Decided: no further change.
+    expect(
+      (await admin.post(`/api/v1/documents/${order.id}/status`, { status: 'accepted' })).statusCode,
+    ).toBe(409)
   })
 })

@@ -1,5 +1,7 @@
+import { createPrivateKey, createSign } from 'node:crypto'
 import type { Tx } from '@opc/db'
 import {
+  type IncomingMailAuth,
   type IncomingMailRun,
   type IncomingMailSettings,
   incomingMailSettingsRequest,
@@ -17,6 +19,11 @@ import { ingestIncomingInvoice } from './incoming-invoices.js'
  * invoice (PDF, ZUGFeRD, XRechnung XML, JPG/PNG) into „Zu prüfen“ exactly like an upload and
  * marks the message as read (or moves it to a folder). Off unless the operator sets
  * INCOMING_MAIL_ENABLED=true; the password is stored encrypted (APP_SECRET).
+ *
+ * Microsoft 365 no longer accepts IMAP with a password: there the company registers an app in
+ * Microsoft Entra (IMAP.AccessAsApp, mailbox released for the app) and enters Verzeichnis-ID,
+ * Anwendungs-ID and client secret. The app gets a token per run (client credentials at
+ * login.microsoftonline.com) and logs in with IMAP XOAUTH2. Only then does it contact Microsoft.
  */
 
 export interface MailAttachment {
@@ -41,28 +48,165 @@ export interface MailboxConnection {
   close(): Promise<void>
 }
 
+export interface MicrosoftOAuth {
+  tenantId: string
+  clientId: string
+  clientSecret: string
+}
+
 export interface MailboxAccess {
   host: string
   port: number
   secure: boolean
   user: string
-  password: string
+  /** IMAP LOGIN; null with Microsoft 365 or Google (OAuth2). */
+  password: string | null
+  oauth: MicrosoftOAuth | null
+  google: GoogleServiceAccount | null
   mailbox: string
   processedMailbox: string | null
 }
 
 export type MailboxConnector = (access: MailboxAccess) => Promise<MailboxConnection>
 
+/** Google Workspace: service account with domain-wide delegation for https://mail.google.com/. */
+export interface GoogleServiceAccount {
+  clientEmail: string
+  privateKey: string
+}
+
 const MESSAGES_PER_RUN = 25
 const INVOICE_EXTENSIONS = /\.(pdf|xml|jpe?g|png)$/i
+const M365_IMAP_HOST = 'outlook.office365.com'
+const GOOGLE_IMAP_HOST = 'imap.gmail.com'
+const GOOGLE_TOKEN_URL = 'https://oauth2.googleapis.com/token'
+
+/** Thrown when Google refuses the service account (key, delegation or scope). */
+export class GoogleTokenError extends Error {
+  constructor(readonly status: number) {
+    super(`Google token request failed (${status})`)
+  }
+}
+
+/**
+ * Reads the JSON key of a Google service account (as downloaded from the Cloud console). Only
+ * client_email and private_key are kept; throws a German message for the settings form.
+ */
+export function parseGoogleServiceAccountKey(json: string): GoogleServiceAccount {
+  let key: { type?: unknown; client_email?: unknown; private_key?: unknown }
+  try {
+    key = JSON.parse(json)
+  } catch {
+    throw new HttpError(400, 'Die Schlüsseldatei ist keine gültige JSON-Datei.', {
+      googleServiceAccountKey: 'Bitte die JSON-Schlüsseldatei des Dienstkontos hochladen.',
+    })
+  }
+  const clientEmail = typeof key.client_email === 'string' ? key.client_email : ''
+  const privateKey = typeof key.private_key === 'string' ? key.private_key : ''
+  let valid = key.type === 'service_account' && /^[^@\s]+@[^@\s]+$/.test(clientEmail)
+  if (valid) {
+    try {
+      valid = createPrivateKey(privateKey).asymmetricKeyType === 'rsa'
+    } catch {
+      valid = false
+    }
+  }
+  if (!valid) {
+    throw new HttpError(400, 'Die Schlüsseldatei gehört zu keinem Google-Dienstkonto.', {
+      googleServiceAccountKey: 'Bitte die JSON-Schlüsseldatei des Dienstkontos hochladen.',
+    })
+  }
+  return { clientEmail, privateKey }
+}
+
+const base64url = (value: string | Buffer) => Buffer.from(value).toString('base64url')
+
+/**
+ * Access token for Gmail IMAP of a Google Workspace mailbox: the service account signs a JWT
+ * for the mailbox user (domain-wide delegation, RFC 7523). The key only signs locally; the token
+ * is not stored.
+ */
+export async function googleImapToken(
+  account: GoogleServiceAccount,
+  user: string,
+  now: number,
+  fetchFn: typeof fetch = fetch,
+): Promise<string> {
+  const iat = Math.floor(now / 1000)
+  const unsigned = `${base64url(JSON.stringify({ alg: 'RS256', typ: 'JWT' }))}.${base64url(
+    JSON.stringify({
+      iss: account.clientEmail,
+      sub: user,
+      scope: 'https://mail.google.com/',
+      aud: GOOGLE_TOKEN_URL,
+      iat,
+      exp: iat + 3600,
+    }),
+  )}`
+  const signature = createSign('RSA-SHA256').update(unsigned).sign(account.privateKey)
+  const res = await fetchFn(GOOGLE_TOKEN_URL, {
+    method: 'POST',
+    headers: { 'content-type': 'application/x-www-form-urlencoded' },
+    body: new URLSearchParams({
+      grant_type: 'urn:ietf:params:oauth:grant-type:jwt-bearer',
+      assertion: `${unsigned}.${base64url(signature)}`,
+    }).toString(),
+    signal: AbortSignal.timeout(30_000),
+  })
+  const body = (await res.json().catch(() => null)) as { access_token?: unknown } | null
+  if (!res.ok || typeof body?.access_token !== 'string') throw new GoogleTokenError(res.status)
+  return body.access_token
+}
+
+/** Thrown when Microsoft refuses the client credentials (wrong IDs or secret). */
+export class MicrosoftTokenError extends Error {
+  constructor(readonly status: number) {
+    super(`Microsoft token request failed (${status})`)
+  }
+}
+
+/**
+ * Access token for IMAP of Exchange Online (OAuth2 client credentials, RFC 6749 § 4.4). The
+ * secret only goes to Microsoft; the token is not stored.
+ */
+export async function microsoftImapToken(
+  oauth: MicrosoftOAuth,
+  fetchFn: typeof fetch = fetch,
+): Promise<string> {
+  const res = await fetchFn(
+    `https://login.microsoftonline.com/${encodeURIComponent(oauth.tenantId)}/oauth2/v2.0/token`,
+    {
+      method: 'POST',
+      headers: { 'content-type': 'application/x-www-form-urlencoded' },
+      body: new URLSearchParams({
+        client_id: oauth.clientId,
+        client_secret: oauth.clientSecret,
+        scope: 'https://outlook.office365.com/.default',
+        grant_type: 'client_credentials',
+      }).toString(),
+      signal: AbortSignal.timeout(30_000),
+    },
+  )
+  const body = (await res.json().catch(() => null)) as { access_token?: unknown } | null
+  if (!res.ok || typeof body?.access_token !== 'string') throw new MicrosoftTokenError(res.status)
+  return body.access_token
+}
 
 /** IMAP with imapflow; messages are parsed with mailparser (attachments only, no HTML). */
 export const imapConnector: MailboxConnector = async (access) => {
+  const auth = access.oauth
+    ? { user: access.user, accessToken: await microsoftImapToken(access.oauth) }
+    : access.google
+      ? {
+          user: access.user,
+          accessToken: await googleImapToken(access.google, access.user, Date.now()),
+        }
+      : { user: access.user, pass: access.password ?? '' }
   const client = new ImapFlow({
     host: access.host,
     port: access.port,
     secure: access.secure,
-    auth: { user: access.user, pass: access.password },
+    auth,
     logger: false,
     socketTimeout: 60_000,
   })
@@ -105,6 +249,13 @@ export const imapConnector: MailboxConnector = async (access) => {
 
 interface StoredMailbox {
   enabled?: boolean
+  auth?: IncomingMailAuth
+  tenantId?: string
+  clientId?: string
+  clientSecretEnc?: string
+  clientSecretExpiresOn?: string
+  googleKeyEnc?: string
+  googleClientEmail?: string
   host?: string
   port?: number
   secure?: boolean
@@ -125,36 +276,90 @@ function view(services: Services, stored: StoredMailbox): IncomingMailSettings {
   return {
     available: services.config.INCOMING_MAIL_ENABLED ?? false,
     enabled: stored.enabled ?? false,
+    auth: stored.auth ?? 'password',
     host: stored.host ?? null,
     port: stored.port ?? 993,
     secure: stored.secure ?? true,
     user: stored.user ?? null,
     hasPassword: Boolean(stored.passwordEnc),
+    tenantId: stored.tenantId ?? null,
+    clientId: stored.clientId ?? null,
+    hasClientSecret: Boolean(stored.clientSecretEnc),
+    clientSecretExpiresOn: stored.clientSecretExpiresOn ?? null,
+    googleClientEmail: stored.googleKeyEnc ? (stored.googleClientEmail ?? null) : null,
     mailbox: stored.mailbox ?? 'INBOX',
     processedMailbox: stored.processedMailbox ?? null,
     lastRun: stored.lastRun ?? null,
   }
 }
 
+const decrypt = (services: Services, value: string) =>
+  services.cipher.decrypt(Buffer.from(value, 'base64'))
+
 function accessOf(services: Services, stored: StoredMailbox): MailboxAccess | null {
-  if (!stored.host || !stored.user || !stored.passwordEnc) return null
-  return {
-    host: stored.host,
+  if (!stored.user) return null
+  const common = {
     port: stored.port ?? 993,
     secure: stored.secure ?? true,
     user: stored.user,
-    password: services.cipher.decrypt(Buffer.from(stored.passwordEnc, 'base64')),
     mailbox: stored.mailbox ?? 'INBOX',
     processedMailbox: stored.processedMailbox ?? null,
+  }
+  if (stored.auth === 'microsoft365') {
+    if (!stored.tenantId || !stored.clientId || !stored.clientSecretEnc) return null
+    return {
+      ...common,
+      host: stored.host ?? M365_IMAP_HOST,
+      password: null,
+      google: null,
+      oauth: {
+        tenantId: stored.tenantId,
+        clientId: stored.clientId,
+        clientSecret: decrypt(services, stored.clientSecretEnc),
+      },
+    }
+  }
+  if (stored.auth === 'google') {
+    if (!stored.googleKeyEnc) return null
+    const key = JSON.parse(decrypt(services, stored.googleKeyEnc)) as GoogleServiceAccount
+    return {
+      ...common,
+      host: stored.host ?? GOOGLE_IMAP_HOST,
+      password: null,
+      oauth: null,
+      google: key,
+    }
+  }
+  if (!stored.host || !stored.passwordEnc) return null
+  return {
+    ...common,
+    host: stored.host,
+    password: decrypt(services, stored.passwordEnc),
+    oauth: null,
+    google: null,
   }
 }
 
 /** Short reason without addresses or content (rule 9: no PII in logs or stored errors). */
-function reasonOf(error: unknown): string {
+function reasonOf(error: unknown, access: MailboxAccess): string {
   if (error instanceof HttpError) return error.message
-  const e = error as { authenticationFailed?: boolean; code?: string; message?: string }
-  if (e.authenticationFailed)
+  if (error instanceof GoogleTokenError) {
+    return 'Anmeldung bei Google fehlgeschlagen (Dienstkonto, domainweite Delegierung mit dem Bereich https://mail.google.com/ und Postfach-Adresse prüfen).'
+  }
+  if (error instanceof MicrosoftTokenError) {
+    return 'Anmeldung bei Microsoft 365 fehlgeschlagen (Verzeichnis-ID, Anwendungs-ID oder geheimer Clientschlüssel prüfen).'
+  }
+  const e = error as { authenticationFailed?: boolean; code?: string; name?: string }
+  if (e.authenticationFailed) {
+    if (access.oauth) {
+      return 'Microsoft 365 hat die Anmeldung am Postfach abgelehnt (IMAP-Berechtigung der App und Freigabe des Postfachs für die App prüfen).'
+    }
+    if (access.google) {
+      return 'Google hat die Anmeldung am Postfach abgelehnt (IMAP im Gmail-Admin erlauben, Postfach-Adresse prüfen).'
+    }
     return 'Anmeldung am Postfach fehlgeschlagen (Benutzer oder Passwort).'
+  }
+  if (e.name === 'TimeoutError') return 'Der Anmeldedienst hat nicht rechtzeitig geantwortet.'
   if (e.code === 'ENOTFOUND') return 'Der Mailserver wurde nicht gefunden.'
   if (e.code === 'ECONNREFUSED' || e.code === 'ETIMEDOUT')
     return 'Der Mailserver ist nicht erreichbar.'
@@ -178,6 +383,7 @@ export async function pollMailbox(
     ignored: 0,
     failed: 0,
     error: null,
+    failedRuns: 0,
   }
   if (!access) {
     run.error = 'Das Postfach ist nicht vollständig eingerichtet.'
@@ -217,11 +423,13 @@ export async function pollMailbox(
         if (!retry) await connection.done(message.uid)
       }
     } catch (error) {
-      run.error = reasonOf(error)
+      run.error = reasonOf(error, access)
     } finally {
       await connection?.close().catch(() => undefined)
     }
   }
+  // Failed runs in a row, for the reminder in the Hinweisleiste.
+  if (run.error) run.failedRuns = stored.lastRun?.error ? (stored.lastRun.failedRuns ?? 1) + 1 : 1
   await inTenant(services, system, async (tx) => {
     await tx`update tenant set settings = jsonb_set(settings, '{incomingMail,lastRun}', ${tx.json(run as never)})
              where id = current_tenant_id() and settings ? 'incomingMail'`
@@ -278,19 +486,64 @@ export function registerIncomingMailboxRoutes(
     const input = parse(incomingMailSettingsRequest, request.body)
     return inTenant(services, auth, async (tx) => {
       const current = await storedMailbox(tx)
-      const passwordEnc =
-        input.password === undefined
-          ? current.passwordEnc
-          : input.password
-            ? services.cipher.encrypt(input.password).toString('base64')
+      // undefined keeps the stored secret, '' or null removes it.
+      const secret = (value: string | null | undefined, stored: string | undefined) =>
+        value === undefined
+          ? stored
+          : value
+            ? services.cipher.encrypt(value).toString('base64')
             : undefined
-      if (input.enabled && (!input.host || !input.user || !passwordEnc)) {
+      const passwordEnc = secret(input.password, current.passwordEnc)
+      const clientSecretEnc = secret(input.clientSecret, current.clientSecretEnc)
+      const m365 = input.auth === 'microsoft365'
+      const google = input.auth === 'google'
+      // The JSON key of the service account: checked, then stored encrypted as a whole.
+      const googleKey = input.googleServiceAccountKey
+        ? parseGoogleServiceAccountKey(input.googleServiceAccountKey)
+        : null
+      const googleKeyEnc = googleKey
+        ? services.cipher.encrypt(JSON.stringify(googleKey)).toString('base64')
+        : input.googleServiceAccountKey === undefined
+          ? current.googleKeyEnc
+          : undefined
+      const googleClientEmail =
+        googleKey?.clientEmail ?? (googleKeyEnc ? current.googleClientEmail : undefined)
+      if (input.enabled && google && (!input.user || !googleKeyEnc)) {
+        throw new HttpError(
+          400,
+          'Für Google Workspace fehlen Postfach-Adresse oder die Schlüsseldatei des Dienstkontos.',
+          { googleServiceAccountKey: 'Bitte Postfach-Adresse und Schlüsseldatei angeben.' },
+        )
+      }
+      if (input.enabled && !m365 && !google && (!input.host || !input.user || !passwordEnc)) {
         throw new HttpError(400, 'Für den Abruf fehlen Server, Benutzer oder Passwort.', {
           host: 'Bitte Server, Benutzer und Passwort angeben.',
         })
       }
+      if (
+        input.enabled &&
+        m365 &&
+        (!input.user || !input.tenantId || !input.clientId || !clientSecretEnc)
+      ) {
+        throw new HttpError(
+          400,
+          'Für Microsoft 365 fehlen Postfach-Adresse, Verzeichnis-ID, Anwendungs-ID oder geheimer Clientschlüssel.',
+          { tenantId: 'Bitte alle Angaben der App-Registrierung eintragen.' },
+        )
+      }
       const stored: StoredMailbox = {
         enabled: input.enabled,
+        auth: input.auth,
+        ...(input.tenantId ? { tenantId: input.tenantId } : {}),
+        ...(input.clientId ? { clientId: input.clientId } : {}),
+        ...(clientSecretEnc ? { clientSecretEnc } : {}),
+        ...(googleKeyEnc ? { googleKeyEnc } : {}),
+        ...(googleClientEmail ? { googleClientEmail } : {}),
+        ...(input.clientSecretExpiresOn
+          ? { clientSecretExpiresOn: input.clientSecretExpiresOn }
+          : input.clientSecretExpiresOn === undefined && current.clientSecretExpiresOn
+            ? { clientSecretExpiresOn: current.clientSecretExpiresOn }
+            : {}),
         ...(input.host ? { host: input.host } : {}),
         port: input.port,
         secure: input.secure,

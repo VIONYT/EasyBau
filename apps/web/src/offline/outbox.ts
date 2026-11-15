@@ -21,6 +21,8 @@ export interface FlushResult {
 const CACHEABLE = [
   /^\/api\/v1\/auth\/me$/,
   /^\/api\/v1\/units$/,
+  // Übersicht without amounts (GET /dashboard is never cached: Finanzdaten).
+  /^\/api\/v1\/dashboard\/site$/,
   /^\/api\/v1\/report-templates$/,
   /^\/api\/v1\/projects(\?.*)?$/,
   /^\/api\/v1\/projects\/[0-9a-f-]{36}$/,

@@ -1,0 +1,95 @@
+name: Fehler melden
+description: Etwas funktioniert nicht wie erwartet.
+labels: [fehler]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Danke für die Meldung! Bitte **keine echten Kundendaten, Rechnungen, IBANs, Passwörter oder Schlüssel** einfügen – Screenshots und Logs vorher schwärzen.
+        Sicherheitslücken bitte nicht hier, sondern vertraulich melden (siehe Auswahl beim Anlegen).
+  - type: textarea
+    id: what
+    attributes:
+      label: Was ist passiert?
+      description: Kurze Beschreibung des Fehlers, ggf. mit Fehlermeldung.
+    validations:
+      required: true
+  - type: textarea
+    id: steps
+    attributes:
+      label: Schritte zum Nachstellen
+      placeholder: |
+        1. Projekt öffnen
+        2. Rechnung anlegen …
+        3. „Festschreiben“ klicken
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: Was hätten Sie erwartet?
+    validations:
+      required: true
+  - type: dropdown
+    id: area
+    attributes:
+      label: Bereich
+      options:
+        - Angebot / Kalkulation / Stammdaten
+        - Rechnung / E-Rechnung / Storno
+        - Zahlungen / Mahnwesen
+        - Eingangsrechnungen / Rechnungseingang per E-Mail
+        - Aufmaß / Bautagebuch / Berichte / Nachträge
+        - Offline-Betrieb (Baustelle)
+        - PDF / Briefpapier
+        - Exporte (DATEV, GoBD)
+        - Anmeldung / Benutzer / Rechte
+        - Betrieb (Docker, Sicherung, Archiv, Update)
+        - Sonstiges
+    validations:
+      required: true
+  - type: dropdown
+    id: severity
+    attributes:
+      label: Auswirkung
+      options:
+        - Falsche Beträge, Steuern oder Belege (GoBD/Recht betroffen)
+        - Datenverlust oder Daten nicht erreichbar
+        - Funktion nicht nutzbar
+        - Störend, aber mit Umweg nutzbar
+        - Darstellung / Text
+    validations:
+      required: true
+  - type: input
+    id: version
+    attributes:
+      label: Version
+      description: Image-Tag (`APP_VERSION` in der `.env`) oder Commit.
+      placeholder: z. B. v0.1.0, latest, edge, a1b2c3d
+    validations:
+      required: true
+  - type: dropdown
+    id: profile
+    attributes:
+      label: Betriebsart
+      options:
+        - Standard-Stack (docker compose up)
+        - Profil standard (separater Worker)
+        - Externer S3 (compose.external-s3.yaml)
+        - Entwicklung (pnpm dev)
+        - Anders (bitte unten beschreiben)
+  - type: input
+    id: client
+    attributes:
+      label: Gerät und Browser
+      placeholder: z. B. iPhone 15, Safari 18 (als App installiert) · Windows 11, Firefox 140
+  - type: textarea
+    id: logs
+    attributes:
+      label: Logs
+      description: Ausgabe von `docker compose logs app --since 10m` (geschwärzt). Wird automatisch als Code formatiert.
+      render: text
+  - type: textarea
+    id: more
+    attributes:
+      label: Weitere Hinweise oder Screenshots

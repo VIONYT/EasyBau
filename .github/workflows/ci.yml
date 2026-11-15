@@ -73,6 +73,20 @@ jobs:
       - name: Smoke test (compact)
         run: BASE_URL=https://localhost:8443 sh infra/smoke-test.sh
 
+      - name: Encrypted backup off site (restic, ADR 0011)
+        run: |
+          OFFSITE="-e RESTIC_REPOSITORY=/backups/.offsite-ci -e RESTIC_PASSWORD=ci-$GITHUB_RUN_ID"
+          docker compose exec -T $OFFSITE backup backup.sh run
+          name=$(docker compose exec -T backup sh -c 'ls /backups | grep "^20" | tail -1' | tr -d '\r')
+          docker compose exec -T db psql -U openplancraft -d openplancraft -tAc \
+            "select offsite_status from backup_run where name = '$name' and status = 'ok'" | grep -qx ok
+          docker compose exec -T $OFFSITE backup backup.sh offsite-list | grep -q "$name"
+          # Lose the local copy, fetch it back from off site and check it.
+          docker compose exec -T backup rm -rf "/backups/$name"
+          docker compose exec -T $OFFSITE backup backup.sh offsite-fetch "$name"
+          docker compose exec -T backup backup.sh verify "$name"
+          docker compose exec -T $OFFSITE backup backup.sh offsite-check
+
       - name: End-to-end tests (Playwright, mobile viewport)
         run: |
           pnpm install --frozen-lockfile

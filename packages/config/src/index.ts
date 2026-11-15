@@ -10,7 +10,7 @@ export type Role = (typeof roles)[number]
 
 const envSchema = z.object({
   NODE_ENV: z.enum(['development', 'test', 'production']).default('production'),
-  APP_NAME: z.string().min(1).default('OpenPlancraft'),
+  APP_NAME: z.string().min(1).default('EasyBau'),
   APP_VERSION: z.string().default('0.0.0-dev'),
   APP_ROLE: z.enum(roles).default('all'),
   PROFILE: z.enum(['compact', 'standard']).default('compact'),

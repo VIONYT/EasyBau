@@ -1,3 +1,4 @@
+import { generateKeyPairSync } from 'node:crypto'
 import type {
   IncomingInvoiceDetail,
   IncomingInvoiceList,
@@ -221,6 +222,151 @@ describe.skipIf(!process.env.DATABASE_URL)('Eingangsrechnungen ausbauen (integra
     ).json() as IncomingMailRun
     expect(failed.error).toBe('Anmeldung am Postfach fehlgeschlagen (Benutzer oder Passwort).')
     inbox.fail = false
+  })
+
+  it('logs in to Microsoft 365 with OAuth2 (App registration) instead of a password', async () => {
+    const incomplete = await admin.put('/api/v1/settings/incoming-mail', {
+      enabled: true,
+      auth: 'microsoft365',
+      user: 'rechnungen@eingang.example',
+      tenantId: 'eingang.onmicrosoft.com',
+    })
+    expect(incomplete.statusCode).toBe(400)
+    expect(
+      (
+        await admin.put('/api/v1/settings/incoming-mail', {
+          enabled: false,
+          auth: 'microsoft365',
+          tenantId: 'https://evil.example/x',
+        })
+      ).statusCode,
+    ).toBe(400)
+    const saved = await admin.put('/api/v1/settings/incoming-mail', {
+      enabled: true,
+      auth: 'microsoft365',
+      user: 'rechnungen@eingang.example',
+      tenantId: '0b2c6d8e-1f3a-4b5c-9d7e-123456789abc',
+      clientId: '6a7b8c9d-0e1f-4a2b-8c3d-abcdef012345',
+      clientSecret: 'client-geheim-456',
+      clientSecretExpiresOn: '2026-11-30',
+    })
+    expect(saved.statusCode, saved.body).toBe(200)
+    expect(saved.json()).toMatchObject({
+      auth: 'microsoft365',
+      clientId: '6a7b8c9d-0e1f-4a2b-8c3d-abcdef012345',
+      hasClientSecret: true,
+      hasPassword: true,
+    } satisfies Partial<IncomingMailSettings>)
+    expect(JSON.stringify(saved.json())).not.toContain('client-geheim')
+    const [row] = await h.adminSql<{ settings: string }[]>`select settings::text from tenant`
+    expect(row?.settings).not.toContain('client-geheim-456')
+
+    inbox.messages = []
+    const run = (
+      await admin.post('/api/v1/settings/incoming-mail/run', {})
+    ).json() as IncomingMailRun
+    expect(run.error).toBeNull()
+    expect(inbox.access).toMatchObject({
+      host: 'outlook.office365.com',
+      port: 993,
+      secure: true,
+      user: 'rechnungen@eingang.example',
+      password: null,
+      oauth: {
+        tenantId: '0b2c6d8e-1f3a-4b5c-9d7e-123456789abc',
+        clientId: '6a7b8c9d-0e1f-4a2b-8c3d-abcdef012345',
+        clientSecret: 'client-geheim-456',
+      },
+    } satisfies Partial<MailboxAccess>)
+    const notices = async () =>
+      ((await admin.get('/api/v1/notices')).json() as { key: string; message: string }[]).filter(
+        (n) => n.key.startsWith('incoming_mail'),
+      )
+    // Harness clock: 2026-11-08 → the secret expires within 30 days.
+    expect((await notices()).map((n) => n.key)).toEqual(['incoming_mail_secret_expiring'])
+    inbox.fail = true
+    let refused: IncomingMailRun | undefined
+    for (let i = 0; i < 3; i++) {
+      refused = (await admin.post('/api/v1/settings/incoming-mail/run', {})).json()
+    }
+    expect(refused?.error).toMatch(/^Microsoft 365 hat die Anmeldung am Postfach abgelehnt/)
+    expect(refused?.failedRuns).toBe(3)
+    expect((await notices())[0]?.message).toMatch(
+      /^Der Rechnungseingang per E-Mail schlägt seit 3 Abrufen fehl: Microsoft 365 hat/,
+    )
+    inbox.fail = false
+    expect(
+      ((await admin.post('/api/v1/settings/incoming-mail/run', {})).json() as IncomingMailRun)
+        .failedRuns,
+    ).toBe(0)
+    expect((await notices()).map((n) => n.key)).toEqual(['incoming_mail_secret_expiring'])
+    // Back to the password login of the first test (kept encrypted meanwhile).
+    const back = await admin.put('/api/v1/settings/incoming-mail', {
+      enabled: true,
+      host: 'imap.example.test',
+      user: 'rechnungen@eingang.example',
+      processedMailbox: 'Verarbeitet',
+    })
+    expect(back.json()).toMatchObject({ auth: 'password', hasPassword: true })
+  })
+
+  it('logs in to Google Workspace with a service account (domain-wide delegation)', async () => {
+    const { privateKey } = generateKeyPairSync('rsa', { modulusLength: 2048 })
+    const keyFile = JSON.stringify({
+      type: 'service_account',
+      private_key: privateKey.export({ type: 'pkcs8', format: 'pem' }).toString(),
+      client_email: 'eingang@rechnungen.iam.gserviceaccount.com',
+    })
+    expect(
+      (
+        await admin.put('/api/v1/settings/incoming-mail', {
+          enabled: true,
+          auth: 'google',
+          user: 'rechnungen@eingang.example',
+          googleServiceAccountKey: '{"type":"authorized_user"}',
+        })
+      ).statusCode,
+    ).toBe(400)
+    const saved = await admin.put('/api/v1/settings/incoming-mail', {
+      enabled: true,
+      auth: 'google',
+      user: 'rechnungen@eingang.example',
+      googleServiceAccountKey: keyFile,
+    })
+    expect(saved.statusCode, saved.body).toBe(200)
+    expect(saved.json()).toMatchObject({
+      auth: 'google',
+      googleClientEmail: 'eingang@rechnungen.iam.gserviceaccount.com',
+    } satisfies Partial<IncomingMailSettings>)
+    expect(saved.body).not.toContain('PRIVATE KEY')
+    const [row] = await h.adminSql<{ settings: string }[]>`select settings::text from tenant`
+    expect(row?.settings).not.toContain('PRIVATE KEY')
+    inbox.messages = []
+    const run = (
+      await admin.post('/api/v1/settings/incoming-mail/run', {})
+    ).json() as IncomingMailRun
+    expect(run.error).toBeNull()
+    expect(inbox.access).toMatchObject({
+      host: 'imap.gmail.com',
+      user: 'rechnungen@eingang.example',
+      password: null,
+      oauth: null,
+      google: { clientEmail: 'eingang@rechnungen.iam.gserviceaccount.com' },
+    })
+    expect(inbox.access?.google?.privateKey).toContain('BEGIN PRIVATE KEY')
+    // Kept when saved again without a new key file.
+    const kept = await admin.put('/api/v1/settings/incoming-mail', {
+      enabled: true,
+      auth: 'google',
+      user: 'rechnungen@eingang.example',
+    })
+    expect(kept.json().googleClientEmail).toBe('eingang@rechnungen.iam.gserviceaccount.com')
+    await admin.put('/api/v1/settings/incoming-mail', {
+      enabled: true,
+      host: 'imap.example.test',
+      user: 'rechnungen@eingang.example',
+      processedMailbox: 'Verarbeitet',
+    })
   })
 
   it('allocates per invoice line, uses the Kreditorennummer and adds project costs', async () => {

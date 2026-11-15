@@ -1,6 +1,7 @@
 import type { Tx } from '@opc/db'
 import {
   type DashboardDto,
+  type DashboardSiteDto,
   type DashboardSum,
   invoiceListQuery,
   type ProjectSummary,
@@ -57,8 +58,12 @@ async function receivables(tx: Tx, auth: AuthContext, today: string) {
   return result
 }
 
-async function dashboard(tx: Tx, auth: AuthContext, today: string): Promise<DashboardDto> {
-  const may = (permission: string) => auth.permissions.has(permission)
+/**
+ * Part of the Übersicht without amounts (Heute auf der Baustelle, zuletzt bearbeitete Projekte):
+ * the web app keeps it on the device, so the start page also works on the site without network
+ * (ADR 0010: no Finanzdaten offline).
+ */
+async function siteOverview(tx: Tx, auth: AuthContext, today: string): Promise<DashboardSiteDto> {
   const recentProjects = await tx<ProjectSummary[]>`
     select ${SUMMARY_COLUMNS(tx)}
     from project p
@@ -75,6 +80,12 @@ async function dashboard(tx: Tx, auth: AuthContext, today: string): Promise<Dash
       and exists (select 1 from project_member m where m.project_id = p.id and m.user_id = ${auth.userId})
       and p.start_date <= ${today}::date and (p.end_date is null or p.end_date >= ${today}::date)
     order by p.start_date, p.name limit 10`
+  return { today, recentProjects, todaysSites }
+}
+
+async function dashboard(tx: Tx, auth: AuthContext, today: string): Promise<DashboardDto> {
+  const may = (permission: string) => auth.permissions.has(permission)
+  const { recentProjects, todaysSites } = await siteOverview(tx, auth, today)
   const openOffers = may('document.read')
     ? await tx<NonNullable<DashboardDto['openOffers']>>`
         select d.id, d.type, d.number, d.subject, d.status, to_char(d.document_date, 'YYYY-MM-DD') as "documentDate",
@@ -201,6 +212,12 @@ export function registerDashboardRoutes(app: FastifyInstance, services: Services
     const auth = requirePermission(request)
     const today = todayIn(services.now())
     return inTenant(services, auth, (tx) => dashboard(tx, auth, today))
+  })
+
+  app.get('/api/v1/dashboard/site', async (request): Promise<DashboardSiteDto> => {
+    const auth = requirePermission(request)
+    const today = todayIn(services.now())
+    return inTenant(services, auth, (tx) => siteOverview(tx, auth, today))
   })
 
   app.get('/api/v1/search', async (request): Promise<SearchResult> => {

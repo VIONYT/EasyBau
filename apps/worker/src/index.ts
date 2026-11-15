@@ -7,6 +7,7 @@ import { archivePending } from './archive.js'
 import { verifyArchive, verifyRequested } from './archive-verify.js'
 import { checkAuditChains } from './audit.js'
 import { dispatchEmails, smtpTransport } from './email.js'
+import { purgeReadNotifications } from './notifications.js'
 
 export { type ArchiveRun, archivePending } from './archive.js'
 export {
@@ -16,7 +17,6 @@ export {
   verifyRequested,
 } from './archive-verify.js'
 export { type AuditCheckResult, checkAuditChains } from './audit.js'
-
 export {
   type ArtifactReader,
   dispatchEmails,
@@ -24,6 +24,7 @@ export {
   type OutgoingMail,
   smtpTransport,
 } from './email.js'
+export { NOTIFICATION_RETENTION_DAYS, purgeReadNotifications } from './notifications.js'
 
 /**
  * Background jobs run on pg-boss, i.e. inside PostgreSQL (ADR 0002).
@@ -34,6 +35,7 @@ export const queues = {
   heartbeat: 'system.heartbeat',
   auditCheck: 'audit.check-chain',
   archiveVerify: 'archive.verify',
+  notificationPurge: 'notification.purge',
 } as const
 
 export interface Worker {
@@ -92,6 +94,12 @@ export async function startWorker(
     await checkAuditChains(auditSql, logger)
   })
   await boss.schedule(queues.auditCheck, '17 2 * * *', {}, { tz: 'Europe/Berlin' })
+  // Benachrichtigungen aufräumen: read ones after 90 days (same small connection).
+  await boss.createQueue(queues.notificationPurge)
+  await boss.work(queues.notificationPurge, async () => {
+    await purgeReadNotifications(auditSql, logger)
+  })
+  await boss.schedule(queues.notificationPurge, '27 4 * * *', {}, { tz: 'Europe/Berlin' })
   // E-mail outbox (optional): polled every 15 s, cheap thanks to a partial index.
   let mailTimer: NodeJS.Timeout | undefined
   const sql = smtpEnabled(config) ? createSql({ ...config, DATABASE_POOL_MAX: 1 }) : undefined

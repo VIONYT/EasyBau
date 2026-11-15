@@ -154,6 +154,15 @@ describe.skipIf(!process.env.DATABASE_URL)(
       expect(dashboard.todaysSites.map((s) => s.id)).toEqual([projectId])
     })
 
+    it('serves the part without amounts for the start page without network', async () => {
+      const res = await worker.get('/api/v1/dashboard/site')
+      expect(res.statusCode, res.body).toBe(200)
+      const site = res.json() as Record<string, unknown>
+      expect(Object.keys(site).sort()).toEqual(['recentProjects', 'today', 'todaysSites'])
+      expect(JSON.stringify(site)).not.toMatch(/Cents/)
+      expect((site.todaysSites as { id: string }[]).map((s) => s.id)).toEqual([projectId])
+    })
+
     it('searches projects, contacts and documents within the rights', async () => {
       const search = async (client: Client, q: string) =>
         (await client.get(`/api/v1/search?q=${encodeURIComponent(q)}`)).json() as SearchResult

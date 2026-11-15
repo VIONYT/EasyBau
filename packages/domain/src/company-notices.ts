@@ -20,7 +20,22 @@ export interface CompanyNoticeInput {
   canManageCompany: boolean
   /** Own login address confirmed; null when it cannot be confirmed (no SMTP). */
   emailVerified: boolean | null
+  /**
+   * Rechnungseingang per E-Mail, only for people who may change the settings and only while the
+   * mailbox is fetched: failed runs in a row and the expiry date of the Microsoft 365 secret.
+   */
+  incomingMail?: {
+    failedRuns: number
+    lastError: string | null
+    secretExpiresOn: string | null
+    today: string
+  }
 }
+
+/** Failed fetches in a row before the bar shows it (a single timeout is no reason to worry). */
+export const INCOMING_MAIL_FAILURE_NOTICE = 3
+/** Days before the Microsoft 365 client secret expires when the bar starts to remind. */
+export const SECRET_EXPIRY_NOTICE_DAYS = 30
 
 export type CompanyNoticeKey =
   | 'company_address'
@@ -29,6 +44,8 @@ export type CompanyNoticeKey =
   | 'company_email'
   | 'company_federal_state'
   | 'email_unverified'
+  | 'incoming_mail_failing'
+  | 'incoming_mail_secret_expiring'
 
 export interface CompanyNotice {
   key: CompanyNoticeKey
@@ -39,6 +56,12 @@ export interface CompanyNotice {
 }
 
 const COMPANY = '/einstellungen?bereich=company'
+const INCOMING_MAIL = '/einstellungen?bereich=incomingMail'
+
+const daysBetween = (from: string, to: string) =>
+  Math.round((Date.parse(`${to}T00:00:00Z`) - Date.parse(`${from}T00:00:00Z`)) / 86_400_000)
+
+const germanDay = (iso: string) => iso.split('-').reverse().join('.')
 
 export function companyNotices(input: CompanyNoticeInput): CompanyNotice[] {
   const notices: CompanyNotice[] = []
@@ -84,6 +107,29 @@ export function companyNotices(input: CompanyNoticeInput): CompanyNotice[] {
         severity: 'recommended',
         message: 'Bundesland fehlt – es bestimmt die gesetzlichen Feiertage.',
         route: COMPANY,
+      })
+    }
+  }
+  const mail = input.incomingMail
+  if (mail && mail.failedRuns >= INCOMING_MAIL_FAILURE_NOTICE) {
+    notices.push({
+      key: 'incoming_mail_failing',
+      severity: 'recommended',
+      message: `Der Rechnungseingang per E-Mail schlägt seit ${mail.failedRuns} Abrufen fehl${mail.lastError ? `: ${mail.lastError}` : '.'}`,
+      route: INCOMING_MAIL,
+    })
+  }
+  if (mail?.secretExpiresOn) {
+    const days = daysBetween(mail.today, mail.secretExpiresOn)
+    if (days <= SECRET_EXPIRY_NOTICE_DAYS) {
+      notices.push({
+        key: 'incoming_mail_secret_expiring',
+        severity: 'recommended',
+        message:
+          days < 0
+            ? `Der geheime Clientschlüssel für Microsoft 365 ist am ${germanDay(mail.secretExpiresOn)} abgelaufen – neuen Schlüssel in Microsoft Entra anlegen und eintragen.`
+            : `Der geheime Clientschlüssel für Microsoft 365 läuft am ${germanDay(mail.secretExpiresOn)} ab – rechtzeitig einen neuen anlegen und eintragen.`,
+        route: INCOMING_MAIL,
       })
     }
   }

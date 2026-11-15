@@ -21,16 +21,33 @@ export function isCumulativeInvoice(kind: InvoiceKind, mode: ProgressBillingMode
 export const DEDUCTED_INVOICE_KINDS: ReadonlySet<InvoiceKind> = new Set(['progress', 'partial'])
 
 /**
+ * Measured quantity a contract position may bill itself: Mehrmengen moved to beauftragte
+ * Mehrmengen-Nachträge are billed there (at the Nachtrag's price), never also here – otherwise the
+ * same quantity would be on two invoices. Never below 0.
+ */
+export function ownMeasuredQuantity(input: {
+  measured: NumericInput
+  inChangeOrders: NumericInput
+}): Decimal {
+  return Decimal.max(toDecimal(input.measured).minus(toDecimal(input.inChangeOrders)), 0)
+}
+
+/**
  * Mengenfortschreibung: quantity to bill for a position.
  * cumulative invoice → measured to date (earlier invoices are deducted in money);
- * otherwise → measured to date − already billed.
+ * otherwise → measured to date − already billed. `inChangeOrders`: Mehrmenge already in
+ * beauftragten Mehrmengen-Nachträgen (see ownMeasuredQuantity).
  */
 export function billingQuantity(input: {
   measured: NumericInput
   previouslyBilled: NumericInput
   cumulative: boolean
+  inChangeOrders?: NumericInput
 }): Decimal {
-  const measured = toDecimal(input.measured)
+  const measured = ownMeasuredQuantity({
+    measured: input.measured,
+    inChangeOrders: input.inChangeOrders ?? 0,
+  })
   return input.cumulative ? measured : measured.minus(toDecimal(input.previouslyBilled))
 }
 

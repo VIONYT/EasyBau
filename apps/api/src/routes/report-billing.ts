@@ -101,6 +101,8 @@ interface NewItem {
   quantity: string
   unit: UnitInfo
   unitPriceCents: number
+  /** Stundenlohn: Kalkulation with one labor line, so the hours count as Lohnkosten (§ 35a). */
+  labor?: { wageGroupId: string; costCents: string; markupPercent: string }
 }
 
 /** Positions of one report: staff hours per Lohngruppe, Leistungen, Material, Geräte. */
@@ -113,17 +115,36 @@ async function itemsOf(
   const staff = valuesOf<StaffValue>(row, 'staff').flatMap((v) => v.rows)
   if (staff.length) {
     const userIds = [...new Set(staff.map((s) => s.userId).filter((u): u is string => !!u))]
-    const groups = await tx<{ userId: string | null; id: string; name: string; rate: string }[]>`
-      select m.user_id as "userId", w.id, w.name, w.hourly_rate_cents::text as rate
+    const groups = await tx<
+      {
+        userId: string | null
+        id: string
+        name: string
+        rate: string
+        cost: string
+        markup: string
+      }[]
+    >`
+      select m.user_id as "userId", w.id, w.name, w.hourly_rate_cents::text as rate,
+             w.cost_per_hour_cents::text as cost, trim_scale(w.markup_percent)::text as markup
       from membership m join wage_group w on w.id = m.wage_group_id
       where w.is_active and m.user_id = any(${userIds}::uuid[])
       union all
-      (select null, w.id, w.name, w.hourly_rate_cents::text from wage_group w where w.is_active
+      (select null, w.id, w.name, w.hourly_rate_cents::text, w.cost_per_hour_cents::text,
+              trim_scale(w.markup_percent)::text
+       from wage_group w where w.is_active
        order by w.sort, w.name limit 1)`
     const fallback = groups.find((g) => g.userId === null) ?? null
     const byGroup = new Map<
       string,
-      { name: string; rate: number; hours: Decimal; people: string[]; sort: number }
+      {
+        name: string
+        rate: number
+        hours: Decimal
+        people: string[]
+        sort: number
+        labor: NewItem['labor']
+      }
     >()
     for (const person of staff) {
       const group = groups.find((g) => g.userId && g.userId === person.userId) ?? fallback
@@ -134,6 +155,9 @@ async function itemsOf(
         hours: new Decimal(0),
         people: [],
         sort: byGroup.size,
+        labor: group
+          ? { wageGroupId: group.id, costCents: group.cost, markupPercent: group.markup }
+          : undefined,
       }
       entry.hours = entry.hours.plus(person.hours)
       entry.people.push(
@@ -149,6 +173,7 @@ async function itemsOf(
         quantity: group.hours.toDecimalPlaces(units.hour.decimals).toString(),
         unit: units.hour,
         unitPriceCents: group.rate,
+        ...(group.labor ? { labor: group.labor } : {}),
       })
     }
   }
@@ -304,7 +329,7 @@ export function registerReportBillingRoutes(app: FastifyInstance, services: Serv
                   'title', ${titleOf(row)}, ${row.id})
           returning id`
         for (const [index, item] of items.entries()) {
-          await tx`
+          const [created] = await tx<{ id: string }[]>`
             insert into document_item ${tx({
               tenant_id: auth.tenantId,
               document_id: id,
@@ -321,7 +346,25 @@ export function registerReportBillingRoutes(app: FastifyInstance, services: Serv
               tax_rate_percent: taxRate,
               calc_mode: 'unit_price',
               source_report_id: row.id,
-            })}`
+            })}
+            returning id`
+          if (item.labor) {
+            // 1 Std Lohn per Std: the price stays the Stundenverrechnungssatz of the Lohngruppe.
+            await tx`
+              insert into item_calc_component ${tx({
+                tenant_id: auth.tenantId,
+                document_id: id,
+                document_item_id: (created as { id: string }).id,
+                sort: 10,
+                cost_kind: 'labor',
+                quantity: '1',
+                unit_id: units.hour.id,
+                description: item.shortText,
+                unit_cost_cents: item.labor.costCents,
+                markup_percent: item.labor.markupPercent,
+                wage_group_id: item.labor.wageGroupId,
+              })}`
+          }
         }
       }
       await recalculate(tx, id)

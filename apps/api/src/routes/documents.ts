@@ -700,7 +700,21 @@ export async function loadDocument(
     ...doc,
     issuer: issuerSnapshot ?? (await liveIssuer(tx)),
     recipient: recipientSnapshot ?? (await liveRecipient(tx, contactId)),
-    changeOrderInfo: info ? { ...info, evidence: await resolveEvidence(tx, info.evidence) } : null,
+    changeOrderInfo: info
+      ? {
+          ...info,
+          evidence: await resolveEvidence(tx, info.evidence),
+          acceptedItemIds:
+            doc.status === 'partially_accepted'
+              ? (
+                  await tx<{ id: string }[]>`
+                    select i.id from document_item i
+                    join change_order_item_decision dec on dec.document_item_id = i.id
+                    where i.document_id = ${id} and dec.accepted order by i.sort, i.id`
+                ).map((r) => r.id)
+              : null,
+        }
+      : null,
     canConvertToChangeOrder: canConvert,
     items,
     totals: totalsOf(rows, costs, doc, await loadDeductions(tx, id)),
@@ -1572,7 +1586,7 @@ export function registerDocumentRoutes(app: FastifyInstance, services: Services)
   app.post('/api/v1/documents/:id/status', async (request, reply) => {
     const auth = requirePermission(request, 'document.write')
     const { id } = parse(documentParam, request.params)
-    const { status } = parse(documentStatusRequest, request.body)
+    const { status, acceptedItemIds } = parse(documentStatusRequest, request.body)
     const doc = await inTenant(services, auth, async (tx) => {
       const [d] = await tx<{ type: string; status: string }[]>`
         select d.type, d.status from document d join project p on p.id = d.project_id
@@ -1584,7 +1598,11 @@ export function registerDocumentRoutes(app: FastifyInstance, services: Services)
       const allowed: Record<string, string[]> = {
         sent: ['finalized'],
         accepted: ['finalized', 'sent'],
+        partially_accepted: ['finalized', 'sent'],
         rejected: ['finalized', 'sent'],
+      }
+      if (status === 'partially_accepted' && d.type !== 'change_order') {
+        throw new HttpError(409, 'Teilweise beauftragen lassen sich nur Nachträge.')
       }
       if (!allowed[status]?.includes(d.status)) {
         throw new HttpError(
@@ -1597,8 +1615,40 @@ export function registerDocumentRoutes(app: FastifyInstance, services: Services)
       await tx`update document set status = ${status},
                  sent_at = ${status === 'sent' ? tx`now()` : tx`sent_at`}
                where id = ${id}`
+      if (status === 'partially_accepted') {
+        // Teilbeauftragung: one decision per priced position; only accepted ones count for the
+        // Vertragssumme and may be billed (Regel 12).
+        const priced = await tx<{ id: string }[]>`
+          select id from document_item
+          where document_id = ${id} and position_type in ('item', 'lump_sum')`
+        const ids = new Set(priced.map((p) => p.id))
+        const chosen = new Set(acceptedItemIds)
+        if ([...chosen].some((itemId) => !ids.has(itemId))) {
+          throw new HttpError(400, 'Eine ausgewählte Position gehört nicht zu diesem Nachtrag.', {
+            acceptedItemIds: 'Nur Positionen dieses Nachtrags auswählen.',
+          })
+        }
+        if (chosen.size === ids.size) {
+          throw new HttpError(
+            409,
+            'Alle Positionen sind ausgewählt – bitte „Beauftragt“ verwenden.',
+            { acceptedItemIds: 'Mindestens eine Position bleibt unbeauftragt.' },
+          )
+        }
+        for (const itemId of ids) {
+          await tx`
+            insert into change_order_item_decision (tenant_id, document_item_id, accepted)
+            values (${auth.tenantId}, ${itemId}, ${chosen.has(itemId)})
+            on conflict (document_item_id) do update set accepted = excluded.accepted`
+        }
+      }
       if (d.type === 'change_order') {
-        const meta = { sent: 'offered', accepted: 'accepted', rejected: 'rejected' }[status]
+        const meta = {
+          sent: 'offered',
+          accepted: 'accepted',
+          partially_accepted: 'partially_accepted',
+          rejected: 'rejected',
+        }[status]
         await tx`
           update change_order_meta set status = ${meta},
                  offered_at = ${status === 'sent' ? tx`now()` : tx`offered_at`},
@@ -1626,7 +1676,13 @@ export function registerDocumentRoutes(app: FastifyInstance, services: Services)
               {
                 kind: 'change_order_decided',
                 refId: id,
-                title: `Nachtrag N${String(co.number).padStart(2, '0')} ${status === 'accepted' ? 'beauftragt' : 'abgelehnt'}`,
+                title: `Nachtrag N${String(co.number).padStart(2, '0')} ${
+                  status === 'accepted'
+                    ? 'beauftragt'
+                    : status === 'partially_accepted'
+                      ? 'teilweise beauftragt'
+                      : 'abgelehnt'
+                }`,
                 body: co.subject,
                 route: `/dokumente/${id}`,
               },

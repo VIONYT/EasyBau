@@ -59,11 +59,13 @@ describe('Offline cache', () => {
       '/api/v1/projects/0195f3c4-0000-7000-8000-000000000003/measurable-items?kind=performance',
       SHEET,
       REPORT,
+      '/api/v1/dashboard/site',
     ]) {
       expect(isCacheable(path), path).toBe(true)
     }
     for (const path of [
       '/api/v1/invoices',
+      '/api/v1/dashboard',
       '/api/v1/documents/0195f3c4-0000-7000-8000-000000000003',
       '/api/v1/incoming-invoices',
       '/api/v1/contacts',

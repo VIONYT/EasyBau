@@ -1,4 +1,4 @@
-import type { DashboardDto, DashboardSum, Me } from '@opc/schemas'
+import type { DashboardDto, DashboardSiteDto, DashboardSum, Me } from '@opc/schemas'
 import { useEffect, useId, useState } from 'react'
 import { type ApiError, api } from '../api'
 import { formatCents, formatDateTime } from '../format'
@@ -34,11 +34,25 @@ export function Dashboard({ me, navigate }: { me: Me; navigate: Navigate }) {
   const id = useId()
   const [data, setData] = useState<DashboardDto | null>(null)
   const [error, setError] = useState<string | null>(null)
+  const [siteOnly, setSiteOnly] = useState(false)
   const [hide, setHide] = useHideAmounts()
   useEffect(() => {
+    const site = () => api<DashboardSiteDto>('GET', '/api/v1/dashboard/site')
     api<DashboardDto>('GET', '/api/v1/dashboard')
-      .then(setData)
-      .catch((err: ApiError) => setError(err.message))
+      .then((full) => {
+        setData(full)
+        // Keep the part without amounts on the device for the start page without network.
+        site().catch(() => undefined)
+      })
+      .catch(async (err: ApiError) => {
+        try {
+          const part = await site()
+          setData({ ...part, receivables: null, incomingReviewCount: null, openOffers: null })
+          setSiteOnly(true)
+        } catch {
+          setError(err.message)
+        }
+      })
   }, [])
   const money = (cents: number) => (hide ? '•••' : formatCents(cents))
   const link = (href: string, go: () => void, label: string) => (
@@ -94,6 +108,7 @@ export function Dashboard({ me, navigate }: { me: Me; navigate: Navigate }) {
         ) : null}
       </div>
       <FormError>{error}</FormError>
+      {siteOnly ? <p className="hint">{t('dash.siteOnly')}</p> : null}
       {!data && !error ? <p className="muted">{t('common.loading')}</p> : null}
       {data ? (
         <div className="dashboard">
@@ -101,7 +116,7 @@ export function Dashboard({ me, navigate }: { me: Me; navigate: Navigate }) {
             <section className="panel" aria-labelledby={`${id}-rec`}>
               <h2 id={`${id}-rec`}>{t('dash.receivables')}</h2>
               <p className="amount-big">{money(data.receivables.total.cents)}</p>
-              <div className="receivable-sums">
+              <div className="dashboard-sums">
                 {sum('open', data.receivables.open)}
                 {sum('overdue', data.receivables.overdue)}
                 {sum('dunned', data.receivables.dunned)}

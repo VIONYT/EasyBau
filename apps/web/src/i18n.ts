@@ -748,6 +748,8 @@ const de = {
   'dash.incomingNone': 'Zu den Eingangsrechnungen',
   'dash.today': 'Heute auf der Baustelle',
   'dash.todayNone': 'Heute ist keines Ihrer Projekte im Zeitraum.',
+  'dash.siteOnly':
+    'Ohne Verbindung: Forderungen, Angebote und Eingangsrechnungen erscheinen, sobald der Server wieder erreichbar ist.',
   'dash.until': 'bis {date}',
   'dash.offers': 'Offene Angebote und Nachträge',
   'dash.offersNone': 'Keine offenen Angebote oder Nachträge.',
@@ -947,6 +949,12 @@ const de = {
   'q.markSent': 'Als versendet markieren',
   'q.markAccepted': 'Beauftragt',
   'q.markRejected': 'Abgelehnt',
+  'q.markPartial': 'Teilweise beauftragt',
+  'q.partialTitle': 'Welche Positionen hat der Kunde beauftragt?',
+  'q.partialHint':
+    'Nur die ausgewählten Positionen zählen zur Vertragssumme und dürfen abgerechnet werden; die übrigen gelten als abgelehnt.',
+  'q.partialConfirm': 'Teilbeauftragung speichern',
+  'q.partialSummary': 'Beauftragt: {list}. Alle anderen Positionen sind abgelehnt.',
   'q.calc': 'Kalkulation',
   'q.calcTitle': 'Kalkulation der Position',
   'q.calcMode': 'Kostenzeilen gelten für',
@@ -1135,6 +1143,11 @@ const de = {
   'sys.backup': 'Sicherung',
   'sys.backupLast': 'Letzte erfolgreiche Sicherung:',
   'sys.backupOld': 'älter als ein Tag',
+  'sys.offsite': 'Sicherung außer Haus',
+  'sys.offsiteOff':
+    'Nicht eingerichtet – die Sicherungen liegen nur auf diesem Server und gehen bei Brand, Diebstahl oder Plattendefekt mit verloren. Verschlüsselte Kopie außer Haus mit RESTIC_REPOSITORY in der .env einrichten (Betriebsdokumentation, Abschnitt Sicherung).',
+  'sys.offsiteFailed': 'Die letzte verschlüsselte Kopie außer Haus ist fehlgeschlagen: {message}',
+  'sys.offsiteOk': 'Verschlüsselt kopiert nach {target} am {at}.',
   'sys.backupNone':
     'Noch keine erfolgreiche Sicherung. Läuft der Dienst „backup“? Sofort sichern: docker compose exec backup backup.sh run',
   'sys.backupRecent': 'Letzte Sicherungen',
@@ -1631,6 +1644,21 @@ const de = {
   'im.lastRun':
     'Letzter Abruf {at}: {messages} E-Mail(s), {imported} Rechnung(en) übernommen, {duplicates} schon vorhanden, {ignored} andere Anhänge, {failed} später erneut.',
   'im.never': 'Noch nicht abgerufen.',
+  'im.auth': 'Anmeldung',
+  'im.auth.password': 'Benutzername und Passwort (IMAP)',
+  'im.auth.microsoft365': 'Microsoft 365 (App-Registrierung, OAuth2)',
+  'im.auth.google': 'Google Workspace (Dienstkonto, OAuth2)',
+  'im.googleHint':
+    'Legen Sie in der Google Cloud Console ein Dienstkonto mit JSON-Schlüssel an und erlauben Sie ihm in der Google-Admin-Konsole die domainweite Delegierung mit dem Bereich https://mail.google.com/ (Anleitung in der Betriebsdokumentation). Der Server verbindet sich dafür mit oauth2.googleapis.com und imap.gmail.com.',
+  'im.googleKey': 'Schlüsseldatei des Dienstkontos (JSON)',
+  'im.googleKeyStored': 'Gespeichert für {email} – nur für einen neuen Schlüssel erneut hochladen.',
+  'im.m365Hint':
+    'Microsoft 365 erlaubt den Abruf per IMAP nicht mehr mit Passwort. Legen Sie in Microsoft Entra eine App-Registrierung mit der Berechtigung IMAP.AccessAsApp an und geben Sie das Postfach für die App frei (Anleitung in der Betriebsdokumentation). Der Server verbindet sich dafür mit login.microsoftonline.com und outlook.office365.com.',
+  'im.mailboxAddress': 'Postfach-Adresse',
+  'im.tenantId': 'Verzeichnis-ID (Mandanten-ID)',
+  'im.clientId': 'Anwendungs-ID (Client-ID)',
+  'im.clientSecret': 'Geheimer Clientschlüssel',
+  'im.clientSecretExpiresOn': 'Schlüssel gültig bis (für eine Erinnerung 30 Tage vorher)',
 } as const
 
 export type TextKey = keyof typeof de

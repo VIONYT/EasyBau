@@ -34,7 +34,11 @@ export function registerOperationsRoutes(app: FastifyInstance, services: Service
     return inTenant(services, auth, async (tx) => {
       const select = (where: 'all' | 'ok') => tx<BackupRunSummary[]>`
         select name, status, started_at as "startedAt", finished_at as "finishedAt",
-               db_bytes::float8 as "dbBytes", files_bytes::float8 as "filesBytes", message
+               db_bytes::float8 as "dbBytes", files_bytes::float8 as "filesBytes", message,
+               case when offsite_status is null then null else json_build_object(
+                 'status', offsite_status,
+                 'at', to_char(offsite_at at time zone 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS.MS"Z"'),
+                 'target', offsite_target, 'message', offsite_message) end as offsite
         from backup_run ${where === 'ok' ? tx`where status = 'ok'` : tx``}
         order by finished_at desc limit ${where === 'ok' ? 1 : 10}`
       const [lastSuccess] = await select('ok')

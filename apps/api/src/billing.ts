@@ -9,6 +9,7 @@ import {
   invoiceLegalNotes,
   isCumulativeInvoice,
   laborShareNote,
+  ownMeasuredQuantity,
   type ProgressBillingMode,
   type TaxCategory,
   type TaxMode,
@@ -143,6 +144,8 @@ export interface ItemBilling {
   quantity: string | null
   currentQuantity: string | null
   fromMeasurement: boolean
+  /** Mehrmenge already in beauftragten Mehrmengen-Nachträgen (billed there, not here). */
+  inChangeOrders: string
 }
 
 /**
@@ -188,7 +191,20 @@ export async function itemBilling(tx: Tx, doc: BillingDoc): Promise<ItemBilling[
       and d.invoice_kind in ('progress', 'partial')
       and d.finalized_at is not null and d.status <> 'cancelled'
       and i.position_type in ('item', 'lump_sum') and i.quantity is not null`
+  // Mehrmengen-Nachträge (variance_of_item_id) that are beauftragt: their quantity is billed via
+  // the Nachtrag, so the contract position bills only the rest of the measured quantity.
+  const variances = await tx<{ root: string; quantity: string }[]>`
+    select document_item_root(i.variance_of_item_id) as root, sum(i.quantity)::text as quantity
+    from document_item i
+    join document d on d.id = i.document_id
+    join change_order_meta co on co.document_id = d.id
+    left join change_order_item_decision dec on dec.document_item_id = i.id
+    where d.project_id = ${doc.projectId} and d.type = 'change_order'
+      and i.variance_of_item_id is not null and i.quantity is not null
+      and (co.status = 'accepted' or (co.status = 'partially_accepted' and coalesce(dec.accepted, false)))
+    group by 1`
   const measuredByRoot = new Map(measured.map((m) => [m.root, m.quantity]))
+  const varianceByRoot = new Map(variances.map((v) => [v.root, v.quantity]))
   const billedByRoot = new Map<string, Decimal>()
   for (const e of earlier) {
     const add = contributedQuantity({
@@ -202,15 +218,22 @@ export async function itemBilling(tx: Tx, doc: BillingDoc): Promise<ItemBilling[
   return items.map((item) => {
     const m = measuredByRoot.get(item.root) ?? null
     const previous = billedByRoot.get(item.root) ?? new Decimal(0)
+    const inChangeOrders = varianceByRoot.get(item.root) ?? '0'
     const quantity =
       m === null
         ? null
-        : billingQuantity({ measured: m, previouslyBilled: previous, cumulative: isCumulative })
+        : billingQuantity({
+            measured: m,
+            previouslyBilled: previous,
+            cumulative: isCumulative,
+            inChangeOrders,
+          })
             .toDecimalPlaces(item.decimals ?? 2, Decimal.ROUND_HALF_UP)
             .toString()
     return {
       itemId: item.itemId,
-      measured: m === null ? null : new Decimal(m).toString(),
+      inChangeOrders: new Decimal(inChangeOrders).toString(),
+      measured: m === null ? null : ownMeasuredQuantity({ measured: m, inChangeOrders }).toString(),
       previouslyBilled: previous.toString(),
       quantity,
       currentQuantity: item.quantity,
@@ -237,6 +260,9 @@ export async function applyInvoiceMeasurements(tx: Tx, doc: BillingDoc): Promise
 }
 
 // ---- Checks before finalizing ----------------------------------------------------------------------
+
+/** 12.5 → „12,5“ */
+const germanQuantity = (value: Decimal) => value.toString().replace('.', ',')
 
 type Issue = { field: string; message: string }
 
@@ -344,7 +370,24 @@ export async function invoiceFinalizeCheck(
   // Quantities taken from the Leistungsaufmaß must still be current (another invoice may have
   // been finalized meanwhile, or lines were added).
   if (doc.type === 'invoice') {
-    const outdated = (await itemBilling(tx, doc)).filter(
+    const billing = await itemBilling(tx, doc)
+    // A Mehrmenge in a beauftragten Mehrmengen-Nachtrag is billed via the Nachtrag; a quantity
+    // typed in by hand must not bill it again at the contract position.
+    const isCumulative = cumulative(doc)
+    for (const b of billing) {
+      if (b.fromMeasurement || b.measured === null || b.currentQuantity === null) continue
+      if (new Decimal(b.inChangeOrders).isZero()) continue
+      const total = isCumulative
+        ? new Decimal(b.currentQuantity)
+        : new Decimal(b.previouslyBilled).plus(b.currentQuantity)
+      if (total.gt(b.measured)) {
+        errors.push({
+          field: 'items',
+          message: `${label(b.itemId)}: Abgerechnet wären ${germanQuantity(total)}, laut Aufmaß stehen der Position aber nur ${germanQuantity(new Decimal(b.measured))} zu – ${germanQuantity(new Decimal(b.inChangeOrders))} sind bereits im beauftragten Mehrmengen-Nachtrag und werden dort abgerechnet. Bitte „Mengen aus Aufmaß übernehmen“ ausführen oder die Menge korrigieren.`,
+        })
+      }
+    }
+    const outdated = billing.filter(
       (b) =>
         b.fromMeasurement &&
         b.quantity !== null &&
@@ -357,6 +400,21 @@ export async function invoiceFinalizeCheck(
         message: `Die Mengen aus dem Leistungsaufmaß haben sich geändert (${outdated.length} Position${outdated.length === 1 ? '' : 'en'}). Bitte „Mengen aus Aufmaß übernehmen“ erneut ausführen.`,
       })
     }
+  }
+  // Positions without a price (e.g. Leistungen/Material/Geräte taken over from a Regiebericht at
+  // 0 €) would be billed for free without anyone noticing.
+  const unpriced = priced.filter(
+    (i) =>
+      (i.unitPriceCents ?? 0) === 0 && (i.quantity === null || !new Decimal(i.quantity).isZero()),
+  )
+  if (unpriced.length) {
+    const shown = unpriced.slice(0, 5).map((i) => label(i.id))
+    const more =
+      unpriced.length > shown.length ? ` und ${unpriced.length - shown.length} weitere` : ''
+    warnings.push({
+      field: 'items',
+      message: `${unpriced.length} Position${unpriced.length === 1 ? ' hat' : 'en haben'} keinen Preis (0,00 €): ${shown.join(', ')}${more}. Bitte Preise prüfen, sonst werden sie kostenlos berechnet.`,
+    })
   }
   if (detail.totals.grossCents === 0 && detail.totals.deductions.length === 0) {
     warnings.push({ field: 'items', message: 'Der Rechnungsbetrag ist 0,00 €.' })

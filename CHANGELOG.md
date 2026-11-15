@@ -4,10 +4,26 @@ Alle wesentlichen Änderungen, vor allem solche, die Betreiber betreffen (neue V
 
 ## Unveröffentlicht
 
+### Behoben
+- **Darstellung der Betragszeilen:** Auf breiten Bildschirmen standen in „Zahlungen und offene Forderung“, in der Eingangsrechnung und im Mahnungsdialog Beschriftungen und Beträge durcheinander, in der Übersicht die Beträge versetzt; Ursache war eine doppelt vergebene CSS-Klasse.
+- **Mehrmengen werden nicht mehr doppelt abgerechnet:** Ist ein Mehrmengen-Nachtrag beauftragt, rechnet „Mengen aus Aufmaß übernehmen“ an der Vertragsposition nur noch die gemessene Menge abzüglich der Nachtragsmenge ab; die Mehrmenge steht nur im Nachtrag (zu dessen Preis). Eine von Hand eingetragene Menge, die sie erneut abrechnen würde, verhindert das Festschreiben.
+- **Hinweis auf Positionen ohne Preis:** Beim Festschreiben einer Rechnung erscheint ein Hinweis, wenn Positionen 0,00 € kosten (z. B. aus einem Regiebericht übernommene Leistungen, Materialien und Geräte).
+- **Regiestunden im Lohnkostenanteil (§ 35a EStG):** Aus Regieberichten übernommene Stunden bekommen eine Lohn-Kalkulation aus der Lohngruppe und zählen damit als Arbeitskosten (vorher 0 €).
+
 ### Geändert
 - **Basis-Images aktualisiert:** App und Web laufen auf **Node 26** (vorher 22). Node 26 enthält kein corepack mehr; die Images installieren pnpm jetzt direkt in der Version aus `package.json` → `packageManager`. KoSIT-Validator auf **Eclipse Temurin 25** (vorher 21), Download-Stufe auf **Alpine 3.24**. CI-Actions auf die aktuellen Hauptversionen (checkout/setup-node v7, Docker-Actions v4/v6/v7). Für Betreiber ändert sich nichts außer neuen Images (`docker compose pull` bzw. `--build`); Entwickler brauchen lokal Node 26 (`.nvmrc`).
 
 ### Neu
+- **Handbuch als Website:** Workflow `Handbuch` (`.github/workflows/handbook.yml`) baut Benutzerhandbuch und Betriebsdokumentation mit Jekyll (Theme Just the Docs, Suche, Handy-tauglich) und veröffentlicht sie auf GitHub Pages; Quelle bleiben die Markdown-Dateien in `docs/`, `docs/site/build.sh` ergänzt nur Navigation und Links.
+- **README, Vorlagen für Issues und Pull Requests:** README für EasyBau mit Funktionsübersicht und Screenshots; Formulare für Fehlerberichte, Funktionswünsche und Fragen (`.github/ISSUE_TEMPLATE/`), Sicherheitslücken vertraulich über GitHub Security Advisories; PR-Vorlage mit den Prüfpunkten aus CLAUDE.md.
+- **Verschlüsselte Sicherung außer Haus (optional):** Nach jeder nächtlichen Sicherung eine mit restic verschlüsselte Kopie an einen zweiten Ort (S3, Backblaze B2, SFTP, restic REST-Server); Status und Warnung im Betriebs-Check; Zurückholen mit `backup.sh offsite-fetch`. Der Dienst `backup` nutzt dafür ein eigenes Image `…-backup` (PostgreSQL-Werkzeuge + restic, ADR 0011). Neue optionale Variablen `RESTIC_REPOSITORY`, `RESTIC_PASSWORD(_FILE)`, `OFFSITE_S3_*`, `OFFSITE_B2_*`, `OFFSITE_SECRETS_DIR`, `OFFSITE_KEEP_*`; Datenbank-Migration `0037_backup_offsite`. Kein neuer Container.
+- **Rechnungseingang mit Google Workspace:** Anmeldung am Postfach per Dienstkonto mit domainweiter Delegierung (OAuth2, JSON-Schlüsseldatei verschlüsselt gespeichert). Einrichtung in `docs/self-hosting/`.
+- **Nachträge teilweise beauftragen:** „Teilweise beauftragt“ am Nachtrag mit Auswahl der beauftragten Positionen; nur diese zählen zur Vertragssumme und dürfen abgerechnet werden.
+- **Kontakte mit eigener Adresse:** Ein geöffneter Kontakt hat die URL `/kontakte/<id>` (Lesezeichen, Zurück-Knopf); Treffer der globalen Suche öffnen den Kontakt direkt.
+- **Übersicht offline:** Ohne Verbindung zeigt die Startseite „Heute auf der Baustelle“ und die zuletzt bearbeiteten Projekte vom Gerät (neuer Endpunkt `GET /dashboard/site` ohne Beträge); Forderungen, Angebote und Eingangsrechnungen erscheinen wieder mit Verbindung.
+- **Hinweise zum Rechnungseingang:** Die Hinweisleiste meldet, wenn der Postfach-Abruf dreimal hintereinander fehlschlägt, und erinnert 30 Tage vor Ablauf des geheimen Clientschlüssels für Microsoft 365 (Ablaufdatum in den Einstellungen eintragbar).
+- **Benachrichtigungen aufräumen:** Gelesene Benachrichtigungen werden nach 90 Tagen nachts gelöscht (Worker, 04:27 Uhr; „Rechnung überfällig“ bleibt, solange die Rechnung überfällig ist). Datenbank-Migration `0036_notification_cleanup`.
+- **Rechnungseingang mit Microsoft 365:** Anmeldung am Postfach per OAuth2 (App-Registrierung in Microsoft Entra mit `IMAP.AccessAsApp`), da Microsoft 365 IMAP mit Passwort nicht mehr zulässt. Einrichtung in `docs/self-hosting/` (Abschnitt Rechnungseingang). Keine neue Variable; der Server verbindet sich nur mit Microsoft, wenn eine Firma das einträgt.
 - **Eingangsrechnungen ausgebaut**:
   - **Rechnungseingang per E-Mail** (optional): Nach Freischaltung durch den Betreiber (`INCOMING_MAIL_ENABLED=true`) trägt jede Firma unter Einstellungen › Rechnungseingang ihr IMAP-Postfach ein. Rechnungsanhänge ungelesener E-Mails landen automatisch in „Zu prüfen“ (mit Absender und Betreff), die E-Mail wird als gelesen markiert oder verschoben. Passwort verschlüsselt gespeichert, „Jetzt abrufen“ zum Testen.
   - **Kostenzuweisung je Rechnungsposition**: Bei E-Rechnungen mit mehreren Positionen „Je Rechnungsposition zuweisen“ – je Position eine Zuweisung mit Betrag, Steuersatz und Text, Projekt/Betriebsbereich je Zeile wählbar.

@@ -1,0 +1,11 @@
+blank_issues_enabled: false
+contact_links:
+  - name: Sicherheitslücke melden
+    url: https://github.com/VIONYT/OpenPlancraft/security/advisories/new
+    about: Bitte nicht öffentlich als Issue – vertraulich über „Report a vulnerability“ melden.
+  - name: Benutzerhandbuch
+    url: https://github.com/VIONYT/OpenPlancraft/tree/main/docs/handbuch
+    about: Viele Fragen zur Bedienung beantwortet das Handbuch.
+  - name: Betriebsdokumentation
+    url: https://github.com/VIONYT/OpenPlancraft/tree/main/docs/self-hosting
+    about: Installation, Updates, Sicherung und Wiederherstellung.

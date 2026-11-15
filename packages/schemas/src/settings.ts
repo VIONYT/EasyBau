@@ -325,6 +325,13 @@ export interface BackupRunSummary {
   dbBytes: number | null
   filesBytes: number | null
   message: string | null
+  /** Sicherung außer Haus (ADR 0011): off = not set up; null = run before it existed. */
+  offsite: {
+    status: 'ok' | 'failed' | 'off'
+    at: string | null
+    target: string | null
+    message: string | null
+  } | null
 }
 
 export interface OperationsStatus {

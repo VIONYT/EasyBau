@@ -88,6 +88,21 @@ describe.skipIf(!process.env.DATABASE_URL)('Betriebs-Check (integration)', () =>
       ['2026-11-08_023000', 'failed', 'No space left on device'],
       ['2026-11-07_023000', 'ok', null],
     ])
+    expect(status.backup.lastSuccess?.offsite).toBeNull()
+  })
+
+  it('shows the state of the encrypted copy off site (ADR 0011)', async () => {
+    await h.adminSql`
+      insert into backup_run (name, status, started_at, finished_at, offsite_status, offsite_at,
+                              offsite_target, offsite_message) values
+        ('2026-11-09_023000', 'ok', now(), now(), 'ok', now(), 's3:https://s3.example.com/sicherung', null)`
+    const status = (await admin.get('/api/v1/settings/operations')).json() as OperationsStatus
+    expect(status.backup.lastSuccess?.offsite).toMatchObject({
+      status: 'ok',
+      target: 's3:https://s3.example.com/sicherung',
+      message: null,
+    })
+    expect(status.backup.lastSuccess?.offsite?.at).toMatch(/^\d{4}-\d{2}-\d{2}T/)
   })
 
   it('lets the application only read the backup log', async () => {

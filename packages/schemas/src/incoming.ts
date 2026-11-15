@@ -274,8 +274,17 @@ export interface IncomingInvoiceDetail extends IncomingInvoiceListItem {
 
 // ---- Rechnungseingang per E-Mail (P2.4) -------------------------------------------------------
 
+/**
+ * Anmeldung am Postfach: password = IMAP LOGIN; google = service account with domain-wide
+ * delegation (JWT bearer, RFC 7523), IMAP XOAUTH2; microsoft365 = OAuth2 client credentials (App
+ * registration in Microsoft Entra with the IMAP permission), IMAP XOAUTH2.
+ */
+export const INCOMING_MAIL_AUTH = ['password', 'microsoft365', 'google'] as const
+export type IncomingMailAuth = (typeof INCOMING_MAIL_AUTH)[number]
+
 export const incomingMailSettingsRequest = z.object({
   enabled: z.boolean(),
+  auth: z.enum(INCOMING_MAIL_AUTH).default('password'),
   host: optionalText(200),
   port: z.number().int().min(1).max(65535).default(993),
   /** TLS from the start (993); false: STARTTLS (143). */
@@ -283,6 +292,20 @@ export const incomingMailSettingsRequest = z.object({
   user: optionalText(200),
   /** undefined: keep the stored password; '' or null: remove it. */
   password: z.string().max(500).nullable().optional(),
+  /** Microsoft 365: Verzeichnis-ID (Mandant) and Anwendungs-ID of the App registration. */
+  tenantId: optionalText(100).refine((v) => !v || /^[A-Za-z0-9.-]+$/.test(v), {
+    message: 'Bitte die Verzeichnis-ID (Mandanten-ID) oder Domain angeben.',
+  }),
+  clientId: optionalText(100),
+  /** Microsoft 365: client secret; undefined keeps the stored one, '' or null removes it. */
+  clientSecret: z.string().max(500).nullable().optional(),
+  /**
+   * Google Workspace: JSON key of the service account (as downloaded from the Google Cloud
+   * console); undefined keeps the stored one, '' or null removes it.
+   */
+  googleServiceAccountKey: z.string().max(10_000).nullable().optional(),
+  /** Microsoft 365: Ablaufdatum of the secret (shown in Entra), for the reminder bar. */
+  clientSecretExpiresOn: isoDate.nullable().optional(),
   mailbox: text(200).default('INBOX'),
   /** Move processed messages there (e.g. „Verarbeitet“); empty: only mark as read. */
   processedMailbox: optionalText(200),
@@ -299,17 +322,26 @@ export interface IncomingMailRun {
   /** Temporary errors: the message stays unread and is tried again. */
   failed: number
   error: string | null
+  /** Runs with an error in a row (0 after a successful run). */
+  failedRuns: number
 }
 
 export interface IncomingMailSettings {
   /** Allowed by the operator (INCOMING_MAIL_ENABLED). */
   available: boolean
   enabled: boolean
+  auth: IncomingMailAuth
   host: string | null
   port: number
   secure: boolean
   user: string | null
   hasPassword: boolean
+  tenantId: string | null
+  clientId: string | null
+  hasClientSecret: boolean
+  clientSecretExpiresOn: string | null
+  /** Google Workspace: e-mail address of the stored service account (not secret). */
+  googleClientEmail: string | null
   mailbox: string
   processedMailbox: string | null
   lastRun: IncomingMailRun | null

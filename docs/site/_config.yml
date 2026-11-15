@@ -1,0 +1,24 @@
+# Handbook site on GitHub Pages; built by .github/workflows/handbook.yml from docs/site/build.sh.
+title: EasyBau – Handbuch
+description: Benutzerhandbuch und Betriebsdokumentation für EasyBau
+lang: de-DE
+remote_theme: just-the-docs/just-the-docs@v0.10.1
+plugins:
+  - jekyll-remote-theme
+  - jekyll-relative-links
+relative_links:
+  enabled: true
+  collections: false
+color_scheme: light
+search_enabled: true
+search:
+  heading_level: 3
+  button: true
+heading_anchors: true
+back_to_top: true
+back_to_top_text: Nach oben
+defaults:
+  - scope:
+      path: ""
+    values:
+      layout: default

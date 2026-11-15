@@ -1,0 +1,70 @@
+# Publishes the user handbook (docs/handbuch) and the operations guide (docs/self-hosting) on GitHub Pages.
+# Needs Pages enabled with source "GitHub Actions" (Settings → Pages). For a private repository this needs
+# a paid plan (GitHub Pro/Team/Enterprise); the published site is public unless the organization uses
+# GitHub Enterprise Cloud with private Pages.
+name: Handbuch
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - docs/handbuch/**
+      - docs/self-hosting/**
+      - docs/screenshots/**
+      - docs/site/**
+      - .github/workflows/handbook.yml
+  pull_request:
+    paths:
+      - docs/handbuch/**
+      - docs/self-hosting/**
+      - docs/screenshots/**
+      - docs/site/**
+      - .github/workflows/handbook.yml
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: pages-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v7
+      - name: Prepare site source
+        # url/baseurl are set here, so the build does not need to read the Pages API.
+        run: |
+          owner=$(printf '%s' "$OWNER" | tr '[:upper:]' '[:lower:]')
+          sh docs/site/build.sh _handbook "$SERVER/$REPOSITORY" "https://$owner.github.io/$NAME"
+        env:
+          OWNER: ${{ github.repository_owner }}
+          NAME: ${{ github.event.repository.name }}
+          SERVER: ${{ github.server_url }}
+          REPOSITORY: ${{ github.repository }}
+      - name: Build with Jekyll
+        uses: actions/jekyll-build-pages@v1
+        with:
+          source: ./_handbook
+          destination: ./_site
+      - name: Upload site
+        if: github.event_name != 'pull_request'
+        uses: actions/upload-pages-artifact@v4
+
+  deploy:
+    if: github.event_name != 'pull_request'
+    needs: build
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      pages: write
+      id-token: write
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - id: deployment
+        uses: actions/deploy-pages@v4

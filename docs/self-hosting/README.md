@@ -85,6 +85,34 @@ Danach `https://<APP_DOMAIN>` öffnen, den Code eingeben, die Firma und das erst
 - Der Server muss den IMAP-Server erreichen dürfen (ausgehend Port 993 bzw. 143).
 - Bitte ein eigenes Postfach nur für Rechnungen verwenden: jeder PDF-/Bild-Anhang wird als mögliche Rechnung übernommen.
 
+#### Google Workspace
+
+Google lässt IMAP mit dem normalen Passwort nicht zu (Gmail nur mit App-Passwort). Für Firmenpostfächer gibt es unter Einstellungen › Rechnungseingang die Anmeldung „Google Workspace (Dienstkonto, OAuth2)“. Einmal einrichten (Super-Admin der Google-Workspace-Domain nötig):
+
+1. **Dienstkonto anlegen:** Google Cloud Console › Projekt wählen oder anlegen › IAM und Verwaltung › Dienstkonten › Dienstkonto erstellen (keine Rollen nötig). Unter „Schlüssel“ einen neuen JSON-Schlüssel erstellen und herunterladen. Die „Eindeutige ID“ (Client-ID) des Dienstkontos notieren.
+2. **Domainweite Delegierung:** Google-Admin-Konsole › Sicherheit › Zugriffs- und Datenverwaltung › API-Steuerung › Domainweite Delegierung › Neu hinzufügen: Client-ID des Dienstkontos, Bereich `https://mail.google.com/`.
+3. **IMAP erlauben:** Admin-Konsole › Apps › Google Workspace › Gmail › Endnutzerzugriff › IMAP-Zugriff aktivieren (für die Organisationseinheit des Postfachs).
+4. In OpenPlancraft Postfach-Adresse eintragen, die JSON-Schlüsseldatei hochladen und „Jetzt abrufen“ testen.
+
+Gespeichert werden nur E-Mail-Adresse und privater Schlüssel des Dienstkontos (verschlüsselt mit `APP_SECRET`, nie angezeigt). Bei jedem Abruf signiert der Server ein Token für das Postfach, tauscht es bei `oauth2.googleapis.com` gegen ein Zugriffstoken und meldet sich per IMAP (XOAUTH2) bei `imap.gmail.com:993` an – beide Adressen müssen ausgehend erreichbar sein. Hinweis: Die domainweite Delegierung mit `https://mail.google.com/` erlaubt dem Dienstkonto den Zugriff auf **alle** Postfächer der Domain; die Schlüsseldatei daher wie ein Administratorpasswort behandeln und nach dem Hochladen löschen.
+
+#### Microsoft 365 / Exchange Online
+
+Microsoft 365 nimmt IMAP nicht mehr mit Passwort an. Dafür gibt es unter Einstellungen › Rechnungseingang die Anmeldung „Microsoft 365 (App-Registrierung, OAuth2)“. Die Firma richtet einmal ein (Administratorrechte im Microsoft-365-Mandanten nötig):
+
+1. **App registrieren:** Microsoft Entra Admin Center › Anwendungen › App-Registrierungen › Neue Registrierung (nur Konten dieses Verzeichnisses). Verzeichnis-ID (Mandanten-ID) und Anwendungs-ID notieren.
+2. **Berechtigung:** API-Berechtigungen › Berechtigung hinzufügen › „Von meiner Organisation verwendete APIs“ › *Office 365 Exchange Online* › Anwendungsberechtigungen › `IMAP.AccessAsApp`, danach „Administratorzustimmung erteilen“.
+3. **Geheimer Clientschlüssel:** Zertifikate & Geheimnisse › Neuer geheimer Clientschlüssel. Den *Wert* kopieren (wird nur einmal angezeigt) und das Ablaufdatum notieren – vor Ablauf einen neuen Schlüssel anlegen und in den Einstellungen eintragen.
+4. **Postfach für die App freigeben** (Exchange Online PowerShell, `Connect-ExchangeOnline`):
+   ```powershell
+   New-ServicePrincipal -AppId <Anwendungs-ID> -ObjectId <Objekt-ID der Unternehmensanwendung>
+   Add-MailboxPermission -Identity rechnungen@firma.de -User <Objekt-ID der Unternehmensanwendung> -AccessRights FullAccess
+   ```
+   Die Objekt-ID steht unter Entra › Unternehmensanwendungen (nicht die der App-Registrierung). Ohne diesen Schritt meldet der Abruf „Microsoft 365 hat die Anmeldung am Postfach abgelehnt“.
+5. In OpenPlancraft Postfach-Adresse, Verzeichnis-ID, Anwendungs-ID und geheimen Clientschlüssel eintragen und „Jetzt abrufen“ testen.
+
+Der Schlüssel wird wie das Passwort verschlüsselt gespeichert und nie angezeigt. Bei jedem Abruf holt der Server ein Zugriffstoken bei `login.microsoftonline.com` und meldet sich per IMAP (XOAUTH2) bei `outlook.office365.com:993` an – beide Adressen müssen ausgehend erreichbar sein. Andere Microsoft-Dienste werden nicht angesprochen; ohne diese Einstellung verbindet sich der Server nie mit Microsoft.
+
 ## 5a. E-Rechnung (Dienst „kosit“)
 
 - Jede Rechnung und Gutschrift wird beim Festschreiben als E-Rechnung erzeugt:
@@ -148,12 +176,37 @@ docker compose exec backup backup.sh verify <Name>    # Sicherung prüfen
 docker compose logs backup                            # Protokoll
 ```
 
-**Ziel:** Standard ist das Docker-Volume `backups` auf demselben Server. Das schützt vor Bedienfehlern, nicht vor einem Plattendefekt oder Einbruch. Deshalb:
+**Ziel:** Standard ist das Docker-Volume `backups` auf demselben Server. Das schützt vor Bedienfehlern, nicht vor einem Plattendefekt, Brand, Diebstahl oder Verschlüsselungstrojaner. Deshalb zusätzlich die **verschlüsselte Sicherung außer Haus** einrichten (unten) und/oder `BACKUP_DIR` auf einen anderen Datenträger legen (z. B. `BACKUP_DIR=/mnt/nas/easybau`).
 
-- `BACKUP_DIR` auf einen anderen Datenträger oder ein NAS legen (z. B. `BACKUP_DIR=/mnt/nas/openplancraft`), **und/oder**
-- die Sicherungen regelmäßig außer Haus kopieren, am besten verschlüsselt (z. B. mit restic oder borg auf ein zweites Gerät oder einen Speicherdienst in der EU). Das Volume liegt unter `docker volume inspect openplancraft_backups`.
 - Die **`.env` getrennt sichern** (Passwortmanager oder Tresor). Ohne denselben `APP_SECRET` sind Zwei-Faktor-Geheimnisse und IBAN nach einer Wiederherstellung nicht lesbar.
-- Die Sicherungen sind nicht verschlüsselt: Zugriff auf das Sicherungsziel wie auf den Server selbst beschränken.
+- Die lokalen Sicherungen sind nicht verschlüsselt: Zugriff auf `BACKUP_DIR` wie auf den Server selbst beschränken.
+
+### 6a. Verschlüsselte Sicherung außer Haus (restic)
+
+Optional ([ADR 0011](../adr/0011-sicherung-ausser-haus.md)): Nach jeder erfolgreichen Sicherung kopiert der Dienst `backup` sie mit [restic](https://restic.net) an einen zweiten Ort. Verschlüsselt wird **auf Ihrem Server** (AES-256); der Speicherort sieht nur verschlüsselte Daten. Nach der ersten Kopie werden nur noch Änderungen übertragen.
+
+1. Ziel wählen, z. B. einen S3-Speicher in der EU (Hetzner Object Storage, IONOS, AWS Frankfurt, Wasabi), Backblaze B2, einen SFTP-Zugang (NAS bei einer anderen Person, Speicherbox) oder einen restic REST-Server.
+2. In der `.env` eintragen (Beispiele in `.env.example`):
+   ```bash
+   RESTIC_REPOSITORY=s3:https://fsn1.your-objectstorage.com/firma-sicherung
+   RESTIC_PASSWORD=<langes zufälliges Passwort, z. B. openssl rand -base64 32>
+   OFFSITE_S3_ACCESS_KEY=…
+   OFFSITE_S3_SECRET_KEY=…
+   ```
+   Für SFTP: `RESTIC_REPOSITORY=sftp:nutzer@host:/pfad`, privaten SSH-Schlüssel als `id_ed25519` und den Host-Schlüssel als `known_hosts` in `OFFSITE_SECRETS_DIR` (Standard `infra/backup/secrets/`) ablegen (`ssh-keyscan host > infra/backup/secrets/known_hosts`).
+3. `docker compose up -d backup`, dann einmal testen: `docker compose exec backup backup.sh run`. Der Betriebs-Check zeigt „Sicherung außer Haus: Verschlüsselt kopiert nach …“.
+
+> **Das restic-Passwort getrennt vom Server aufbewahren** (Passwort-Manager, Ausdruck im Tresor). Ohne dieses Passwort lassen sich die Kopien nicht mehr öffnen – auch nicht vom Anbieter.
+
+Aufbewahrung außer Haus: `OFFSITE_KEEP_DAILY` (14), `OFFSITE_KEEP_WEEKLY` (8), `OFFSITE_KEEP_MONTHLY` (24). Schutz gegen Löschen durch einen Angreifer auf dem Server: ein Ziel mit eigener Löschsperre wählen (S3 mit Versionierung/Object Lock und Lebenszyklus-Regel, restic REST-Server mit `--append-only`).
+
+```bash
+docker compose exec backup backup.sh offsite-list          # Stände außer Haus anzeigen
+docker compose exec backup backup.sh offsite-check         # Repository prüfen (5 % der Daten gelesen)
+docker compose exec backup backup.sh offsite-fetch <Name>  # Stand zurückholen und prüfen, danach restore.sh <Name>
+```
+
+Auf einem neuen Server: Repository klonen, `.env` (mit `APP_SECRET` und `RESTIC_*`) einrichten, `docker compose up -d db backup`, `offsite-list`, `offsite-fetch <Name>`, dann `sh infra/restore.sh <Name>`.
 
 **Wiederherstellen** (z. B. nach einem Fehler oder auf einem neuen Server mit derselben `.env`):
 

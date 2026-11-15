@@ -1,4 +1,4 @@
-// Brief nach DIN 5008 Form B, A4 (OpenPlancraft). All content comes from /data.json and is
+// Brief nach DIN 5008 Form B, A4 (EasyBau). All content comes from /data.json and is
 // rendered as plain text (never evaluated as markup). Positions in mm, see DIN5008B in
 // packages/domain/src/letterhead.ts.
 

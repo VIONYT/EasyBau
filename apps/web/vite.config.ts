@@ -3,7 +3,7 @@ import { defaultClientConditions, defineConfig } from 'vite'
 import { VitePWA } from 'vite-plugin-pwa'
 
 /** Product name in one place (ADR 0001: working title, renamed before the first release). */
-const APP_NAME = process.env.VITE_APP_NAME ?? 'OpenPlancraft'
+const APP_NAME = process.env.VITE_APP_NAME ?? 'EasyBau'
 
 export default defineConfig({
   plugins: [
