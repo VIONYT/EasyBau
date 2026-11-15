@@ -13,6 +13,7 @@ Alle wesentlichen Änderungen, vor allem solche, die Betreiber betreffen (neue V
 - **Basis-Images aktualisiert:** App und Web laufen auf **Node 26** (vorher 22). Node 26 enthält kein corepack mehr; die Images installieren pnpm jetzt direkt in der Version aus `package.json` → `packageManager`. KoSIT-Validator auf **Eclipse Temurin 25** (vorher 21), Download-Stufe auf **Alpine 3.24**. CI-Actions auf die aktuellen Hauptversionen (checkout/setup-node v7, Docker-Actions v4/v6/v7). Für Betreiber ändert sich nichts außer neuen Images (`docker compose pull` bzw. `--build`); Entwickler brauchen lokal Node 26 (`.nvmrc`).
 
 ### Neu
+- **Kontakte mit eigener Adresse:** Ein geöffneter Kontakt hat die URL `/kontakte/<id>` (Lesezeichen, Zurück-Knopf); Treffer der globalen Suche öffnen den Kontakt direkt.
 - **Übersicht offline:** Ohne Verbindung zeigt die Startseite „Heute auf der Baustelle“ und die zuletzt bearbeiteten Projekte vom Gerät (neuer Endpunkt `GET /dashboard/site` ohne Beträge); Forderungen, Angebote und Eingangsrechnungen erscheinen wieder mit Verbindung.
 - **Hinweise zum Rechnungseingang:** Die Hinweisleiste meldet, wenn der Postfach-Abruf dreimal hintereinander fehlschlägt, und erinnert 30 Tage vor Ablauf des geheimen Clientschlüssels für Microsoft 365 (Ablaufdatum in den Einstellungen eintragbar).
 - **Benachrichtigungen aufräumen:** Gelesene Benachrichtigungen werden nach 90 Tagen nachts gelöscht (Worker, 04:27 Uhr; „Rechnung überfällig“ bleibt, solange die Rechnung überfällig ist). Datenbank-Migration `0036_notification_cleanup`.

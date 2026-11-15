@@ -1021,6 +1021,13 @@ test('Übersicht, globale Suche und Benachrichtigungen', async () => {
   await expect(page.getByRole('heading', { name: 'Kontakte' })).toBeVisible()
   await expect(page.getByRole('heading', { name: 'Dokumente' })).toBeVisible()
   await expectNoHorizontalScroll(page)
+  // A contact hit opens the contact itself (own URL).
+  await page
+    .getByRole('region', { name: 'Kontakte' })
+    .getByRole('link', { name: /Wohnbau Nord eG/ })
+    .click()
+  await expect(page).toHaveURL(/\/kontakte\/[0-9a-f-]{36}$/)
+  await expect(page.getByRole('heading', { name: 'Wohnbau Nord eG' })).toBeVisible()
   await page.getByRole('searchbox', { name: 'Suchen' }).fill('Lindenweg')
   await page.getByRole('searchbox', { name: 'Suchen' }).press('Enter')
   await page

@@ -216,7 +216,9 @@ export function Workspace({
         ) : null}
         {current.view === 'catalog' ? <Catalog me={me} /> : null}
         {current.view === 'settings' ? <Settings me={me} initial={current.section} /> : null}
-        {current.view === 'contacts' ? <Contacts me={me} navigate={navigate} /> : null}
+        {current.view === 'contacts' ? (
+          <Contacts me={me} navigate={navigate} selected={current.id ?? null} />
+        ) : null}
         {current.view === 'invoices' ? <Invoices me={me} navigate={navigate} /> : null}
         {current.view === 'incoming' ? <IncomingInvoices me={me} navigate={navigate} /> : null}
         {current.view === 'incomingInvoice' ? (
@@ -252,7 +254,16 @@ function contactQuery(query: string, filter: typeof NO_CONTACT_FILTER) {
   return params.toString()
 }
 
-function Contacts({ me, navigate }: { me: Me; navigate: Navigate }) {
+/** Kontakte; the open contact has its own URL (/kontakte/<id>), e.g. for search hits and links. */
+function Contacts({
+  me,
+  navigate,
+  selected,
+}: {
+  me: Me
+  navigate: Navigate
+  selected: string | null
+}) {
   const [query, setQuery] = useState('')
   const [filter, setFilter] = useState(NO_CONTACT_FILTER)
   const [importing, setImporting] = useState(false)
@@ -260,7 +271,8 @@ function Contacts({ me, navigate }: { me: Me; navigate: Navigate }) {
   const list = useList<ContactSummary>(`/api/v1/contacts?${contactQuery(query, filter)}`)
   const canWrite = me.permissions.includes('contacts.write')
   const [kind, setKind] = useState<'organization' | 'person'>('organization')
-  const [selected, setSelected] = useState<string | null>(null)
+  const setSelected = (id: string | null) =>
+    navigate(id ? { view: 'contacts', id } : { view: 'contacts' })
   const form = useForm(
     (data) =>
       api<ContactDetail>('POST', '/api/v1/contacts', {

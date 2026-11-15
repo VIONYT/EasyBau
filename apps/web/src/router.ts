@@ -6,7 +6,7 @@ export type Route =
   | { view: 'search'; q: string }
   | { view: 'notifications' }
   | { view: 'projects' }
-  | { view: 'contacts' }
+  | { view: 'contacts'; id?: string }
   | { view: 'invoices' }
   | { view: 'incoming' }
   | { view: 'incomingInvoice'; id: string }
@@ -71,6 +71,8 @@ export function parseRoute(path: string, search = ''): Route {
     const section = new URLSearchParams(search).get('bereich')
     return section ? { view: 'settings', section } : { view: 'settings' }
   }
+  const contact = new RegExp(`^/kontakte/(${UUID})/?$`).exec(path)
+  if (contact) return { view: 'contacts', id: contact[1] as string }
   if (path.startsWith('/kontakte')) return { view: 'contacts' }
   if (path.startsWith('/rechnungen')) return { view: 'invoices' }
   if (path.startsWith('/benutzer')) return { view: 'users' }
@@ -90,7 +92,7 @@ export function pathOf(route: Route): string {
     case 'search':
       return `/suche?q=${encodeURIComponent(route.q)}`
     case 'contacts':
-      return '/kontakte'
+      return route.id ? `/kontakte/${route.id}` : '/kontakte'
     case 'catalog':
       return '/stammdaten'
     case 'settings':

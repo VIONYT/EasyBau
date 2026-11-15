@@ -6,7 +6,7 @@ import { FormError } from '../forms'
 import { type TextKey, t, tf } from '../i18n'
 import { type Navigate, pathOf, type Route } from '../router'
 
-/** Where a search hit leads. Contacts and Stammdaten have no own page yet: their list. */
+/** Where a search hit leads. Stammdaten have no own page yet: their list. */
 function routeOf(hit: SearchHit): Route {
   switch (hit.kind) {
     case 'project':
@@ -16,7 +16,7 @@ function routeOf(hit: SearchHit): Route {
     case 'incoming':
       return { view: 'incomingInvoice', id: hit.id }
     case 'contact':
-      return { view: 'contacts' }
+      return { view: 'contacts', id: hit.id }
     case 'catalog':
       return { view: 'catalog' }
   }
