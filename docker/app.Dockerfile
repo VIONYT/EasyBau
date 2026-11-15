@@ -1,7 +1,7 @@
 # syntax=docker/dockerfile:1.7
 # One image for all roles: APP_ROLE=all|api|worker (ADR 0002).
 
-FROM node:22-alpine AS base
+FROM node:26-alpine AS base
 ENV PNPM_HOME=/pnpm PATH=/pnpm:$PATH COREPACK_ENABLE_DOWNLOAD_PROMPT=0
 # Optional extra CA for TLS-inspecting corporate proxies (build secret "extra_ca", may be empty).
 ENV NODE_EXTRA_CA_CERTS=/run/secrets/extra_ca
@@ -37,7 +37,7 @@ ENV NODE_EXTRA_CA_CERTS=
 COPY . .
 CMD ["sh", "-c", "pnpm lint && pnpm typecheck && pnpm test:coverage"]
 
-FROM node:22-alpine AS runtime
+FROM node:26-alpine AS runtime
 ENV NODE_ENV=production PORT=3000
 WORKDIR /app
 COPY --from=build --chown=node:node /out ./
