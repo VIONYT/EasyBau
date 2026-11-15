@@ -5,6 +5,7 @@ Alle wesentlichen Änderungen, vor allem solche, die Betreiber betreffen (neue V
 ## Unveröffentlicht
 
 ### Behoben
+- **Darstellung der Betragszeilen:** Auf breiten Bildschirmen standen in „Zahlungen und offene Forderung“, in der Eingangsrechnung und im Mahnungsdialog Beschriftungen und Beträge durcheinander, in der Übersicht die Beträge versetzt; Ursache war eine doppelt vergebene CSS-Klasse.
 - **Mehrmengen werden nicht mehr doppelt abgerechnet:** Ist ein Mehrmengen-Nachtrag beauftragt, rechnet „Mengen aus Aufmaß übernehmen“ an der Vertragsposition nur noch die gemessene Menge abzüglich der Nachtragsmenge ab; die Mehrmenge steht nur im Nachtrag (zu dessen Preis). Eine von Hand eingetragene Menge, die sie erneut abrechnen würde, verhindert das Festschreiben.
 - **Hinweis auf Positionen ohne Preis:** Beim Festschreiben einer Rechnung erscheint ein Hinweis, wenn Positionen 0,00 € kosten (z. B. aus einem Regiebericht übernommene Leistungen, Materialien und Geräte).
 - **Regiestunden im Lohnkostenanteil (§ 35a EStG):** Aus Regieberichten übernommene Stunden bekommen eine Lohn-Kalkulation aus der Lohngruppe und zählen damit als Arbeitskosten (vorher 0 €).

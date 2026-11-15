@@ -116,7 +116,7 @@ export function Dashboard({ me, navigate }: { me: Me; navigate: Navigate }) {
             <section className="panel" aria-labelledby={`${id}-rec`}>
               <h2 id={`${id}-rec`}>{t('dash.receivables')}</h2>
               <p className="amount-big">{money(data.receivables.total.cents)}</p>
-              <div className="receivable-sums">
+              <div className="dashboard-sums">
                 {sum('open', data.receivables.open)}
                 {sum('overdue', data.receivables.overdue)}
                 {sum('dunned', data.receivables.dunned)}

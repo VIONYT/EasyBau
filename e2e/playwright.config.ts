@@ -50,9 +50,12 @@ export default defineConfig({
     ignoreHTTPSErrors: true,
     trace: 'off',
     screenshot: 'only-on-failure',
-    ...(process.env.CHROMIUM_PATH
-      ? { launchOptions: { executablePath: process.env.CHROMIUM_PATH } }
-      : {}),
+    // German browser language: date fields show TT.MM.JJJJ like on German devices.
+    launchOptions: {
+      args: ['--lang=de-DE'],
+      env: { ...process.env, LANG: 'de_DE.UTF-8', LANGUAGE: 'de' },
+      ...(process.env.CHROMIUM_PATH ? { executablePath: process.env.CHROMIUM_PATH } : {}),
+    },
   },
   projects: [{ name: `${device}-chromium`, use: { ...DEVICES[device] } }],
 })

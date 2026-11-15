@@ -266,7 +266,8 @@ legend {
   align-items: start;
 }
 
-.receivable-sums {
+/* Own class: .receivable-sums is the row list of the payment panel (label left, amount right). */
+.dashboard-sums {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(90px, 1fr));
   gap: var(--space-2);
@@ -276,6 +277,11 @@ legend {
 .receivable-sum {
   display: flex;
   flex-direction: column;
+}
+
+/* Label, amount and count stacked: the amount under its label, not right-aligned. */
+.receivable-sum .amount {
+  text-align: left;
 }
 
 .receivable-sum--overdue strong,
