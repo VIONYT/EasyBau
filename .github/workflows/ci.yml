@@ -30,7 +30,8 @@ jobs:
       DATABASE_URL: postgres://test:test@localhost:5432/test
     steps:
       - uses: actions/checkout@v7
-      - run: corepack enable
+      # Node 25+ no longer ships corepack: install the pnpm of "packageManager" (before setup-node, for its cache).
+      - run: npm install --global --no-fund --no-audit "$(node -p "require('./package.json').packageManager")"
       - uses: actions/setup-node@v7
         with:
           node-version-file: .nvmrc
@@ -51,7 +52,8 @@ jobs:
       COMPOSE_BAKE: "false"
     steps:
       - uses: actions/checkout@v7
-      - run: corepack enable
+      # Node 25+ no longer ships corepack: install the pnpm of "packageManager" (before setup-node, for its cache).
+      - run: npm install --global --no-fund --no-audit "$(node -p "require('./package.json').packageManager")"
       - uses: actions/setup-node@v7
         with:
           node-version-file: .nvmrc

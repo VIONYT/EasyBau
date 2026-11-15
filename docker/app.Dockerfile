@@ -1,12 +1,15 @@
 # syntax=docker/dockerfile:1.7
 # One image for all roles: APP_ROLE=all|api|worker (ADR 0002).
 
-FROM node:22-alpine AS base
-ENV PNPM_HOME=/pnpm PATH=/pnpm:$PATH COREPACK_ENABLE_DOWNLOAD_PROMPT=0
+FROM node:26-alpine AS base
+ENV PNPM_HOME=/pnpm PATH=/pnpm:$PATH
 # Optional extra CA for TLS-inspecting corporate proxies (build secret "extra_ca", may be empty).
 ENV NODE_EXTRA_CA_CERTS=/run/secrets/extra_ca
-RUN corepack enable
 WORKDIR /repo
+# Node 25+ no longer ships corepack: install exactly the pnpm of "packageManager" with npm.
+COPY package.json ./
+RUN --mount=type=secret,id=extra_ca \
+    npm install --global --no-fund --no-audit "$(node -p "require('./package.json').packageManager")"
 
 FROM base AS deps
 COPY pnpm-lock.yaml pnpm-workspace.yaml package.json ./
@@ -37,7 +40,7 @@ ENV NODE_EXTRA_CA_CERTS=
 COPY . .
 CMD ["sh", "-c", "pnpm lint && pnpm typecheck && pnpm test:coverage"]
 
-FROM node:22-alpine AS runtime
+FROM node:26-alpine AS runtime
 ENV NODE_ENV=production PORT=3000
 WORKDIR /app
 COPY --from=build --chown=node:node /out ./

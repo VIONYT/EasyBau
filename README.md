@@ -20,7 +20,7 @@ Danach ist die Anwendung unter `https://localhost` bzw. Ihrer Domain erreichbar;
 
 ## Entwicklung
 
-Voraussetzungen: Node 22, pnpm (über `corepack enable`), Docker.
+Voraussetzungen: Node 26 (siehe `.nvmrc`), pnpm in der Version aus `package.json` → `packageManager` (`npm install -g pnpm@10.28.0`; Node 26 enthält kein corepack mehr), Docker.
 
 ```bash
 pnpm install

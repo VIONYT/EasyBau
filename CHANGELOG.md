@@ -4,6 +4,9 @@ Alle wesentlichen Änderungen, vor allem solche, die Betreiber betreffen (neue V
 
 ## Unveröffentlicht
 
+### Geändert
+- **Basis-Images aktualisiert:** App und Web laufen auf **Node 26** (vorher 22). Node 26 enthält kein corepack mehr; die Images installieren pnpm jetzt direkt in der Version aus `package.json` → `packageManager`. KoSIT-Validator auf **Eclipse Temurin 25** (vorher 21), Download-Stufe auf **Alpine 3.24**. CI-Actions auf die aktuellen Hauptversionen (checkout/setup-node v7, Docker-Actions v4/v6/v7). Für Betreiber ändert sich nichts außer neuen Images (`docker compose pull` bzw. `--build`); Entwickler brauchen lokal Node 26 (`.nvmrc`).
+
 ### Neu
 - **Eingangsrechnungen ausgebaut**:
   - **Rechnungseingang per E-Mail** (optional): Nach Freischaltung durch den Betreiber (`INCOMING_MAIL_ENABLED=true`) trägt jede Firma unter Einstellungen › Rechnungseingang ihr IMAP-Postfach ein. Rechnungsanhänge ungelesener E-Mails landen automatisch in „Zu prüfen“ (mit Absender und Betreff), die E-Mail wird als gelesen markiert oder verschoben. Passwort verschlüsselt gespeichert, „Jetzt abrufen“ zum Testen.

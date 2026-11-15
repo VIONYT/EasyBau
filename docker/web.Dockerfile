@@ -1,11 +1,14 @@
 # syntax=docker/dockerfile:1.7
 # Builds the PWA and serves it from Caddy, which is also the TLS reverse proxy.
 
-FROM node:22-alpine AS build
-ENV PNPM_HOME=/pnpm PATH=/pnpm:$PATH COREPACK_ENABLE_DOWNLOAD_PROMPT=0
+FROM node:26-alpine AS build
+ENV PNPM_HOME=/pnpm PATH=/pnpm:$PATH
 ENV NODE_EXTRA_CA_CERTS=/run/secrets/extra_ca
-RUN corepack enable
 WORKDIR /repo
+# Node 25+ no longer ships corepack: install exactly the pnpm of "packageManager" with npm.
+COPY package.json ./
+RUN --mount=type=secret,id=extra_ca \
+    npm install --global --no-fund --no-audit "$(node -p "require('./package.json').packageManager")"
 COPY pnpm-lock.yaml pnpm-workspace.yaml package.json ./
 COPY apps/web/package.json apps/web/
 COPY packages/schemas/package.json packages/schemas/
