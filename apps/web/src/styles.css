@@ -279,11 +279,6 @@ legend {
   flex-direction: column;
 }
 
-/* Label, amount and count stacked: the amount under its label, not right-aligned. */
-.receivable-sum .amount {
-  text-align: left;
-}
-
 .receivable-sum--overdue strong,
 .receivable-sum--dunned strong {
   color: var(--color-warning);
@@ -713,6 +708,11 @@ a.button {
   white-space: nowrap;
   font-variant-numeric: tabular-nums;
   text-align: right;
+}
+
+/* Label, amount and count stacked: the amount under its label, not right-aligned. */
+.receivable-sum .amount {
+  text-align: left;
 }
 
 .choices {
