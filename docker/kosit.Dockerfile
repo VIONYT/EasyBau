@@ -6,7 +6,7 @@ ARG VALIDATOR_VERSION=1.6.3
 ARG CONFIG_RELEASE=2026-08-31
 ARG XRECHNUNG_VERSION=3.0.2
 
-FROM alpine:3.22 AS download
+FROM alpine:3.24 AS download
 ARG VALIDATOR_VERSION
 ARG CONFIG_RELEASE
 ARG XRECHNUNG_VERSION
@@ -22,7 +22,7 @@ RUN mkdir -p /opt/kosit/configuration \
  && rm /tmp/configuration.zip \
  && chmod -R a+rX /opt/kosit
 
-FROM eclipse-temurin:21-jre-alpine AS runtime
+FROM eclipse-temurin:25-jre-alpine AS runtime
 COPY --from=download /opt/kosit /opt/kosit
 RUN addgroup -S kosit && adduser -S -G kosit -H kosit
 USER kosit
