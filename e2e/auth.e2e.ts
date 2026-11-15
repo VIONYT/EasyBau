@@ -75,6 +75,7 @@ test('setup, security key, user management and passwordless login', async ({ bro
   // Ersteinrichtung
   await page.goto('/')
   await expect(page.getByRole('heading', { name: 'Ersteinrichtung' })).toBeVisible()
+  if (SCREENSHOTS) await page.screenshot({ path: `${SCREENSHOTS}/tour/00-ersteinrichtung.png` })
   await page.getByLabel('Einrichtungscode').fill(SETUP_TOKEN)
   await page.getByLabel('Firmenname mit Rechtsform').fill('Muster Bau GmbH')
   await page.getByLabel('Ihr Name').fill(ADMIN.name)
@@ -1028,8 +1029,10 @@ test('Übersicht, globale Suche und Benachrichtigungen', async () => {
     .click()
   await expect(page).toHaveURL(/\/kontakte\/[0-9a-f-]{36}$/)
   await expect(page.getByRole('heading', { name: 'Wohnbau Nord eG' })).toBeVisible()
-  await page.getByRole('searchbox', { name: 'Suchen' }).fill('Lindenweg')
-  await page.getByRole('searchbox', { name: 'Suchen' }).press('Enter')
+  // The contacts page has its own search field; use the one in the top bar.
+  const topSearch = page.getByRole('search').getByRole('searchbox', { name: 'Suchen' })
+  await topSearch.fill('Lindenweg')
+  await topSearch.press('Enter')
   await page
     .getByRole('region', { name: 'Projekte' })
     .getByRole('link', { name: /P-00101 · Sanierung Lindenweg/ })
@@ -1460,6 +1463,91 @@ test('Prüfung: Änderungsprotokoll, Hash-Kette und befristeter Prüferzugang', 
   await auditor.close()
 })
 
+// Screenshot-Rundgang: every screen once with the data of the tests above (only with
+// SCREENSHOT_DIR, e.g. for the handbook or a review on MacBook and iPhone).
+test('Screenshot-Rundgang über alle Oberflächen', async () => {
+  test.skip(!SETUP_TOKEN || !SCREENSHOTS, 'only for screenshots (SCREENSHOT_DIR)')
+  test.setTimeout(300_000)
+  const json = async <T>(path: string) => (await (await page.request.get(path)).json()) as T
+  const projects = (
+    await json<{ items: { id: string; name: string }[] }>('/api/v1/projects?limit=100')
+  ).items
+  const project = projects.find((p) => p.name.includes('Lindenweg')) ?? projects[0]
+  const projectId = project?.id as string
+  const documents = await json<{ id: string; type: string; status: string }[]>(
+    `/api/v1/projects/${projectId}/documents`,
+  )
+  const firstOf = (type: string) => documents.find((d) => d.type === type)?.id
+  const sheets = await json<{ id: string }[]>(`/api/v1/projects/${projectId}/measurement-sheets`)
+  const reports = await json<{ id: string; templateKey?: string }[]>(
+    `/api/v1/projects/${projectId}/reports`,
+  )
+  const contacts = (await json<{ items: { id: string }[] }>('/api/v1/contacts?q=')).items
+  const incoming = (await json<{ items: { id: string }[] }>('/api/v1/incoming-invoices')).items
+  const shots: [string, string | undefined][] = [
+    ['01-uebersicht', '/'],
+    ['02-suche', '/suche?q=Lindenweg'],
+    ['03-benachrichtigungen', '/benachrichtigungen'],
+    ['04-projekte', '/projekte'],
+    ['05-projekt-uebersicht', `/projekte/${projectId}`],
+    ['06-projekt-dokumente', `/projekte/${projectId}/dokumente`],
+    ['07-projekt-aufmass', `/projekte/${projectId}/aufmass`],
+    ['08-projekt-bautagebuch', `/projekte/${projectId}/bautagebuch`],
+    ['09-projekt-berichte', `/projekte/${projectId}/berichte`],
+    ['10-projekt-ablage', `/projekte/${projectId}/ablage`],
+    ['11-angebot', firstOf('quote') && `/dokumente/${firstOf('quote')}`],
+    ['12-angebot-druckansicht', firstOf('quote') && `/dokumente/${firstOf('quote')}/druck`],
+    [
+      '13-auftragsbestaetigung',
+      firstOf('order_confirmation') && `/dokumente/${firstOf('order_confirmation')}`,
+    ],
+    ['14-nachtrag', firstOf('change_order') && `/dokumente/${firstOf('change_order')}`],
+    ['15-rechnung', firstOf('invoice') && `/dokumente/${firstOf('invoice')}`],
+    ['16-aufmassblatt', sheets[0] && `/aufmass/${sheets[0].id}`],
+    ['17-bericht', reports[0] && `/berichte/${reports[0].id}`],
+    ['18-kontakte', '/kontakte'],
+    ['19-kontakt', contacts[0] && `/kontakte/${contacts[0].id}`],
+    ['20-rechnungen', '/rechnungen'],
+    ['21-eingangsrechnungen', '/eingangsrechnungen'],
+    ['22-eingangsrechnung', incoming[0] && `/eingangsrechnungen/${incoming[0].id}`],
+    ['23-stammdaten', '/stammdaten'],
+    ['24-pruefung', '/pruefung'],
+    ['25-benutzer', '/benutzer'],
+    ['26-sicherheit', '/sicherheit'],
+  ]
+  const sections = [
+    'company',
+    'numbers',
+    'paymentTerms',
+    'taxRates',
+    'surcharges',
+    'wageGroups',
+    'units',
+    'workingHours',
+    'holidays',
+    'texts',
+    'documents',
+    'letterhead',
+    'filing',
+    'datev',
+    'areas',
+    'mail',
+    'incomingMail',
+    'dunning',
+    'system',
+  ]
+  sections.forEach((section, index) => {
+    shots.push([`${30 + index}-einstellungen-${section}`, `/einstellungen?bereich=${section}`])
+  })
+  for (const [name, path] of shots) {
+    if (!path) continue
+    await page.goto(path)
+    await page.waitForLoadState('networkidle')
+    await expect(page.getByText('Wird geladen …')).toHaveCount(0)
+    await page.screenshot({ path: `${SCREENSHOTS}/tour/${name}.png`, fullPage: true })
+  }
+})
+
 test('second factor fails without the security key', async () => {
   test.skip(!SETUP_TOKEN, 'SETUP_TOKEN must be set for a fresh stack')
   // Without the key the second step of the login fails with a readable message.
@@ -1468,8 +1556,10 @@ test('second factor fails without the security key', async () => {
   })
   await page.getByRole('button', { name: 'Abmelden' }).click()
   await expect(page.getByRole('heading', { name: 'Anmelden' })).toBeVisible()
+  if (SCREENSHOTS) await page.screenshot({ path: `${SCREENSHOTS}/tour/60-anmeldung.png` })
   await page.getByLabel('E-Mail-Adresse').fill(ADMIN.email)
   await page.locator('input[name=password]').fill(ADMIN.password)
   await page.getByRole('button', { name: 'Anmelden', exact: true }).click()
   await expect(page.getByRole('heading', { name: 'Zweiter Schritt' })).toBeVisible()
+  if (SCREENSHOTS) await page.screenshot({ path: `${SCREENSHOTS}/tour/61-zweiter-schritt.png` })
 })

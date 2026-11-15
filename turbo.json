@@ -1,6 +1,6 @@
 {
   "$schema": "https://turbo.build/schema.json",
-  "globalPassThroughEnv": ["BASE_URL", "CHROMIUM_PATH", "SCREENSHOT_DIR", "SETUP_TOKEN"],
+  "globalPassThroughEnv": ["BASE_URL", "CHROMIUM_PATH", "E2E_DEVICE", "SCREENSHOT_DIR", "SETUP_TOKEN"],
   "tasks": {
     "build": {
       "dependsOn": ["^build"],
