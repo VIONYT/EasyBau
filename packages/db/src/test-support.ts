@@ -3,6 +3,22 @@ import { createSql, migrate, type Sql, type Tx, withTenant } from './index.js'
 /** Shared helpers for database integration tests (not exported from the package entry). */
 export const testDatabaseUrl = process.env.DATABASE_URL
 
+/**
+ * Creates the runtime role before the migrations of a fresh test database run. Roles are
+ * cluster-wide while the migration lock is per database, so test files that migrate their own
+ * databases in parallel race on `CREATE ROLE opc_app` in 0001 ("duplicate key … pg_authid").
+ * Creating it here first (and tolerating a concurrent creation) makes 0001 skip it.
+ */
+export async function ensureAppRole(sql: Sql): Promise<void> {
+  try {
+    await sql.unsafe('create role opc_app nologin nosuperuser nobypassrls nocreatedb nocreaterole')
+  } catch (error) {
+    const code = (error as { code?: string }).code
+    // 42710 duplicate_object; 23505 when two sessions insert into pg_authid at the same time.
+    if (code !== '42710' && code !== '23505') throw error
+  }
+}
+
 export interface TestDb {
   admin: Sql
   app: Sql

@@ -70,7 +70,7 @@ KI-Angebotsentwurf aus Freitext, Sprach-Bautagebuch (Diktat → strukturierter E
 └──────────────┬───────────────────────────────────────────┘
                │ HTTPS (JSON/REST, OpenAPI), Cookies
 ┌──────────────▼───────────────────────────────────────────┐
-│  API (Node 22, Fastify, TypeScript)                       │
+│  API (Node 26, Fastify, TypeScript)                       │
 │  Module: auth · tenants · customers · projects · catalog  │
 │          measurements · documents · change-orders         │
 │          invoicing · payments · diary · files · exports   │
