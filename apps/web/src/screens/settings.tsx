@@ -1922,11 +1922,13 @@ function IncomingMailForm() {
     '/api/v1/settings/incoming-mail',
   )
   const [password, setPassword] = useState('')
+  const [clientSecret, setClientSecret] = useState('')
   const save = useSave()
   const fetchNow = useSave()
   if (error) return <FormError>{error}</FormError>
   if (!data) return <p className="muted">{t('common.loading')}</p>
   const run = data.lastRun
+  const m365 = data.auth === 'microsoft365'
   return (
     <Panel title={t('s.incomingMail')}>
       <p className="hint">{t('im.hint')}</p>
@@ -1936,43 +1938,94 @@ function IncomingMailForm() {
         checked={data.enabled}
         onChange={(enabled) => setData({ ...data, enabled })}
       />
-      <div className="row">
-        <Input
-          label={t('im.host')}
-          value={data.host ?? ''}
-          onChange={(host) => setData({ ...data, host })}
-        />
-        <Input
-          label={t('im.port')}
-          type="number"
-          inputMode="numeric"
-          value={String(data.port)}
-          onChange={(port) => setData({ ...data, port: Number(port) || 993 })}
-        />
+      <div className="field">
+        <label htmlFor="incoming-mail-auth">{t('im.auth')}</label>
+        <select
+          id="incoming-mail-auth"
+          className="select"
+          value={data.auth}
+          onChange={(e) =>
+            setData({ ...data, auth: e.target.value as IncomingMailSettings['auth'] })
+          }
+        >
+          <option value="password">{t('im.auth.password')}</option>
+          <option value="microsoft365">{t('im.auth.microsoft365')}</option>
+        </select>
       </div>
-      <Check
-        label={t('im.secure')}
-        checked={data.secure}
-        onChange={(secure) => setData({ ...data, secure })}
-      />
-      <div className="row">
-        <Input
-          label={t('im.user')}
-          value={data.user ?? ''}
-          onChange={(user) => setData({ ...data, user })}
-        />
-        <div className="field">
-          <label htmlFor="incoming-mail-password">{t('im.password')}</label>
-          <input
-            id="incoming-mail-password"
-            type="password"
-            autoComplete="new-password"
-            value={password}
-            onChange={(e) => setPassword(e.target.value)}
+      {m365 ? (
+        <>
+          <p className="hint">{t('im.m365Hint')}</p>
+          <Input
+            label={t('im.mailboxAddress')}
+            type="email"
+            value={data.user ?? ''}
+            onChange={(user) => setData({ ...data, user })}
           />
-          {data.hasPassword ? <p className="hint">{t('im.passwordStored')}</p> : null}
-        </div>
-      </div>
+          <div className="row">
+            <Input
+              label={t('im.tenantId')}
+              value={data.tenantId ?? ''}
+              onChange={(tenantId) => setData({ ...data, tenantId })}
+            />
+            <Input
+              label={t('im.clientId')}
+              value={data.clientId ?? ''}
+              onChange={(clientId) => setData({ ...data, clientId })}
+            />
+          </div>
+          <div className="field">
+            <label htmlFor="incoming-mail-client-secret">{t('im.clientSecret')}</label>
+            <input
+              id="incoming-mail-client-secret"
+              type="password"
+              autoComplete="new-password"
+              value={clientSecret}
+              onChange={(e) => setClientSecret(e.target.value)}
+            />
+            {data.hasClientSecret ? <p className="hint">{t('im.passwordStored')}</p> : null}
+          </div>
+        </>
+      ) : (
+        <>
+          <div className="row">
+            <Input
+              label={t('im.host')}
+              value={data.host ?? ''}
+              onChange={(host) => setData({ ...data, host })}
+            />
+            <Input
+              label={t('im.port')}
+              type="number"
+              inputMode="numeric"
+              value={String(data.port)}
+              onChange={(port) => setData({ ...data, port: Number(port) || 993 })}
+            />
+          </div>
+          <Check
+            label={t('im.secure')}
+            checked={data.secure}
+            onChange={(secure) => setData({ ...data, secure })}
+          />
+          <div className="row">
+            <Input
+              label={t('im.user')}
+              value={data.user ?? ''}
+              onChange={(user) => setData({ ...data, user })}
+            />
+            <div className="field">
+              <label htmlFor="incoming-mail-password">{t('im.password')}</label>
+              <input
+                id="incoming-mail-password"
+                type="password"
+                autoComplete="new-password"
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+              />
+              {data.hasPassword ? <p className="hint">{t('im.passwordStored')}</p> : null}
+            </div>
+          </div>
+        </>
+      )}
       <div className="row">
         <Input
           label={t('im.mailbox')}
@@ -2007,6 +2060,10 @@ function IncomingMailForm() {
               setData(
                 await api<IncomingMailSettings>('PUT', '/api/v1/settings/incoming-mail', {
                   enabled: data.enabled,
+                  auth: data.auth,
+                  tenantId: nullable(data.tenantId ?? ''),
+                  clientId: nullable(data.clientId ?? ''),
+                  ...(clientSecret ? { clientSecret } : {}),
                   host: nullable(data.host ?? ''),
                   port: data.port,
                   secure: data.secure,
@@ -2017,6 +2074,7 @@ function IncomingMailForm() {
                 }),
               )
               setPassword('')
+              setClientSecret('')
             })
           }
         >

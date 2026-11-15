@@ -1631,6 +1631,15 @@ const de = {
   'im.lastRun':
     'Letzter Abruf {at}: {messages} E-Mail(s), {imported} Rechnung(en) übernommen, {duplicates} schon vorhanden, {ignored} andere Anhänge, {failed} später erneut.',
   'im.never': 'Noch nicht abgerufen.',
+  'im.auth': 'Anmeldung',
+  'im.auth.password': 'Benutzername und Passwort (IMAP)',
+  'im.auth.microsoft365': 'Microsoft 365 (App-Registrierung, OAuth2)',
+  'im.m365Hint':
+    'Microsoft 365 erlaubt den Abruf per IMAP nicht mehr mit Passwort. Legen Sie in Microsoft Entra eine App-Registrierung mit der Berechtigung IMAP.AccessAsApp an und geben Sie das Postfach für die App frei (Anleitung in der Betriebsdokumentation). Der Server verbindet sich dafür mit login.microsoftonline.com und outlook.office365.com.',
+  'im.mailboxAddress': 'Postfach-Adresse',
+  'im.tenantId': 'Verzeichnis-ID (Mandanten-ID)',
+  'im.clientId': 'Anwendungs-ID (Client-ID)',
+  'im.clientSecret': 'Geheimer Clientschlüssel',
 } as const
 
 export type TextKey = keyof typeof de

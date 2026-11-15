@@ -85,6 +85,23 @@ Danach `https://<APP_DOMAIN>` öffnen, den Code eingeben, die Firma und das erst
 - Der Server muss den IMAP-Server erreichen dürfen (ausgehend Port 993 bzw. 143).
 - Bitte ein eigenes Postfach nur für Rechnungen verwenden: jeder PDF-/Bild-Anhang wird als mögliche Rechnung übernommen.
 
+#### Microsoft 365 / Exchange Online
+
+Microsoft 365 nimmt IMAP nicht mehr mit Passwort an. Dafür gibt es unter Einstellungen › Rechnungseingang die Anmeldung „Microsoft 365 (App-Registrierung, OAuth2)“. Die Firma richtet einmal ein (Administratorrechte im Microsoft-365-Mandanten nötig):
+
+1. **App registrieren:** Microsoft Entra Admin Center › Anwendungen › App-Registrierungen › Neue Registrierung (nur Konten dieses Verzeichnisses). Verzeichnis-ID (Mandanten-ID) und Anwendungs-ID notieren.
+2. **Berechtigung:** API-Berechtigungen › Berechtigung hinzufügen › „Von meiner Organisation verwendete APIs“ › *Office 365 Exchange Online* › Anwendungsberechtigungen › `IMAP.AccessAsApp`, danach „Administratorzustimmung erteilen“.
+3. **Geheimer Clientschlüssel:** Zertifikate & Geheimnisse › Neuer geheimer Clientschlüssel. Den *Wert* kopieren (wird nur einmal angezeigt) und das Ablaufdatum notieren – vor Ablauf einen neuen Schlüssel anlegen und in den Einstellungen eintragen.
+4. **Postfach für die App freigeben** (Exchange Online PowerShell, `Connect-ExchangeOnline`):
+   ```powershell
+   New-ServicePrincipal -AppId <Anwendungs-ID> -ObjectId <Objekt-ID der Unternehmensanwendung>
+   Add-MailboxPermission -Identity rechnungen@firma.de -User <Objekt-ID der Unternehmensanwendung> -AccessRights FullAccess
+   ```
+   Die Objekt-ID steht unter Entra › Unternehmensanwendungen (nicht die der App-Registrierung). Ohne diesen Schritt meldet der Abruf „Microsoft 365 hat die Anmeldung am Postfach abgelehnt“.
+5. In OpenPlancraft Postfach-Adresse, Verzeichnis-ID, Anwendungs-ID und geheimen Clientschlüssel eintragen und „Jetzt abrufen“ testen.
+
+Der Schlüssel wird wie das Passwort verschlüsselt gespeichert und nie angezeigt. Bei jedem Abruf holt der Server ein Zugriffstoken bei `login.microsoftonline.com` und meldet sich per IMAP (XOAUTH2) bei `outlook.office365.com:993` an – beide Adressen müssen ausgehend erreichbar sein. Andere Microsoft-Dienste werden nicht angesprochen; ohne diese Einstellung verbindet sich der Server nie mit Microsoft.
+
 ## 5a. E-Rechnung (Dienst „kosit“)
 
 - Jede Rechnung und Gutschrift wird beim Festschreiben als E-Rechnung erzeugt:

@@ -1,5 +1,6 @@
 import type { Tx } from '@opc/db'
 import {
+  type IncomingMailAuth,
   type IncomingMailRun,
   type IncomingMailSettings,
   incomingMailSettingsRequest,
@@ -17,6 +18,11 @@ import { ingestIncomingInvoice } from './incoming-invoices.js'
  * invoice (PDF, ZUGFeRD, XRechnung XML, JPG/PNG) into „Zu prüfen“ exactly like an upload and
  * marks the message as read (or moves it to a folder). Off unless the operator sets
  * INCOMING_MAIL_ENABLED=true; the password is stored encrypted (APP_SECRET).
+ *
+ * Microsoft 365 no longer accepts IMAP with a password: there the company registers an app in
+ * Microsoft Entra (IMAP.AccessAsApp, mailbox released for the app) and enters Verzeichnis-ID,
+ * Anwendungs-ID and client secret. The app gets a token per run (client credentials at
+ * login.microsoftonline.com) and logs in with IMAP XOAUTH2. Only then does it contact Microsoft.
  */
 
 export interface MailAttachment {
@@ -41,12 +47,20 @@ export interface MailboxConnection {
   close(): Promise<void>
 }
 
+export interface MicrosoftOAuth {
+  tenantId: string
+  clientId: string
+  clientSecret: string
+}
+
 export interface MailboxAccess {
   host: string
   port: number
   secure: boolean
   user: string
-  password: string
+  /** IMAP LOGIN; null with Microsoft 365 (OAuth2). */
+  password: string | null
+  oauth: MicrosoftOAuth | null
   mailbox: string
   processedMailbox: string | null
 }
@@ -55,14 +69,52 @@ export type MailboxConnector = (access: MailboxAccess) => Promise<MailboxConnect
 
 const MESSAGES_PER_RUN = 25
 const INVOICE_EXTENSIONS = /\.(pdf|xml|jpe?g|png)$/i
+const M365_IMAP_HOST = 'outlook.office365.com'
+
+/** Thrown when Microsoft refuses the client credentials (wrong IDs or secret). */
+export class MicrosoftTokenError extends Error {
+  constructor(readonly status: number) {
+    super(`Microsoft token request failed (${status})`)
+  }
+}
+
+/**
+ * Access token for IMAP of Exchange Online (OAuth2 client credentials, RFC 6749 § 4.4). The
+ * secret only goes to Microsoft; the token is not stored.
+ */
+export async function microsoftImapToken(
+  oauth: MicrosoftOAuth,
+  fetchFn: typeof fetch = fetch,
+): Promise<string> {
+  const res = await fetchFn(
+    `https://login.microsoftonline.com/${encodeURIComponent(oauth.tenantId)}/oauth2/v2.0/token`,
+    {
+      method: 'POST',
+      headers: { 'content-type': 'application/x-www-form-urlencoded' },
+      body: new URLSearchParams({
+        client_id: oauth.clientId,
+        client_secret: oauth.clientSecret,
+        scope: 'https://outlook.office365.com/.default',
+        grant_type: 'client_credentials',
+      }).toString(),
+      signal: AbortSignal.timeout(30_000),
+    },
+  )
+  const body = (await res.json().catch(() => null)) as { access_token?: unknown } | null
+  if (!res.ok || typeof body?.access_token !== 'string') throw new MicrosoftTokenError(res.status)
+  return body.access_token
+}
 
 /** IMAP with imapflow; messages are parsed with mailparser (attachments only, no HTML). */
 export const imapConnector: MailboxConnector = async (access) => {
+  const auth = access.oauth
+    ? { user: access.user, accessToken: await microsoftImapToken(access.oauth) }
+    : { user: access.user, pass: access.password ?? '' }
   const client = new ImapFlow({
     host: access.host,
     port: access.port,
     secure: access.secure,
-    auth: { user: access.user, pass: access.password },
+    auth,
     logger: false,
     socketTimeout: 60_000,
   })
@@ -105,6 +157,10 @@ export const imapConnector: MailboxConnector = async (access) => {
 
 interface StoredMailbox {
   enabled?: boolean
+  auth?: IncomingMailAuth
+  tenantId?: string
+  clientId?: string
+  clientSecretEnc?: string
   host?: string
   port?: number
   secure?: boolean
@@ -125,36 +181,68 @@ function view(services: Services, stored: StoredMailbox): IncomingMailSettings {
   return {
     available: services.config.INCOMING_MAIL_ENABLED ?? false,
     enabled: stored.enabled ?? false,
+    auth: stored.auth ?? 'password',
     host: stored.host ?? null,
     port: stored.port ?? 993,
     secure: stored.secure ?? true,
     user: stored.user ?? null,
     hasPassword: Boolean(stored.passwordEnc),
+    tenantId: stored.tenantId ?? null,
+    clientId: stored.clientId ?? null,
+    hasClientSecret: Boolean(stored.clientSecretEnc),
     mailbox: stored.mailbox ?? 'INBOX',
     processedMailbox: stored.processedMailbox ?? null,
     lastRun: stored.lastRun ?? null,
   }
 }
 
+const decrypt = (services: Services, value: string) =>
+  services.cipher.decrypt(Buffer.from(value, 'base64'))
+
 function accessOf(services: Services, stored: StoredMailbox): MailboxAccess | null {
-  if (!stored.host || !stored.user || !stored.passwordEnc) return null
-  return {
-    host: stored.host,
+  if (!stored.user) return null
+  const common = {
     port: stored.port ?? 993,
     secure: stored.secure ?? true,
     user: stored.user,
-    password: services.cipher.decrypt(Buffer.from(stored.passwordEnc, 'base64')),
     mailbox: stored.mailbox ?? 'INBOX',
     processedMailbox: stored.processedMailbox ?? null,
+  }
+  if (stored.auth === 'microsoft365') {
+    if (!stored.tenantId || !stored.clientId || !stored.clientSecretEnc) return null
+    return {
+      ...common,
+      host: stored.host ?? M365_IMAP_HOST,
+      password: null,
+      oauth: {
+        tenantId: stored.tenantId,
+        clientId: stored.clientId,
+        clientSecret: decrypt(services, stored.clientSecretEnc),
+      },
+    }
+  }
+  if (!stored.host || !stored.passwordEnc) return null
+  return {
+    ...common,
+    host: stored.host,
+    password: decrypt(services, stored.passwordEnc),
+    oauth: null,
   }
 }
 
 /** Short reason without addresses or content (rule 9: no PII in logs or stored errors). */
-function reasonOf(error: unknown): string {
+function reasonOf(error: unknown, access: MailboxAccess): string {
   if (error instanceof HttpError) return error.message
-  const e = error as { authenticationFailed?: boolean; code?: string; message?: string }
-  if (e.authenticationFailed)
-    return 'Anmeldung am Postfach fehlgeschlagen (Benutzer oder Passwort).'
+  if (error instanceof MicrosoftTokenError) {
+    return 'Anmeldung bei Microsoft 365 fehlgeschlagen (Verzeichnis-ID, Anwendungs-ID oder geheimer Clientschlüssel prüfen).'
+  }
+  const e = error as { authenticationFailed?: boolean; code?: string; name?: string }
+  if (e.authenticationFailed) {
+    return access.oauth
+      ? 'Microsoft 365 hat die Anmeldung am Postfach abgelehnt (IMAP-Berechtigung der App und Freigabe des Postfachs für die App prüfen).'
+      : 'Anmeldung am Postfach fehlgeschlagen (Benutzer oder Passwort).'
+  }
+  if (e.name === 'TimeoutError') return 'Microsoft 365 hat nicht rechtzeitig geantwortet.'
   if (e.code === 'ENOTFOUND') return 'Der Mailserver wurde nicht gefunden.'
   if (e.code === 'ECONNREFUSED' || e.code === 'ETIMEDOUT')
     return 'Der Mailserver ist nicht erreichbar.'
@@ -217,7 +305,7 @@ export async function pollMailbox(
         if (!retry) await connection.done(message.uid)
       }
     } catch (error) {
-      run.error = reasonOf(error)
+      run.error = reasonOf(error, access)
     } finally {
       await connection?.close().catch(() => undefined)
     }
@@ -278,19 +366,38 @@ export function registerIncomingMailboxRoutes(
     const input = parse(incomingMailSettingsRequest, request.body)
     return inTenant(services, auth, async (tx) => {
       const current = await storedMailbox(tx)
-      const passwordEnc =
-        input.password === undefined
-          ? current.passwordEnc
-          : input.password
-            ? services.cipher.encrypt(input.password).toString('base64')
+      // undefined keeps the stored secret, '' or null removes it.
+      const secret = (value: string | null | undefined, stored: string | undefined) =>
+        value === undefined
+          ? stored
+          : value
+            ? services.cipher.encrypt(value).toString('base64')
             : undefined
-      if (input.enabled && (!input.host || !input.user || !passwordEnc)) {
+      const passwordEnc = secret(input.password, current.passwordEnc)
+      const clientSecretEnc = secret(input.clientSecret, current.clientSecretEnc)
+      const m365 = input.auth === 'microsoft365'
+      if (input.enabled && !m365 && (!input.host || !input.user || !passwordEnc)) {
         throw new HttpError(400, 'Für den Abruf fehlen Server, Benutzer oder Passwort.', {
           host: 'Bitte Server, Benutzer und Passwort angeben.',
         })
       }
+      if (
+        input.enabled &&
+        m365 &&
+        (!input.user || !input.tenantId || !input.clientId || !clientSecretEnc)
+      ) {
+        throw new HttpError(
+          400,
+          'Für Microsoft 365 fehlen Postfach-Adresse, Verzeichnis-ID, Anwendungs-ID oder geheimer Clientschlüssel.',
+          { tenantId: 'Bitte alle Angaben der App-Registrierung eintragen.' },
+        )
+      }
       const stored: StoredMailbox = {
         enabled: input.enabled,
+        auth: input.auth,
+        ...(input.tenantId ? { tenantId: input.tenantId } : {}),
+        ...(input.clientId ? { clientId: input.clientId } : {}),
+        ...(clientSecretEnc ? { clientSecretEnc } : {}),
         ...(input.host ? { host: input.host } : {}),
         port: input.port,
         secure: input.secure,

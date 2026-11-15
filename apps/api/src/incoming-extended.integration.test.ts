@@ -223,6 +223,75 @@ describe.skipIf(!process.env.DATABASE_URL)('Eingangsrechnungen ausbauen (integra
     inbox.fail = false
   })
 
+  it('logs in to Microsoft 365 with OAuth2 (App registration) instead of a password', async () => {
+    const incomplete = await admin.put('/api/v1/settings/incoming-mail', {
+      enabled: true,
+      auth: 'microsoft365',
+      user: 'rechnungen@eingang.example',
+      tenantId: 'eingang.onmicrosoft.com',
+    })
+    expect(incomplete.statusCode).toBe(400)
+    expect(
+      (
+        await admin.put('/api/v1/settings/incoming-mail', {
+          enabled: false,
+          auth: 'microsoft365',
+          tenantId: 'https://evil.example/x',
+        })
+      ).statusCode,
+    ).toBe(400)
+    const saved = await admin.put('/api/v1/settings/incoming-mail', {
+      enabled: true,
+      auth: 'microsoft365',
+      user: 'rechnungen@eingang.example',
+      tenantId: '0b2c6d8e-1f3a-4b5c-9d7e-123456789abc',
+      clientId: '6a7b8c9d-0e1f-4a2b-8c3d-abcdef012345',
+      clientSecret: 'client-geheim-456',
+    })
+    expect(saved.statusCode, saved.body).toBe(200)
+    expect(saved.json()).toMatchObject({
+      auth: 'microsoft365',
+      clientId: '6a7b8c9d-0e1f-4a2b-8c3d-abcdef012345',
+      hasClientSecret: true,
+      hasPassword: true,
+    } satisfies Partial<IncomingMailSettings>)
+    expect(JSON.stringify(saved.json())).not.toContain('client-geheim')
+    const [row] = await h.adminSql<{ settings: string }[]>`select settings::text from tenant`
+    expect(row?.settings).not.toContain('client-geheim-456')
+
+    inbox.messages = []
+    const run = (
+      await admin.post('/api/v1/settings/incoming-mail/run', {})
+    ).json() as IncomingMailRun
+    expect(run.error).toBeNull()
+    expect(inbox.access).toMatchObject({
+      host: 'outlook.office365.com',
+      port: 993,
+      secure: true,
+      user: 'rechnungen@eingang.example',
+      password: null,
+      oauth: {
+        tenantId: '0b2c6d8e-1f3a-4b5c-9d7e-123456789abc',
+        clientId: '6a7b8c9d-0e1f-4a2b-8c3d-abcdef012345',
+        clientSecret: 'client-geheim-456',
+      },
+    } satisfies Partial<MailboxAccess>)
+    inbox.fail = true
+    const refused = (
+      await admin.post('/api/v1/settings/incoming-mail/run', {})
+    ).json() as IncomingMailRun
+    expect(refused.error).toMatch(/^Microsoft 365 hat die Anmeldung am Postfach abgelehnt/)
+    inbox.fail = false
+    // Back to the password login of the first test (kept encrypted meanwhile).
+    const back = await admin.put('/api/v1/settings/incoming-mail', {
+      enabled: true,
+      host: 'imap.example.test',
+      user: 'rechnungen@eingang.example',
+      processedMailbox: 'Verarbeitet',
+    })
+    expect(back.json()).toMatchObject({ auth: 'password', hasPassword: true })
+  })
+
   it('allocates per invoice line, uses the Kreditorennummer and adds project costs', async () => {
     const list = (
       await admin.get('/api/v1/incoming-invoices?status=review')

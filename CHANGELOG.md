@@ -4,10 +4,16 @@ Alle wesentlichen Änderungen, vor allem solche, die Betreiber betreffen (neue V
 
 ## Unveröffentlicht
 
+### Behoben
+- **Mehrmengen werden nicht mehr doppelt abgerechnet:** Ist ein Mehrmengen-Nachtrag beauftragt, rechnet „Mengen aus Aufmaß übernehmen“ an der Vertragsposition nur noch die gemessene Menge abzüglich der Nachtragsmenge ab; die Mehrmenge steht nur im Nachtrag (zu dessen Preis). Eine von Hand eingetragene Menge, die sie erneut abrechnen würde, verhindert das Festschreiben.
+- **Hinweis auf Positionen ohne Preis:** Beim Festschreiben einer Rechnung erscheint ein Hinweis, wenn Positionen 0,00 € kosten (z. B. aus einem Regiebericht übernommene Leistungen, Materialien und Geräte).
+- **Regiestunden im Lohnkostenanteil (§ 35a EStG):** Aus Regieberichten übernommene Stunden bekommen eine Lohn-Kalkulation aus der Lohngruppe und zählen damit als Arbeitskosten (vorher 0 €).
+
 ### Geändert
 - **Basis-Images aktualisiert:** App und Web laufen auf **Node 26** (vorher 22). Node 26 enthält kein corepack mehr; die Images installieren pnpm jetzt direkt in der Version aus `package.json` → `packageManager`. KoSIT-Validator auf **Eclipse Temurin 25** (vorher 21), Download-Stufe auf **Alpine 3.24**. CI-Actions auf die aktuellen Hauptversionen (checkout/setup-node v7, Docker-Actions v4/v6/v7). Für Betreiber ändert sich nichts außer neuen Images (`docker compose pull` bzw. `--build`); Entwickler brauchen lokal Node 26 (`.nvmrc`).
 
 ### Neu
+- **Rechnungseingang mit Microsoft 365:** Anmeldung am Postfach per OAuth2 (App-Registrierung in Microsoft Entra mit `IMAP.AccessAsApp`), da Microsoft 365 IMAP mit Passwort nicht mehr zulässt. Einrichtung in `docs/self-hosting/` (Abschnitt Rechnungseingang). Keine neue Variable; der Server verbindet sich nur mit Microsoft, wenn eine Firma das einträgt.
 - **Eingangsrechnungen ausgebaut**:
   - **Rechnungseingang per E-Mail** (optional): Nach Freischaltung durch den Betreiber (`INCOMING_MAIL_ENABLED=true`) trägt jede Firma unter Einstellungen › Rechnungseingang ihr IMAP-Postfach ein. Rechnungsanhänge ungelesener E-Mails landen automatisch in „Zu prüfen“ (mit Absender und Betreff), die E-Mail wird als gelesen markiert oder verschoben. Passwort verschlüsselt gespeichert, „Jetzt abrufen“ zum Testen.
   - **Kostenzuweisung je Rechnungsposition**: Bei E-Rechnungen mit mehreren Positionen „Je Rechnungsposition zuweisen“ – je Position eine Zuweisung mit Betrag, Steuersatz und Text, Projekt/Betriebsbereich je Zeile wählbar.
