@@ -163,6 +163,9 @@ importers:
       '@opc/db':
         specifier: workspace:*
         version: link:../../packages/db
+      '@opc/domain':
+        specifier: workspace:*
+        version: link:../../packages/domain
       '@opc/storage':
         specifier: workspace:*
         version: link:../../packages/storage

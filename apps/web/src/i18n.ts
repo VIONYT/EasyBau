@@ -1158,6 +1158,10 @@ const de = {
   'sys.backup.failed': 'fehlgeschlagen',
   'sys.backupHint':
     'Die Sicherung läuft täglich (BACKUP_TIME) und enthält Datenbank und Ablage. Kopieren Sie die Sicherungen regelmäßig auf ein zweites Gerät und bewahren Sie die .env (APP_SECRET) getrennt auf. Wiederherstellen: sh infra/restore.sh',
+  'sys.alertOn':
+    'Bei Problemen mit Sicherung, Änderungsprotokoll oder Belegarchiv bekommen alle mit dem Recht „Einstellungen ändern“ morgens eine E-Mail – bei neuen Problemen sofort, sonst höchstens wöchentlich.',
+  'sys.alertOff':
+    'E-Mail-Warnungen bei Problemen mit Sicherung, Änderungsprotokoll oder Belegarchiv gibt es, sobald der E-Mail-Versand eingerichtet ist.',
   'sys.emailOffShort': 'Nicht eingerichtet (optional).',
   'sys.emailOk': 'Eingerichtet, keine Fehler.',
   'sys.emailFailed': '{n} E-Mail(s) konnten nicht versendet werden, siehe Postausgang.',
