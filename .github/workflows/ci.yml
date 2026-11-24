@@ -30,6 +30,8 @@ jobs:
       DATABASE_URL: postgres://test:test@localhost:5432/test
     steps:
       - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0 # base revision for the migration check
       # Node 25+ no longer ships corepack: install the pnpm of "packageManager" (before setup-node, for its cache).
       - run: npm install --global --no-fund --no-audit "$(node -p "require('./package.json').packageManager")"
       - uses: actions/setup-node@v7
@@ -37,6 +39,11 @@ jobs:
           node-version-file: .nvmrc
           cache: pnpm
       - run: pnpm install --frozen-lockfile
+      - name: Released migrations unchanged (ADR 0003)
+        run: |
+          base="${{ github.event_name == 'pull_request' && format('origin/{0}', github.base_ref) || github.event.before }}"
+          if [ -z "$base" ] || [ "$base" = "0000000000000000000000000000000000000000" ]; then base=HEAD^; fi
+          sh infra/check-migrations.sh "$base"
       - name: Archive image pinned consistently (ADR 0009, Dependabot)
         run: sh infra/check-pinned-images.sh
       - run: pnpm lint
