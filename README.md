@@ -68,6 +68,7 @@ Alles Weitere: [Betriebsdokumentation](docs/self-hosting/README.md).
 |---|---|
 | Anwender im Büro und auf der Baustelle | [Benutzerhandbuch](docs/handbuch/README.md) – auch als Website mit Suche: <https://vionyt.github.io/OpenPlancraft/> (GitHub Pages, sobald freigeschaltet) |
 | Betreiber (Installation, Updates, Sicherung, Wiederherstellung) | [Betriebsdokumentation](docs/self-hosting/README.md) |
+| Inhaber, Steuerberatung (GoBD, DSGVO) | [Vorlage Verfahrensdokumentation](docs/verfahrensdokumentation/README.md) mit Löschkonzept |
 | Entwickler | [DESIGN.md](DESIGN.md) (Architektur, Datenmodell, UX) · [CLAUDE.md](CLAUDE.md) (Regeln, Konventionen, offene Punkte) · [Architekturentscheidungen](docs/adr/) · [CHANGELOG](CHANGELOG.md) |
 | Hintergrund | [docs/RESEARCH.md](docs/RESEARCH.md) – Markt und Recht (GoBD, E-Rechnung, VOB/B) |
 
