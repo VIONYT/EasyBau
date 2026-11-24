@@ -253,6 +253,22 @@ const de = {
   'contacts.filter.archived': 'Archivierte Kontakte',
   'contacts.archived': 'archiviert',
   'contacts.archive': 'Archivieren',
+  'privacy.title': 'Datenschutz',
+  'privacy.hint':
+    'Auskunft (Art. 15 DSGVO) lädt alle gespeicherten Daten dieses Kontakts als Datei herunter. Löschen anonymisiert den Kontakt; steht er in festgeschriebenen Belegen, wird er bis zum Ende der Aufbewahrungsfrist gesperrt und danach automatisch gelöscht.',
+  'privacy.report': 'Auskunft herunterladen',
+  'privacy.erase': 'Löschen (DSGVO) …',
+  'privacy.confirmErase':
+    'Der Kontakt wird sofort und endgültig anonymisiert: Name, Anschriften, Kommunikationswege und Verknüpfungen werden gelöscht. Das lässt sich nicht rückgängig machen.',
+  'privacy.confirmBlock':
+    'Der Kontakt steht in {n} festgeschriebenen Belegen, die bis {date} aufbewahrt werden müssen. Er wird bis dahin gesperrt (nicht mehr änder- oder verwendbar) und danach automatisch gelöscht.',
+  'privacy.doErase': 'Endgültig löschen',
+  'privacy.doBlock': 'Sperren und später löschen',
+  'privacy.erasedNow': 'Der Kontakt wurde gelöscht (anonymisiert).',
+  'privacy.blockedNow': 'Der Kontakt ist bis {date} gesperrt und wird danach automatisch gelöscht.',
+  'privacy.erased': 'Gelöscht (anonymisiert) am {date} nach DSGVO.',
+  'privacy.blocked':
+    'Gesperrt bis {date} (gesetzliche Aufbewahrungsfrist). Danach wird der Kontakt automatisch gelöscht.',
   'contacts.unarchive': 'Wiederherstellen',
   'contacts.salutation': 'Anrede',
   'contacts.title': 'Titel',

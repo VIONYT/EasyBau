@@ -10,6 +10,10 @@ import { dispatchEmails, smtpTransport } from './email.js'
 import { purgeReadNotifications } from './notifications.js'
 import { alertOperations } from './operations-alert.js'
 
+export { eraseExpiredContacts } from './privacy.js'
+
+import { eraseExpiredContacts } from './privacy.js'
+
 export { type ArchiveRun, archivePending } from './archive.js'
 export {
   type ArchiveProblem,
@@ -43,6 +47,7 @@ export const queues = {
   archiveVerify: 'archive.verify',
   notificationPurge: 'notification.purge',
   operationsAlert: 'operations.alert',
+  privacyErase: 'privacy.erase-expired',
 } as const
 
 export interface Worker {
@@ -118,6 +123,12 @@ export async function startWorker(
     })
   })
   await boss.schedule(queues.operationsAlert, '13 6 * * *', {}, { tz: 'Europe/Berlin' })
+  // Löschkonzept (DSGVO): blocked contacts are erased after their retention period.
+  await boss.createQueue(queues.privacyErase)
+  await boss.work(queues.privacyErase, async () => {
+    await eraseExpiredContacts(auditSql, logger)
+  })
+  await boss.schedule(queues.privacyErase, '7 5 * * *', {}, { tz: 'Europe/Berlin' })
   // E-mail outbox (optional): polled every 15 s, cheap thanks to a partial index.
   let mailTimer: NodeJS.Timeout | undefined
   const sql = smtpEnabled(config) ? createSql({ ...config, DATABASE_POOL_MAX: 1 }) : undefined

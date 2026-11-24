@@ -17,6 +17,17 @@ Jeder geöffnete Kontakt hat eine eigene Adresse (`/kontakte/…`), die Sie z. B
 
 ![Kontakt bearbeiten](../screenshots/macbook-kontakt.png)
 
+### Datenschutz: Auskunft und Löschen
+
+Fragt ein Kunde nach seinen Daten oder verlangt die Löschung (DSGVO), finden Sie beides im Kontakt unter **Datenschutz**:
+
+- **Auskunft herunterladen** erstellt eine Datei mit allem, was zu diesem Kontakt gespeichert ist: Stammdaten, Anschriften, Kommunikationswege, Projekte, Dokumente, Eingangsrechnungen, gesendete E-Mails sowie Zwecke, Rechtsgrundlagen und Speicherdauer. Die Datei können Sie dem Kunden übergeben (sie ist zugleich maschinenlesbar, Art. 20). Jede Auskunft wird im Änderungsprotokoll vermerkt.
+- **Löschen (DSGVO)** zeigt zuerst, was passiert:
+  - Steht der Kontakt in **keinem festgeschriebenen Beleg**, wird er sofort und endgültig anonymisiert (Name, Anschriften, Kommunikationswege und Verknüpfungen werden gelöscht).
+  - Steht er in **Rechnungen oder anderen festgeschriebenen Belegen**, müssen diese aufbewahrt werden (§ 147 AO, § 257 HGB). Der Kontakt wird dann bis zum Ende der Aufbewahrungsfrist **gesperrt**: Er lässt sich nicht mehr ändern und nicht mehr für neue Projekte oder Dokumente verwenden. Am Tag nach Fristende löscht EasyBau ihn automatisch.
+
+Festgeschriebene Belege selbst behalten ihre Empfängerdaten unverändert (GoBD). Projektnamen, Baustellenanschriften und Dateien in der Ablage prüfen Sie bei einer Löschung bitte selbst.
+
 ## Stammdaten
 
 **Stammdaten** sind Ihre wiederkehrenden **Leistungen** (mit Kalkulation aus Lohn, Material, Gerät, Fremdleistung) und **Materialien** (mit Einkaufspreis, Gebinde, Lieferant).
