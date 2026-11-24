@@ -68,7 +68,7 @@ describe.skipIf(!process.env.DATABASE_URL || !out)('Upgrade fixture (generator)'
     const doc = (r: unknown) => r as DocumentDetail
 
     at('2026-10-01')
-    const setup = await ok(
+    await ok(
       admin.post('/api/v1/setup', {
         setupToken: h.setupToken,
         company: { name: 'Muster Bau GmbH' },
