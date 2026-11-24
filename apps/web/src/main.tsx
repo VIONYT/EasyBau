@@ -3,6 +3,7 @@ import { StrictMode } from 'react'
 import { createRoot } from 'react-dom/client'
 import { App } from './App'
 import { startOfflineSync } from './offline/client'
+import '@opc/ui/tokens.css'
 import './styles.css'
 
 // Offline shell (ADR 0010): the service worker updates itself; data sync runs in the app.

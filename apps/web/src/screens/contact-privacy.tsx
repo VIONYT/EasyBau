@@ -1,8 +1,8 @@
 import type { ContactDetail, ContactPrivacy, EraseContactResult } from '@opc/schemas'
+import { Button, FormError, Notice } from '@opc/ui'
 import { useState } from 'react'
 import { type ApiError, api, downloadFile } from '../api'
 import { formatDateTime } from '../format'
-import { FormError } from '../forms'
 import { t, tf } from '../i18n'
 
 /**
@@ -63,21 +63,15 @@ export function ContactPrivacyPanel({
     <div className="privacy-panel">
       <h3>{t('privacy.title')}</h3>
       {contact.erasedAt ? (
-        <p className="notice">
-          {tf('privacy.erased', { date: formatDateTime(contact.erasedAt, 'date') })}
-        </p>
+        <Notice>{tf('privacy.erased', { date: formatDateTime(contact.erasedAt, 'date') })}</Notice>
       ) : contact.blockedUntil ? (
-        <p className="notice">
+        <Notice tone="warning">
           {tf('privacy.blocked', { date: formatDateTime(contact.blockedUntil, 'date') })}
-        </p>
+        </Notice>
       ) : (
         <p className="hint">{t('privacy.hint')}</p>
       )}
-      {done ? (
-        <p className="success" role="status">
-          {done}
-        </p>
-      ) : null}
+      {done ? <Notice tone="success">{done}</Notice> : null}
       {plan ? (
         <div className="privacy-confirm" role="alertdialog" aria-label={t('privacy.erase')}>
           <p>
@@ -89,24 +83,18 @@ export function ContactPrivacyPanel({
                 })}
           </p>
           <div className="button-row">
-            <button type="button" className="button danger auto" disabled={busy} onClick={erase}>
+            <Button variant="destructive" disabled={busy} onClick={erase}>
               {plan.action === 'erase' ? t('privacy.doErase') : t('privacy.doBlock')}
-            </button>
-            <button type="button" className="button ghost auto" onClick={() => setPlan(null)}>
-              {t('common.cancel')}
-            </button>
+            </Button>
+            <Button onClick={() => setPlan(null)}>{t('common.cancel')}</Button>
           </div>
         </div>
       ) : null}
       <FormError>{error}</FormError>
       <div className="button-row">
-        <button type="button" className="button ghost auto" onClick={report}>
-          {t('privacy.report')}
-        </button>
+        <Button onClick={report}>{t('privacy.report')}</Button>
         {!contact.erasedAt && !contact.blockedUntil && !plan ? (
-          <button type="button" className="button ghost auto" onClick={prepare}>
-            {t('privacy.erase')}
-          </button>
+          <Button onClick={prepare}>{t('privacy.erase')}</Button>
         ) : null}
       </div>
     </div>

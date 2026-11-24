@@ -1,4 +1,5 @@
 import type { ContactDetail, ContactSummary, Page, PaymentTerm } from '@opc/schemas'
+import { color } from '@opc/ui'
 import { useCallback, useEffect, useId, useState } from 'react'
 import { type ApiError, api, apiWithEtag } from '../api'
 import { Field, FormError, SelectField, TextArea, useForm, value } from '../forms'
@@ -426,7 +427,7 @@ export function ContactEditor({
               type="color"
               name="color"
               aria-label={t('contacts.colorValue')}
-              defaultValue={c.color ?? '#0f4c5c'}
+              defaultValue={c.color ?? color.primary}
             />
           </div>
           <TextArea

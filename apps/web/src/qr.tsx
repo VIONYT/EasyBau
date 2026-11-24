@@ -26,6 +26,7 @@ export function QrCode({
       width={size}
       height={size}
     >
+      {/* Pure black on white for scanners (EPC/GiroCode), deliberately not themed. */}
       <rect width={modules} height={modules} fill="#ffffff" />
       <path d={cells.join('')} fill="#000000" />
     </svg>
