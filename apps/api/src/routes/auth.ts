@@ -11,7 +11,7 @@ import {
   type TotpSetupResponse,
   totpDisableRequest,
   totpEnableRequest,
-} from '@opc/schemas'
+} from '@easybau/schemas'
 import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify'
 import { mfaSetupRequired, requireAuth, type Services, sessionCookieName } from '../context.js'
 import { HttpError, parse } from '../http.js'
@@ -37,6 +37,7 @@ import {
   setSessionCookie,
   useChallenge,
 } from './auth-common.js'
+import { passwordChangedNotice } from './security-notices.js'
 
 export { buildMe } from './auth-common.js'
 
@@ -242,6 +243,7 @@ export function registerAuthRoutes(app: FastifyInstance, services: Services) {
     await sql`update app_user set password_hash = ${await hashPassword(input.newPassword)} where id = ${auth.userId}`
     await deleteSessionsOfUser(sql, auth.userId, auth.sessionId)
     await audit(services, auth.tenantId, auth.userId, 'password_changed')
+    await passwordChangedNotice(services, auth.userId)
     return reply.status(204).send()
   })
 

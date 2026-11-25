@@ -31,9 +31,9 @@ RUN --mount=type=secret,id=extra_ca --mount=type=cache,id=pnpm,target=/pnpm/stor
 
 FROM deps AS build
 COPY . .
-RUN --mount=type=secret,id=extra_ca pnpm turbo run build --filter=@opc/server...
+RUN --mount=type=secret,id=extra_ca pnpm turbo run build --filter=@easybau/server...
 RUN --mount=type=secret,id=extra_ca --mount=type=cache,id=pnpm,target=/pnpm/store \
-    pnpm deploy --filter=@opc/server --prod --legacy /out
+    pnpm deploy --filter=@easybau/server --prod --legacy /out
 
 # Test stage: used by compose.test.yaml and CI (lint, typecheck, unit + integration tests).
 FROM deps AS test

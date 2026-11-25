@@ -1,6 +1,6 @@
 # Complete test pipeline in Docker, identical to CI:
 #   docker compose -f compose.test.yaml run --rm --build test
-name: openplancraft-test
+name: easybau-test
 
 services:
   test:

@@ -1,4 +1,4 @@
-import type { CompanyNoticeEntry } from '@opc/schemas'
+import type { CompanyNoticeEntry } from '@easybau/schemas'
 import { useEffect, useState } from 'react'
 import { api } from '../api'
 import { type TextKey, t } from '../i18n'

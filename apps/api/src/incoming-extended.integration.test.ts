@@ -5,7 +5,7 @@ import type {
   IncomingMailRun,
   IncomingMailSettings,
   ProjectFiguresDto,
-} from '@opc/schemas'
+} from '@easybau/schemas'
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
 import type { MailboxAccess, MailMessage } from './routes/incoming-mailbox.js'
 import { Client, createHarness, type Harness } from './testing/harness.js'

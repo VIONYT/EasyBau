@@ -4,7 +4,7 @@ import type {
   DocumentItem,
   FileSummary,
   TargetPriceResult,
-} from '@opc/schemas'
+} from '@easybau/schemas'
 import { useEffect, useId, useState } from 'react'
 import { type ApiError, api, apiWithEtag, uploadFile } from '../api'
 import { formatCents, parseEuro } from '../format'
@@ -131,6 +131,9 @@ export function VersionsPanel({
   const [error, setError] = useState<string | null>(null)
   if (!VERSIONED_TYPES.includes(doc.type)) return null
   const newest = doc.versions.length ? doc.versions[doc.versions.length - 1] : null
+  // Replaced: an older version once a newer one has been finalized.
+  const newestFinal = doc.versions.filter((v) => v.status !== 'draft').at(-1)
+  const superseded = (version: number) => !!newestFinal && version < newestFinal.version
   const canCreate =
     canWrite &&
     doc.status !== 'draft' &&
@@ -159,7 +162,11 @@ export function VersionsPanel({
                   {tf('ver.label', { n: String(v.version) })} · {v.number ?? t('ver.draft')}
                 </a>
               )}
-              <span className="muted">{t(`doc.status.${v.status}` as TextKey)}</span>
+              <span className="muted">
+                {superseded(v.version)
+                  ? t('ver.superseded')
+                  : t(`doc.status.${v.status}` as TextKey)}
+              </span>
             </li>
           ))}
         </ol>

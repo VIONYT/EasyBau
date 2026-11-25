@@ -3,7 +3,7 @@ import {
   renameCredentialRequest,
   webauthnRegisterRequest,
   webauthnResponse,
-} from '@opc/schemas'
+} from '@easybau/schemas'
 import {
   type AuthenticationResponseJSON,
   generateAuthenticationOptions,

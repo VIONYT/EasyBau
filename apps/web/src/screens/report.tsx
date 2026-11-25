@@ -1,10 +1,11 @@
-import type { Me, ReportDetail, ReportSection, SignerRole, UnitSummary } from '@opc/schemas'
-import { WEATHER_CONDITIONS } from '@opc/schemas/constants'
+import type { Me, ReportDetail, ReportSection, SignerRole, UnitSummary } from '@easybau/schemas'
+import { WEATHER_CONDITIONS } from '@easybau/schemas/constants'
 import { type ChangeEvent, useCallback, useEffect, useMemo, useState } from 'react'
 import { ApiError, api, apiWithEtag, mutate } from '../api'
 import { formatDateTime, formatInputNumber } from '../format'
 import { FormError } from '../forms'
 import { type TextKey, t, tf } from '../i18n'
+import { useOnline, useWaitingPhoto } from '../offline/client'
 import type { Navigate } from '../router'
 import {
   initialChoice,
@@ -87,6 +88,7 @@ function toRequest(sections: ReportSection[], data: Data): Data {
 /** A report (Bautagesbericht and other templates), rendered from the template's sections. */
 export function ReportScreen({ me, id, navigate }: { me: Me; id: string; navigate: Navigate }) {
   const [report, setReport] = useState<ReportDetail | null>(null)
+  const online = useOnline()
   const [, setEtag] = useState<string | null>(null)
   const [data, setData] = useState<Data>({})
   const [reportDate, setReportDate] = useState('')
@@ -239,16 +241,20 @@ export function ReportScreen({ me, id, navigate }: { me: Me; id: string; navigat
           </a>
         </p>
       ) : null}
-      <div className="button-row">
-        <a
-          className="button ghost"
-          href={`/api/v1/reports/${report.id}/pdf`}
-          target="_blank"
-          rel="noopener"
-        >
-          {t('d.pdf')}
-        </a>
-      </div>
+      {online ? (
+        <div className="button-row">
+          <a
+            className="button ghost"
+            href={`/api/v1/reports/${report.id}/pdf`}
+            target="_blank"
+            rel="noopener"
+          >
+            {t('d.pdf')}
+          </a>
+        </div>
+      ) : (
+        <p className="hint">{t('off.siteOnlineOnly')}</p>
+      )}
       {report.status !== 'draft' ? (
         <p className="notice inline" role="status">
           {t('d.locked')}
@@ -416,9 +422,12 @@ export function ReportScreen({ me, id, navigate }: { me: Me; id: string; navigat
         </div>
       ) : null}
 
-      <Signatures report={report} me={me} busy={busy} save={dirty ? save : null} run={run} />
+      {online ? (
+        <Signatures report={report} me={me} busy={busy} save={dirty ? save : null} run={run} />
+      ) : null}
 
       {editable &&
+      online &&
       (report.createdBy?.id === me.user.id || me.permissions.includes('project.write')) ? (
         <button type="button" className="button ghost danger" onClick={remove}>
           {t('d.delete')}
@@ -677,6 +686,7 @@ function Photos({
   setError: (message: string | null) => void
 }) {
   const [uploading, setUploading] = useState(false)
+  const online = useOnline()
   const add = async (selected: FileList | null) => {
     // Copy first: the FileList is emptied when the input is reset right after this call.
     const files = selected ? [...selected] : []
@@ -730,13 +740,7 @@ function Photos({
         <ul className="file-grid">
           {report.photos.map((p) =>
             (p as LocalPhoto).pending ? (
-              <li key={p.fileId} className="file-card">
-                <span className="file-preview file-kind">{t('d.photo')}</span>
-                <span className="file-info">
-                  {p.filename}
-                  <span className="not-synced block">{t('off.notSynced')}</span>
-                </span>
-              </li>
+              <WaitingPhoto key={p.fileId} reportId={report.id} filename={p.filename} />
             ) : (
               <li key={p.fileId} className="file-card">
                 <a
@@ -752,7 +756,7 @@ function Photos({
                   />
                 </a>
                 <span className="file-info">{p.caption ?? p.filename}</span>
-                {editable ? (
+                {editable && online ? (
                   <button
                     type="button"
                     className="button ghost small danger"
@@ -784,6 +788,26 @@ function Photos({
         </label>
       ) : null}
     </div>
+  )
+}
+
+/** A photo still waiting in the outbox: shown from the device until it is transferred. */
+function WaitingPhoto({ reportId, filename }: { reportId: string; filename: string }) {
+  const url = useWaitingPhoto(reportPath(reportId), filename)
+  return (
+    <li className="file-card">
+      {url ? (
+        <span className="file-preview">
+          <img src={url} alt={filename} />
+        </span>
+      ) : (
+        <span className="file-preview file-kind">{t('d.photo')}</span>
+      )}
+      <span className="file-info">
+        {filename}
+        <span className="not-synced block">{t('off.notSynced')}</span>
+      </span>
+    </li>
   )
 }
 

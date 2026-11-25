@@ -2,7 +2,7 @@ import { execFileSync } from 'node:child_process'
 import { mkdirSync, mkdtempSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { documentLetter, renderLetterPdf } from '@opc/pdf-templates'
+import { documentLetter, renderLetterPdf } from '@easybau/pdf-templates'
 import { describe, expect, it } from 'vitest'
 import { invoice, standardItems, UNIT_CODES } from './fixtures.test-support.js'
 import { addFacturXMetadata, buildEinvoice, FacturXError, facturXmp } from './index.js'
@@ -52,17 +52,20 @@ describe('ZUGFeRD / Factur-X PDF/A-3', () => {
     }
   })
 
-  it.skipIf(!has('pdfinfo'))('stays readable and exposes metadata and attachment', () => {
-    const dir = mkdtempSync(join(tmpdir(), 'opc-zugferd-'))
-    const file = join(dir, 'r.pdf')
-    writeFileSync(file, pdf)
-    const meta = execFileSync('pdfinfo', ['-meta', file]).toString()
-    expect(meta).toContain('<fx:ConformanceLevel>EN 16931</fx:ConformanceLevel>')
-    expect(meta).toContain('<pdfaid:part>3</pdfaid:part>')
-    expect(execFileSync('pdfdetach', ['-list', file]).toString()).toContain('factur-x.xml')
-    execFileSync('pdfdetach', ['-save', '1', '-o', join(dir, 'x.xml'), file])
-    expect(execFileSync('cat', [join(dir, 'x.xml')]).toString()).toBe(xml)
-  })
+  it.skipIf(!has('pdfinfo') || !has('pdfdetach'))(
+    'stays readable and exposes metadata and attachment',
+    () => {
+      const dir = mkdtempSync(join(tmpdir(), 'easybau-zugferd-'))
+      const file = join(dir, 'r.pdf')
+      writeFileSync(file, pdf)
+      const meta = execFileSync('pdfinfo', ['-meta', file]).toString()
+      expect(meta).toContain('<fx:ConformanceLevel>EN 16931</fx:ConformanceLevel>')
+      expect(meta).toContain('<pdfaid:part>3</pdfaid:part>')
+      expect(execFileSync('pdfdetach', ['-list', file]).toString()).toContain('factur-x.xml')
+      execFileSync('pdfdetach', ['-save', '1', '-o', join(dir, 'x.xml'), file])
+      expect(execFileSync('cat', [join(dir, 'x.xml')]).toString()).toBe(xml)
+    },
+  )
 
   it('refuses PDFs it cannot update safely', () => {
     expect(() => addFacturXMetadata(Buffer.from('%PDF-1.7\n'))).toThrow(FacturXError)

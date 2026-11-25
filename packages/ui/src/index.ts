@@ -1,3 +1,7 @@
 export * from './components.js'
 export * from './fields.js'
+export * from './inputs.js'
+export * from './money.js'
+export * from './overlay.js'
+export * from './table.js'
 export * from './tokens.js'

@@ -1,11 +1,11 @@
-import type { Tx } from '@opc/db'
+import type { Tx } from '@easybau/db'
 import {
   type AuditChainCheck,
   type AuditChainStatus,
   type AuditEventItem,
   type AuditEventList,
   auditEventQuery,
-} from '@opc/schemas'
+} from '@easybau/schemas'
 import type { FastifyInstance } from 'fastify'
 import { inTenant, requirePermission, type Services } from '../context.js'
 import { decodeCursor, encodeCursor, parse } from '../http.js'
@@ -90,10 +90,12 @@ export function registerAuditRoutes(app: FastifyInstance, services: Services) {
           entityId: string | null
           before: Record<string, unknown> | null
           after: Record<string, unknown> | null
+          redactedAt: string | null
         }[]
       >`
         select e.seq::text, to_char(e.created_at at time zone 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS.MS"Z"') as "createdAt",
-               u.display_name as actor, e.action, e.entity, e.entity_id as "entityId", e.before, e.after
+               u.display_name as actor, e.action, e.entity, e.entity_id as "entityId", e.before, e.after,
+               to_char(e.redacted_at at time zone 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS.MS"Z"') as "redactedAt"
         from audit_event e left join app_user u on u.id = e.actor_user_id
         where true
           ${query.entity ? tx`and e.entity = ${query.entity}` : tx``}
@@ -114,6 +116,7 @@ export function registerAuditRoutes(app: FastifyInstance, services: Services) {
           entity: r.entity,
           entityId: r.entityId,
           changes: changesOf(r.before, r.after),
+          redactedAt: r.redactedAt,
         })),
         nextCursor: rows.length > query.limit && lastRow ? encodeCursor([lastRow.seq]) : null,
       }

@@ -12,14 +12,14 @@ import {
   type TestDb,
   type TestTenant,
   testDatabaseUrl,
-} from '@opc/db/test-support'
+} from '@easybau/db/test-support'
 import {
   type ArchivedObject,
   type ArchiveStatus,
   type ArchiveStore,
   FsObjectStore,
   S3ArchiveStore,
-} from '@opc/storage'
+} from '@easybau/storage'
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
 import { archivePending } from './archive.js'
 
@@ -98,7 +98,7 @@ describe.skipIf(!testDatabaseUrl)('Belegarchiv: Worker archiviert Originale (int
 
   beforeAll(async () => {
     db = await openTestDb()
-    dir = await mkdtemp(join(tmpdir(), 'opc-archive-'))
+    dir = await mkdtemp(join(tmpdir(), 'easybau-archive-'))
     files = new FsObjectStore(dir)
     a = await createTenant(db, 'Archiv A')
     b = await createTenant(db, 'Archiv B')

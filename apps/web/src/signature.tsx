@@ -1,5 +1,5 @@
-import type { MySignature, UploadedSignature } from '@opc/schemas'
-import { paper } from '@opc/ui'
+import type { MySignature, UploadedSignature } from '@easybau/schemas'
+import { paper } from '@easybau/ui'
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { api, uploadFile } from './api'
 import { FormError } from './forms'

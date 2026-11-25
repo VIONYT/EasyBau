@@ -1,7 +1,7 @@
-import type { Me, MeasurementSheetDetail, MeasurementSheetSummary } from '@opc/schemas'
-import { MEASUREMENT_KINDS } from '@opc/schemas/constants'
+import type { Me, MeasurementSheetDetail, MeasurementSheetSummary } from '@easybau/schemas'
+import { MEASUREMENT_KINDS } from '@easybau/schemas/constants'
 import { useEffect, useState } from 'react'
-import { type ApiError, api } from '../api'
+import { type ApiError, api, mutate } from '../api'
 import { formatDateTime } from '../format'
 import { Field, FormError, optional, useForm } from '../forms'
 import { type TextKey, t } from '../i18n'
@@ -32,13 +32,53 @@ export function ProjectMeasurements({
   }, [projectId])
 
   const open = (id: string) => navigate({ view: 'measurement', id })
+  // New sheets get their id on the device: they can be created offline (outbox, ADR 0010).
   const form = useForm(
-    (data) =>
-      api<MeasurementSheetDetail>('POST', `/api/v1/projects/${projectId}/measurement-sheets`, {
+    async (data) => {
+      const id = crypto.randomUUID()
+      const title = optional(data, 'title')
+      const measuredOn = optional(data, 'measuredOn') ?? new Date().toISOString().slice(0, 10)
+      const now = new Date().toISOString()
+      const summary: MeasurementSheetSummary = {
+        id,
+        projectId,
         kind,
-        title: optional(data, 'title'),
-        measuredOn: optional(data, 'measuredOn'),
-      }),
+        title: title ?? t(`m.kind.${kind}` as TextKey),
+        measuredOn,
+        status: 'draft',
+        lineCount: 0,
+        createdBy: { id: me.user.id, displayName: me.user.displayName },
+        updatedAt: now,
+      }
+      const listPath = `/api/v1/projects/${projectId}/measurement-sheets`
+      const result = await mutate<MeasurementSheetDetail>({
+        method: 'POST',
+        path: listPath,
+        json: { id, kind, title, measuredOn },
+        resource: `/api/v1/measurement-sheets/${id}`,
+        label: `${t('m.new')}: ${summary.title}`,
+        optimistic: () => ({
+          ...summary,
+          project: { id: projectId, number: null, name: '' },
+          signedAt: null,
+          signedByContractor: null,
+          signedByClient: null,
+          contractorSignatureAssetId: null,
+          clientSignatureAssetId: null,
+          locations: [],
+          lines: [],
+          items: [],
+          unassigned: [],
+        }),
+        alsoUpdate: [
+          {
+            resource: listPath,
+            apply: (current) => [summary, ...((current as MeasurementSheetSummary[]) ?? [])],
+          },
+        ],
+      })
+      return result.data
+    },
     (sheet) => open(sheet.id),
   )
 

@@ -1,5 +1,5 @@
-import type { Tx } from '@opc/db'
-import type { BackupRunSummary, OperationsStatus } from '@opc/schemas'
+import type { Tx } from '@easybau/db'
+import type { BackupRunSummary, OperationsStatus } from '@easybau/schemas'
 import type { FastifyInstance } from 'fastify'
 import { inTenant, requirePermission, type Services } from '../context.js'
 import { HttpError } from '../http.js'

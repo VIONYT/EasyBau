@@ -1,4 +1,4 @@
-import type { ProjectFiguresDto } from '@opc/schemas'
+import type { ProjectFiguresDto } from '@easybau/schemas'
 import { useEffect, useId, useState } from 'react'
 import { type ApiError, api } from '../api'
 import { formatCents, formatInputNumber } from '../format'

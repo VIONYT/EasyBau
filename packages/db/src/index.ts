@@ -1,4 +1,4 @@
-import type { Config } from '@opc/config'
+import type { Config } from '@easybau/config'
 import postgres from 'postgres'
 
 export type Sql = postgres.Sql

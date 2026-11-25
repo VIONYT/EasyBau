@@ -1,4 +1,4 @@
-import type { DocumentDetail, DocumentItem, EinvoiceFormat } from '@opc/schemas'
+import type { DocumentDetail, DocumentItem, EinvoiceFormat } from '@easybau/schemas'
 import { Decimal } from 'decimal.js'
 import { decimal } from './format.js'
 import type {

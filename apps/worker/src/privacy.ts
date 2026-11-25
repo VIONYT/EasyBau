@@ -1,4 +1,4 @@
-import { type Sql, withTenant } from '@opc/db'
+import { type Sql, withTenant } from '@easybau/db'
 import type { Logger } from 'pino'
 
 /**

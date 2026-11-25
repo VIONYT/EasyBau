@@ -5,7 +5,7 @@ import type {
   FileSummary,
   MeasurementSheetSummary,
   ReportSummary,
-} from '@opc/schemas'
+} from '@easybau/schemas'
 import { useEffect, useId, useState } from 'react'
 import { type ApiError, api, apiWithEtag } from '../api'
 import { formatDateTime } from '../format'

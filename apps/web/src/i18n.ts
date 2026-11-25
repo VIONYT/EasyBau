@@ -23,6 +23,8 @@ const de = {
   'off.discardConfirm': 'Diese Änderung verwerfen? Sie wird nicht übertragen.',
   'off.logoutWaiting':
     'Es warten noch Änderungen auf Übertragung. Sie bleiben auf diesem Gerät und werden nach der nächsten Anmeldung mit diesem Konto übertragen. Trotzdem abmelden?',
+  'off.siteOnlineOnly':
+    'Ohne Netz nicht verfügbar: PDF, Unterschreiben und Löschen – sobald wieder Netz da ist, erscheinen die Knöpfe.',
   'off.notSynced': 'noch nicht übertragen',
   'off.notCached': 'Offline: Diese Ansicht ist auf dem Gerät noch nicht gespeichert.',
   'off.onlineOnly': 'Das geht nur mit Verbindung.',
@@ -213,6 +215,18 @@ const de = {
     'Eine bestätigte Adresse stellt sicher, dass Links zum Zurücksetzen des Passworts bei Ihnen ankommen.',
   'account.email.send': 'Bestätigungs-E-Mail senden',
   'account.email.sent': 'Die E-Mail ist unterwegs. Der Link darin ist 48 Stunden gültig.',
+  'account.change.open': 'E-Mail-Adresse ändern',
+  'account.change.newEmail': 'Neue E-Mail-Adresse',
+  'account.change.submit': 'Adresse ändern',
+  'account.change.linkSent':
+    'Wir haben einen Link an die neue Adresse geschickt (24 Stunden gültig). Erst nach der Bestätigung gilt sie für die Anmeldung; Ihre bisherige Adresse wurde informiert.',
+  'account.change.changedNow':
+    'Die Adresse ist geändert. Ohne E-Mail-Versand kann sie nicht bestätigt werden – ab sofort melden Sie sich mit der neuen Adresse an.',
+  'account.change.title': 'Neue E-Mail-Adresse bestätigen',
+  'account.change.confirmText':
+    '{name}, soll Ihre Anmeldung von {old} auf {new} umgestellt werden?',
+  'account.change.confirm': 'Neue Adresse bestätigen',
+  'account.change.done': 'Fertig. Sie melden sich ab sofort mit {email} an.',
   'account.email.noSmtp': 'In diesem System ist kein E-Mail-Versand eingerichtet.',
   'users.resetPassword': 'Passwort-Link',
   'users.resetSendEmail':
@@ -253,6 +267,20 @@ const de = {
   'contacts.filter.archived': 'Archivierte Kontakte',
   'contacts.archived': 'archiviert',
   'contacts.archive': 'Archivieren',
+  'merge.title': 'Dublette zusammenführen',
+  'merge.open': 'Mit anderem Kontakt zusammenführen',
+  'merge.hint':
+    'Dieser Kontakt geht im gewählten auf: Projekte, Entwürfe, Ansprechpartner, Eingangsrechnungen in Prüfung sowie fehlende Telefonnummern, E-Mail-Adressen und Anschriften wandern dorthin. Festgeschriebene Dokumente behalten ihren Empfänger. Dieser Kontakt wird archiviert.',
+  'merge.into': 'Bleibender Kontakt',
+  'merge.confirm':
+    '„{from}“ wird mit „{into}“ zusammengeführt. Das lässt sich nicht rückgängig machen.',
+  'merge.submit': 'Zusammenführen',
+  'merge.done':
+    'Zusammengeführt mit „{name}“ – dieser Kontakt ist archiviert und wird nicht mehr verwendet.',
+  'privacy.projects':
+    'Die Projekte dieses Privatkunden verlieren beim Löschen Namen, Beschreibung und Baustellenanschrift und werden archiviert.',
+  'privacy.files':
+    'In den Projekten liegen {files} Dateien/Fotos und {reports} Berichte. Sie werden nicht automatisch gelöscht (oft Nachweise, z. B. für die Gewährleistung) – bitte in der Ablage prüfen und nicht mehr Benötigtes selbst löschen.',
   'privacy.title': 'Datenschutz',
   'privacy.hint':
     'Auskunft (Art. 15 DSGVO) lädt alle gespeicherten Daten dieses Kontakts als Datei herunter. Löschen anonymisiert den Kontakt; steht er in festgeschriebenen Belegen, wird er bis zum Ende der Aufbewahrungsfrist gesperrt und danach automatisch gelöscht.',
@@ -379,6 +407,16 @@ const de = {
   'security.keyNeverUsed': 'Noch nicht benutzt',
   'security.unsupported': 'Dieser Browser unterstützt keine Sicherheitsschlüssel.',
   'security.password': 'Passwort ändern',
+  'security.myData': 'Meine Daten',
+  'security.display': 'Darstellung',
+  'security.contrast': 'Kontrast',
+  'security.contrast.system': 'Wie im Betriebssystem eingestellt',
+  'security.contrast.high': 'Hoher Kontrast (z. B. Sonnenlicht auf der Baustelle)',
+  'security.contrast.normal': 'Normal',
+  'security.contrastHint': 'Gilt nur für dieses Gerät.',
+  'security.myDataHint':
+    'Auskunft nach Art. 15 DSGVO: alles, was zu Ihrem Zugang gespeichert ist (Konto, Sitzungen, Geräte, Mitgliedschaft und Ihre Daten in dieser Firma), als Datei.',
+  'security.myDataDownload': 'Auskunft herunterladen',
   'security.currentPassword': 'Aktuelles Passwort',
   'security.newPassword': 'Neues Passwort',
   'security.saved': 'Gespeichert.',
@@ -418,6 +456,8 @@ const de = {
   'audit.field': 'Feld',
   'audit.before': 'vorher',
   'audit.after': 'nachher',
+  'audit.redacted':
+    'Werte am {when} aus Datenschutzgründen entfernt (DSGVO, Löschkonzept) – der Eintrag selbst und die Prüfkette bleiben erhalten.',
   'audit.noChanges': 'Keine Felddaten (Ereignis wie Anmeldung oder Export).',
   'audit.record': 'Datensatz {id}',
   'audit.action.insert': 'Angelegt',
@@ -461,8 +501,10 @@ const de = {
   'users.role': 'Rolle',
   'users.roleOf': 'Rolle von {name}',
   'users.remove': 'Entfernen',
-  'users.removeConfirm': 'Diese Person aus der Firma entfernen?',
+  'users.removeConfirm':
+    'Diese Person aus der Firma entfernen? Gehört sie danach zu keiner Firma mehr, werden ihre Anmeldedaten (Passwort, zweiter Faktor, Geräte) gelöscht; ihr Name bleibt im Änderungsprotokoll.',
   'users.resetMfa': '2FA zurücksetzen',
+  'users.privacyReport': 'Auskunft (DSGVO)',
   'users.resetMfaConfirm': 'Zweiten Faktor (App und Schlüssel) dieser Person zurücksetzen?',
   'users.you': 'Sie',
   'users.mfa': '2FA',
@@ -562,6 +604,7 @@ const de = {
   'doc.header': 'Kopfdaten',
   'doc.subject': 'Betreff',
   'doc.date': 'Datum',
+  'doc.contactPerson': 'Ansprechpartner (z. Hd.)',
   'doc.recipient': 'Empfänger',
   'doc.place': 'Leistungsort',
   'doc.serviceFrom': 'Leistung von',
@@ -846,10 +889,15 @@ const de = {
   'ev.kind.file': 'Datei',
   'ev.locked': 'unterschrieben/gesperrt',
   'ev.choose': 'Auswählen …',
-  'var.title': 'Mehrmengen',
+  'var.title': 'Mehr- und Mindermengen',
   'var.hint':
     'Gemessene Mengen über der beauftragten Menge (alle Leistungsaufmaße), abzüglich der Mengen, die schon in Nachträgen stehen.',
   'var.none': 'Keine Mehrmengen gegenüber dem Auftrag.',
+  'var.lineLess': 'beauftragt {ordered}, gemessen {measured}',
+  'var.over110':
+    '{percent} % der beauftragten Menge: Für die Menge über 110 % kann ein neuer Einheitspreis verlangt werden (VOB/B § 2 Abs. 3 Nr. 2) – im Nachtrag anpassen.',
+  'var.under90':
+    'Nur {percent} % der beauftragten Menge: Steht die Menge endgültig fest, kann der Einheitspreis erhöht werden (VOB/B § 2 Abs. 3 Nr. 3), z. B. für Gemeinkosten, die nicht mehr gedeckt sind.',
   'var.line': 'beauftragt {ordered}, gemessen {measured}, Mehrmenge {extra}',
   'var.create': 'Nachtrag aus Mehrmengen anlegen',
   'rep.title': 'Berichte',
@@ -1604,8 +1652,10 @@ const de = {
   'ver.title': 'Versionen',
   'ver.label': 'Version {n}',
   'ver.draft': 'Entwurf',
+  'ver.superseded': 'ersetzt',
   'ver.create': 'Neue Version anlegen',
-  'ver.outdated': 'Es gibt eine neuere Version dieses Angebots.',
+  'ver.outdated':
+    'Es gibt eine neuere Version dieses Angebots. Sobald sie fertiggestellt ist, gilt diese Version als ersetzt: Folgedokumente (z. B. Auftragsbestätigung) nur noch aus der neuesten Version.',
   'img.title': 'Bild einfügen',
   'img.file': 'Bild aus der Projektablage',
   'img.choose': '– Bild wählen –',

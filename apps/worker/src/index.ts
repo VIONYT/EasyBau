@@ -1,6 +1,10 @@
-import { type Config, smtpEnabled } from '@opc/config'
-import { createSql } from '@opc/db'
-import { archiveStoreFromSettings, FsObjectStore, previousArchiveFromSettings } from '@opc/storage'
+import { type Config, smtpEnabled } from '@easybau/config'
+import { createSql } from '@easybau/db'
+import {
+  archiveStoreFromSettings,
+  FsObjectStore,
+  previousArchiveFromSettings,
+} from '@easybau/storage'
 import { PgBoss } from 'pg-boss'
 import type { Logger } from 'pino'
 import { archivePending } from './archive.js'

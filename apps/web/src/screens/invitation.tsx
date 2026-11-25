@@ -1,4 +1,4 @@
-import type { InvitationInfo, LoginResponse, Me } from '@opc/schemas'
+import type { InvitationInfo, LoginResponse, Me } from '@easybau/schemas'
 import { useEffect, useState } from 'react'
 import { api } from '../api'
 import { Field, FormError, optional, useForm } from '../forms'

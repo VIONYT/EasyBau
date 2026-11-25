@@ -1,5 +1,5 @@
 import { Readable } from 'node:stream'
-import type { Tx } from '@opc/db'
+import type { Tx } from '@easybau/db'
 import {
   type FileSummary,
   type FolderSummary,
@@ -7,14 +7,14 @@ import {
   folderRequest,
   updateFileRequest,
   uploadQuery,
-} from '@opc/schemas'
+} from '@easybau/schemas'
 import {
   detectFileType,
   extensionOf,
   sanitizeFilename,
   TooLargeError,
   typeOfMime,
-} from '@opc/storage'
+} from '@easybau/storage'
 import type { FastifyInstance, FastifyRequest } from 'fastify'
 import { z } from 'zod'
 import {

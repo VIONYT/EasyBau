@@ -1,5 +1,5 @@
-import { withTenant } from '@opc/db'
-import type { DocumentDetail, FinalizeCheck } from '@opc/schemas'
+import { withTenant } from '@easybau/db'
+import type { DocumentDetail, FinalizeCheck } from '@easybau/schemas'
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
 import { type EinvoiceValidator, kositValidator, ValidatorUnavailableError } from './kosit.js'
 import {

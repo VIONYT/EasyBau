@@ -357,7 +357,7 @@ describe.skipIf(!testDatabaseUrl)('database schema (integration)', () => {
       // The transaction is rolled back so the tampering does not persist.
       const broken = await db.admin
         .begin(async (tx) => {
-          await tx`alter table audit_event disable trigger trg_audit_immutable`
+          await tx`alter table audit_event disable trigger trg_audit_guard`
           await tx`update audit_event set after = '{"tampered":true}'
                    where tenant_id = ${a.tenantId} and seq = 2`
           const [row] = await tx<{ broken: string | null }[]>`

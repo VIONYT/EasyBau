@@ -80,7 +80,7 @@ describe('sanitizeFilename', () => {
 describe('FsObjectStore', () => {
   const dirs: string[] = []
   const store = async () => {
-    const dir = await mkdtemp(join(tmpdir(), 'opc-store-'))
+    const dir = await mkdtemp(join(tmpdir(), 'easybau-store-'))
     dirs.push(dir)
     return { dir, store: new FsObjectStore(dir) }
   }
@@ -149,7 +149,7 @@ describe('typeOfMime', () => {
   })
 
   it('accepts exactly the extensions announced to the web app', async () => {
-    const { UPLOAD_EXTENSIONS } = await import('@opc/schemas')
+    const { UPLOAD_EXTENSIONS } = await import('@easybau/schemas')
     expect([...ALLOWED_EXTENSIONS].sort()).toEqual([...UPLOAD_EXTENSIONS].sort())
   })
 })

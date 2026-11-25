@@ -7,7 +7,7 @@ import type {
   ProjectStatus,
   ProjectSummary,
   TeamMember,
-} from '@opc/schemas'
+} from '@easybau/schemas'
 import { useEffect, useId, useState } from 'react'
 import { type ApiError, api } from '../api'
 import { formatDateTime } from '../format'

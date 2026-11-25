@@ -1,4 +1,4 @@
-import type { CatalogImportResult, CatalogItem } from '@opc/schemas'
+import type { CatalogImportResult, CatalogItem } from '@easybau/schemas'
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
 import { Client, createHarness, type Harness } from './testing/harness.js'
 

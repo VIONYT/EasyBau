@@ -1,4 +1,4 @@
-import type { Tx } from '@opc/db'
+import type { Tx } from '@easybau/db'
 import {
   type ContactDetail,
   type ContactSummary,
@@ -9,7 +9,7 @@ import {
   type Page,
   type UpdateContactRequest,
   updateContactRequest,
-} from '@opc/schemas'
+} from '@easybau/schemas'
 import type { FastifyInstance } from 'fastify'
 import { z } from 'zod'
 import { inTenant, requirePermission, type Services } from '../context.js'
@@ -22,6 +22,7 @@ import {
   notFound,
   parse,
 } from '../http.js'
+import { registerContactMergeRoutes } from './contact-merge.js'
 
 const idParam = z.object({ id: z.uuid('Ungültige ID.') })
 
@@ -89,7 +90,9 @@ async function loadContact(tx: Tx, id: string): Promise<(ContactDetail & { etag:
            updated_at as "updatedRaw", to_char(updated_at at time zone 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS.MS"Z"') as "updatedAt",
            to_char(created_at at time zone 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS.MS"Z"') as "createdAt",
            to_char(blocked_until, 'YYYY-MM-DD') as "blockedUntil",
-           to_char(erased_at at time zone 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS.MS"Z"') as "erasedAt"
+           to_char(erased_at at time zone 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS.MS"Z"') as "erasedAt",
+           (select json_build_object('id', m.id, 'displayName', m.display_name)
+              from contact m where m.id = contact.merged_into_id) as "mergedInto"
     from contact where id = ${id}`
   if (!c) return null
   const channels = await tx<ContactDetail['channels']>`
@@ -120,11 +123,20 @@ export function restrictedContact(): HttpError {
   )
 }
 
-/** Usable for new projects and documents: exists, not blocked, not erased. */
+/** Usable for new projects and documents: exists, not blocked, not erased, not merged away. */
 export async function usableContact(tx: Tx, id: string): Promise<boolean> {
   return (
-    (await tx`select 1 from contact where id = ${id} and blocked_at is null and erased_at is null`)
-      .length > 0
+    (
+      await tx`select 1 from contact where id = ${id} and blocked_at is null and erased_at is null
+                 and merged_into_id is null`
+    ).length > 0
+  )
+}
+
+export function mergedContact(): HttpError {
+  return new HttpError(
+    409,
+    'Der Kontakt wurde mit einem anderen zusammengeführt und kann nicht mehr geändert werden.',
   )
 }
 
@@ -161,6 +173,7 @@ export async function insertContact(
 }
 
 export function registerContactRoutes(app: FastifyInstance, services: Services) {
+  registerContactMergeRoutes(app, services, loadContact)
   app.get('/api/v1/contacts', async (request): Promise<Page<ContactSummary>> => {
     const auth = requirePermission(request, 'contacts.read')
     const query = parse(contactListQuery, request.query)
@@ -243,13 +256,16 @@ export function registerContactRoutes(app: FastifyInstance, services: Services) 
           firstName: string | null
           lastName: string | null
           restricted: boolean
+          merged: boolean
         }[]
       >`
         select kind, updated_at as "updatedAt", organization_name as "organizationName",
                first_name as "firstName", last_name as "lastName",
-               (blocked_at is not null or erased_at is not null) as restricted
+               (blocked_at is not null or erased_at is not null) as restricted,
+               merged_into_id is not null as merged
         from contact where id = ${id} for update`
       if (!current) throw notFound('Der Kontakt')
+      if (current.merged) throw mergedContact()
       if (current.restricted) throw restrictedContact()
       checkIfMatch(request.headers['if-match'], current.updatedAt)
       const merged = { ...current, ...input }
@@ -286,7 +302,7 @@ export function registerContactRoutes(app: FastifyInstance, services: Services) 
         auth,
         (tx) => tx`
         update contact set archived_at = ${archived ? tx`now()` : null}
-        where id = ${id} and blocked_at is null and erased_at is null`,
+        where id = ${id} and blocked_at is null and erased_at is null and merged_into_id is null`,
       )
       if (!updated.count) throw notFound('Der Kontakt')
       return reply.status(204).send()

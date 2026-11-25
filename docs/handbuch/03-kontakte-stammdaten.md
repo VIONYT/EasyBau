@@ -17,6 +17,10 @@ Jeder geöffnete Kontakt hat eine eigene Adresse (`/kontakte/…`), die Sie z. B
 
 ![Kontakt bearbeiten](../screenshots/macbook-kontakt.png)
 
+### Dubletten zusammenführen
+
+Gibt es einen Kunden doppelt, öffnen Sie die Dublette und wählen **Mit anderem Kontakt zusammenführen** und den Kontakt, der bleiben soll. Projekte, Entwürfe, Ansprechpartner, Eingangsrechnungen in Prüfung sowie fehlende Telefonnummern, E-Mail-Adressen und Anschriften wandern zum bleibenden Kontakt; hat er noch keine Kunden- oder Kreditorennummer, übernimmt er die der Dublette. Festgeschriebene Dokumente behalten ihren Empfänger (GoBD). Die Dublette wird archiviert, zeigt „Zusammengeführt mit …“ und lässt sich nicht mehr verwenden. Zusammenführen geht nur zwischen Kontakten derselben Art (Person/Organisation) und lässt sich nicht rückgängig machen.
+
 ### Datenschutz: Auskunft und Löschen
 
 Fragt ein Kunde nach seinen Daten oder verlangt die Löschung (DSGVO), finden Sie beides im Kontakt unter **Datenschutz**:
@@ -26,7 +30,7 @@ Fragt ein Kunde nach seinen Daten oder verlangt die Löschung (DSGVO), finden Si
   - Steht der Kontakt in **keinem festgeschriebenen Beleg**, wird er sofort und endgültig anonymisiert (Name, Anschriften, Kommunikationswege und Verknüpfungen werden gelöscht).
   - Steht er in **Rechnungen oder anderen festgeschriebenen Belegen**, müssen diese aufbewahrt werden (§ 147 AO, § 257 HGB). Der Kontakt wird dann bis zum Ende der Aufbewahrungsfrist **gesperrt**: Er lässt sich nicht mehr ändern und nicht mehr für neue Projekte oder Dokumente verwenden. Am Tag nach Fristende löscht EasyBau ihn automatisch.
 
-Festgeschriebene Belege selbst behalten ihre Empfängerdaten unverändert (GoBD). Projektnamen, Baustellenanschriften und Dateien in der Ablage prüfen Sie bei einer Löschung bitte selbst.
+Festgeschriebene Belege selbst behalten ihre Empfängerdaten unverändert (GoBD). Die alten Werte des Kontakts werden auch aus dem Änderungsprotokoll entfernt. Bei **Privatkunden** verlieren deren Projekte Namen, Beschreibung und Baustellenanschrift und werden archiviert; Dateien, Fotos und Berichte in diesen Projekten nennt der Löschdialog – prüfen Sie sie in der Ablage und löschen Sie, was nicht mehr gebraucht wird.
 
 ## Stammdaten
 

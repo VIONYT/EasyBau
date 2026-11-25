@@ -1,3 +1,5 @@
+import { Decimal } from './decimal.js'
+
 /**
  * Vertragssumme (DESIGN.md §4.4, rule 12): Hauptauftrag + beauftragte Nachträge. Partially
  * accepted change orders count with the net amount of their accepted positions only. Offered and
@@ -77,4 +79,25 @@ export function contractTotals(
   }
   const totalNetCents = totals.contractNetCents + totals.acceptedNetCents
   return { ...totals, totalNetCents, potentialNetCents: totalNetCents + totals.offeredNetCents }
+}
+
+/** VOB/B § 2 Abs. 3: Mengenabweichung of a unit-price position (more than ±10 %). */
+export type QuantityDeviationRule = 'over_110' | 'under_90'
+
+/**
+ * Measured quantity relative to the ordered one. Over 110 %: a new price can be agreed for the
+ * quantity beyond 110 % (§ 2 Abs. 3 Nr. 2). Under 90 %: the unit price can be raised for the
+ * quantity actually carried out (§ 2 Abs. 3 Nr. 3) – only once the quantity is final.
+ */
+export function quantityDeviation(
+  ordered: string,
+  measured: string,
+): { percent: string | null; rule: QuantityDeviationRule | null } {
+  const base = new Decimal(ordered)
+  if (base.lte(0)) return { percent: null, rule: null }
+  const ratio = new Decimal(measured).div(base).times(100)
+  const percent = ratio.toDecimalPlaces(0, Decimal.ROUND_HALF_UP).toString()
+  if (ratio.gt(110)) return { percent, rule: 'over_110' }
+  if (ratio.lt(90)) return { percent, rule: 'under_90' }
+  return { percent, rule: null }
 }

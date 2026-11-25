@@ -1,6 +1,6 @@
 // Test fixtures: realistic finalized documents whose totals come from the real domain calculation.
-import { calculateDocumentTotals, type PositionType, type TaxMode } from '@opc/domain'
-import type { DocumentDetail, DocumentItem } from '@opc/schemas'
+import { calculateDocumentTotals, type PositionType, type TaxMode } from '@easybau/domain'
+import type { DocumentDetail, DocumentItem } from '@easybau/schemas'
 
 export const UNIT_CODES = new Map([
   ['u-m2', 'MTK'],
@@ -125,6 +125,7 @@ export function invoice(items: DocumentItem[], options: InvoiceOptions = {}): Do
     cancels: options.cancels ?? null,
     project: { id: 'p', number: 'P-00101', name: 'Sanierung Lindenweg 4' },
     contact: { id: 'c', displayName: 'Wohnbau Nord eG' },
+    contactPerson: null,
     placeOfPerformance: 'Lindenweg 4, 30159 Hannover',
     serviceFrom: options.serviceFrom === undefined ? '2026-10-01' : options.serviceFrom,
     serviceTo: options.serviceTo === undefined ? '2026-11-20' : options.serviceTo,

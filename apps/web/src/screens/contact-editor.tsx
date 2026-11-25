@@ -1,9 +1,10 @@
-import type { ContactDetail, ContactSummary, Page, PaymentTerm } from '@opc/schemas'
-import { color } from '@opc/ui'
+import type { ContactDetail, ContactSummary, Page, PaymentTerm } from '@easybau/schemas'
+import { color } from '@easybau/ui'
 import { useCallback, useEffect, useId, useState } from 'react'
 import { type ApiError, api, apiWithEtag } from '../api'
 import { Field, FormError, SelectField, TextArea, useForm, value } from '../forms'
 import { type TextKey, t } from '../i18n'
+import { ContactMergePanel } from './contact-merge'
 import { ContactPrivacyPanel } from './contact-privacy'
 
 const TAX_MODES = [
@@ -544,8 +545,18 @@ export function ContactEditor({
         />
       ) : null}
 
+      {canWrite ? (
+        <ContactMergePanel
+          contact={c}
+          onMerged={(into) => {
+            onSaved(into)
+            onOpenContact?.(into.id)
+          }}
+        />
+      ) : null}
+
       <FormError>{actionError}</FormError>
-      {canWrite && !restricted ? (
+      {canWrite && !restricted && !c.mergedInto ? (
         <div className="button-row">
           <button type="button" className="button ghost auto" onClick={archive}>
             {t(c.archived ? 'contacts.unarchive' : 'contacts.archive')}

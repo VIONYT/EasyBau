@@ -2,14 +2,14 @@ import { execFileSync } from 'node:child_process'
 import { mkdtempSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { defaultLetterhead } from '@opc/domain'
+import { defaultLetterhead } from '@easybau/domain'
 import { describe, expect, it } from 'vitest'
 import { type DunningLetterSnapshot, dunningLetter, fillDunningText } from './dunning.js'
 import { renderLetterPdf } from './render.js'
 
 function text(pdf: Buffer): string {
   try {
-    const dir = mkdtempSync(join(tmpdir(), 'opc-dunning-'))
+    const dir = mkdtempSync(join(tmpdir(), 'easybau-dunning-'))
     writeFileSync(join(dir, 'x.pdf'), pdf)
     return execFileSync('pdftotext', ['-raw', join(dir, 'x.pdf'), '-'], {
       stdio: ['ignore', 'pipe', 'ignore'],

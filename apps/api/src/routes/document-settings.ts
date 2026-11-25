@@ -1,5 +1,5 @@
 import { Readable } from 'node:stream'
-import type { Tx } from '@opc/db'
+import type { Tx } from '@easybau/db'
 import {
   checkFileNamePattern,
   companyNotices,
@@ -9,8 +9,8 @@ import {
   fileNameFrom,
   isFederalState,
   publicHolidays,
-} from '@opc/domain'
-import { documentTitle } from '@opc/pdf-templates'
+} from '@easybau/domain'
+import { documentTitle } from '@easybau/pdf-templates'
 import {
   type AttachmentFile,
   attachmentUploadQuery,
@@ -23,8 +23,8 @@ import {
   holidayQuery,
   holidayRequest,
   settingsIdParam,
-} from '@opc/schemas'
-import { TooLargeError } from '@opc/storage'
+} from '@easybau/schemas'
+import { TooLargeError } from '@easybau/storage'
 import type { FastifyInstance } from 'fastify'
 import { inTenant, requireAuth, requirePermission, type Services } from '../context.js'
 import { HttpError, notFound, parse } from '../http.js'

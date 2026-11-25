@@ -1,4 +1,4 @@
-import type { DocumentDetail, MeasurementSheetDetail, SheetVariance } from '@opc/schemas'
+import type { DocumentDetail, MeasurementSheetDetail, SheetVariance } from '@easybau/schemas'
 import { useEffect, useId, useState } from 'react'
 import { type ApiError, api } from '../api'
 import { formatInputNumber } from '../format'
@@ -33,6 +33,7 @@ export function VariancePanel({
       .catch((err: ApiError) => setError(err.message))
   }, [sheet.id, lineCount])
   if (!variances) return error ? <FormError>{error}</FormError> : null
+  const extras = variances.filter((v) => Number(v.extraQuantity) > 0)
   const create = async () => {
     setBusy(true)
     setError(null)
@@ -62,12 +63,19 @@ export function VariancePanel({
                 {v.shortText}
               </strong>
               <span className="muted block">
-                {tf('var.line', {
+                {tf(Number(v.extraQuantity) > 0 ? 'var.line' : 'var.lineLess', {
                   ordered: amount(v.orderedQuantity, v.unit),
                   measured: amount(v.measuredQuantity, v.unit),
                   extra: amount(v.extraQuantity, v.unit),
                 })}
               </span>
+              {v.deviation ? (
+                <span className="hint block">
+                  {tf(v.deviation === 'over_110' ? 'var.over110' : 'var.under90', {
+                    percent: v.measuredPercent ?? '',
+                  })}
+                </span>
+              ) : null}
             </li>
           ))}
         </ul>
@@ -75,7 +83,7 @@ export function VariancePanel({
         <p className="muted">{t('var.none')}</p>
       )}
       <FormError>{error}</FormError>
-      {variances.length ? (
+      {extras.length ? (
         <button type="button" className="button primary auto" disabled={busy} onClick={create}>
           {t('var.create')}
         </button>

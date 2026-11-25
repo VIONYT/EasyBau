@@ -1,11 +1,11 @@
-import { type Sql, type Tx, withTenant } from '@opc/db'
+import { type Sql, type Tx, withTenant } from '@easybau/db'
 import {
   alertDecision,
   alertMail,
   type OperationsFacts,
   type OperationsProblem,
   operationsProblems,
-} from '@opc/domain'
+} from '@easybau/domain'
 import type { Logger } from 'pino'
 
 export interface OperationsAlertOptions {

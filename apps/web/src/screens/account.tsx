@@ -1,13 +1,15 @@
 import type {
+  EmailChangeInfo,
+  EmailChangeRequested,
   EmailVerificationRequested,
   Me,
   PasswordResetInfo,
   PasswordResetRequested,
-} from '@opc/schemas'
+} from '@easybau/schemas'
 import { useEffect, useState } from 'react'
 import { type ApiError, api } from '../api'
 import { Field, FormError, useForm, value } from '../forms'
-import { t } from '../i18n'
+import { t, tf } from '../i18n'
 
 /**
  * Konto (P2.10): Passwort vergessen, neues Passwort über den Link (/passwort-zuruecksetzen#…),
@@ -191,8 +193,119 @@ export function EmailVerifyScreen({
   )
 }
 
-/** Sicherheit: status of the e-mail address and „Bestätigungs-E-Mail senden“. */
-export function EmailVerificationCard({ me }: { me: Me }) {
+/** Neue E-Mail-Adresse bestätigen über den Link an die neue Adresse; works signed in or not. */
+export function EmailChangeScreen({
+  appName,
+  onContinue,
+}: {
+  appName: string
+  onContinue: () => void
+}) {
+  const [token] = useState(() => window.location.hash.slice(1))
+  const [info, setInfo] = useState<EmailChangeInfo | null>(null)
+  const [state, setState] = useState<'busy' | 'ready' | 'done' | string>('busy')
+  useEffect(() => {
+    window.history.replaceState(null, '', '/')
+    api<EmailChangeInfo>('POST', '/api/v1/auth/email/change/lookup', { token })
+      .then((result) => {
+        setInfo(result)
+        setState('ready')
+      })
+      .catch((err: ApiError) => setState(err.message))
+  }, [token])
+  const confirm = () => {
+    setState('busy')
+    api('POST', '/api/v1/auth/email/change/confirm', { token })
+      .then(() => setState('done'))
+      .catch((err: ApiError) => setState(err.message))
+  }
+  const failed = state !== 'busy' && state !== 'ready' && state !== 'done'
+  return (
+    <main className="page">
+      <div className="card">
+        <h1>{appName}</h1>
+        <h2>{t('account.change.title')}</h2>
+        {state === 'busy' ? <p className="muted">{t('common.loading')}</p> : null}
+        {state === 'ready' && info ? (
+          <>
+            <p>
+              {tf('account.change.confirmText', {
+                name: info.displayName,
+                old: info.oldEmail,
+                new: info.newEmail,
+              })}
+            </p>
+            <button type="button" className="button primary" onClick={confirm}>
+              {t('account.change.confirm')}
+            </button>
+          </>
+        ) : null}
+        {state === 'done' ? (
+          <p className="success" role="status">
+            {tf('account.change.done', { email: info?.newEmail ?? '' })}
+          </p>
+        ) : null}
+        {failed ? <FormError>{state}</FormError> : null}
+        {state === 'done' || failed ? (
+          <button type="button" className="button primary" onClick={onContinue}>
+            {t('account.verify.continue')}
+          </button>
+        ) : null}
+      </div>
+    </main>
+  )
+}
+
+/** Sicherheit: change the own address (current password, link to the new address). */
+function EmailChangeForm({ onChanged }: { onChanged: () => void }) {
+  const [result, setResult] = useState<EmailChangeRequested | null>(null)
+  const form = useForm(
+    async (data) =>
+      api<EmailChangeRequested>('POST', '/api/v1/auth/email/change', {
+        newEmail: value(data, 'newEmail'),
+        currentPassword: String(data.get('currentPassword') ?? ''),
+      }),
+    (res) => {
+      setResult(res)
+      if (res.changed) onChanged()
+    },
+  )
+  if (result) {
+    return (
+      <p className="notice inline" role="status">
+        {t(result.changed ? 'account.change.changedNow' : 'account.change.linkSent')}
+      </p>
+    )
+  }
+  return (
+    <form className="stack" onSubmit={form.onSubmit} noValidate>
+      <FormError>{form.error}</FormError>
+      <Field
+        label={t('account.change.newEmail')}
+        name="newEmail"
+        type="email"
+        autoComplete="email"
+        required
+        error={form.fieldErrors.newEmail}
+      />
+      <Field
+        label={t('security.currentPassword')}
+        name="currentPassword"
+        type="password"
+        autoComplete="current-password"
+        required
+        error={form.fieldErrors.currentPassword}
+      />
+      <button type="submit" className="button ghost" disabled={form.busy}>
+        {t('account.change.submit')}
+      </button>
+    </form>
+  )
+}
+
+/** Sicherheit: status of the e-mail address, „Bestätigungs-E-Mail senden“ and „Ändern“. */
+export function EmailVerificationCard({ me, onChanged }: { me: Me; onChanged: () => void }) {
+  const [changing, setChanging] = useState(false)
   const [result, setResult] = useState<EmailVerificationRequested | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [busy, setBusy] = useState(false)
@@ -232,6 +345,13 @@ export function EmailVerificationCard({ me }: { me: Me }) {
             </button>
           )}
         </>
+      )}
+      {changing ? (
+        <EmailChangeForm onChanged={onChanged} />
+      ) : (
+        <button type="button" className="button ghost" onClick={() => setChanging(true)}>
+          {t('account.change.open')}
+        </button>
       )}
     </div>
   )

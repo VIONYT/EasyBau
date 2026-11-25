@@ -1,5 +1,5 @@
 {
-  "name": "@opc/api",
+  "name": "@easybau/api",
   "version": "0.0.0",
   "private": true,
   "type": "module",
@@ -17,14 +17,14 @@
   "dependencies": {
     "@fastify/cookie": "11.1.5",
     "@node-rs/argon2": "2.2.2",
-    "@opc/config": "workspace:*",
-    "@opc/db": "workspace:*",
-    "@opc/domain": "workspace:*",
-    "@opc/einvoice": "workspace:*",
-    "@opc/exports": "workspace:*",
-    "@opc/pdf-templates": "workspace:*",
-    "@opc/schemas": "workspace:*",
-    "@opc/storage": "workspace:*",
+    "@easybau/config": "workspace:*",
+    "@easybau/db": "workspace:*",
+    "@easybau/domain": "workspace:*",
+    "@easybau/einvoice": "workspace:*",
+    "@easybau/exports": "workspace:*",
+    "@easybau/pdf-templates": "workspace:*",
+    "@easybau/schemas": "workspace:*",
+    "@easybau/storage": "workspace:*",
     "@simplewebauthn/server": "14.1.0",
     "fastify": "5.12.8",
     "imapflow": "2.12.1",
@@ -32,7 +32,7 @@
     "zod": "4.6.7"
   },
   "devDependencies": {
-    "@opc/worker": "workspace:*",
+    "@easybau/worker": "workspace:*",
     "@types/mailparser": "3.9.0"
   }
 }

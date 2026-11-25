@@ -1,4 +1,4 @@
-import type { Tx } from '@opc/db'
+import type { Tx } from '@easybau/db'
 import {
   DEFAULT_EMAIL_TEMPLATES,
   EMAIL_DOCUMENT_TYPES,
@@ -7,9 +7,9 @@ import {
   type EmailTemplate,
   fillEmailTemplate,
   formatCents,
-} from '@opc/domain'
-import { germanDate } from '@opc/exports'
-import { documentTitle } from '@opc/pdf-templates'
+} from '@easybau/domain'
+import { germanDate } from '@easybau/exports'
+import { documentTitle } from '@easybau/pdf-templates'
 import {
   type DocumentDetail,
   type DocumentEmailDraft,
@@ -18,7 +18,7 @@ import {
   type EmailTemplatesRequest,
   emailTemplatesRequest,
   sendDocumentEmailRequest,
-} from '@opc/schemas'
+} from '@easybau/schemas'
 import type { FastifyInstance } from 'fastify'
 import { z } from 'zod'
 import { type AuthContext, inTenant, requirePermission, type Services } from '../context.js'

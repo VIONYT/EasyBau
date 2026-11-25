@@ -7,7 +7,7 @@ export default defineConfig({
     include: ['apps/*/src/**/*.test.ts', 'packages/*/src/**/*.test.ts'],
     environment: 'node',
     // Workspace packages are executed from TypeScript sources (condition "source"), never from dist/.
-    server: { deps: { inline: [/^@opc\//] } },
+    server: { deps: { inline: [/^@easybau\//] } },
     coverage: {
       provider: 'v8',
       // CLAUDE.md: packages/domain (pure business logic) requires 100 % coverage.

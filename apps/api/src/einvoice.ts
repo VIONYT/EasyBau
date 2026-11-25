@@ -1,11 +1,11 @@
-import type { Tx } from '@opc/db'
+import type { Tx } from '@easybau/db'
 import {
   buildEinvoice,
   type EinvoiceContext,
   einvoiceFormatsOf,
   isEinvoiceDocument,
-} from '@opc/einvoice'
-import type { DocumentDetail, EinvoiceFormat, EinvoiceSummary } from '@opc/schemas'
+} from '@easybau/einvoice'
+import type { DocumentDetail, EinvoiceFormat, EinvoiceSummary } from '@easybau/schemas'
 import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify'
 import { z } from 'zod'
 import { openArtifact, storeArtifact } from './artifacts.js'

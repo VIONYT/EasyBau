@@ -44,28 +44,28 @@ importers:
       '@node-rs/argon2':
         specifier: 2.2.2
         version: 2.2.2
-      '@opc/config':
+      '@easybau/config':
         specifier: workspace:*
         version: link:../../packages/config
-      '@opc/db':
+      '@easybau/db':
         specifier: workspace:*
         version: link:../../packages/db
-      '@opc/domain':
+      '@easybau/domain':
         specifier: workspace:*
         version: link:../../packages/domain
-      '@opc/einvoice':
+      '@easybau/einvoice':
         specifier: workspace:*
         version: link:../../packages/einvoice
-      '@opc/exports':
+      '@easybau/exports':
         specifier: workspace:*
         version: link:../../packages/exports
-      '@opc/pdf-templates':
+      '@easybau/pdf-templates':
         specifier: workspace:*
         version: link:../../packages/pdf-templates
-      '@opc/schemas':
+      '@easybau/schemas':
         specifier: workspace:*
         version: link:../../packages/schemas
-      '@opc/storage':
+      '@easybau/storage':
         specifier: workspace:*
         version: link:../../packages/storage
       '@simplewebauthn/server':
@@ -84,7 +84,7 @@ importers:
         specifier: 4.6.7
         version: 4.6.7
     devDependencies:
-      '@opc/worker':
+      '@easybau/worker':
         specifier: workspace:*
         version: link:../worker
       '@types/mailparser':
@@ -93,16 +93,16 @@ importers:
 
   apps/server:
     dependencies:
-      '@opc/api':
+      '@easybau/api':
         specifier: workspace:*
         version: link:../api
-      '@opc/config':
+      '@easybau/config':
         specifier: workspace:*
         version: link:../../packages/config
-      '@opc/db':
+      '@easybau/db':
         specifier: workspace:*
         version: link:../../packages/db
-      '@opc/worker':
+      '@easybau/worker':
         specifier: workspace:*
         version: link:../worker
       fastify:
@@ -114,13 +114,13 @@ importers:
 
   apps/web:
     dependencies:
-      '@opc/domain':
+      '@easybau/domain':
         specifier: workspace:*
         version: link:../../packages/domain
-      '@opc/schemas':
+      '@easybau/schemas':
         specifier: workspace:*
         version: link:../../packages/schemas
-      '@opc/ui':
+      '@easybau/ui':
         specifier: workspace:*
         version: link:../../packages/ui
       '@simplewebauthn/browser':
@@ -163,16 +163,16 @@ importers:
 
   apps/worker:
     dependencies:
-      '@opc/config':
+      '@easybau/config':
         specifier: workspace:*
         version: link:../../packages/config
-      '@opc/db':
+      '@easybau/db':
         specifier: workspace:*
         version: link:../../packages/db
-      '@opc/domain':
+      '@easybau/domain':
         specifier: workspace:*
         version: link:../../packages/domain
-      '@opc/storage':
+      '@easybau/storage':
         specifier: workspace:*
         version: link:../../packages/storage
       nodemailer:
@@ -193,7 +193,7 @@ importers:
 
   packages/db:
     dependencies:
-      '@opc/config':
+      '@easybau/config':
         specifier: workspace:*
         version: link:../config
       postgres:
@@ -212,17 +212,17 @@ importers:
 
   packages/einvoice:
     dependencies:
-      '@opc/schemas':
+      '@easybau/schemas':
         specifier: workspace:*
         version: link:../schemas
       decimal.js:
         specifier: 10.6.0
         version: 10.6.0
     devDependencies:
-      '@opc/domain':
+      '@easybau/domain':
         specifier: workspace:*
         version: link:../domain
-      '@opc/pdf-templates':
+      '@easybau/pdf-templates':
         specifier: workspace:*
         version: link:../pdf-templates
 
@@ -233,10 +233,10 @@ importers:
       '@myriaddreamin/typst-ts-node-compiler':
         specifier: 0.7.0
         version: 0.7.0
-      '@opc/domain':
+      '@easybau/domain':
         specifier: workspace:*
         version: link:../domain
-      '@opc/schemas':
+      '@easybau/schemas':
         specifier: workspace:*
         version: link:../schemas
       uqr:
@@ -251,7 +251,7 @@ importers:
 
   packages/storage:
     devDependencies:
-      '@opc/schemas':
+      '@easybau/schemas':
         specifier: workspace:*
         version: link:../schemas
 

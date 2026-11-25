@@ -1,5 +1,5 @@
 {
-  "name": "@opc/web",
+  "name": "@easybau/web",
   "version": "0.0.0",
   "private": true,
   "type": "module",
@@ -10,9 +10,9 @@
     "preview": "vite preview"
   },
   "dependencies": {
-    "@opc/domain": "workspace:*",
-    "@opc/schemas": "workspace:*",
-    "@opc/ui": "workspace:*",
+    "@easybau/domain": "workspace:*",
+    "@easybau/schemas": "workspace:*",
+    "@easybau/ui": "workspace:*",
     "@simplewebauthn/browser": "14.0.0",
     "dexie": "4.4.7",
     "react": "19.3.1",

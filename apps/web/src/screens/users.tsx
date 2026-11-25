@@ -5,9 +5,9 @@ import type {
   InviteResponse,
   MemberSummary,
   RoleSummary,
-} from '@opc/schemas'
+} from '@easybau/schemas'
 import { useCallback, useEffect, useId, useState } from 'react'
-import { type ApiError, api } from '../api'
+import { type ApiError, api, downloadFile } from '../api'
 import { formatDateTime } from '../format'
 import { Field, FormError, optional, useForm, value } from '../forms'
 import { t, tf } from '../i18n'
@@ -186,6 +186,15 @@ export function Users() {
                       {t('users.resetMfa')}
                     </button>
                   ) : null}
+                  <button
+                    type="button"
+                    className="button ghost"
+                    onClick={() =>
+                      act(() => downloadFile(`/api/v1/users/${m.userId}/privacy-report`))
+                    }
+                  >
+                    {t('users.privacyReport')}
+                  </button>
                   <button
                     type="button"
                     className="button ghost danger"

@@ -1,5 +1,5 @@
 import { createHash } from 'node:crypto'
-import type { Tx } from '@opc/db'
+import type { Tx } from '@easybau/db'
 import {
   CalculationError,
   COUNTED_POSITION_TYPES,
@@ -14,7 +14,7 @@ import {
   rateForTimeUnit,
   roundTo,
   type TaxCategory,
-} from '@opc/domain'
+} from '@easybau/domain'
 import {
   type CostKind,
   type CreateDocumentRequest,
@@ -37,7 +37,7 @@ import {
   type UnitSummary,
   updateDocumentRequest,
   updateItemRequest,
-} from '@opc/schemas'
+} from '@easybau/schemas'
 import type { FastifyInstance, FastifyReply } from 'fastify'
 import { z } from 'zod'
 import { archiveSummary } from '../artifacts.js'
@@ -501,6 +501,7 @@ export async function liveIssuer(tx: Tx): Promise<Issuer> {
 export async function liveRecipient(
   tx: Tx,
   contactId: string | null,
+  contactPersonId: string | null = null,
 ): Promise<DocumentDetail['recipient']> {
   if (!contactId) return null
   const [c] = await tx<
@@ -519,6 +520,13 @@ export async function liveRecipient(
            einvoice_format as "einvoiceFormat"
     from contact where id = ${contactId}`
   if (!c) return null
+  // Ansprechpartner: „z. Hd. …“ as the first line under the name (DIN 5008).
+  const [person] = contactPersonId
+    ? await tx<{ name: string }[]>`
+        select concat_ws(' ', nullif(salutation, ''), nullif(title, ''), first_name, last_name) as name
+        from contact where id = ${contactPersonId} and kind = 'person'`
+    : []
+  const attention = person?.name ? [`z. Hd. ${person.name}`] : []
   const extra = {
     private: c.private,
     vatId: c.vatId,
@@ -542,7 +550,7 @@ export async function liveRecipient(
            postal_code as "postalCode", city, country_code as "countryCode"
     from contact_address where contact_id = ${contactId} and kind in ('billing', 'main')
     order by (kind = 'billing') desc limit 1`
-  if (!a) return { name: c.name, lines: [], ...extra }
+  if (!a) return { name: c.name, lines: attention, ...extra }
   const block =
     a.recipientBlock
       ?.split('\n')
@@ -551,6 +559,7 @@ export async function liveRecipient(
   return {
     name: block[0] ?? c.name,
     lines: [
+      ...attention,
       ...block.slice(1),
       a.street,
       a.streetExtra,
@@ -598,6 +607,7 @@ export async function loadDocument(
     select ${summaryColumns(tx)}, d.updated_at as "updatedRaw", ${ISO(tx, 'd.finalized_at')} as "finalizedAt",
            json_build_object('id', p.id, 'number', p.number, 'name', p.name) as project,
            case when c.id is null then null else json_build_object('id', c.id, 'displayName', c.display_name) end as contact,
+           case when cp.id is null then null else json_build_object('id', cp.id, 'displayName', cp.display_name) end as "contactPerson",
            d.contact_id as "contactId",
            d.place_of_performance as "placeOfPerformance",
            ${DATE(tx, 'd.service_from')} as "serviceFrom", ${DATE(tx, 'd.service_to')} as "serviceTo",
@@ -616,6 +626,7 @@ export async function loadDocument(
              select 1 from document v where v.previous_version_id = d.id) as "hasVersions"
     from ${fromDocuments(tx)}
     left join contact c on c.id = d.contact_id
+    left join contact cp on cp.id = d.contact_person_id
     where d.id = ${id} and ${projectVisibility(tx, auth)}`
   if (!row) return null
   const rows = await loadItems(tx, id)
@@ -700,7 +711,7 @@ export async function loadDocument(
   const detail: DocumentDetail = {
     ...doc,
     issuer: issuerSnapshot ?? (await liveIssuer(tx)),
-    recipient: recipientSnapshot ?? (await liveRecipient(tx, contactId)),
+    recipient: recipientSnapshot ?? (await liveRecipient(tx, contactId, doc.contactPerson?.id)),
     changeOrderInfo: info
       ? {
           ...info,
@@ -894,6 +905,20 @@ export async function createDocument(
       throw new HttpError(400, 'Die Eingaben sind unvollständig oder ungültig.', {
         sourceDocumentId: 'Das Ausgangsdokument gehört nicht zu diesem Projekt.',
       })
+    }
+    // Angebotsversionen: an older version is replaced once a newer one has been finalized.
+    const [newer] = await tx<{ version: number; number: string | null }[]>`
+      with recursive later as (
+        select id, version, number, status from document where previous_version_id = ${source.id}
+        union all
+        select d.id, d.version, d.number, d.status from document d join later on d.previous_version_id = later.id
+      )
+      select version, number from later where status <> 'draft' order by version desc limit 1`
+    if (newer) {
+      throw new HttpError(
+        409,
+        `Dieses Angebot ist durch Version ${newer.version}${newer.number ? ` (${newer.number})` : ''} ersetzt. Bitte das Folgedokument aus der neuesten Version erstellen.`,
+      )
     }
   }
 
@@ -1156,6 +1181,7 @@ export function registerDocumentRoutes(app: FastifyInstance, services: Services)
         serviceTo: 'service_to',
         placeOfPerformance: 'place_of_performance',
         contactId: 'contact_id',
+        contactPersonId: 'contact_person_id',
         introText: 'intro_text',
         closingText: 'closing_text',
         paymentDueDays: 'payment_due_days',
@@ -1168,6 +1194,30 @@ export function registerDocumentRoutes(app: FastifyInstance, services: Services)
         constructionLevyPercent: 'construction_levy_percent',
         progressBillingMode: 'progress_billing_mode',
         showLaborShare: 'show_labor_share',
+      }
+      // Ansprechpartner: a person linked to the (new) recipient organization; another recipient
+      // drops a person who is not linked to it.
+      const [links] = await tx<{ contactId: string | null; personId: string | null }[]>`
+        select contact_id as "contactId", contact_person_id as "personId" from document where id = ${id}`
+      const recipientId =
+        input.contactId !== undefined ? input.contactId : (links?.contactId ?? null)
+      const personId =
+        input.contactPersonId !== undefined ? input.contactPersonId : (links?.personId ?? null)
+      if (personId) {
+        const [linked] = recipientId
+          ? await tx`
+              select 1 from contact_link l join contact p on p.id = l.person_id
+              where l.organization_id = ${recipientId} and l.person_id = ${personId}
+                and p.blocked_at is null and p.erased_at is null`
+          : []
+        if (!linked) {
+          if (input.contactPersonId) {
+            throw new HttpError(400, 'Die Eingaben sind unvollständig oder ungültig.', {
+              contactPersonId: 'Die Person ist kein Ansprechpartner dieses Empfängers.',
+            })
+          }
+          input.contactPersonId = null
+        }
       }
       const columns: Record<string, unknown> = {}
       for (const [key, column] of Object.entries(map)) {

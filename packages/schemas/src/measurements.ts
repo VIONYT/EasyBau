@@ -16,6 +16,8 @@ export const measurementVariables = z
   .refine((v) => Object.keys(v).length <= 20, 'Höchstens 20 Variablen.')
 
 export const createSheetRequest = z.object({
+  /** Offline capture: the client's own id (a repeated send returns the sheet, ADR 0010). */
+  id: id.optional(),
   kind: z.enum(MEASUREMENT_KINDS, 'Bitte Angebots- oder Leistungsaufmaß wählen.'),
   title: optionalText(200),
   measuredOn: isoDate.optional(),
@@ -35,6 +37,8 @@ export const signSheetRequest = z.object({
 })
 
 export const locationRequest = z.object({
+  /** Offline capture: the client's own id (a repeated send changes nothing, ADR 0010). */
+  id: id.optional(),
   name: text(200),
   parentId: id.nullish(),
   variables: measurementVariables.default({}),

@@ -1,4 +1,4 @@
-import { formatUnitQuantity, RESULT_DECIMALS, roundTo } from '@opc/domain'
+import { formatUnitQuantity, RESULT_DECIMALS, roundTo } from '@easybau/domain'
 /** Date formatting that never throws on unexpected input (a crash would blank the whole app). */
 export function formatDateTime(
   iso: string | null | undefined,

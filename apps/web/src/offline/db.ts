@@ -48,7 +48,7 @@ export class OfflineDb extends Dexie {
   outbox!: Table<OutboxEntry, number>
   meta!: Table<MetaEntry, string>
 
-  constructor(name = 'opc-offline') {
+  constructor(name = 'easybau-offline') {
     super(name)
     this.version(1).stores({
       cache: 'url',

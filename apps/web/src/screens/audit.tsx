@@ -1,4 +1,4 @@
-import type { AuditChainStatus, AuditEventItem, AuditEventList, Me } from '@opc/schemas'
+import type { AuditChainStatus, AuditEventItem, AuditEventList, Me } from '@easybau/schemas'
 import { useCallback, useEffect, useId, useState } from 'react'
 import { type ApiError, api } from '../api'
 import { formatDateTime } from '../format'
@@ -264,6 +264,10 @@ function EventRow({ event: e }: { event: AuditEventItem }) {
               </tbody>
             </table>
           </div>
+        ) : e.redactedAt ? (
+          <p className="muted">
+            {tf('audit.redacted', { when: formatDateTime(e.redactedAt, 'date') })}
+          </p>
         ) : (
           <p className="muted">{t('audit.noChanges')}</p>
         )}

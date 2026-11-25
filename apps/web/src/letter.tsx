@@ -4,8 +4,8 @@ import {
   fillPlaceholders,
   footerColumnWeights,
   type LetterheadValues,
-} from '@opc/domain'
-import type { LetterheadLayout } from '@opc/schemas'
+} from '@easybau/domain'
+import type { LetterheadLayout } from '@easybau/schemas'
 import {
   type KeyboardEvent,
   type PointerEvent,

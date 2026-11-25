@@ -210,6 +210,8 @@ export interface ContactDetail
   blockedUntil: string | null
   /** DSGVO: anonymised (Art. 17); nothing can be changed any more. */
   erasedAt: string | null
+  /** Merged into this contact (duplicate); archived and no longer changed. */
+  mergedInto: { id: string; displayName: string } | null
   createdAt: string
 }
 
@@ -224,6 +226,9 @@ export interface ContactPrivacy {
     documents: number
     finalizedDocuments: number
     incomingInvoices: number
+    /** Files and photos in the Ablage of the customer's projects (checked by the company). */
+    files: number
+    reports: number
   }
   blockedAt: string | null
   blockedUntil: string | null
@@ -237,4 +242,21 @@ export const eraseContactRequest = z.object({
 export interface EraseContactResult {
   result: 'erased' | 'blocked'
   blockedUntil: string | null
+}
+
+/** Kontakte zusammenführen: the contact of the URL is the duplicate, `intoId` stays. */
+export const mergeContactRequest = z.object({ intoId: id, confirm: z.literal(true) })
+
+export interface MergeContactResult {
+  into: ContactDetail
+  moved: {
+    projects: number
+    documents: number
+    incomingInvoices: number
+    links: number
+    channels: number
+    addresses: number
+  }
+  /** Finalised documents and confirmed incoming invoices stay with the duplicate (snapshot). */
+  keptWithDuplicate: number
 }

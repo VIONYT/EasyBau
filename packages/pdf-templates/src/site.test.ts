@@ -2,8 +2,8 @@ import { execFileSync } from 'node:child_process'
 import { mkdtempSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { defaultLetterhead } from '@opc/domain'
-import type { MeasurementSheetDetail, ReportDetail } from '@opc/schemas'
+import { defaultLetterhead } from '@easybau/domain'
+import type { MeasurementSheetDetail, ReportDetail } from '@easybau/schemas'
 import { describe, expect, it } from 'vitest'
 import { isUsableImage, renderLetterPdf } from './render.js'
 import { reportLetter, type SiteLetterContext, sheetLetter } from './site.js'
@@ -23,7 +23,7 @@ const context: SiteLetterContext = {
 
 function text(pdf: Buffer): string {
   try {
-    const dir = mkdtempSync(join(tmpdir(), 'opc-site-'))
+    const dir = mkdtempSync(join(tmpdir(), 'easybau-site-'))
     writeFileSync(join(dir, 'x.pdf'), pdf)
     if (process.env.PDF_SAMPLE_DIR)
       writeFileSync(join(process.env.PDF_SAMPLE_DIR, `site-${Date.now()}.pdf`), pdf)

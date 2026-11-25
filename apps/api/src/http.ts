@@ -1,4 +1,4 @@
-import type { Problem } from '@opc/schemas'
+import type { Problem } from '@easybau/schemas'
 import type { FastifyReply } from 'fastify'
 import type { z } from 'zod'
 

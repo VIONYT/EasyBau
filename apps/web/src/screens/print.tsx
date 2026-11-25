@@ -1,5 +1,5 @@
-import { defaultLetterhead } from '@opc/domain'
-import type { DocumentDetail } from '@opc/schemas'
+import { defaultLetterhead } from '@easybau/domain'
+import type { DocumentDetail } from '@easybau/schemas'
 import { useEffect, useState } from 'react'
 import { type ApiError, api } from '../api'
 import { formatCents, formatDateTime, formatQuantity, formatUnitAmount } from '../format'

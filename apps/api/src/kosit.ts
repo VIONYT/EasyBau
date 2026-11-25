@@ -1,4 +1,4 @@
-import { parseKositReport, type ValidationResult } from '@opc/einvoice'
+import { parseKositReport, type ValidationResult } from '@easybau/einvoice'
 
 /** Validation of one e-invoice XML (rule 8). */
 export interface EinvoiceValidation {

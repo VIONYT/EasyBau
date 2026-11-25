@@ -1,4 +1,4 @@
-import { withTenant } from '@opc/db'
+import { withTenant } from '@easybau/db'
 import type { FastifyReply, FastifyRequest } from 'fastify'
 import type { Services } from './context.js'
 import { HttpError } from './http.js'

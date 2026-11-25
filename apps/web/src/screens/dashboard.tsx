@@ -1,4 +1,4 @@
-import type { DashboardDto, DashboardSiteDto, DashboardSum, Me } from '@opc/schemas'
+import type { DashboardDto, DashboardSiteDto, DashboardSum, Me } from '@easybau/schemas'
 import { useEffect, useId, useState } from 'react'
 import { type ApiError, api } from '../api'
 import { formatCents, formatDateTime } from '../format'
@@ -7,7 +7,7 @@ import { type TextKey, t, tf } from '../i18n'
 import type { Navigate } from '../router'
 import { StatusBadge } from './projects'
 
-const HIDE_KEY = 'opc.dashboard.hideAmounts'
+const HIDE_KEY = 'easybau.dashboard.hideAmounts'
 
 /** Per-device preference only (no data): Beträge ausblenden, e.g. in front of customers. */
 function useHideAmounts(): [boolean, (hide: boolean) => void] {

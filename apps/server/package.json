@@ -1,5 +1,5 @@
 {
-  "name": "@opc/server",
+  "name": "@easybau/server",
   "version": "0.0.0",
   "private": true,
   "type": "module",
@@ -10,10 +10,10 @@
     "start": "node dist/main.js"
   },
   "dependencies": {
-    "@opc/api": "workspace:*",
-    "@opc/config": "workspace:*",
-    "@opc/db": "workspace:*",
-    "@opc/worker": "workspace:*",
+    "@easybau/api": "workspace:*",
+    "@easybau/config": "workspace:*",
+    "@easybau/db": "workspace:*",
+    "@easybau/worker": "workspace:*",
     "fastify": "5.12.8",
     "pino": "10.4.0"
   }

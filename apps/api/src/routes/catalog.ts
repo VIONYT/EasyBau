@@ -1,5 +1,5 @@
 import { Readable } from 'node:stream'
-import type { Tx } from '@opc/db'
+import type { Tx } from '@easybau/db'
 import {
   CalculationError,
   type CostLineInput,
@@ -21,7 +21,7 @@ import {
   toCents,
   toDecimal,
   unitCostCents,
-} from '@opc/domain'
+} from '@easybau/domain'
 import {
   type CatalogFolder,
   type CatalogItem,
@@ -39,7 +39,7 @@ import {
   type UpdateCatalogItemRequest,
   updateCatalogItemRequest,
   updateSupplierCatalogRequest,
-} from '@opc/schemas'
+} from '@easybau/schemas'
 import type { FastifyInstance } from 'fastify'
 import { z } from 'zod'
 import { type AuthContext, inTenant, requirePermission, type Services } from '../context.js'

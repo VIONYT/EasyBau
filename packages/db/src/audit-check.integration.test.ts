@@ -33,7 +33,7 @@ describe.skipIf(!testDatabaseUrl)('audit chain check (integration)', () => {
   async function tampered(tamper: (tx: Sql) => Promise<unknown>): Promise<CheckRow> {
     return db.admin
       .begin(async (tx) => {
-        await tx`alter table audit_event disable trigger trg_audit_immutable`
+        await tx`alter table audit_event disable trigger trg_audit_guard`
         await tamper(tx as unknown as Sql)
         await tx`select check_all_audit_chains()`
         const [row] = await tx<CheckRow[]>`

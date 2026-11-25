@@ -1,5 +1,5 @@
-import { type Sql, withTenant } from '@opc/db'
-import type { Membership } from '@opc/schemas'
+import { type Sql, withTenant } from '@easybau/db'
+import type { Membership } from '@easybau/schemas'
 import { randomToken, sha256 } from './crypto.js'
 
 export interface SessionRow {

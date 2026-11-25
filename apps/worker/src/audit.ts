@@ -1,4 +1,4 @@
-import type { Sql } from '@opc/db'
+import type { Sql } from '@easybau/db'
 import type { Logger } from 'pino'
 
 export interface AuditCheckResult {

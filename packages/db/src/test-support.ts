@@ -25,9 +25,29 @@ export interface TestDb {
   close: () => Promise<void>
 }
 
-export async function openTestDb(): Promise<TestDb> {
-  const url = testDatabaseUrl as string
+/**
+ * The test database. With `isolated` a fresh database just for this test file (migrated, dropped
+ * at the end) – for tests that look at all companies (outbox, nightly jobs), so other test files
+ * running at the same time cannot change what they see.
+ */
+export async function openTestDb(options: { isolated?: boolean } = {}): Promise<TestDb> {
+  const base = testDatabaseUrl as string
+  let url = base
+  let drop: (() => Promise<void>) | null = null
+  if (options.isolated) {
+    const name = `easybau_iso_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 6)}`
+    const root = createSql({ DATABASE_URL: base, DATABASE_POOL_MAX: 1 }, { mode: 'admin' })
+    await root.unsafe(`create database ${name}`)
+    const target = new URL(base)
+    target.pathname = `/${name}`
+    url = target.toString()
+    drop = async () => {
+      await root.unsafe(`drop database if exists ${name} with (force)`)
+      await root.end({ timeout: 5 })
+    }
+  }
   const admin = createSql({ DATABASE_URL: url, DATABASE_POOL_MAX: 3 }, { mode: 'admin' })
+  if (options.isolated) await ensureAppRole(admin)
   await migrate(admin)
   const app = createSql({ DATABASE_URL: url, DATABASE_POOL_MAX: 10 })
   return {
@@ -36,6 +56,7 @@ export async function openTestDb(): Promise<TestDb> {
     close: async () => {
       await app.end({ timeout: 5 })
       await admin.end({ timeout: 5 })
+      await drop?.()
     },
   }
 }

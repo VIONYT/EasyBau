@@ -38,10 +38,10 @@ Unterschrieben wird mit Finger oder Stift direkt im Feld. Ihre eigene Unterschri
 ## Ohne Netz arbeiten
 
 1. **Vorher** (mit Netz): im Projekt **Offline verfügbar machen**.
-2. **Auf der Baustelle**: Aufmaßzeilen, Bautagebuch und Fotos wie gewohnt erfassen. Oben zeigt eine Leiste, dass Sie offline sind und wie viele Änderungen warten.
+2. **Auf der Baustelle**: neue Aufmaßblätter, Räume, Aufmaßzeilen, Bautagebuch und Fotos wie gewohnt erfassen; noch nicht übertragene Fotos sehen Sie als Vorschau vom Gerät. Oben zeigt eine Leiste, dass Sie offline sind und wie viele Änderungen warten.
 3. **Wieder mit Netz**: Die Änderungen werden automatisch übertragen, oder **Jetzt übertragen**. Lehnt der Server eine Änderung ab, sehen Sie den Grund und können **Erneut versuchen** oder **Verwerfen**.
 
-Ohne Netz nicht möglich: neue Aufmaßblätter und Räume, Unterschreiben, PDFs, Preise und Rechnungen. Bitte die App vor dem Abmelden einmal mit Netz öffnen, damit nichts liegen bleibt.
+Ohne Netz nicht möglich: Unterschreiben, PDFs, Löschen von Berichten, Blättern und Fotos, Preise und Rechnungen – diese Knöpfe sind offline ausgeblendet und erscheinen wieder, sobald Netz da ist. Bitte die App vor dem Abmelden einmal mit Netz öffnen, damit nichts liegen bleibt.
 
 ![Offline auf dem iPhone](../screenshots/iphone-offline.png)
 

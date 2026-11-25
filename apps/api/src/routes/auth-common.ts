@@ -1,5 +1,5 @@
-import { withTenant } from '@opc/db'
-import type { LoginResponse, Me, MfaMethod } from '@opc/schemas'
+import { withTenant } from '@easybau/db'
+import type { LoginResponse, Me, MfaMethod } from '@easybau/schemas'
 import type { FastifyReply, FastifyRequest } from 'fastify'
 import {
   type AuthContext,
@@ -16,6 +16,7 @@ import {
   listMemberships,
   loadTenantContext,
 } from '../security/sessions.js'
+import { rememberDevice } from './security-notices.js'
 
 const WINDOW = 15 * 60
 /** A pending login (password ok, second factor outstanding) is valid for 5 minutes. */
@@ -128,6 +129,9 @@ export async function finishLogin(
     mfaVerified: input.mfaVerified,
   })
   await audit(services, membership.tenantId, input.userId, `login:${input.method}`)
+  if (await rememberDevice(services, request, reply, input.userId)) {
+    await audit(services, membership.tenantId, input.userId, 'login_new_device')
+  }
   clearChallengeCookie(reply, services)
   setSessionCookie(reply, services, token)
   return {

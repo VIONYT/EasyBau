@@ -1,11 +1,11 @@
-import type { Tx } from '@opc/db'
+import type { Tx } from '@easybau/db'
 import {
   type BilledDocument,
   type ProjectCostType,
   projectCosts,
   projectFigures,
-} from '@opc/domain'
-import type { DocumentDetail, ProjectFiguresDto } from '@opc/schemas'
+} from '@easybau/domain'
+import type { DocumentDetail, ProjectFiguresDto } from '@easybau/schemas'
 import type { FastifyInstance } from 'fastify'
 import { z } from 'zod'
 import {

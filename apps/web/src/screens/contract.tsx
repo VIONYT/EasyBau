@@ -1,4 +1,4 @@
-import type { ProjectContract } from '@opc/schemas'
+import type { ProjectContract } from '@easybau/schemas'
 import { useEffect, useId, useState } from 'react'
 import { type ApiError, api } from '../api'
 import { formatCents, formatDateTime } from '../format'

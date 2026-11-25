@@ -1,4 +1,4 @@
-import { withTenant } from '@opc/db'
+import { withTenant } from '@easybau/db'
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
 import { Client, createHarness, type Harness } from './testing/harness.js'
 import { SoftAuthenticator } from './testing/soft-authenticator.js'

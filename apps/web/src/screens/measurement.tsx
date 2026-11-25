@@ -3,7 +3,7 @@ import {
   MEASUREMENT_TEMPLATES,
   measurementLineQuantity,
   tryEvaluateFormula,
-} from '@opc/domain'
+} from '@easybau/domain'
 import type {
   Me,
   MeasurableDocumentRef,
@@ -12,12 +12,13 @@ import type {
   MeasurementLocation,
   MeasurementSheetDetail,
   UnitSummary,
-} from '@opc/schemas'
+} from '@easybau/schemas'
 import { type FormEvent, useCallback, useEffect, useMemo, useState } from 'react'
 import { ApiError, api, apiWithEtag, mutate } from '../api'
 import { formatDateTime, formatInputNumber, formatQuantity, formatUnitAmount } from '../format'
 import { Field, FormError, optional, SelectField, useForm, value } from '../forms'
 import { type TextKey, t } from '../i18n'
+import { useOnline } from '../offline/client'
 import type { Navigate } from '../router'
 import {
   initialChoice,
@@ -148,6 +149,7 @@ export function MeasurementScreen({
   const [error, setError] = useState<string | null>(null)
   const [items, setItems] = useState<MeasurableItem[]>([])
   const [units, setUnits] = useState<UnitSummary[]>([])
+  const online = useOnline()
 
   const apply: Apply = useCallback(({ data }) => setSheet(data), [])
   useEffect(() => {
@@ -205,16 +207,20 @@ export function MeasurementScreen({
       <p className="muted">
         {t(`m.kind.${sheet.kind}` as TextKey)} · {formatDateTime(sheet.measuredOn, 'date')}
       </p>
-      <div className="button-row">
-        <a
-          className="button ghost"
-          href={`/api/v1/measurement-sheets/${sheet.id}/pdf`}
-          target="_blank"
-          rel="noopener"
-        >
-          {t('m.pdf')}
-        </a>
-      </div>
+      {online ? (
+        <div className="button-row">
+          <a
+            className="button ghost"
+            href={`/api/v1/measurement-sheets/${sheet.id}/pdf`}
+            target="_blank"
+            rel="noopener"
+          >
+            {t('m.pdf')}
+          </a>
+        </div>
+      ) : (
+        <p className="hint">{t('off.siteOnlineOnly')}</p>
+      )}
       {sheet.status === 'signed' ? (
         <div className="notice inline signature-list" role="status">
           {t('m.signedBy')} {formatDateTime(sheet.signedAt)}: {sheet.signedByContractor} /{' '}
@@ -245,8 +251,8 @@ export function MeasurementScreen({
       {sheet.kind === 'performance' && me.permissions.includes('document.write') ? (
         <VariancePanel sheet={sheet} lineCount={sheet.lines.length} navigate={navigate} />
       ) : null}
-      {editable ? <SignPanel sheet={sheet} me={me} apply={apply} /> : null}
-      {editable ? (
+      {editable && online ? <SignPanel sheet={sheet} me={me} apply={apply} /> : null}
+      {editable && online ? (
         <button type="button" className="button ghost danger" onClick={remove}>
           {t('m.deleteSheet')}
         </button>
@@ -362,16 +368,41 @@ function RoomForm({
         else delete variables[name]
       }
       const body = { name: value(data, 'name'), variables }
-      return room
-        ? apiWithEtag<Sheet>(
-            'PATCH',
-            `/api/v1/measurement-sheets/${sheet.id}/locations/${room.id}`,
-            body,
-          )
-        : apiWithEtag<Sheet>('POST', `/api/v1/measurement-sheets/${sheet.id}/locations`, {
-            ...body,
-            parentId: optional(data, 'parentId') ?? null,
-          })
+      if (room) {
+        return apiWithEtag<Sheet>(
+          'PATCH',
+          `/api/v1/measurement-sheets/${sheet.id}/locations/${room.id}`,
+          body,
+        )
+      }
+      // New rooms get their id on the device: they can be created offline (outbox, ADR 0010).
+      const id = crypto.randomUUID()
+      const parentId = optional(data, 'parentId') ?? null
+      return mutate<Sheet>({
+        method: 'POST',
+        path: `${sheetPath(sheet)}/locations`,
+        json: { ...body, id, parentId },
+        resource: sheetPath(sheet),
+        label: `${t('m.rooms')}: ${body.name}`,
+        optimistic: (current) => {
+          const base = current ?? sheet
+          const parent = base.locations.find((l) => l.id === parentId)
+          return {
+            ...base,
+            locations: [
+              ...base.locations,
+              {
+                id,
+                parentId,
+                name: body.name,
+                variables,
+                path: parent ? `${parent.path} › ${body.name}` : body.name,
+                level: parent ? parent.level + 1 : 0,
+              },
+            ],
+          }
+        },
+      })
     },
     (result) => {
       apply(result)

@@ -1,5 +1,5 @@
-import type { Tx } from '@opc/db'
-import { checkNumberPattern, formatNumber, hourlyRateCents } from '@opc/domain'
+import type { Tx } from '@easybau/db'
+import { checkNumberPattern, formatNumber, hourlyRateCents } from '@easybau/domain'
 import {
   type Company,
   companyRequest,
@@ -23,7 +23,7 @@ import {
   type WorkingDay,
   wageGroupRequest,
   workingHoursRequest,
-} from '@opc/schemas'
+} from '@easybau/schemas'
 import type { FastifyInstance } from 'fastify'
 import { z } from 'zod'
 import { inTenant, requirePermission, type Services } from '../context.js'

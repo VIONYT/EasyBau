@@ -1,9 +1,9 @@
 import { mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { createSql, migrate, type Sql } from '@opc/db'
-import { ensureAppRole } from '@opc/db/test-support'
-import { type ArchiveStore, FsObjectStore } from '@opc/storage'
+import { createSql, migrate, type Sql } from '@easybau/db'
+import { ensureAppRole } from '@easybau/db/test-support'
+import { type ArchiveStore, FsObjectStore } from '@easybau/storage'
 import type { FastifyInstance, LightMyRequestResponse } from 'fastify'
 import { buildApi } from '../index.js'
 import { type EinvoiceValidator, kositValidator } from '../kosit.js'
@@ -36,7 +36,7 @@ export async function createHarness(
 ): Promise<Harness> {
   const baseUrl = process.env.DATABASE_URL as string
   const root = createSql({ DATABASE_URL: baseUrl, DATABASE_POOL_MAX: 1 }, { mode: 'admin' })
-  const name = `opc_api_test_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 6)}`
+  const name = `easybau_api_test_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 6)}`
   await root.unsafe(`create database ${name}`)
   await ensureAppRole(root)
   const url = new URL(baseUrl)
@@ -49,7 +49,7 @@ export async function createHarness(
   const sql = createSql({ DATABASE_URL: url.toString(), DATABASE_POOL_MAX: 5 })
   const clock = { now: Date.parse('2026-11-08T10:00:00Z') }
   const setupToken = 'TEST-SETU-PTOK'
-  const storageDir = await mkdtemp(join(tmpdir(), 'opc-files-'))
+  const storageDir = await mkdtemp(join(tmpdir(), 'easybau-files-'))
   const app = buildApi({
     config: {
       APP_NAME: 'Test-ERP',

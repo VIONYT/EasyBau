@@ -6,8 +6,8 @@ import type {
   SupplierArticle,
   SupplierCatalog,
   UnitSummary,
-} from '@opc/schemas'
-import { COST_KINDS } from '@opc/schemas/constants'
+} from '@easybau/schemas'
+import { COST_KINDS } from '@easybau/schemas/constants'
 import { useCallback, useEffect, useState } from 'react'
 import { ApiError, api, uploadFile } from '../api'
 import {

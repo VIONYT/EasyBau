@@ -16,7 +16,7 @@ describe.skipIf(!testDatabaseUrl)('migration runner (integration)', () => {
       { DATABASE_URL: testDatabaseUrl as string, DATABASE_POOL_MAX: 4 },
       { mode: 'admin' },
     )
-    dir = await mkdtemp(join(tmpdir(), 'opc-migrations-'))
+    dir = await mkdtemp(join(tmpdir(), 'easybau-migrations-'))
     await writeFile(
       join(dir, '0001_create.sql'),
       `create schema ${schema}; create table ${schema}.t (id int);`,

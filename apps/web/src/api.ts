@@ -1,4 +1,4 @@
-import type { Problem } from '@opc/schemas'
+import type { Problem } from '@easybau/schemas'
 import { t } from './i18n'
 import {
   cachedGet,

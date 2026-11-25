@@ -1,4 +1,4 @@
-import { checkNumberPattern, formatNumber } from '@opc/domain'
+import { checkNumberPattern, formatNumber } from '@easybau/domain'
 import type {
   BaseInterestRate,
   BusinessArea,
@@ -20,8 +20,8 @@ import type {
   UnitSetting,
   WageGroup,
   WorkingDay,
-} from '@opc/schemas'
-import { COST_KINDS, DOCUMENT_TYPES, FEDERAL_STATES } from '@opc/schemas/constants'
+} from '@easybau/schemas'
+import { COST_KINDS, DOCUMENT_TYPES, FEDERAL_STATES } from '@easybau/schemas/constants'
 import { type ReactNode, useCallback, useEffect, useId, useRef, useState } from 'react'
 import { ApiError, api, uploadFile } from '../api'
 import { formatCents, formatInputNumber, parseEuro } from '../format'

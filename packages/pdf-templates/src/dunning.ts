@@ -1,5 +1,5 @@
-import { formatEuro, germanDate, giroCodePayload, type LetterheadValues } from '@opc/domain'
-import type { DunningAmounts } from '@opc/schemas'
+import { formatEuro, germanDate, giroCodePayload, type LetterheadValues } from '@easybau/domain'
+import type { DunningAmounts } from '@easybau/schemas'
 import { germanPercent } from './document.js'
 import { type LogoPosition, letterFrame } from './frame.js'
 import type { LetterPdfInput } from './types.js'

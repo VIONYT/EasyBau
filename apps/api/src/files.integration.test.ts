@@ -1,7 +1,7 @@
 import { readdir } from 'node:fs/promises'
 import { join } from 'node:path'
-import { withTenant } from '@opc/db'
-import type { FileSummary, FolderSummary } from '@opc/schemas'
+import { withTenant } from '@easybau/db'
+import type { FileSummary, FolderSummary } from '@easybau/schemas'
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
 import { Client, createHarness, type Harness } from './testing/harness.js'
 

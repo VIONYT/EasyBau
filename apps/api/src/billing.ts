@@ -1,4 +1,4 @@
-import type { Tx } from '@opc/db'
+import type { Tx } from '@easybau/db'
 import {
   billingQuantity,
   checkInvoiceRequirements,
@@ -13,9 +13,9 @@ import {
   type ProgressBillingMode,
   type TaxCategory,
   type TaxMode,
-} from '@opc/domain'
-import { einvoiceProblems } from '@opc/einvoice'
-import type { DeductionSummary, DocumentDetail, FinalizeCheck } from '@opc/schemas'
+} from '@easybau/domain'
+import { einvoiceProblems } from '@easybau/einvoice'
+import type { DeductionSummary, DocumentDetail, FinalizeCheck } from '@easybau/schemas'
 import { einvoiceContext } from './einvoice.js'
 import { reportBillingProblems } from './routes/report-billing.js'
 

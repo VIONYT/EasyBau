@@ -42,13 +42,14 @@ Auftragsverarbeiter (Art. 28 DSGVO), mit denen ein AV-Vertrag nötig ist: [[Host
 | Kontakt steht in festgeschriebenen Belegen oder Eingangsrechnungen | **Sperre bis Fristende**: Ende = spätestes Aufbewahrungsende der archivierten Originale, in denen der Kontakt steht (bzw. Jahresende + Aufbewahrungsjahre der Firma). Gesperrte Kontakte sind nicht änder- und nicht mehr für neue Projekte/Dokumente verwendbar. |
 | Sperrfrist abgelaufen | Der Hintergrunddienst anonymisiert den Kontakt am Folgetag automatisch (täglich 05:07 Uhr). |
 | Auskunft (Art. 15) / Datenübertragbarkeit (Art. 20) | **Auskunft herunterladen** im Kontakt: alle gespeicherten Daten als Datei; die Auskunft wird im Änderungsprotokoll vermerkt. |
+| Mitarbeitende / Benutzerkonten | Auskunft: unter **Sicherheit › Meine Daten** (selbst) oder **Benutzer › Auskunft (DSGVO)**. Löschen: **Benutzer › Entfernen**; gehört der Zugang danach zu keiner Firma mehr, werden Passwort, zweiter Faktor, Passkeys, Sitzungen, Geräte und die E-Mail-Adresse gelöscht. Der Name bleibt im Änderungsprotokoll und in Unterschriften (GoBD-Nachvollziehbarkeit, Beweisfunktion). |
 
 Wer Löschungen und Auskünfte bearbeitet: [[…]]. Frist für die Antwort: ein Monat (Art. 12 Abs. 3).
 
 ### Was EasyBau (noch) nicht automatisch löscht – manuell regeln
 
 - **Festgeschriebene Belege** (Rechnungen, Angebote, Mahnungen) mit ihren Empfängerdaten: nach Ablauf der Aufbewahrungsfrist löschen EasyBau und das WORM-Archiv sie nicht von selbst. [[Vorgehen festlegen, z. B. jährliche Prüfung; technische Unterstützung ist geplant.]]
-- **Änderungsprotokoll**: Einträge zu Stammdaten enthalten den alten und neuen Stand (auch Namen und Anschriften) und sind Teil der GoBD-Nachvollziehbarkeit; sie bleiben bestehen, auch wenn der Kontakt anonymisiert wird. Eine Kürzung alter Protokollteile nach Fristende ist geplant.
-- **Projekte, Baustellenanschriften, Ablage-Dateien, Fotos, Berichte** zu einem gelöschten Kunden: [[bei einer Löschung manuell prüfen, z. B. Projektname ohne Personennamen, Fotos löschen, soweit nicht abrechnungs- oder beweisrelevant]].
-- **Benutzerkonten** ausgeschiedener Mitarbeitender: deaktivieren; Name bleibt in Protokollen und Unterschriften (Beweisfunktion).
+- **Änderungsprotokoll**: Beim Löschen eines Kontakts werden dessen alte/neue Werte aus dem Protokoll entfernt (geschwärzt), ebenso die der Projekte eines Privatkunden; die Einträge selbst bleiben (wer, wann, was). Einträge, die vor dem Update auf Migration 0042 entstanden sind, lassen sich nicht schwärzen und bleiben bis zum Ende der Protokoll-Aufbewahrung.
+- **Projekte eines Privatkunden** verlieren beim Löschen Namen, Beschreibung und Baustellenanschrift und werden archiviert. **Ablage-Dateien, Fotos und Berichte** dieser Projekte werden nicht automatisch gelöscht (oft Nachweise, z. B. Gewährleistung); der Löschdialog nennt ihre Anzahl: [[manuell prüfen und nicht mehr Benötigtes löschen]]. Projekte von Organisationen bleiben unverändert.
+- **Benutzerkonten**: siehe Tabelle oben; Unterschriftsbilder in unterschriebenen Berichten/Aufmaßblättern bleiben (Beweisfunktion).
 - **Sicherungen**: Gelöschte Daten verschwinden aus den Sicherungen mit deren Ablauf ([[BACKUP_KEEP_DAYS]] Tage lokal, [[OFFSITE_KEEP_*]] außer Haus). Bei einer Wiederherstellung werden zwischenzeitliche Löschungen erneut ausgeführt: [[Vorgehen festlegen]].

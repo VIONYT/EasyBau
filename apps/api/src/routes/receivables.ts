@@ -1,12 +1,12 @@
-import type { Tx } from '@opc/db'
+import type { Tx } from '@easybau/db'
 import {
   addDays,
   type DunningLevel,
   nextDunningDue,
   type ReceivableState,
   receivableState,
-} from '@opc/domain'
-import { csvLine, germanAmount, germanDate } from '@opc/exports'
+} from '@easybau/domain'
+import { csvLine, germanAmount, germanDate } from '@easybau/exports'
 import {
   type AdjustmentEntry,
   type AdjustmentKind,
@@ -22,7 +22,7 @@ import {
   releaseRetentionRequest,
   reverseEntryRequest,
   updateAdjustmentRequest,
-} from '@opc/schemas'
+} from '@easybau/schemas'
 import type { FastifyInstance } from 'fastify'
 import { z } from 'zod'
 import {

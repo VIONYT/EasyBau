@@ -1,4 +1,4 @@
-import type { Tx } from '@opc/db'
+import type { Tx } from '@easybau/db'
 import {
   addReportPhotoRequest,
   createReportRequest,
@@ -15,7 +15,7 @@ import {
   updateReportRequest,
   uploadReportPhotoQuery,
   type WeatherValue,
-} from '@opc/schemas'
+} from '@easybau/schemas'
 import type { FastifyInstance, FastifyReply } from 'fastify'
 import { z } from 'zod'
 import {

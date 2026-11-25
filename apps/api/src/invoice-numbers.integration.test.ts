@@ -1,4 +1,4 @@
-import type { DocumentDetail } from '@opc/schemas'
+import type { DocumentDetail } from '@easybau/schemas'
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
 import type { EinvoiceValidator } from './kosit.js'
 import { acceptingValidator, Client, createHarness, type Harness } from './testing/harness.js'

@@ -4,8 +4,8 @@ import type {
   DocumentSummary,
   Me,
   ProjectDetail,
-} from '@opc/schemas'
-import { CHANGE_ORDER_BASES } from '@opc/schemas/constants'
+} from '@easybau/schemas'
+import { CHANGE_ORDER_BASES } from '@easybau/schemas/constants'
 import { useEffect, useState } from 'react'
 import { type ApiError, api } from '../api'
 import { formatCents, formatDateTime } from '../format'

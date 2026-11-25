@@ -1,6 +1,6 @@
-import type { Tx } from '@opc/db'
-import { Decimal } from '@opc/domain'
-import { germanDate } from '@opc/exports'
+import type { Tx } from '@easybau/db'
+import { Decimal } from '@easybau/domain'
+import { germanDate } from '@easybau/exports'
 import {
   applyReportsRequest,
   type BillableReport,
@@ -8,7 +8,7 @@ import {
   type QuantityRowsValue,
   type ReportSection,
   type StaffValue,
-} from '@opc/schemas'
+} from '@easybau/schemas'
 import type { FastifyInstance } from 'fastify'
 import { z } from 'zod'
 import { type AuthContext, inTenant, requirePermission, type Services } from '../context.js'

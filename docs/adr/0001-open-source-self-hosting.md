@@ -22,6 +22,8 @@ Alternativen:
 ## Projektname (Umbenennung vor Release bestätigt)
 „OpenPlancraft“ enthält die Marke eines bestehenden Anbieters. Für ein öffentliches Open-Source-Projekt ist das markenrechtlich riskant (Verwechslungsgefahr) und widerspricht der Projektregel, keine fremden Markennamen zu übernehmen. Entscheidung: Bis zum ersten Release bleibt „OpenPlancraft“ ein interner Arbeitstitel. Davor werden Repository, Image-Namen, Paketnamen und Domain umbenannt. Im Code wird der Name deshalb nur an einer zentralen Stelle (Konfiguration/Branding) gepflegt.
 
+**Umgesetzt:** Produktname **EasyBau** (Anzeigename 2026-11-15, technische Namen 2026-11-25: Compose-Projekt und Volumes `easybau_*`, Images `ghcr.io/vionyt/easybau-*`, npm-Scope `@easybau`, Datenbank/-benutzer `easybau`). Intern bleiben die Datenbankrolle `opc_app` (in veröffentlichten Migrationen angelegt, die nie geändert werden; clusterweit) und das Ableitungslabel des Feldschlüssels (verschlüsselte Daten blieben sonst unlesbar). Offen: Umbenennung des GitHub-Repositorys durch den Inhaber.
+
 ## Konsequenzen
 - Verantwortung für GoBD-konforme Aufbewahrung, Backups und Sicherheit liegt beim Betreiber. Das System unterstützt ihn mit Betriebs-Check, automatischen Restore-Tests, Object-Lock-Prüfung und einer Vorlage für die Verfahrensdokumentation.
 - Neue Laufzeitabhängigkeiten müssen als Container im Stack verfügbar und lizenzkompatibel sein.

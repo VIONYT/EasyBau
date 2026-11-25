@@ -5,7 +5,7 @@ import {
   footerColumnWeights,
   type Letterhead,
   type LetterheadValues,
-} from '@opc/domain'
+} from '@easybau/domain'
 import type { LetterPdfInput } from './types.js'
 
 export interface LogoPosition {

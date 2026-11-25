@@ -1,6 +1,6 @@
 import { Readable } from 'node:stream'
-import type { Tx } from '@opc/db'
-import { allocationTax, type CostType } from '@opc/domain'
+import type { Tx } from '@easybau/db'
+import { allocationTax, type CostType } from '@easybau/domain'
 import {
   customerAccount,
   datevBookingBatch,
@@ -20,7 +20,7 @@ import {
   incomingBookings,
   type ZipEntry,
   zipStream,
-} from '@opc/exports'
+} from '@easybau/exports'
 import type { FastifyBaseLogger, FastifyInstance, FastifyReply } from 'fastify'
 import { z } from 'zod'
 import { openArtifact } from '../artifacts.js'
@@ -1024,7 +1024,7 @@ export function registerExportRoutes(app: FastifyInstance, services: Services) {
         name: 'manifest.json',
         data: JSON.stringify(
           {
-            format: 'openplancraft-export',
+            format: 'easybau-export',
             version: 1,
             createdAt: new Date().toISOString(),
             application: { name: services.config.APP_NAME },

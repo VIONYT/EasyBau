@@ -34,7 +34,7 @@ export { parseKositReport, type ValidationMessage, type ValidationResult } from 
 export * from './model.js'
 export { toUbl } from './ubl.js'
 
-import type { DocumentDetail, EinvoiceFormat } from '@opc/schemas'
+import type { DocumentDetail, EinvoiceFormat } from '@easybau/schemas'
 import { toCii } from './cii.js'
 import { type EinvoiceContext, einvoiceFromDocument } from './document.js'
 import { toUbl } from './ubl.js'

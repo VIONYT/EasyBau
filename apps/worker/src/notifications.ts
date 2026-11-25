@@ -1,4 +1,4 @@
-import type { Sql } from '@opc/db'
+import type { Sql } from '@easybau/db'
 import type { Logger } from 'pino'
 
 /** Read notifications older than this are deleted (they are only hints with a link). */
@@ -16,6 +16,9 @@ export async function purgeReadNotifications(
   const [row] = await sql<{ removed: number }[]>`
     select purge_read_notifications(${days}) as removed`
   const removed = row?.removed ?? 0
-  logger.info({ removed, days }, 'read notifications purged')
+  // Rate-limit windows are at most a day long; old rows (one per person and day for the
+  // overdue check) are only clutter.
+  const stale = await sql`delete from rate_limit where window_start < now() - interval '2 days'`
+  logger.info({ removed, days, staleRateLimits: stale.count }, 'read notifications purged')
   return removed
 }

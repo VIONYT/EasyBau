@@ -1,4 +1,4 @@
-import type { LoginResponse } from '@opc/schemas'
+import type { LoginResponse } from '@easybau/schemas'
 import {
   browserSupportsWebAuthn,
   startAuthentication,

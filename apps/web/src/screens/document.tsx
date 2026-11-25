@@ -1,6 +1,7 @@
 import type {
   CancelInvoiceResult,
   CatalogItem,
+  ContactDetail,
   ContactSummary,
   DocumentDetail,
   DocumentItem,
@@ -11,13 +12,13 @@ import type {
   SupplierArticle,
   TaxRateSummary,
   UnitSummary,
-} from '@opc/schemas'
+} from '@easybau/schemas'
 import {
   CHANGE_ORDER_BASES,
   COST_KINDS,
   PRICED_POSITION_TYPES,
   TAX_MODES,
-} from '@opc/schemas/constants'
+} from '@easybau/schemas/constants'
 import { type FormEvent, useCallback, useEffect, useId, useState } from 'react'
 import { ApiError, api, apiWithEtag } from '../api'
 import {
@@ -250,6 +251,24 @@ function HeaderForm({
       .then((page) => setContacts(page.items))
       .catch(() => undefined)
   }, [editable])
+  // Ansprechpartner („z. Hd.“): persons linked to the chosen recipient organization.
+  const [recipientId, setRecipientId] = useState(doc.contact?.id ?? '')
+  const [persons, setPersons] = useState<{ id: string; displayName: string }[]>([])
+  useEffect(() => {
+    if (!editable || !recipientId) {
+      setPersons([])
+      return
+    }
+    api<ContactDetail>('GET', `/api/v1/contacts/${recipientId}`)
+      .then((c) =>
+        setPersons(
+          c.links
+            .filter((l) => l.kind === 'person')
+            .map((l) => ({ id: l.contactId, displayName: l.displayName })),
+        ),
+      )
+      .catch(() => setPersons([]))
+  }, [editable, recipientId])
   const form = useForm(
     async (data) => {
       setSaved(false)
@@ -266,6 +285,7 @@ function HeaderForm({
           discountPercent: optional(data, 'discountPercent') ?? null,
           taxMode: value(data, 'taxMode'),
           contactId: value(data, 'contactId') || null,
+          contactPersonId: value(data, 'contactPersonId') || null,
           // Another recipient: the server applies the default of the settings (§ 35a matrix).
           ...(doc.type !== 'delivery_note' &&
           (value(data, 'contactId') || null) === (doc.contact?.id ?? null)
@@ -340,8 +360,29 @@ function HeaderForm({
                 : []),
               ...contacts.map((c) => ({ value: c.id, label: c.displayName })),
             ]}
+            onChange={setRecipientId}
             error={form.fieldErrors.contactId}
           />
+          {persons.length || doc.contactPerson ? (
+            <SelectField
+              key={recipientId}
+              label={t('doc.contactPerson')}
+              name="contactPersonId"
+              defaultValue={
+                recipientId === (doc.contact?.id ?? '') ? (doc.contactPerson?.id ?? '') : ''
+              }
+              options={[
+                { value: '', label: t('common.none') },
+                ...(doc.contactPerson &&
+                recipientId === (doc.contact?.id ?? '') &&
+                !persons.some((p) => p.id === doc.contactPerson?.id)
+                  ? [{ value: doc.contactPerson.id, label: doc.contactPerson.displayName }]
+                  : []),
+                ...persons.map((p) => ({ value: p.id, label: p.displayName })),
+              ]}
+              error={form.fieldErrors.contactPersonId}
+            />
+          ) : null}
           <Field
             label={t('doc.place')}
             name="placeOfPerformance"

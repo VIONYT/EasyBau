@@ -2,7 +2,20 @@ import { readFileSync } from 'node:fs'
 import { createElement } from 'react'
 import { renderToStaticMarkup } from 'react-dom/server'
 import { describe, expect, it } from 'vitest'
-import { Amount, Badge, Button, Field, formatEuro, Notice } from './index.js'
+import {
+  Amount,
+  Badge,
+  Button,
+  DataTable,
+  Dialog,
+  Field,
+  formatEuro,
+  formatEuroInput,
+  MoneyField,
+  Notice,
+  parseEuro,
+  UnitField,
+} from './index.js'
 import { color, fontSize, paper, slate, space, touch } from './tokens.js'
 
 const css = readFileSync(new URL('./tokens.css', import.meta.url), 'utf8')
@@ -85,5 +98,93 @@ describe('components', () => {
     expect(markup).toContain(`<label for="${id}">PLZ</label>`)
     expect(markup).toContain(`aria-describedby="${id}-hint ${id}-error"`)
     expect(markup).toContain('aria-invalid="true"')
+  })
+})
+
+describe('Geldfeld: parseEuro / formatEuroInput', () => {
+  it('reads German notation into cents without floats', () => {
+    expect(parseEuro('1.234,56')).toBe(123456n)
+    expect(parseEuro('1234,5')).toBe(123450n)
+    expect(parseEuro('12.5')).toBe(1250n)
+    expect(parseEuro('12.500')).toBe(1250000n)
+    expect(parseEuro(' 99 € ')).toBe(9900n)
+    expect(parseEuro('-0,01')).toBe(-1n)
+    expect(parseEuro('')).toBeNull()
+    expect(parseEuro('1,234')).toBeUndefined()
+    expect(parseEuro('12a')).toBeUndefined()
+  })
+
+  it('formats cents for the input', () => {
+    expect(formatEuroInput(123456n)).toBe('1.234,56')
+    expect(formatEuroInput(5)).toBe('0,05')
+    expect(formatEuroInput(-100000)).toBe('-1.000,00')
+    expect(formatEuroInput(null)).toBe('')
+    for (const cents of [0n, 1n, 99n, 100n, 123456789n, -42n]) {
+      expect(parseEuro(formatEuroInput(cents))).toBe(cents)
+    }
+  })
+})
+
+describe('further components', () => {
+  it('renders money and unit fields with the suffix announced to screen readers', () => {
+    const html = renderToStaticMarkup(
+      createElement(MoneyField, { label: 'Betrag', name: 'amount', invalidText: 'Ungültig' }),
+    )
+    expect(html).toContain('inputMode="decimal"')
+    expect(html).toContain('class="input-affix__suffix"')
+    expect(html).toMatch(/aria-describedby="[^"]*suffix/)
+    expect(
+      renderToStaticMarkup(
+        createElement(UnitField, { label: 'Fläche', name: 'qty', suffix: 'm²' }),
+      ),
+    ).toContain('m²')
+  })
+
+  it('renders a table with a header row and numeric columns', () => {
+    const html = renderToStaticMarkup(
+      createElement(DataTable<{ id: string; name: string; cents: number }>, {
+        caption: 'Rechnungen',
+        rowKey: (r) => r.id,
+        rows: [{ id: '1', name: 'R-1', cents: 100 }],
+        columns: [
+          { key: 'name', header: 'Nummer', cell: (r) => r.name },
+          { key: 'sum', header: 'Betrag', cell: (r) => formatEuro(r.cents), numeric: true },
+        ],
+      }),
+    )
+    expect(html).toContain('<th scope="col" class="numeric">Betrag</th>')
+    expect(html).toContain('<caption')
+    const empty = renderToStaticMarkup(
+      createElement(DataTable<{ id: string }>, {
+        caption: 'Leer',
+        rowKey: (r) => r.id,
+        rows: [],
+        columns: [],
+        empty: createElement('p', null, 'Keine Einträge'),
+      }),
+    )
+    expect(empty).toBe('<p>Keine Einträge</p>')
+  })
+
+  it('renders a dialog with an accessible title and close button', () => {
+    const html = renderToStaticMarkup(
+      createElement(Dialog, {
+        open: false,
+        title: 'Zahlung',
+        onClose: () => undefined,
+        closeLabel: 'Schließen',
+        // biome-ignore lint/correctness/noChildrenProp: the props type requires children.
+        children: 'Inhalt',
+      }),
+    )
+    expect(html).toContain('<dialog')
+    expect(html).toContain('aria-label="Schließen"')
+    expect(html).toMatch(/aria-labelledby="[^"]+"/)
+  })
+
+  it('defines high-contrast colours for light and dark mode', () => {
+    const tokens = readFileSync(new URL('./tokens.css', import.meta.url), 'utf8')
+    expect(tokens).toContain(':root[data-contrast="high"]')
+    expect(tokens).toContain('prefers-contrast: more')
   })
 })

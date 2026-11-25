@@ -1,4 +1,4 @@
-import { formatUnitQuantity, germanDate, type LetterheadValues } from '@opc/domain'
+import { formatUnitQuantity, germanDate, type LetterheadValues } from '@easybau/domain'
 import type {
   EquipmentValue,
   MeasurementSheetDetail,
@@ -7,7 +7,7 @@ import type {
   StaffValue,
   TextValue,
   WeatherValue,
-} from '@opc/schemas'
+} from '@easybau/schemas'
 import { EMPTY_BODY, type LogoPosition, letterFrame } from './frame.js'
 import type { LetterBlock, LetterPdfInput } from './types.js'
 

@@ -1,6 +1,6 @@
 import { writeFileSync } from 'node:fs'
-import { withTenant } from '@opc/db'
-import type { DocumentDetail } from '@opc/schemas'
+import { withTenant } from '@easybau/db'
+import type { DocumentDetail } from '@easybau/schemas'
 import { describe, expect, it } from 'vitest'
 import { Client, createHarness } from './testing/harness.js'
 
@@ -288,7 +288,7 @@ describe.skipIf(!process.env.DATABASE_URL || !out)('Upgrade fixture (generator)'
     )
     await ok(admin.post(`/api/v1/incoming-invoices/${incoming.id}/confirm`, {}))
 
-    // Zweite Firma (Mandantentrennung), wie createTenant() in @opc/db/test-support
+    // Zweite Firma (Mandantentrennung), wie createTenant() in @easybau/db/test-support
     const [ids] = (await h.sql`select uuid_v7() as tenant, uuid_v7() as "user"`) as unknown as [
       { tenant: string; user: string },
     ]

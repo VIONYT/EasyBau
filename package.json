@@ -1,5 +1,5 @@
 {
-  "name": "openplancraft",
+  "name": "easybau",
   "private": true,
   "license": "AGPL-3.0-or-later",
   "type": "module",
@@ -16,7 +16,7 @@
     "lint": "biome check .",
     "format": "biome format --write .",
     "check": "pnpm lint && pnpm typecheck && pnpm test",
-    "db:migrate": "pnpm --filter @opc/db migrate",
+    "db:migrate": "pnpm --filter @easybau/db migrate",
     "test:coverage": "vitest run --coverage",
     "test:e2e": "playwright test -c e2e/playwright.config.ts"
   },
