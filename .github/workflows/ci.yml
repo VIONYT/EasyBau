@@ -55,6 +55,8 @@ jobs:
       - run: pnpm typecheck
       - run: pnpm test:coverage
       - run: pnpm build
+      - name: PDF/A-3b and ZUGFeRD PDFs valid (veraPDF, ADR 0006/0007)
+        run: sh infra/check-pdfa.sh
 
   docker:
     name: Docker test pipeline and stack (compact + standard)
