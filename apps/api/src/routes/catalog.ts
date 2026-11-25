@@ -6,6 +6,7 @@ import {
   calculateItem,
   type DatanormArticle,
   type DatanormArticleExtra,
+  type DatanormDiscount,
   DatanormError,
   type DatanormPrice,
   type DatanormText,
@@ -584,13 +585,14 @@ export function registerCatalogRoutes(app: FastifyInstance, services: Services) 
           `Die Datei ist zu groß (höchstens ${services.config.UPLOAD_MAX_MB} MB).`,
         )
       }
+      const baseName = query.filename.replace(/\.[^.]+$/, '')
       const result = await inTenant(services, auth, async (tx): Promise<ImportResult> => {
         let catalogId = query.catalogId
         if (catalogId) {
           const found = await tx`select 1 from supplier_catalog where id = ${catalogId} for update`
           if (!found.length) throw notFound('Der Katalog')
         } else {
-          const name = query.name ?? query.filename.replace(/\.[^.]+$/, '')
+          const name = query.name ?? baseName
           const [created] = await tx<{ id: string }[]>`
             insert into supplier_catalog (tenant_id, name, created_by)
             values (${auth.tenantId}, ${name.slice(0, 200)}, ${auth.userId}) returning id`
@@ -610,7 +612,11 @@ export function registerCatalogRoutes(app: FastifyInstance, services: Services) 
           skipped: 0,
           encoding: '',
           unknownUnits: [] as string[],
+          discounts: 0,
+          discountsWithoutValue: 0,
         }
+        // Discount groups of a *.RAB file; applied after the articles (last record per group wins).
+        const discounts = new Map<string, DatanormDiscount>()
         const unknown = new Set<string>()
         let header: { supplier: string | null; version: string; currency: string } | null = null
         const batch: ImportBatch = { articles: [], extras: [], texts: [], prices: [] }
@@ -644,6 +650,9 @@ export function registerCatalogRoutes(app: FastifyInstance, services: Services) 
               case 'price':
                 batch.prices.push(...record.prices)
                 stats.prices += record.prices.length
+                break
+              case 'discount':
+                discounts.set(record.discount.discountGroup, record.discount)
                 break
               default:
                 stats.skipped += 1
@@ -692,7 +701,29 @@ export function registerCatalogRoutes(app: FastifyInstance, services: Services) 
                 from supplier_text where catalog_id = ${catalogId} group by text_key) t
           where a.catalog_id = ${catalogId} and a.long_text_key = t.text_key`
         await tx`delete from supplier_text where catalog_id = ${catalogId}`
+        for (const d of discounts.values()) {
+          if (d.action === 'delete') {
+            await tx`delete from supplier_discount
+                     where catalog_id = ${catalogId} and discount_group = ${d.discountGroup}`
+            continue
+          }
+          // 0 % or no value usually means "your own conditions": keep what the firm entered.
+          if (d.kind !== 'percent' || !d.percent || Number(d.percent) === 0) {
+            stats.discountsWithoutValue += 1
+            continue
+          }
+          await tx`
+            insert into supplier_discount (tenant_id, catalog_id, discount_group, percent)
+            values (${auth.tenantId}, ${catalogId}, ${d.discountGroup}, ${d.percent})
+            on conflict (catalog_id, discount_group) do update set percent = excluded.percent`
+          stats.discounts += 1
+        }
         const h = header as { supplier: string | null; version: string; currency: string } | null
+        // Files are often just called DATANORM.001: then the supplier from the header names it.
+        if (!query.catalogId && !query.name && h?.supplier && /^datanorm$/i.test(baseName)) {
+          await tx`update supplier_catalog set name = ${h.supplier.slice(0, 200)}
+                   where id = ${catalogId}`
+        }
         await tx`
           update supplier_catalog set
             article_count = (select count(*)::int from supplier_article where catalog_id = ${catalogId}),
@@ -702,6 +733,14 @@ export function registerCatalogRoutes(app: FastifyInstance, services: Services) 
             currency = coalesce(${h?.currency ?? null}, currency)
           where id = ${catalogId}`
         stats.unknownUnits = [...unknown].slice(0, 20)
+        if (!query.catalogId && stats.articles === 0) {
+          throw new HttpError(
+            400,
+            discounts.size || stats.skipped
+              ? 'Die Datei enthält keine Artikel. Rabatt- und Warengruppendateien (z. B. *.RAB, *.WRG) bitte in einen vorhandenen Katalog importieren.'
+              : 'Die Datei enthält keine Artikel.',
+          )
+        }
         return { catalog: (await loadCatalog(tx, catalogId as string)) as SupplierCatalog, stats }
       })
       return reply.status(201).send(result)

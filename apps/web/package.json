@@ -12,6 +12,7 @@
   "dependencies": {
     "@opc/domain": "workspace:*",
     "@opc/schemas": "workspace:*",
+    "@opc/ui": "workspace:*",
     "@simplewebauthn/browser": "14.0.0",
     "dexie": "4.4.7",
     "react": "19.3.1",

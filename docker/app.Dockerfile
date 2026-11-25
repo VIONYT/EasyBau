@@ -25,6 +25,7 @@ COPY packages/exports/package.json packages/exports/
 COPY packages/pdf-templates/package.json packages/pdf-templates/
 COPY packages/schemas/package.json packages/schemas/
 COPY packages/storage/package.json packages/storage/
+COPY packages/ui/package.json packages/ui/
 RUN --mount=type=secret,id=extra_ca --mount=type=cache,id=pnpm,target=/pnpm/store \
     pnpm install --frozen-lockfile
 

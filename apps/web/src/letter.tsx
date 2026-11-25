@@ -1,4 +1,10 @@
-import { clampToPage, DIN5008B, fillPlaceholders, type LetterheadValues } from '@opc/domain'
+import {
+  clampToPage,
+  DIN5008B,
+  fillPlaceholders,
+  footerColumnWeights,
+  type LetterheadValues,
+} from '@opc/domain'
 import type { LetterheadLayout } from '@opc/schemas'
 import {
   type KeyboardEvent,
@@ -97,6 +103,7 @@ export function LetterPage({
   editing?: LetterEditing | undefined
 }) {
   const footer = layout.footer.map((column) => fillPlaceholders(column, values)).filter(Boolean)
+  const footerWeights = footerColumnWeights(footer)
   return (
     <div
       className={`letter-sheet font-${layout.font}${editing ? ' is-editing' : ''}`}
@@ -229,8 +236,11 @@ export function LetterPage({
 
       <footer className="letter-footer">
         {footer.map((column, index) => (
-          // biome-ignore lint/suspicious/noArrayIndexKey: columns have no identity
-          <div key={index} className="letter-footer__column">
+          <div
+            key={column}
+            className="letter-footer__column"
+            style={{ flexGrow: footerWeights[index] }}
+          >
             {column}
           </div>
         ))}

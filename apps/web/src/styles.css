@@ -1,37 +1,4 @@
-/* Design tokens (DESIGN.md §7.2). Colors and spacing only via tokens. */
-:root {
-  --color-primary: #0f4c5c;
-  --color-accent: #f28c28;
-  --color-bg: #f8fafc;
-  --color-surface: #ffffff;
-  --color-text: #0f172a;
-  --color-muted: #475569;
-  --color-border: #e2e8f0;
-  --color-success: #15803d;
-  --color-warning: #b45309;
-  --color-error: #b91c1c;
-  --space-1: 4px;
-  --space-2: 8px;
-  --space-4: 16px;
-  --space-6: 24px;
-  --radius: 12px;
-  --font: Inter, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
-  color-scheme: light dark;
-}
-
-@media (prefers-color-scheme: dark) {
-  :root {
-    --color-primary: #5fb3c6;
-    --color-bg: #0b1220;
-    --color-surface: #111a2e;
-    --color-text: #e2e8f0;
-    --color-muted: #94a3b8;
-    --color-border: #1e293b;
-    --color-success: #4ade80;
-    --color-warning: #fbbf24;
-    --color-error: #f87171;
-  }
-}
+/* Design tokens (colours, spacing, sizes) come from @opc/ui/tokens.css (DESIGN.md §7.2). */
 
 * {
   box-sizing: border-box;
@@ -145,7 +112,7 @@ legend {
 .search {
   width: 100%;
   min-width: 0;
-  min-height: 44px;
+  min-height: var(--touch-min);
   padding: var(--space-2) var(--space-4);
   font: inherit;
   color: var(--color-text);
@@ -191,7 +158,7 @@ legend {
 }
 
 .button {
-  min-height: 44px;
+  min-height: var(--touch-min);
   padding: var(--space-2) var(--space-6);
   font: inherit;
   font-weight: 600;
@@ -202,7 +169,7 @@ legend {
 
 .button.primary {
   width: 100%;
-  color: #ffffff;
+  color: var(--color-on-primary);
   background: var(--color-primary);
 }
 
@@ -254,7 +221,7 @@ legend {
   font-size: 0.875rem;
   font-variant-numeric: tabular-nums;
   text-align: center;
-  color: #fff;
+  color: var(--color-on-primary);
   background: var(--color-error);
 }
 
@@ -300,6 +267,29 @@ legend {
   border-bottom: 1px solid var(--color-border);
 }
 
+/* Tones of Notice and Badge from @opc/ui. */
+.notice--info {
+  color: var(--color-text);
+}
+.notice--success,
+.badge--success {
+  color: var(--color-success);
+}
+.notice--warning,
+.badge--warning {
+  color: var(--color-warning);
+}
+.notice--error,
+.badge--error {
+  color: var(--color-error);
+}
+.badge--info {
+  color: var(--color-info);
+}
+.badge--neutral {
+  color: var(--color-muted);
+}
+
 .tabs {
   display: flex;
   gap: var(--space-2);
@@ -313,7 +303,7 @@ legend {
 
 .tabs button,
 .segmented label {
-  min-height: 44px;
+  min-height: var(--touch-min);
   padding: var(--space-2) var(--space-4);
   font: inherit;
   color: var(--color-text);
@@ -325,7 +315,7 @@ legend {
 
 .tabs button[aria-current="page"],
 .segmented label:has(input:checked) {
-  color: #ffffff;
+  color: var(--color-on-primary);
   background: var(--color-primary);
   border-color: var(--color-primary);
 }
@@ -369,7 +359,7 @@ legend {
 .list li {
   display: grid;
   gap: var(--space-1);
-  min-height: 56px;
+  min-height: var(--touch-site);
   padding: var(--space-2) var(--space-4);
   border-bottom: 1px solid var(--color-border);
   overflow-wrap: anywhere;
@@ -426,7 +416,7 @@ legend {
 }
 
 .select {
-  min-height: 44px;
+  min-height: var(--touch-min);
   padding: var(--space-2);
   font: inherit;
   color: var(--color-text);
@@ -442,6 +432,10 @@ legend {
 
 .button.danger {
   color: var(--color-error);
+}
+
+.button.site {
+  min-height: var(--touch-site);
 }
 
 .button.full {
@@ -546,7 +540,7 @@ details > summary:focus-visible,
 }
 
 .button.small {
-  min-height: 44px;
+  min-height: var(--touch-min);
   padding: var(--space-1) var(--space-4);
   font-weight: 500;
 }
@@ -573,7 +567,7 @@ a.button {
 .back {
   display: inline-flex;
   align-items: center;
-  min-height: 44px;
+  min-height: var(--touch-min);
   margin: var(--space-2) 0;
   color: var(--color-primary);
   text-decoration: none;
@@ -681,7 +675,7 @@ a.button {
 .list-link a {
   display: grid;
   gap: var(--space-1);
-  min-height: 56px;
+  min-height: var(--touch-site);
   padding: var(--space-2) var(--space-4);
   color: inherit;
   text-decoration: none;
@@ -704,6 +698,10 @@ a.button {
   gap: var(--space-4);
 }
 
+.amount--strong {
+  font-weight: 700;
+}
+
 .amount {
   white-space: nowrap;
   font-variant-numeric: tabular-nums;
@@ -724,7 +722,7 @@ a.button {
   display: flex;
   align-items: flex-start;
   gap: var(--space-2);
-  min-height: 44px;
+  min-height: var(--touch-min);
   padding: var(--space-2);
   border: 1px solid var(--color-border);
   border-radius: 8px;
@@ -754,7 +752,7 @@ details.panel {
 }
 
 details > summary {
-  min-height: 44px;
+  min-height: var(--touch-min);
   display: flex;
   align-items: center;
   cursor: pointer;
@@ -905,7 +903,7 @@ details.panel > summary {
 
 .chips button {
   flex: none;
-  min-height: 44px;
+  min-height: var(--touch-min);
   padding: var(--space-2) var(--space-4);
   font: inherit;
   color: var(--color-text);
@@ -916,7 +914,7 @@ details.panel > summary {
 }
 
 .chips button[aria-current="true"] {
-  color: #ffffff;
+  color: var(--color-on-primary);
   background: var(--color-primary);
   border-color: var(--color-primary);
 }
@@ -1037,7 +1035,7 @@ details.panel > summary {
 .site .field input,
 .site .select,
 .site .chips button {
-  min-height: 56px;
+  min-height: var(--touch-site);
 }
 
 .site .button.icon {
@@ -1131,7 +1129,7 @@ details.panel > summary {
   display: flex;
   align-items: center;
   gap: var(--space-2);
-  min-height: 56px;
+  min-height: var(--touch-site);
   margin-bottom: var(--space-2);
   cursor: pointer;
 }
@@ -1237,7 +1235,7 @@ legend.h2 + * {
 .weather-option {
   display: inline-flex;
   align-items: center;
-  min-height: 56px;
+  min-height: var(--touch-site);
   padding: var(--space-2) var(--space-4);
   border: 1px solid var(--color-border);
   border-radius: 999px;
@@ -1245,7 +1243,7 @@ legend.h2 + * {
 }
 
 .weather-option:has(input:checked) {
-  color: #ffffff;
+  color: var(--color-on-primary);
   background: var(--color-primary);
   border-color: var(--color-primary);
 }
@@ -1305,7 +1303,7 @@ legend.h2 + * {
   display: inline-flex;
   align-items: center;
   gap: var(--space-2);
-  min-height: 44px;
+  min-height: var(--touch-min);
   cursor: pointer;
   font-weight: 600;
 }
@@ -1336,9 +1334,9 @@ legend.h2 + * {
   left: 3px;
   width: 24px;
   height: 24px;
-  background: #ffffff;
+  background: var(--paper);
   border-radius: 50%;
-  box-shadow: 0 1px 3px rgb(0 0 0 / 0.3);
+  box-shadow: var(--shadow-raised);
   transition: transform 0.15s;
 }
 
@@ -1406,9 +1404,9 @@ legend.h2 + * {
   position: relative;
   width: 210mm;
   min-height: 297mm;
-  color: #111827;
-  background: #ffffff;
-  box-shadow: 0 1px 8px rgb(0 0 0 / 0.18);
+  color: var(--paper-text);
+  background: var(--paper);
+  box-shadow: var(--shadow-overlay);
   font-size: 10pt;
   line-height: 1.35;
   overflow: hidden;
@@ -1456,11 +1454,11 @@ legend.h2 + * {
   align-items: flex-end;
   padding-bottom: 1.5mm;
   font-size: 7pt;
-  color: #374151;
+  color: var(--paper-soft);
 }
 
 .letter-sender span {
-  border-bottom: 0.2mm solid #6b7280;
+  border-bottom: 0.2mm solid var(--paper-rule-strong);
 }
 
 .letter-recipient {
@@ -1483,7 +1481,7 @@ legend.h2 + * {
 }
 
 .letter-info dt {
-  color: #4b5563;
+  color: var(--paper-muted);
 }
 
 .letter-info dd {
@@ -1494,7 +1492,7 @@ legend.h2 + * {
   position: absolute;
   left: 4mm;
   width: 5mm;
-  border-top: 0.2mm solid #9ca3af;
+  border-top: 0.2mm solid var(--paper-rule);
 }
 
 .fold-mark.hole {
@@ -1535,14 +1533,15 @@ legend.h2 + * {
   display: flex;
   gap: 4mm;
   padding-top: 2mm;
-  border-top: 0.3mm solid var(--accent, #0f4c5c);
+  border-top: 0.3mm solid var(--accent, var(--paper-brand));
   font-size: 7pt;
   line-height: 1.3;
-  color: #374151;
+  color: var(--paper-soft);
 }
 
 .letter-footer__column {
-  flex: 1;
+  /* flex-grow comes from footerColumnWeights() (longest line), like the columns in the PDF. */
+  flex: 1 1 0;
   min-width: 0;
   white-space: pre-line;
 }
@@ -1555,7 +1554,7 @@ legend.h2 + * {
   text-align: center;
   font-size: 60pt;
   font-weight: 800;
-  color: rgb(185 28 28 / 0.12);
+  color: color-mix(in srgb, var(--paper-watermark) 12%, transparent);
   transform: rotate(-20deg);
   pointer-events: none;
 }
@@ -1563,7 +1562,7 @@ legend.h2 + * {
 .letter-title {
   margin: 0 0 2mm;
   font-size: 14pt;
-  color: var(--accent, #111827);
+  color: var(--accent, var(--paper-text));
 }
 
 .letter-subject {
@@ -1573,7 +1572,7 @@ legend.h2 + * {
 
 .letter-small {
   font-size: 9pt;
-  color: #4b5563;
+  color: var(--paper-muted);
 }
 
 .letter-items {
@@ -1589,12 +1588,12 @@ legend.h2 + * {
   padding: 1.2mm 1.2mm;
   vertical-align: top;
   text-align: left;
-  border-bottom: 1px solid #e5e7eb;
+  border-bottom: 1px solid var(--paper-line);
 }
 
 .letter-items th {
-  color: var(--accent, #111827);
-  border-bottom: 1.5px solid var(--accent, #111827);
+  color: var(--accent, var(--paper-text));
+  border-bottom: 1.5px solid var(--accent, var(--paper-text));
 }
 
 .letter-items .num {
@@ -1608,7 +1607,7 @@ legend.h2 + * {
 }
 
 .letter-items .title-row td {
-  background: #f3f4f6;
+  background: var(--paper-shade);
 }
 
 .letter-items tr {
@@ -1636,29 +1635,33 @@ legend.h2 + * {
 
 .letter-totals .grand {
   padding-top: 1mm;
-  border-top: 1.5px solid #111827;
+  border-top: 1.5px solid var(--paper-text);
   font-weight: 700;
 }
 
 /* Editor: draggable elements of the Briefkopf */
 .is-editing .letter-header {
-  background: repeating-linear-gradient(135deg, transparent 0 6px, rgb(15 76 92 / 0.04) 6px 12px);
-  border-bottom: 1px dashed rgb(15 76 92 / 0.45);
+  background: repeating-linear-gradient(
+    135deg,
+    transparent 0 6px,
+    color-mix(in srgb, var(--paper-brand) 4%, transparent) 6px 12px
+  );
+  border-bottom: 1px dashed color-mix(in srgb, var(--paper-brand) 45%, transparent);
 }
 
 .letter-positioned.is-editable {
   min-height: 4mm;
-  outline: 1px dashed rgb(15 76 92 / 0.45);
+  outline: 1px dashed color-mix(in srgb, var(--paper-brand) 45%, transparent);
   cursor: move;
   touch-action: none;
 }
 
 .letter-positioned.is-selected {
-  outline: 2px solid #0f4c5c;
+  outline: 2px solid var(--paper-brand);
 }
 
 .letter-positioned.is-editable:focus-visible {
-  outline: 3px solid #f28c28;
+  outline: 3px solid var(--paper-focus);
 }
 
 .resize-handle {
@@ -1668,9 +1671,9 @@ legend.h2 + * {
   width: 6mm;
   height: 6mm;
   margin-top: -3mm;
-  border: 2px solid #ffffff;
+  border: 2px solid var(--paper);
   border-radius: 50%;
-  background: #0f4c5c;
+  background: var(--paper-brand);
   cursor: ew-resize;
   touch-action: none;
 }
@@ -1682,7 +1685,7 @@ legend.h2 + * {
   }
 
   body {
-    background: #ffffff;
+    background: var(--paper);
   }
 
   .workspace > .topbar,
@@ -1893,7 +1896,7 @@ fieldset.plain {
   display: flex;
   gap: var(--space-2);
   align-items: flex-start;
-  min-height: 44px;
+  min-height: var(--touch-min);
   margin: var(--space-2) 0;
 }
 .check-row > .check-box {
@@ -1986,7 +1989,7 @@ fieldset.plain {
   touch-action: none;
   user-select: none;
   -webkit-user-select: none;
-  background: #ffffff;
+  background: var(--paper);
   border: 1px solid var(--color-border);
   border-radius: var(--radius);
   cursor: crosshair;
@@ -1997,7 +2000,7 @@ fieldset.plain {
   left: var(--space-6);
   right: var(--space-6);
   bottom: 40px;
-  border-bottom: 1px solid #94a3b8;
+  border-bottom: 1px solid var(--slate-400);
   pointer-events: none;
 }
 
@@ -2010,7 +2013,7 @@ fieldset.plain {
 }
 
 .signature-pad__actions .button {
-  min-height: 44px;
+  min-height: var(--touch-min);
 }
 
 .signature-stored {
@@ -2018,7 +2021,7 @@ fieldset.plain {
   align-items: center;
   min-height: 96px;
   padding: var(--space-2) var(--space-4);
-  background: #ffffff;
+  background: var(--paper);
   border: 1px solid var(--color-border);
   border-radius: var(--radius);
 }
@@ -2033,7 +2036,7 @@ fieldset.plain {
 .signature-list .signature-image {
   margin-top: var(--space-2);
   padding: var(--space-1) var(--space-2);
-  background: #ffffff;
+  background: var(--paper);
   border-radius: var(--space-1);
   max-height: 72px;
 }
@@ -2058,7 +2061,7 @@ fieldset.plain {
   display: grid;
   gap: var(--space-1);
   width: 100%;
-  min-height: 56px;
+  min-height: var(--touch-site);
   padding: var(--space-2) var(--space-4);
   border: 0;
   background: none;
@@ -2244,7 +2247,7 @@ fieldset.plain {
 }
 .audit-summary {
   cursor: pointer;
-  min-height: 44px;
+  min-height: var(--touch-min);
   display: flex;
   align-items: center;
 }
@@ -2329,7 +2332,7 @@ fieldset.plain {
 }
 .einvoice-summary {
   cursor: pointer;
-  min-height: 44px;
+  min-height: var(--touch-min);
   font-weight: 600;
 }
 .einvoice-parties {
@@ -2385,7 +2388,7 @@ fieldset.plain {
   align-items: center;
   justify-content: center;
   min-width: 44px;
-  min-height: 44px;
+  min-height: var(--touch-min);
   cursor: pointer;
 }
 .row-select-box {
@@ -2468,7 +2471,7 @@ fieldset.plain {
 }
 
 .link-button {
-  min-height: 44px;
+  min-height: var(--touch-min);
   padding: 0;
   font: inherit;
   color: var(--color-primary);
@@ -2551,7 +2554,7 @@ fieldset.plain {
   width: 100%;
   height: 70vh;
   min-height: 24rem;
-  border: 1px solid var(--color-border, #d1d5db);
+  border: 1px solid var(--color-border);
   border-radius: 4px;
-  background: #fff;
+  background: var(--paper);
 }

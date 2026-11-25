@@ -28,6 +28,7 @@ import {
   notFound,
   parse,
 } from '../http.js'
+import { usableContact } from './contacts.js'
 
 const idParam = z.object({ id: z.uuid('Ungültige ID.') })
 
@@ -92,10 +93,7 @@ async function checkReferences(tx: Tx, input: UpdateProjectRequest) {
   ) {
     errors.statusId = 'Unbekannter Status.'
   }
-  if (
-    input.customerId &&
-    !(await tx`select 1 from contact where id = ${input.customerId}`).length
-  ) {
+  if (input.customerId && !(await usableContact(tx, input.customerId))) {
     errors.customerId = 'Unbekannter Kunde.'
   }
   if (input.memberIds?.length) {

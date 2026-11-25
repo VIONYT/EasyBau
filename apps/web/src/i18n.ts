@@ -253,6 +253,22 @@ const de = {
   'contacts.filter.archived': 'Archivierte Kontakte',
   'contacts.archived': 'archiviert',
   'contacts.archive': 'Archivieren',
+  'privacy.title': 'Datenschutz',
+  'privacy.hint':
+    'Auskunft (Art. 15 DSGVO) lädt alle gespeicherten Daten dieses Kontakts als Datei herunter. Löschen anonymisiert den Kontakt; steht er in festgeschriebenen Belegen, wird er bis zum Ende der Aufbewahrungsfrist gesperrt und danach automatisch gelöscht.',
+  'privacy.report': 'Auskunft herunterladen',
+  'privacy.erase': 'Löschen (DSGVO) …',
+  'privacy.confirmErase':
+    'Der Kontakt wird sofort und endgültig anonymisiert: Name, Anschriften, Kommunikationswege und Verknüpfungen werden gelöscht. Das lässt sich nicht rückgängig machen.',
+  'privacy.confirmBlock':
+    'Der Kontakt steht in {n} festgeschriebenen Belegen, die bis {date} aufbewahrt werden müssen. Er wird bis dahin gesperrt (nicht mehr änder- oder verwendbar) und danach automatisch gelöscht.',
+  'privacy.doErase': 'Endgültig löschen',
+  'privacy.doBlock': 'Sperren und später löschen',
+  'privacy.erasedNow': 'Der Kontakt wurde gelöscht (anonymisiert).',
+  'privacy.blockedNow': 'Der Kontakt ist bis {date} gesperrt und wird danach automatisch gelöscht.',
+  'privacy.erased': 'Gelöscht (anonymisiert) am {date} nach DSGVO.',
+  'privacy.blocked':
+    'Gesperrt bis {date} (gesetzliche Aufbewahrungsfrist). Danach wird der Kontakt automatisch gelöscht.',
   'contacts.unarchive': 'Wiederherstellen',
   'contacts.salutation': 'Anrede',
   'contacts.title': 'Titel',
@@ -1079,7 +1095,7 @@ const de = {
   'c.fromDatanorm': 'aus Katalog',
   'c.import': 'DATANORM-Datei importieren',
   'c.importHint':
-    'DATANORM 4 oder 5 vom Großhändler (z. B. *.001, *.DAT). Updates mit Neu/Ändern/Löschen und Preisänderungen werden auf den gewählten Katalog angewendet.',
+    'DATANORM 4 oder 5 vom Großhändler (z. B. *.001, *.DAT; ZIP-Archive bitte vorher entpacken). Updates mit Neu/Ändern/Löschen und Preisänderungen werden auf den gewählten Katalog angewendet. Rabattgruppen (*.RAB) und Warengruppen (*.WRG) in den vorhandenen Katalog importieren.',
   'c.importName': 'Name des Katalogs',
   'c.importTarget': 'Importieren in',
   'c.importNew': 'Neuer Katalog',
@@ -1088,6 +1104,9 @@ const de = {
   'c.imported':
     'Importiert: {articles} Artikel, {deleted} gelöscht, {prices} Preise, {texts} Langtextzeilen ({encoding}).',
   'c.unknownUnits': 'Einheiten ohne Zuordnung (beim Übernehmen bitte Einheit wählen):',
+  'c.importedDiscounts': 'Rabattgruppen übernommen: {count}.',
+  'c.discountsWithoutValue':
+    '{count} Rabattgruppen ohne Rabatt in der Datei (0 %) – Ihre eigenen Werte bleiben erhalten; Rabatte bitte unter „Bearbeiten“ eintragen.',
   'c.noCatalogs': 'Noch keine Kataloge importiert.',
   'c.articles': 'Artikel',
   'c.importedAt': 'importiert',
@@ -1155,6 +1174,10 @@ const de = {
   'sys.backup.failed': 'fehlgeschlagen',
   'sys.backupHint':
     'Die Sicherung läuft täglich (BACKUP_TIME) und enthält Datenbank und Ablage. Kopieren Sie die Sicherungen regelmäßig auf ein zweites Gerät und bewahren Sie die .env (APP_SECRET) getrennt auf. Wiederherstellen: sh infra/restore.sh',
+  'sys.alertOn':
+    'Bei Problemen mit Sicherung, Änderungsprotokoll oder Belegarchiv bekommen alle mit dem Recht „Einstellungen ändern“ morgens eine E-Mail – bei neuen Problemen sofort, sonst höchstens wöchentlich.',
+  'sys.alertOff':
+    'E-Mail-Warnungen bei Problemen mit Sicherung, Änderungsprotokoll oder Belegarchiv gibt es, sobald der E-Mail-Versand eingerichtet ist.',
   'sys.emailOffShort': 'Nicht eingerichtet (optional).',
   'sys.emailOk': 'Eingerichtet, keine Fehler.',
   'sys.emailFailed': '{n} E-Mail(s) konnten nicht versendet werden, siehe Postausgang.',

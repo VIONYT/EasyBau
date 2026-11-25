@@ -1,5 +1,6 @@
 import { DIN5008B, defaultLetterhead, LETTERHEAD_FIELDS } from '@opc/domain'
 import type { LetterheadLayout, LetterheadSettings } from '@opc/schemas'
+import { paper } from '@opc/ui'
 import { useEffect, useId, useRef, useState } from 'react'
 import { ApiError, api, uploadFile } from '../api'
 import { FormError } from '../forms'
@@ -61,7 +62,7 @@ export function LetterheadEditor({ canEdit }: { canEdit: boolean }) {
           fontSize: 10,
           bold: false,
           align: 'left',
-          color: '#111827',
+          color: paper.text,
         },
       ],
     })

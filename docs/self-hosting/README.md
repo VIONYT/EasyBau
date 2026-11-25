@@ -181,6 +181,8 @@ docker compose logs backup                            # Protokoll
 - Die **`.env` getrennt sichern** (Passwortmanager oder Tresor). Ohne denselben `APP_SECRET` sind Zwei-Faktor-Geheimnisse und IBAN nach einer Wiederherstellung nicht lesbar.
 - Die lokalen Sicherungen sind nicht verschlüsselt: Zugriff auf `BACKUP_DIR` wie auf den Server selbst beschränken.
 
+**Warnung per E-Mail:** Ist der E-Mail-Versand eingerichtet (Abschnitt 5), prüft der Hintergrunddienst jeden Morgen um 06:13 Uhr Sicherung (älter als 26 Stunden, fehlgeschlagen, Kopie außer Haus fehlgeschlagen), Änderungsprotokoll (Audit-Kette defekt oder nicht geprüft) und Belegarchiv (Kopien scheitern, Belege warten über 24 Stunden, Belege verloren). Bei Problemen geht eine E-Mail an alle Personen mit dem Recht „Einstellungen ändern“ (Admin, Büroleitung) – bei neuen Problemen sofort, bei bestehenden höchstens alle 7 Tage, und einmal „wieder in Ordnung“. Ohne E-Mail-Versand bleibt nur der Betriebs-Check in der App.
+
 ### 6a. Verschlüsselte Sicherung außer Haus (restic)
 
 Optional ([ADR 0011](../adr/0011-sicherung-ausser-haus.md)): Nach jeder erfolgreichen Sicherung kopiert der Dienst `backup` sie mit [restic](https://restic.net) an einen zweiten Ort. Verschlüsselt wird **auf Ihrem Server** (AES-256); der Speicherort sieht nur verschlüsselte Daten. Nach der ersten Kopie werden nur noch Änderungen übertragen.
@@ -198,7 +200,14 @@ Optional ([ADR 0011](../adr/0011-sicherung-ausser-haus.md)): Nach jeder erfolgre
 
 > **Das restic-Passwort getrennt vom Server aufbewahren** (Passwort-Manager, Ausdruck im Tresor). Ohne dieses Passwort lassen sich die Kopien nicht mehr öffnen – auch nicht vom Anbieter.
 
-Aufbewahrung außer Haus: `OFFSITE_KEEP_DAILY` (14), `OFFSITE_KEEP_WEEKLY` (8), `OFFSITE_KEEP_MONTHLY` (24). Schutz gegen Löschen durch einen Angreifer auf dem Server: ein Ziel mit eigener Löschsperre wählen (S3 mit Versionierung/Object Lock und Lebenszyklus-Regel, restic REST-Server mit `--append-only`).
+Aufbewahrung außer Haus: `OFFSITE_KEEP_DAILY` (14), `OFFSITE_KEEP_WEEKLY` (8), `OFFSITE_KEEP_MONTHLY` (24).
+
+**Löschsperre am Ziel (empfohlen):** Wer den Server übernimmt (z. B. Erpressungstrojaner), hat auch die Zugangsdaten zum Ziel und könnte die Kopien löschen. Dagegen hilft nur ein Ziel, das Löschen selbst verweigert:
+
+- [restic REST-Server](https://github.com/restic/rest-server) mit `--append-only` (z. B. auf einem NAS oder Zweitserver), Repository `rest:https://nutzer:passwort@host:8000/firma`, oder
+- `rclone serve restic --append-only` vor einem beliebigen Cloud-Speicher.
+
+Dann in der `.env` `OFFSITE_APPEND_ONLY=true` setzen: EasyBau kopiert nur noch und löscht nie alte Stände (`forget/prune` entfällt, die `OFFSITE_KEEP_*` gelten nicht). Aufgeräumt wird **am Ziel** mit einem eigenen Zugang, z. B. monatlich `restic -r /pfad/zum/repository forget --keep-daily 14 --keep-weekly 8 --keep-monthly 24 --prune`. Ein S3-Bucket mit Object Lock ist für restic **kein** geeignetes Ziel (restic muss Sperrdateien löschen können).
 
 ```bash
 docker compose exec backup backup.sh offsite-list          # Stände außer Haus anzeigen

@@ -54,6 +54,7 @@ import {
 import { einvoiceSummary } from '../einvoice.js'
 import { checkIfMatch, etagOf, HttpError, notFound, parse } from '../http.js'
 import { checkEvidence, resolveEvidence } from './change-orders.js'
+import { restrictedContact, usableContact } from './contacts.js'
 import { documentSettings, laborShareDefault } from './document-settings.js'
 import { finalizeInvoice } from './invoices.js'
 import { companyValues, loadLetterhead } from './letterhead.js'
@@ -897,6 +898,8 @@ export async function createDocument(
   }
 
   const contactId = source ? source.contactId : project.customerId
+  // DSGVO: no new documents for a blocked or erased contact (Art. 18).
+  if (contactId && !(await usableContact(tx, contactId))) throw restrictedContact()
   const [contact] = contactId
     ? await tx<
         {
@@ -1141,10 +1144,7 @@ export function registerDocumentRoutes(app: FastifyInstance, services: Services)
     const doc = await inTenant(services, auth, async (tx) => {
       const current = await lockDraft(tx, auth, id)
       checkIfMatch(request.headers['if-match'], current.updatedAt)
-      if (
-        input.contactId &&
-        !(await tx`select 1 from contact where id = ${input.contactId}`).length
-      ) {
+      if (input.contactId && !(await usableContact(tx, input.contactId))) {
         throw new HttpError(400, 'Die Eingaben sind unvollständig oder ungültig.', {
           contactId: 'Unbekannter Kontakt.',
         })

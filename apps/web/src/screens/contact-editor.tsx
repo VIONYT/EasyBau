@@ -1,8 +1,10 @@
 import type { ContactDetail, ContactSummary, Page, PaymentTerm } from '@opc/schemas'
+import { color } from '@opc/ui'
 import { useCallback, useEffect, useId, useState } from 'react'
 import { type ApiError, api, apiWithEtag } from '../api'
 import { Field, FormError, SelectField, TextArea, useForm, value } from '../forms'
 import { type TextKey, t } from '../i18n'
+import { ContactPrivacyPanel } from './contact-privacy'
 
 const TAX_MODES = [
   'standard',
@@ -150,6 +152,8 @@ export function ContactEditor({
   const mapQuery = [main?.street, main?.postalCode, main?.city].filter(Boolean).join(' ')
   const setChannel = (index: number, patch: Partial<Channel>) =>
     setChannels(channels.map((ch, i) => (i === index ? { ...ch, ...patch } : ch)))
+  // DSGVO: blocked or erased contacts are read only (the server refuses changes as well).
+  const restricted = Boolean(c.blockedUntil || c.erasedAt)
   const archive = async () => {
     setActionError(null)
     try {
@@ -189,7 +193,7 @@ export function ContactEditor({
             {t('contacts.saved')}
           </p>
         ) : null}
-        <fieldset disabled={!canWrite || form.busy}>
+        <fieldset disabled={!canWrite || form.busy || restricted}>
           {c.kind === 'organization' ? (
             <Field
               label={t('contacts.organizationName')}
@@ -423,7 +427,7 @@ export function ContactEditor({
               type="color"
               name="color"
               aria-label={t('contacts.colorValue')}
-              defaultValue={c.color ?? '#0f4c5c'}
+              defaultValue={c.color ?? color.primary}
             />
           </div>
           <TextArea
@@ -529,8 +533,19 @@ export function ContactEditor({
         </>
       ) : null}
 
-      <FormError>{actionError}</FormError>
       {canWrite ? (
+        <ContactPrivacyPanel
+          contact={c}
+          onChanged={async () => {
+            const result = await apiWithEtag<ContactDetail>('GET', `/api/v1/contacts/${id}`)
+            apply(result)
+            onSaved(result.data)
+          }}
+        />
+      ) : null}
+
+      <FormError>{actionError}</FormError>
+      {canWrite && !restricted ? (
         <div className="button-row">
           <button type="button" className="button ghost auto" onClick={archive}>
             {t(c.archived ? 'contacts.unarchive' : 'contacts.archive')}

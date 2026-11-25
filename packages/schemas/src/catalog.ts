@@ -141,6 +141,10 @@ export interface ImportResult {
     encoding: string
     /** Units of the file without a matching system unit (first 20). */
     unknownUnits: string[]
+    /** Discount groups (R records, *.RAB) applied to the catalog. */
+    discounts: number
+    /** Discount groups with 0 % or another kind (multiplier); the firm's own value is kept. */
+    discountsWithoutValue: number
   }
 }
 

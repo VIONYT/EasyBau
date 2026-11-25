@@ -17,6 +17,7 @@
   "dependencies": {
     "@opc/config": "workspace:*",
     "@opc/db": "workspace:*",
+    "@opc/domain": "workspace:*",
     "@opc/storage": "workspace:*",
     "nodemailer": "10.2.1",
     "pg-boss": "12.2.0",

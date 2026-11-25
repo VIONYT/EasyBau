@@ -2,6 +2,7 @@ import {
   DIN5008B,
   defaultLetterhead,
   fillPlaceholders,
+  footerColumnWeights,
   type Letterhead,
   type LetterheadValues,
 } from '@opc/domain'
@@ -27,6 +28,9 @@ export function letterFrame(options: {
 }): Omit<LetterPdfInput, 'logo' | 'body'> & { logoPosition: LogoPosition | null } {
   const layout = options.layout ?? defaultLetterhead()
   const { values } = options
+  const footer = layout.footer
+    .map((c) => fillPlaceholders(c, values))
+    .filter((c) => c.trim() !== '')
   return {
     title: options.title,
     author: options.issuerName,
@@ -44,7 +48,8 @@ export function letterFrame(options: {
     senderLine: fillPlaceholders(layout.senderLine, values),
     recipient: options.recipient,
     info: options.info,
-    footer: layout.footer.map((c) => fillPlaceholders(c, values)).filter((c) => c.trim() !== ''),
+    footer,
+    footerWeights: footerColumnWeights(footer),
   }
 }
 

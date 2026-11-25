@@ -240,6 +240,7 @@ services:
       OFFSITE_KEEP_DAILY: ${OFFSITE_KEEP_DAILY:-14}
       OFFSITE_KEEP_WEEKLY: ${OFFSITE_KEEP_WEEKLY:-8}
       OFFSITE_KEEP_MONTHLY: ${OFFSITE_KEEP_MONTHLY:-24}
+      OFFSITE_APPEND_ONLY: ${OFFSITE_APPEND_ONLY:-false}
       PATH: /opt/backup:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
     volumes:
       # Directory, not file: an updated script (git pull) is used without recreating the container.

@@ -206,5 +206,35 @@ export interface ContactDetail
     role: string | null
   }[]
   projects: { id: string; number: string | null; name: string; updatedAt: string }[]
+  /** DSGVO: blocked until the end of the retention period (Art. 18), then erased. */
+  blockedUntil: string | null
+  /** DSGVO: anonymised (Art. 17); nothing can be changed any more. */
+  erasedAt: string | null
   createdAt: string
+}
+
+/** Datenschutz eines Kontakts: what „Löschen“ would do now. */
+export interface ContactPrivacy {
+  /** End of the retention period of tax-relevant records naming the contact; null = none. */
+  retentionEnd: string | null
+  /** What happens on „Löschen (DSGVO)“: erase at once or block until retentionEnd. */
+  action: 'erase' | 'block'
+  usage: {
+    projects: number
+    documents: number
+    finalizedDocuments: number
+    incomingInvoices: number
+  }
+  blockedAt: string | null
+  blockedUntil: string | null
+  erasedAt: string | null
+}
+
+export const eraseContactRequest = z.object({
+  confirm: z.literal(true, 'Bitte das Löschen bestätigen.'),
+})
+
+export interface EraseContactResult {
+  result: 'erased' | 'blocked'
+  blockedUntil: string | null
 }

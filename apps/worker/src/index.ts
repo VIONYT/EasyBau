@@ -8,6 +8,11 @@ import { verifyArchive, verifyRequested } from './archive-verify.js'
 import { checkAuditChains } from './audit.js'
 import { dispatchEmails, smtpTransport } from './email.js'
 import { purgeReadNotifications } from './notifications.js'
+import { alertOperations } from './operations-alert.js'
+
+export { eraseExpiredContacts } from './privacy.js'
+
+import { eraseExpiredContacts } from './privacy.js'
 
 export { type ArchiveRun, archivePending } from './archive.js'
 export {
@@ -25,6 +30,11 @@ export {
   smtpTransport,
 } from './email.js'
 export { NOTIFICATION_RETENTION_DAYS, purgeReadNotifications } from './notifications.js'
+export {
+  alertOperations,
+  type OperationsAlertOptions,
+  type OperationsAlertResult,
+} from './operations-alert.js'
 
 /**
  * Background jobs run on pg-boss, i.e. inside PostgreSQL (ADR 0002).
@@ -36,6 +46,8 @@ export const queues = {
   auditCheck: 'audit.check-chain',
   archiveVerify: 'archive.verify',
   notificationPurge: 'notification.purge',
+  operationsAlert: 'operations.alert',
+  privacyErase: 'privacy.erase-expired',
 } as const
 
 export interface Worker {
@@ -45,6 +57,7 @@ export interface Worker {
 export async function startWorker(
   config: Pick<
     Config,
+    | 'APP_NAME'
     | 'DATABASE_URL'
     | 'DATABASE_POOL_MAX'
     | 'PROFILE'
@@ -100,6 +113,22 @@ export async function startWorker(
     await purgeReadNotifications(auditSql, logger)
   })
   await boss.schedule(queues.notificationPurge, '27 4 * * *', {}, { tz: 'Europe/Berlin' })
+  // Betriebswarnung per E-Mail: after the nightly backup, audit and archive checks.
+  await boss.createQueue(queues.operationsAlert)
+  await boss.work(queues.operationsAlert, async () => {
+    await alertOperations(auditSql, logger, {
+      smtpEnabled: smtpEnabled(config),
+      archiveConfigured: Boolean(config.ARCHIVE_S3_ENDPOINT),
+      appName: config.APP_NAME,
+    })
+  })
+  await boss.schedule(queues.operationsAlert, '13 6 * * *', {}, { tz: 'Europe/Berlin' })
+  // Löschkonzept (DSGVO): blocked contacts are erased after their retention period.
+  await boss.createQueue(queues.privacyErase)
+  await boss.work(queues.privacyErase, async () => {
+    await eraseExpiredContacts(auditSql, logger)
+  })
+  await boss.schedule(queues.privacyErase, '7 5 * * *', {}, { tz: 'Europe/Berlin' })
   // E-mail outbox (optional): polled every 15 s, cheap thanks to a partial index.
   let mailTimer: NodeJS.Timeout | undefined
   const sql = smtpEnabled(config) ? createSql({ ...config, DATABASE_POOL_MAX: 1 }) : undefined

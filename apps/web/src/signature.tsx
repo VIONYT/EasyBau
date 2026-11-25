@@ -1,4 +1,5 @@
 import type { MySignature, UploadedSignature } from '@opc/schemas'
+import { paper } from '@opc/ui'
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { api, uploadFile } from './api'
 import { FormError } from './forms'
@@ -15,7 +16,7 @@ interface Point {
   width: number
 }
 
-const INK = '#10203a'
+const INK = paper.ink
 const PAD_HEIGHT = 180
 const EXPORT_SCALE = 2
 const EXPORT_PADDING = 8

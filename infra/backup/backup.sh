@@ -74,6 +74,18 @@ offsite_record() { # name status message
 
 # Encrypted copy off site (ADR 0011): restic encrypts on this server (AES-256), the target only
 # sees encrypted data. Unchanged files are not transferred again (deduplication).
+# Old snapshots are removed here – unless the target refuses deletions (OFFSITE_APPEND_ONLY=true,
+# e.g. rest-server --append-only): then nobody on this server, not even an intruder, can delete the
+# copies, and pruning is done on the target itself (docs/self-hosting, „Löschsperre am Ziel“).
+offsite_prune() {
+  case "${OFFSITE_APPEND_ONLY:-false}" in
+    true | 1 | yes) return 0 ;;
+  esac
+  restic forget --host easybau --prune \
+    --keep-daily "${OFFSITE_KEEP_DAILY:-14}" --keep-weekly "${OFFSITE_KEEP_WEEKLY:-8}" \
+    --keep-monthly "${OFFSITE_KEEP_MONTHLY:-24}"
+}
+
 offsite() {
   name=$1
   if ! offsite_enabled; then
@@ -90,9 +102,7 @@ offsite() {
   if {
     { restic cat config >/dev/null 2>&1 || restic init; } &&
       restic backup --host easybau --tag "$name" "$TARGET/$name" &&
-      restic forget --host easybau --prune \
-        --keep-daily "${OFFSITE_KEEP_DAILY:-14}" --keep-weekly "${OFFSITE_KEEP_WEEKLY:-8}" \
-        --keep-monthly "${OFFSITE_KEEP_MONTHLY:-24}"
+      offsite_prune
   } >/dev/null 2>"$err"; then
     rm -f "$err"
     offsite_record "$name" ok ""

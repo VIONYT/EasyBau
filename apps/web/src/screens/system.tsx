@@ -354,6 +354,7 @@ function OperationsPanel({ canWrite }: { canWrite: boolean }) {
         </>
       ) : null}
       <p className="muted">{t('sys.backupHint')}</p>
+      <p className="muted">{status.email.enabled ? t('sys.alertOn') : t('sys.alertOff')}</p>
     </div>
   )
 }

@@ -71,7 +71,7 @@
   v(2mm, weak: true)
   if data.footer.len() > 0 {
     text(size: 7pt, fill: rgb("#374151"), grid(
-      columns: (1fr,) * data.footer.len(),
+      columns: data.footerWeights.map(w => w * 1fr),
       column-gutter: 4mm,
       ..data.footer.map(lines),
     ))

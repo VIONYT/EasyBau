@@ -87,7 +87,9 @@ async function loadContact(tx: Tx, id: string): Promise<(ContactDetail & { etag:
            tax_mode as "taxMode", vat_id as "vatId", buyer_reference as "buyerReference",
            creditor_number as "creditorNumber", einvoice_email as "einvoiceEmail", einvoice_format as "einvoiceFormat",
            updated_at as "updatedRaw", to_char(updated_at at time zone 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS.MS"Z"') as "updatedAt",
-           to_char(created_at at time zone 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS.MS"Z"') as "createdAt"
+           to_char(created_at at time zone 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS.MS"Z"') as "createdAt",
+           to_char(blocked_until, 'YYYY-MM-DD') as "blockedUntil",
+           to_char(erased_at at time zone 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS.MS"Z"') as "erasedAt"
     from contact where id = ${id}`
   if (!c) return null
   const channels = await tx<ContactDetail['channels']>`
@@ -108,6 +110,22 @@ async function loadContact(tx: Tx, id: string): Promise<(ContactDetail & { etag:
     from project where customer_id = ${id} order by updated_at desc limit 50`
   const { updatedRaw, ...rest } = c
   return { ...rest, channels, addresses, links, projects, etag: etagOf(updatedRaw) }
+}
+
+/** DSGVO: blocked (until the end of the retention period) or erased contacts stay as they are. */
+export function restrictedContact(): HttpError {
+  return new HttpError(
+    409,
+    'Der Kontakt ist aus Datenschutzgründen gesperrt oder gelöscht und kann nicht mehr geändert oder verwendet werden.',
+  )
+}
+
+/** Usable for new projects and documents: exists, not blocked, not erased. */
+export async function usableContact(tx: Tx, id: string): Promise<boolean> {
+  return (
+    (await tx`select 1 from contact where id = ${id} and blocked_at is null and erased_at is null`)
+      .length > 0
+  )
 }
 
 /** Unique Kreditorennummer per company. */
@@ -224,12 +242,15 @@ export function registerContactRoutes(app: FastifyInstance, services: Services) 
           organizationName: string | null
           firstName: string | null
           lastName: string | null
+          restricted: boolean
         }[]
       >`
         select kind, updated_at as "updatedAt", organization_name as "organizationName",
-               first_name as "firstName", last_name as "lastName"
+               first_name as "firstName", last_name as "lastName",
+               (blocked_at is not null or erased_at is not null) as restricted
         from contact where id = ${id} for update`
       if (!current) throw notFound('Der Kontakt')
+      if (current.restricted) throw restrictedContact()
       checkIfMatch(request.headers['if-match'], current.updatedAt)
       const merged = { ...current, ...input }
       if (current.kind === 'organization' && !merged.organizationName) {
@@ -264,7 +285,8 @@ export function registerContactRoutes(app: FastifyInstance, services: Services) 
         services,
         auth,
         (tx) => tx`
-        update contact set archived_at = ${archived ? tx`now()` : null} where id = ${id}`,
+        update contact set archived_at = ${archived ? tx`now()` : null}
+        where id = ${id} and blocked_at is null and erased_at is null`,
       )
       if (!updated.count) throw notFound('Der Kontakt')
       return reply.status(204).send()

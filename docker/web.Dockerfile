@@ -13,11 +13,13 @@ COPY pnpm-lock.yaml pnpm-workspace.yaml package.json ./
 COPY apps/web/package.json apps/web/
 COPY packages/schemas/package.json packages/schemas/
 COPY packages/domain/package.json packages/domain/
+COPY packages/ui/package.json packages/ui/
 RUN --mount=type=secret,id=extra_ca --mount=type=cache,id=pnpm,target=/pnpm/store \
     pnpm install --frozen-lockfile --filter=@opc/web...
 COPY apps/web apps/web
 COPY packages/schemas packages/schemas
 COPY packages/domain packages/domain
+COPY packages/ui packages/ui
 COPY tsconfig.base.json ./
 RUN --mount=type=secret,id=extra_ca pnpm --filter=@opc/web build
 

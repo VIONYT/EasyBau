@@ -1,0 +1,82 @@
+/* Design tokens (DESIGN.md §7.2) – the only place for colours, spacing and sizes.
+   Same values as src/tokens.ts (checked by tokens.test.ts). */
+:root {
+  --color-primary: #0f4c5c;
+  --color-on-primary: #ffffff;
+  --color-accent: #f28c28;
+  --color-bg: #f8fafc;
+  --color-surface: #ffffff;
+  --color-text: #0f172a;
+  --color-muted: #475569;
+  --color-border: #e2e8f0;
+  --color-success: #15803d;
+  --color-warning: #b45309;
+  --color-error: #b91c1c;
+  --color-info: #1d4ed8;
+
+  --slate-50: #f8fafc;
+  --slate-100: #f1f5f9;
+  --slate-200: #e2e8f0;
+  --slate-300: #cbd5e1;
+  --slate-400: #94a3b8;
+  --slate-500: #64748b;
+  --slate-600: #475569;
+  --slate-700: #334155;
+  --slate-800: #1e293b;
+  --slate-900: #0f172a;
+
+  /* The printed sheet stays paper-white in dark mode. */
+  --paper: #ffffff;
+  --paper-text: #111827;
+  --paper-muted: #4b5563;
+  --paper-soft: #374151;
+  --paper-rule: #9ca3af;
+  --paper-rule-strong: #6b7280;
+  --paper-line: #e5e7eb;
+  --paper-shade: #f3f4f6;
+  --paper-brand: #0f4c5c;
+  --paper-focus: #f28c28;
+  --paper-watermark: #b91c1c;
+  --paper-ink: #10203a;
+
+  --space-1: 4px;
+  --space-2: 8px;
+  --space-3: 12px;
+  --space-4: 16px;
+  --space-5: 20px;
+  --space-6: 24px;
+  --space-8: 32px;
+
+  --font-size-xs: 12px;
+  --font-size-sm: 14px;
+  --font-size-md: 16px;
+  --font-size-lg: 18px;
+  --font-size-xl: 20px;
+  --font-size-2xl: 24px;
+  --font-size-3xl: 30px;
+  --font-size-4xl: 36px;
+
+  --touch-min: 44px;
+  --touch-site: 56px;
+  --radius: 12px;
+  --shadow-raised: 0 1px 3px rgb(0 0 0 / 0.3);
+  --shadow-overlay: 0 1px 8px rgb(0 0 0 / 0.18);
+  --font: Inter, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  color-scheme: light dark;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --color-primary: #5fb3c6;
+    --color-on-primary: #0b1220;
+    --color-bg: #0b1220;
+    --color-surface: #111a2e;
+    --color-text: #e2e8f0;
+    --color-muted: #94a3b8;
+    --color-border: #1e293b;
+    --color-success: #4ade80;
+    --color-warning: #fbbf24;
+    --color-error: #f87171;
+    --color-info: #93c5fd;
+  }
+}

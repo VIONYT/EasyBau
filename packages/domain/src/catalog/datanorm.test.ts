@@ -33,6 +33,61 @@ describe('DATANORM records', () => {
     })
   })
 
+  it('reads the fixed-width header of DATANORM 4', () => {
+    const fixed = (date: string, info: string[], version: string, currency: string) =>
+      `V ${date.padEnd(6)}${(info[0] ?? '').padEnd(40)}${(info[1] ?? '').padEnd(40)}${(info[2] ?? '').padEnd(35)}${version.padEnd(2)}${currency}`
+    // Layout as in a real wholesaler file (Belimo, 128 characters).
+    const line = fixed('191026', ['Belimo', 'ab 01.01.2027'], '04', 'EUR')
+    expect(line).toHaveLength(128)
+    expect(parse(`${line}\r`)).toEqual({
+      type: 'header',
+      header: {
+        version: '04',
+        date: '191026',
+        supplier: 'Belimo',
+        info: ['Belimo', 'ab 01.01.2027'],
+        currency: 'EUR',
+      },
+    })
+    expect(parse(fixed('', [], '', ''))).toMatchObject({
+      header: { version: '04', date: null, supplier: null, info: [], currency: 'EUR' },
+    })
+    expect(() => parse(fixed('010195', ['Alt'], '03', 'DM '))).toThrow(
+      /Zeile 7: DATANORM-Version 03 wird nicht unterstützt/,
+    )
+  })
+
+  it('reads discount groups (Rabattsatz, file *.RAB)', () => {
+    expect(parse('R;;80;1;0;Gueltig fuer S8;')).toEqual({
+      type: 'discount',
+      discount: {
+        action: 'new',
+        discountGroup: '80',
+        kind: 'percent',
+        percent: '0',
+        text: 'Gueltig fuer S8',
+      },
+    })
+    expect(parse('R;A;W5;1;3550;')).toMatchObject({
+      discount: { action: 'change', discountGroup: 'W5', percent: '35.5', text: null },
+    })
+    expect(parse('R;N;W6;1;12,5')).toMatchObject({ discount: { percent: '12.5' } })
+    expect(parse('R;N;W7;1')).toMatchObject({ discount: { percent: null } })
+    expect(parse('R;N;M1;2;1250;Multi')).toMatchObject({
+      discount: { kind: 'other', percent: null },
+    })
+    expect(() => parse('R;N;;1;10')).toThrow(/Rabattgruppe fehlt/)
+    expect(() => parse('R;N;X;1;10000')).toThrow(/100 % oder mehr/)
+    expect(() => parse('R;N;X;1;abc')).toThrow(/Ungültiger Rabatt/)
+  })
+
+  it('skips product groups (Warengruppe, file *.WRG)', () => {
+    expect(parse('S;;S2;;AntriebeFU;Antriebe für raue Umgebungsbedingungen;')).toEqual({
+      type: 'skip',
+      recordType: 'S',
+    })
+  })
+
   it('reads articles with list price, price unit and unit', () => {
     expect(parse('A;N;4711;00;Dispersionsfarbe weiß;12,5 l;1;0;Eim;4599;R10;MAL;T4711\r')).toEqual({
       type: 'article',
@@ -94,6 +149,18 @@ describe('DATANORM records', () => {
         ],
       },
     )
+    // Real DATANORM 4 file (Belimo): an empty field after the key, empty Kennzeichen.
+    expect(parse('T;N;T9220;;1;;Differenzdruckschalter;2;;Messbereich 200...1000 Pa;')).toEqual({
+      type: 'text',
+      texts: [
+        { key: 'T9220', line: 1, text: 'Differenzdruckschalter' },
+        { key: 'T9220', line: 2, text: 'Messbereich 200...1000 Pa' },
+      ],
+    })
+    expect(parse('T;N;T9220;;11;;Typ 01APS-101;;;;')).toEqual({
+      type: 'text',
+      texts: [{ key: 'T9220', line: 11, text: 'Typ 01APS-101' }],
+    })
     expect(parse('T;N;T1;x;0;ignoriert;3;0')).toEqual({
       type: 'text',
       texts: [{ key: 'T1', line: 3, text: '' }],
@@ -115,8 +182,9 @@ describe('DATANORM records', () => {
   })
 
   it('skips unknown and empty records', () => {
-    expect(parse('R;N;R10;30')).toEqual({ type: 'skip', recordType: 'R' })
+    expect(parse('Z;N;R10;30')).toEqual({ type: 'skip', recordType: 'Z' })
     expect(parse('   ')).toBeNull()
+    expect(parse('\u001a')).toBeNull()
   })
 
   it('reports broken lines with their number', () => {

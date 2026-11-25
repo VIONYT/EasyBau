@@ -42,6 +42,7 @@ import { registerNotificationRoutes } from './routes/notifications.js'
 import { registerOfferToolRoutes } from './routes/offer-tools.js'
 import { registerOperationsRoutes } from './routes/operations.js'
 import { registerPdfRoutes } from './routes/pdf.js'
+import { registerPrivacyRoutes } from './routes/privacy.js'
 import { registerProjectFigureRoutes } from './routes/project-figures.js'
 import { registerProjectRoutes } from './routes/projects.js'
 import { registerReceivableRoutes } from './routes/receivables.js'
@@ -271,6 +272,7 @@ export function buildApi({
   registerChangeOrderRoutes(app, services)
   registerAccountRoutes(app, services)
   registerContactCsvRoutes(app, services)
+  registerPrivacyRoutes(app, services)
   registerProjectFigureRoutes(app, services)
   registerDashboardRoutes(app, services)
   registerNotificationRoutes(app, services)
