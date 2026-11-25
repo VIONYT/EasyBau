@@ -213,6 +213,18 @@ const de = {
     'Eine bestätigte Adresse stellt sicher, dass Links zum Zurücksetzen des Passworts bei Ihnen ankommen.',
   'account.email.send': 'Bestätigungs-E-Mail senden',
   'account.email.sent': 'Die E-Mail ist unterwegs. Der Link darin ist 48 Stunden gültig.',
+  'account.change.open': 'E-Mail-Adresse ändern',
+  'account.change.newEmail': 'Neue E-Mail-Adresse',
+  'account.change.submit': 'Adresse ändern',
+  'account.change.linkSent':
+    'Wir haben einen Link an die neue Adresse geschickt (24 Stunden gültig). Erst nach der Bestätigung gilt sie für die Anmeldung; Ihre bisherige Adresse wurde informiert.',
+  'account.change.changedNow':
+    'Die Adresse ist geändert. Ohne E-Mail-Versand kann sie nicht bestätigt werden – ab sofort melden Sie sich mit der neuen Adresse an.',
+  'account.change.title': 'Neue E-Mail-Adresse bestätigen',
+  'account.change.confirmText':
+    '{name}, soll Ihre Anmeldung von {old} auf {new} umgestellt werden?',
+  'account.change.confirm': 'Neue Adresse bestätigen',
+  'account.change.done': 'Fertig. Sie melden sich ab sofort mit {email} an.',
   'account.email.noSmtp': 'In diesem System ist kein E-Mail-Versand eingerichtet.',
   'users.resetPassword': 'Passwort-Link',
   'users.resetSendEmail':

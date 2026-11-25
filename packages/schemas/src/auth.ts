@@ -70,6 +70,27 @@ export interface EmailVerificationRequested {
   alreadyVerified: boolean
 }
 
+/** Eigene E-Mail-Adresse ändern: the current password confirms that it is really the person. */
+export const changeEmailRequest = z.object({
+  newEmail: email,
+  currentPassword: z.string().min(1, 'Bitte das aktuelle Passwort eingeben.').max(256),
+})
+
+export interface EmailChangeRequested {
+  /** With SMTP a link goes to the new address and the change waits for it. */
+  emailEnabled: boolean
+  /** Without SMTP the address is changed at once (not confirmed). */
+  changed: boolean
+  /** The link expires at this time (only with SMTP). */
+  expiresAt: string | null
+}
+
+export interface EmailChangeInfo {
+  displayName: string
+  oldEmail: string
+  newEmail: string
+}
+
 /** Ersteinrichtung: first company and its first administrator. */
 export const setupRequest = z.object({
   setupToken: z

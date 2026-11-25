@@ -3,7 +3,7 @@ import { useEffect, useState } from 'react'
 import { ApiError, api } from './api'
 import { t } from './i18n'
 import { clearOfflineData, setOfflineOwner } from './offline/client'
-import { EmailVerifyScreen, PasswordResetScreen } from './screens/account'
+import { EmailChangeScreen, EmailVerifyScreen, PasswordResetScreen } from './screens/account'
 import { LoginScreen, SetupScreen } from './screens/auth'
 import { InvitationScreen } from './screens/invitation'
 import { Workspace } from './screens/workspace'
@@ -17,6 +17,7 @@ type State =
   | { screen: 'invitation' }
   | { screen: 'passwordReset' }
   | { screen: 'emailVerify' }
+  | { screen: 'emailChange' }
 
 /** Start: setup required? → Ersteinrichtung; session valid? → workspace; otherwise login. */
 export function App() {
@@ -40,6 +41,10 @@ export function App() {
     }
     if (window.location.pathname === '/email-bestaetigen') {
       setState({ screen: 'emailVerify' })
+      return
+    }
+    if (window.location.pathname === '/email-aendern') {
+      setState({ screen: 'emailChange' })
       return
     }
     ;(async () => {
@@ -98,6 +103,8 @@ export function App() {
       return <PasswordResetScreen appName={appName} onLogin={() => setState({ screen: 'login' })} />
     case 'emailVerify':
       return <EmailVerifyScreen appName={appName} onContinue={() => window.location.assign('/')} />
+    case 'emailChange':
+      return <EmailChangeScreen appName={appName} onContinue={() => window.location.assign('/')} />
     case 'invitation':
       return (
         <InvitationScreen

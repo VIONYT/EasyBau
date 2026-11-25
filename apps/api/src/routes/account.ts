@@ -1,8 +1,11 @@
-import { type Sql, withTenant } from '@opc/db'
+import type { Sql } from '@opc/db'
 import {
   type AdminPasswordReset,
   accountTokenRequest,
   adminPasswordResetRequest,
+  changeEmailRequest,
+  type EmailChangeInfo,
+  type EmailChangeRequested,
   type EmailVerificationRequested,
   type PasswordResetInfo,
   type PasswordResetRequested,
@@ -12,7 +15,6 @@ import {
 import type { FastifyInstance, FastifyRequest } from 'fastify'
 import { z } from 'zod'
 import {
-  type AuthContext,
   inTenant,
   publicOrigin,
   requireAuth,
@@ -21,10 +23,17 @@ import {
 } from '../context.js'
 import { HttpError, notFound, parse } from '../http.js'
 import { randomToken, sha256 } from '../security/crypto.js'
-import { hashPassword } from '../security/passwords.js'
+import { hashPassword, verifyPassword } from '../security/passwords.js'
 import { deleteSessionsOfUser } from '../security/sessions.js'
 import { audit, rateLimit } from './auth-common.js'
 import { queueEmail } from './email.js'
+import {
+  mail,
+  NOT_YOU,
+  noticeTime,
+  passwordChangedNotice,
+  securityNotice,
+} from './security-notices.js'
 
 /**
  * Konto (P2.10): Passwort vergessen (link by e-mail), Zurücksetzen durch die Administration
@@ -44,9 +53,11 @@ const ADMIN_RESET_HOURS_WITHOUT_SMTP = 24
 const resetMinutes = (services: Services) =>
   services.config.SMTP_ENABLED ? SELF_RESET_MINUTES : ADMIN_RESET_HOURS_WITHOUT_SMTP * 60
 const VERIFY_HOURS = 48
+/** A new address is confirmed within a day – the old one is told at once. */
+const EMAIL_CHANGE_HOURS = 24
 const GENERIC_INVALID = 'Der Link ist ungültig oder abgelaufen. Bitte einen neuen anfordern.'
 
-type Purpose = 'password_reset' | 'email_verify'
+type Purpose = 'password_reset' | 'email_verify' | 'email_change'
 
 interface TokenRow {
   id: string
@@ -93,16 +104,6 @@ async function findToken(sql: Sql, token: string, purpose: Purpose): Promise<Tok
   return row ?? null
 }
 
-/** Mails go out in the name of the person's first company (outbox, footer, reply-to). */
-async function firstTenantOf(
-  sql: Sql,
-  userId: string,
-): Promise<{ tenantId: string; tenantName: string } | null> {
-  const [row] = await sql<{ tenantId: string; tenantName: string }[]>`
-    select tenant_id as "tenantId", tenant_name as "tenantName" from user_memberships(${userId}) limit 1`
-  return row ?? null
-}
-
 async function auditEverywhere(
   services: Services,
   userId: string,
@@ -112,27 +113,6 @@ async function auditEverywhere(
   const tenants = await services.sql<{ tenantId: string }[]>`
     select tenant_id as "tenantId" from user_memberships(${userId})`
   for (const { tenantId } of tenants) await audit(services, tenantId, actorId, action, userId)
-}
-
-async function mail(
-  services: Services,
-  userId: string,
-  kind: Purpose,
-  to: string,
-  subject: string,
-  text: string,
-) {
-  const tenant = await firstTenantOf(services.sql, userId)
-  if (!tenant) return false
-  await withTenant(services.sql, { tenantId: tenant.tenantId, userId }, (tx) =>
-    queueEmail(tx, { tenantId: tenant.tenantId, userId } as AuthContext, {
-      kind,
-      to,
-      subject,
-      text,
-    }),
-  )
-  return true
 }
 
 const resetUrl = (services: Services, request: FastifyRequest, token: string) =>
@@ -207,6 +187,7 @@ export function registerAccountRoutes(app: FastifyInstance, services: Services) 
     await sql`delete from account_token where user_id = ${row.userId} and purpose = 'password_reset' and used_at is null`
     await deleteSessionsOfUser(sql, row.userId)
     await auditEverywhere(services, row.userId, row.createdBy ?? row.userId, 'password_reset')
+    await passwordChangedNotice(services, row.userId)
     return reply.status(204).send()
   })
 
@@ -322,4 +303,131 @@ export function registerAccountRoutes(app: FastifyInstance, services: Services) 
     await auditEverywhere(services, row.userId, row.userId, 'email_verified')
     return reply.status(204).send()
   })
+
+  // Eigene E-Mail-Adresse ändern: with SMTP a link goes to the new address (the change waits for
+  // it) and the old address is told; without SMTP the address changes at once, unconfirmed.
+  app.post('/api/v1/auth/email/change', async (request, reply) => {
+    const auth = requireAuth(request)
+    const { newEmail, currentPassword } = parse(changeEmailRequest, request.body)
+    await rateLimit(services, `email-change:${auth.userId}`, 5)
+    const [user] = await sql<{ email: string; passwordHash: string | null; displayName: string }[]>`
+      select email, password_hash as "passwordHash", display_name as "displayName"
+      from app_user where id = ${auth.userId}`
+    if (!user) throw notFound('Die Person')
+    if (!user.passwordHash || !(await verifyPassword(user.passwordHash, currentPassword))) {
+      throw new HttpError(403, 'Das aktuelle Passwort ist falsch.', {
+        currentPassword: 'Passwort ist falsch.',
+      })
+    }
+    if (newEmail.toLowerCase() === user.email.toLowerCase()) {
+      throw new HttpError(400, 'Das ist bereits Ihre E-Mail-Adresse.', {
+        newEmail: 'Bitte eine andere Adresse eingeben.',
+      })
+    }
+    await ensureEmailFree(sql, newEmail, auth.userId)
+    if (!services.config.SMTP_ENABLED) {
+      await setEmail(sql, auth.userId, newEmail, false)
+      await auditEverywhere(services, auth.userId, auth.userId, 'email_changed')
+      const body: EmailChangeRequested = { emailEnabled: false, changed: true, expiresAt: null }
+      return reply.status(200).send(body)
+    }
+    const { token, expiresAt } = await createToken(sql, {
+      userId: auth.userId,
+      purpose: 'email_change',
+      email: newEmail,
+      minutes: EMAIL_CHANGE_HOURS * 60,
+    })
+    await inTenant(services, auth, (tx) =>
+      queueEmail(tx, auth, {
+        kind: 'email_change',
+        to: newEmail,
+        subject: `${appName}: Neue E-Mail-Adresse bestätigen`,
+        text: [
+          `Hallo ${user.displayName},`,
+          '',
+          `Sie möchten Ihre Anmeldung bei ${appName} auf diese E-Mail-Adresse umstellen. Bitte bestätigen Sie das über diesen Link:`,
+          '',
+          `${publicOrigin(services, request)}/email-aendern#${token}`,
+          '',
+          `Der Link ist ${EMAIL_CHANGE_HOURS} Stunden gültig. Bis dahin melden Sie sich weiter mit ${user.email} an.`,
+        ].join('\n'),
+      }),
+    )
+    await securityNotice(
+      services,
+      auth.userId,
+      'Änderung Ihrer E-Mail-Adresse angefordert',
+      [
+        `am ${noticeTime()} wurde angefordert, Ihre Anmeldung bei ${appName} auf die Adresse ${newEmail} umzustellen. Die Änderung gilt erst, wenn der Link an die neue Adresse bestätigt wird.`,
+        '',
+        NOT_YOU,
+      ],
+      user.email,
+    )
+    await auditEverywhere(services, auth.userId, auth.userId, 'email_change_requested')
+    const body: EmailChangeRequested = { emailEnabled: true, changed: false, expiresAt }
+    return reply.status(202).send(body)
+  })
+
+  app.post('/api/v1/auth/email/change/lookup', async (request): Promise<EmailChangeInfo> => {
+    const { token } = parse(accountTokenRequest, request.body)
+    await rateLimit(services, `email-change-token:ip:${request.ip}`, 30)
+    const row = await findToken(sql, token, 'email_change')
+    if (!row) throw new HttpError(410, GENERIC_INVALID)
+    return { displayName: row.displayName, oldEmail: row.userEmail, newEmail: row.email }
+  })
+
+  app.post('/api/v1/auth/email/change/confirm', async (request, reply) => {
+    const { token } = parse(accountTokenRequest, request.body)
+    await rateLimit(services, `email-change-token:ip:${request.ip}`, 30)
+    const row = await findToken(sql, token, 'email_change')
+    if (!row) throw new HttpError(410, GENERIC_INVALID)
+    await ensureEmailFree(sql, row.email, row.userId)
+    const used =
+      await sql`update account_token set used_at = now() where id = ${row.id} and used_at is null`
+    if (!used.count) throw new HttpError(410, GENERIC_INVALID)
+    await setEmail(sql, row.userId, row.email, true)
+    await auditEverywhere(services, row.userId, row.userId, 'email_changed')
+    await securityNotice(
+      services,
+      row.userId,
+      'Ihre E-Mail-Adresse wurde geändert',
+      [
+        `Ihre Anmeldung bei ${appName} wurde am ${noticeTime()} von ${row.userEmail} auf ${row.email} umgestellt. An diese Adresse kommen keine Nachrichten mehr.`,
+        '',
+        NOT_YOU,
+      ],
+      row.userEmail,
+    )
+    return reply.status(204).send()
+  })
+}
+
+async function ensureEmailFree(sql: Sql, email: string, userId: string) {
+  const [taken] = await sql`
+    select 1 from app_user where lower(email) = ${email.toLowerCase()} and id <> ${userId}`
+  if (taken) {
+    throw new HttpError(
+      409,
+      'Diese E-Mail-Adresse wird bereits für eine andere Anmeldung verwendet.',
+      {
+        newEmail: 'Adresse bereits vergeben.',
+      },
+    )
+  }
+}
+
+/** Changes the login's address; open links of the old address lose their meaning. */
+async function setEmail(sql: Sql, userId: string, email: string, verified: boolean) {
+  try {
+    await sql`
+      update app_user set email = ${email},
+             email_verified_at = case when ${verified} then now() else null end
+      where id = ${userId}`
+  } catch (err) {
+    if ((err as { code?: string }).code === '23505') await ensureEmailFree(sql, email, userId)
+    throw err
+  }
+  await sql`delete from account_token where user_id = ${userId} and used_at is null
+            and purpose in ('email_verify', 'email_change')`
 }

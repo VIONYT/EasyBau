@@ -28,6 +28,18 @@ Administratoren müssen einen zweiten Faktor einrichten, bevor sie weiterarbeite
 
 ![Sicherheit](../screenshots/macbook-sicherheit.png)
 
+## E-Mail-Adresse ändern und Sicherheitshinweise
+
+Unter **Sicherheit › E-Mail-Adresse › E-Mail-Adresse ändern** die neue Adresse und Ihr aktuelles Passwort eingeben. EasyBau schickt einen Link an die **neue** Adresse (24 Stunden gültig); erst nach der Bestätigung melden Sie sich damit an. Ihre bisherige Adresse bekommt sofort einen Hinweis. Ohne eingerichteten E-Mail-Versand gilt die neue Adresse sofort (dann als „nicht bestätigt“).
+
+Mit eingerichtetem E-Mail-Versand bekommen Sie außerdem eine E-Mail, wenn
+
+- Ihr Passwort geändert oder zurückgesetzt wurde,
+- sich jemand mit Ihrem Zugang von einem **neuen Gerät** (Browser) angemeldet hat – das erste Gerät nach dem Einrichten zählt nicht,
+- Ihre E-Mail-Adresse geändert wurde (an die alte Adresse).
+
+Waren Sie das nicht, ändern Sie sofort Ihr Passwort (oder nutzen **Passwort vergessen**) und informieren Sie die Administration.
+
 ## Aufbau der Oberfläche
 
 - **Kopfzeile:** Firmenname, Ihr Name, die **Suche** über alles (Projekte, Kontakte, Dokumente, Stammdaten, Eingangsrechnungen), **Benachrichtigungen** und **Abmelden**.

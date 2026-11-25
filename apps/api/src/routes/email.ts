@@ -5,7 +5,15 @@ import { type AuthContext, inTenant, requirePermission, type Services } from '..
 import { HttpError, parse } from '../http.js'
 
 export interface QueuedEmail {
-  kind: 'invitation' | 'test' | 'document' | 'dunning' | 'password_reset' | 'email_verify'
+  kind:
+    | 'invitation'
+    | 'test'
+    | 'document'
+    | 'dunning'
+    | 'password_reset'
+    | 'email_verify'
+    | 'email_change'
+    | 'security_notice'
   to: string
   subject: string
   text: string
