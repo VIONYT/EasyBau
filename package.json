@@ -21,13 +21,13 @@
     "test:e2e": "playwright test -c e2e/playwright.config.ts"
   },
   "devDependencies": {
-    "@biomejs/biome": "2.6.6",
+    "@biomejs/biome": "2.6.8",
     "@types/node": "26.6.6",
     "tsx": "4.23.15",
-    "turbo": "2.11.10",
+    "turbo": "2.11.12",
     "typescript": "7.0.2",
     "vitest": "4.1.12",
     "@vitest/coverage-v8": "4.1.12",
-    "@playwright/test": "1.63.0"
+    "@playwright/test": "1.65.1"
   }
 }

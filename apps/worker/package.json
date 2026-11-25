@@ -19,8 +19,8 @@
     "@opc/db": "workspace:*",
     "@opc/domain": "workspace:*",
     "@opc/storage": "workspace:*",
-    "nodemailer": "10.2.1",
-    "pg-boss": "12.2.0",
+    "nodemailer": "10.6.0",
+    "pg-boss": "12.38.2",
     "pino": "10.4.0"
   }
 }
