@@ -3,7 +3,7 @@
 # for the optional encrypted backup off site (and an SSH client for sftp: targets). The script
 # itself is mounted from infra/backup.
 
-FROM postgres:17-alpine AS runtime
+FROM postgres:18-alpine AS runtime
 # Optional extra CA for TLS-inspecting proxies during the build (build secret "extra_ca"): only
 # for apk, the original CA bundle is put back afterwards.
 RUN --mount=type=secret,id=extra_ca \
