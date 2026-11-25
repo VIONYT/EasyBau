@@ -80,3 +80,43 @@
     --color-info: #93c5fd;
   }
 }
+
+/* Hoher Kontrast (Baustelle, Sonnenlicht): darker text and borders, stronger primary colour.
+   Chosen in the app (data-contrast="high") or by the system setting. */
+:root[data-contrast="high"] {
+  --color-primary: #003340;
+  --color-text: #000000;
+  --color-muted: #1e293b;
+  --color-border: #475569;
+  --color-bg: #ffffff;
+  --color-surface: #ffffff;
+  --color-success: #0b5d2a;
+  --color-warning: #7a3606;
+  --color-error: #8f1111;
+  --color-info: #102f8f;
+}
+@media (prefers-contrast: more) and (prefers-color-scheme: light) {
+  :root:not([data-contrast="normal"]) {
+    --color-primary: #003340;
+    --color-text: #000000;
+    --color-muted: #1e293b;
+    --color-border: #475569;
+    --color-bg: #ffffff;
+    --color-surface: #ffffff;
+  }
+}
+@media (prefers-color-scheme: dark) {
+  :root[data-contrast="high"] {
+    --color-primary: #8fe3f5;
+    --color-on-primary: #000000;
+    --color-text: #ffffff;
+    --color-muted: #e2e8f0;
+    --color-border: #94a3b8;
+    --color-bg: #000000;
+    --color-surface: #000000;
+    --color-success: #86efac;
+    --color-warning: #fde68a;
+    --color-error: #fca5a5;
+    --color-info: #bfdbfe;
+  }
+}

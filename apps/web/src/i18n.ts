@@ -408,6 +408,12 @@ const de = {
   'security.unsupported': 'Dieser Browser unterstützt keine Sicherheitsschlüssel.',
   'security.password': 'Passwort ändern',
   'security.myData': 'Meine Daten',
+  'security.display': 'Darstellung',
+  'security.contrast': 'Kontrast',
+  'security.contrast.system': 'Wie im Betriebssystem eingestellt',
+  'security.contrast.high': 'Hoher Kontrast (z. B. Sonnenlicht auf der Baustelle)',
+  'security.contrast.normal': 'Normal',
+  'security.contrastHint': 'Gilt nur für dieses Gerät.',
   'security.myDataHint':
     'Auskunft nach Art. 15 DSGVO: alles, was zu Ihrem Zugang gespeichert ist (Konto, Sitzungen, Geräte, Mitgliedschaft und Ihre Daten in dieser Firma), als Datei.',
   'security.myDataDownload': 'Auskunft herunterladen',

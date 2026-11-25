@@ -1,6 +1,7 @@
 import type { Me, SecurityOverview, TotpSetupResponse } from '@opc/schemas'
 import { useCallback, useEffect, useState } from 'react'
 import { type ApiError, api, downloadFile } from '../api'
+import { type ContrastMode, readContrast, saveContrast } from '../contrast'
 import { formatDateTime } from '../format'
 import { Field, FormError, useForm, value } from '../forms'
 import { t } from '../i18n'
@@ -43,6 +44,7 @@ export function Security({ me, onChanged }: { me: Me; onChanged: () => void }) {
           <EmailVerificationCard me={me} onChanged={onChanged} />
           <PasswordCard />
           <MyDataCard />
+          <DisplayCard />
         </>
       ) : (
         <p className="muted">{t('common.loading')}</p>
@@ -278,6 +280,34 @@ function MyDataCard() {
       >
         {t('security.myDataDownload')}
       </button>
+    </div>
+  )
+}
+
+/** Darstellung: high contrast for sunlight on the site (stored on this device only). */
+function DisplayCard() {
+  const [mode, setMode] = useState<ContrastMode>(readContrast)
+  return (
+    <div className="panel">
+      <h2>{t('security.display')}</h2>
+      <fieldset className="choices">
+        <legend>{t('security.contrast')}</legend>
+        {(['system', 'high', 'normal'] as const).map((m) => (
+          <label key={m}>
+            <input
+              type="radio"
+              name="contrast"
+              checked={mode === m}
+              onChange={() => {
+                setMode(m)
+                saveContrast(m)
+              }}
+            />
+            <span>{t(`security.contrast.${m}`)}</span>
+          </label>
+        ))}
+      </fieldset>
+      <p className="hint">{t('security.contrastHint')}</p>
     </div>
   )
 }

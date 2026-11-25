@@ -28,6 +28,10 @@ Administratoren müssen einen zweiten Faktor einrichten, bevor sie weiterarbeite
 
 ![Sicherheit](../screenshots/macbook-sicherheit.png)
 
+## Hoher Kontrast
+
+Unter **Sicherheit › Darstellung** schalten Sie für dieses Gerät einen **hohen Kontrast** ein – dunklere Schrift und Rahmen, gut lesbar bei Sonnenlicht auf der Baustelle. „Wie im Betriebssystem eingestellt“ folgt der Kontrast-Einstellung von iOS, Android, Windows oder macOS.
+
 ## E-Mail-Adresse ändern und Sicherheitshinweise
 
 Unter **Sicherheit › E-Mail-Adresse › E-Mail-Adresse ändern** die neue Adresse und Ihr aktuelles Passwort eingeben. EasyBau schickt einen Link an die **neue** Adresse (24 Stunden gültig); erst nach der Bestätigung melden Sie sich damit an. Ihre bisherige Adresse bekommt sofort einen Hinweis. Ohne eingerichteten E-Mail-Versand gilt die neue Adresse sofort (dann als „nicht bestätigt“).
