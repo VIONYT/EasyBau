@@ -1,12 +1,12 @@
-import cookie from '@fastify/cookie'
-import type { Config } from '@opc/config'
-import type { Sql } from '@opc/db'
+import type { Config } from '@easybau/config'
+import type { Sql } from '@easybau/db'
 import {
   type ArchiveStore,
   archiveStoreFromSettings,
   FsObjectStore,
   type ObjectStore,
-} from '@opc/storage'
+} from '@easybau/storage'
+import cookie from '@fastify/cookie'
 import Fastify, {
   type FastifyError,
   type FastifyInstance,

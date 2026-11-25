@@ -12,8 +12,8 @@ import {
   type TestDb,
   type TestTenant,
   testDatabaseUrl,
-} from '@opc/db/test-support'
-import { FsObjectStore, MemoryArchiveStore, S3ArchiveStore } from '@opc/storage'
+} from '@easybau/db/test-support'
+import { FsObjectStore, MemoryArchiveStore, S3ArchiveStore } from '@easybau/storage'
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
 import { archivePending } from './archive.js'
 import { verifyArchive, verifyRequested } from './archive-verify.js'
@@ -79,7 +79,7 @@ describe.skipIf(!testDatabaseUrl)('Archiv-Abgleich (integration)', () => {
 
   beforeAll(async () => {
     db = await openTestDb()
-    dir = await mkdtemp(join(tmpdir(), 'opc-verify-'))
+    dir = await mkdtemp(join(tmpdir(), 'easybau-verify-'))
     files = new FsObjectStore(dir)
     tenant = await createTenant(db, 'Abgleich A')
     other = await createTenant(db, 'Abgleich B')

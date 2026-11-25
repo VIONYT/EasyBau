@@ -1,5 +1,5 @@
-import type { Tx } from '@opc/db'
-import { type EmailMessageSummary, type EmailSettings, testEmailRequest } from '@opc/schemas'
+import type { Tx } from '@easybau/db'
+import { type EmailMessageSummary, type EmailSettings, testEmailRequest } from '@easybau/schemas'
 import type { FastifyInstance } from 'fastify'
 import { type AuthContext, inTenant, requirePermission, type Services } from '../context.js'
 import { HttpError, parse } from '../http.js'

@@ -1,4 +1,4 @@
-import { loadConfig } from '@opc/config'
+import { loadConfig } from '@easybau/config'
 import { createSql } from '../index.js'
 import { migrate } from '../migrate.js'
 

@@ -1,4 +1,4 @@
-import type { OperationsStatus } from '@opc/schemas'
+import type { OperationsStatus } from '@easybau/schemas'
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
 import { Client, createHarness, type Harness } from './testing/harness.js'
 

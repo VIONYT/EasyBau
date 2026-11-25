@@ -1,4 +1,4 @@
-# OpenPlancraft – Design-Dokument
+# EasyBau – Design-Dokument
 
 Version 0.1 · Stand 2026-11-08 · Status: **Entwurf zur Freigabe vor Implementierung**
 
@@ -116,7 +116,7 @@ Alle Kästen laufen als Container im selben `docker compose`-Stack beim Betreibe
 ### 3.3 Repository-Struktur
 
 ```
-openplancraft/
+easybau/
 ├─ apps/
 │  ├─ api/            # Fastify-Server (HTTP)
 │  ├─ worker/         # Job-Worker auf pg-boss (PDF via Typst, E-Rechnung, Mail, Export); im Profil „kompakt“ im API-Prozess
@@ -154,8 +154,8 @@ Standardfall beim Self-Hosting ist **eine Firma pro Installation**. Die Mandante
 | Dienst | Image | Aufgabe |
 |---|---|---|
 | `proxy` | Caddy | TLS, HTTP/2/3, Security-Header, liefert das Web-Frontend aus |
-| `api` | `ghcr.io/<org>/openplancraft-api` | REST-API, führt beim Start Datenbank-Migrationen aus (mit Lock, idempotent) |
-| `worker` | `ghcr.io/<org>/openplancraft-worker` | PDF (Typst), E-Rechnung, E-Mail, Exporte, geplante Jobs; **entfällt im Profil kompakt** (läuft dann im `api`-Container) |
+| `api` | `ghcr.io/<org>/easybau-api` | REST-API, führt beim Start Datenbank-Migrationen aus (mit Lock, idempotent) |
+| `worker` | `ghcr.io/<org>/easybau-worker` | PDF (Typst), E-Rechnung, E-Mail, Exporte, geplante Jobs; **entfällt im Profil kompakt** (läuft dann im `api`-Container) |
 | `db` | PostgreSQL 17 | Daten (Volume) |
 | `storage` | RustFS (gepinntes Herstellerimage, [ADR 0009](docs/adr/0009-belegarchiv-rustfs.md)); Einmal-Dienste `storage-keys` (Root-Schlüssel im Volume `archive-keys`) und `storage-setup` (Bucket mit Object Lock, eingeschränkter App-Zugang ohne Löschrecht) | WORM-Archiv festgeschriebener Belege: der Worker kopiert jedes Original mit Sperrfrist dorthin ([ADR 0008](docs/adr/0008-belegarchiv-worm.md)). Alternativ externer S3 (`compose.external-s3.yaml`). Die Projektablage liegt im Volume `files` ([ADR 0004](docs/adr/0004-dateiablage.md)) |
 | `kosit` | KoSIT-Validator (Java) | Prüfung jeder E-Rechnung, nur intern erreichbar. Läuft mit begrenztem Heap (`-Xmx256m`, Serial GC) dauerhaft in beiden Profilen (ca. 300 MB; ein Start bei Bedarf bräuchte den Docker-Socket, [ADR 0007](docs/adr/0007-e-rechnung-kosit.md)) |
@@ -625,7 +625,7 @@ Suchen · Benachrichtigungen · Übersicht · Projekte · Angebote · Ausgangsre
 ---
 
 ## 9. Offene Fragen
-1. ~~Hosting-Anbieter~~ → entschieden: Open Source, Self-Hosting per Docker (§1, §3.5). Lizenz AGPL-3.0-or-later; der Projektname „OpenPlancraft“ ist nur Arbeitstitel und wird vor dem ersten Release ersetzt (ADR 0001).
+1. ~~Hosting-Anbieter~~ → entschieden: Open Source, Self-Hosting per Docker (§1, §3.5). Lizenz AGPL-3.0-or-later; der Arbeitstitel „OpenPlancraft“ wurde durch **EasyBau** ersetzt (ADR 0001, 2026-11-15/25).
 2. ~~Preismodell~~ → entfällt als Lizenzthema. Optional später: bezahlter Support oder Hosting-Angebot durch Dritte.
 3. ~~Österreich bereits im MVP?~~ → entschieden (2026-11-12): nein, vorerst nicht; später Phase 2/3.
 4. ~~Formale GoBD-Testierung (IDW PS 880)?~~ → entschieden (2026-11-12): nein. Die Software ist Open Source und wird selbst betrieben; ein Testat gälte nur für eine bestimmte Version und Umgebung, die Kosten sind zu hoch. Stattdessen Vorlage Verfahrensdokumentation für Betreiber.

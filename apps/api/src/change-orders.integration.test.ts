@@ -1,4 +1,4 @@
-import type { DocumentDetail, ProjectContract, ReportDetail } from '@opc/schemas'
+import type { DocumentDetail, ProjectContract, ReportDetail } from '@easybau/schemas'
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
 import { Client, createHarness, type Harness } from './testing/harness.js'
 

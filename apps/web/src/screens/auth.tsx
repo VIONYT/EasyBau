@@ -1,4 +1,4 @@
-import type { LoginResponse, Me, MfaMethod } from '@opc/schemas'
+import type { LoginResponse, Me, MfaMethod } from '@easybau/schemas'
 import { useState } from 'react'
 import { api } from '../api'
 import { Field, FormError, optional, useForm, value } from '../forms'

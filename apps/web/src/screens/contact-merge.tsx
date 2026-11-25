@@ -1,5 +1,5 @@
-import type { ContactDetail, ContactSummary, MergeContactResult, Page } from '@opc/schemas'
-import { Button, FormError, Notice, SelectField } from '@opc/ui'
+import type { ContactDetail, ContactSummary, MergeContactResult, Page } from '@easybau/schemas'
+import { Button, FormError, Notice, SelectField } from '@easybau/ui'
 import { useEffect, useState } from 'react'
 import { type ApiError, api } from '../api'
 import { t, tf } from '../i18n'

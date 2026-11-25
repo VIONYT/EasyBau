@@ -1,4 +1,4 @@
-import type { Tx } from '@opc/db'
+import type { Tx } from '@easybau/db'
 import {
   type DashboardDto,
   type DashboardSiteDto,
@@ -9,7 +9,7 @@ import {
   type SearchKind,
   type SearchResult,
   searchQuery,
-} from '@opc/schemas'
+} from '@easybau/schemas'
 import type { FastifyInstance } from 'fastify'
 import {
   type AuthContext,

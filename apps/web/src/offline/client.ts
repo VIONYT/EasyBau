@@ -1,4 +1,4 @@
-import type { Me } from '@opc/schemas'
+import type { Me } from '@easybau/schemas'
 import { useEffect, useState } from 'react'
 import { OfflineDb, type OutboxEntry } from './db'
 import {

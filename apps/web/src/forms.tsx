@@ -33,5 +33,5 @@ export const value = (data: FormData, name: string): string => String(data.get(n
 export const optional = (data: FormData, name: string): string | undefined =>
   value(data, name) || undefined
 
-// Base components live in @opc/ui (DESIGN.md §7.2); re-exported for the existing screens.
-export { Field, FormError, SelectField, TextArea } from '@opc/ui'
+// Base components live in @easybau/ui (DESIGN.md §7.2); re-exported for the existing screens.
+export { Field, FormError, SelectField, TextArea } from '@easybau/ui'

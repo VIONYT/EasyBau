@@ -2,8 +2,8 @@ import { execFileSync } from 'node:child_process'
 import { mkdtempSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { defaultLetterhead } from '@opc/domain'
-import type { DocumentDetail } from '@opc/schemas'
+import { defaultLetterhead } from '@easybau/domain'
+import type { DocumentDetail } from '@easybau/schemas'
 import { describe, expect, it } from 'vitest'
 import { documentLetter, documentTitle, germanPercent, germanQuantity } from './document.js'
 import { qrSvg, renderLetterPdf } from './render.js'
@@ -33,6 +33,7 @@ function sampleDocument(items = 3): DocumentDetail {
     cancels: null,
     project: { id: 'p', number: 'P-00101', name: 'Sanierung Lindenweg' },
     contact: { id: 'c', displayName: 'Wohnbau Nord eG' },
+    contactPerson: null,
     placeOfPerformance: 'Lindenweg 4, 30159 Hannover',
     serviceFrom: '2026-10-01',
     serviceTo: '2026-11-20',
@@ -142,7 +143,7 @@ function sampleDocument(items = 3): DocumentDetail {
 }
 
 function pdfText(pdf: Buffer): { text: string; info: string } {
-  const dir = mkdtempSync(join(tmpdir(), 'opc-pdf-'))
+  const dir = mkdtempSync(join(tmpdir(), 'easybau-pdf-'))
   const file = join(dir, 'doc.pdf')
   writeFileSync(file, pdf)
   return {

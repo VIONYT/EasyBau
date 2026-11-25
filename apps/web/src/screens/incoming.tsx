@@ -8,8 +8,8 @@ import type {
   Me,
   Page,
   ProjectSummary,
-} from '@opc/schemas'
-import { COST_TYPES, INCOMING_UPLOAD_EXTENSIONS } from '@opc/schemas/constants'
+} from '@easybau/schemas'
+import { COST_TYPES, INCOMING_UPLOAD_EXTENSIONS } from '@easybau/schemas/constants'
 import { type DragEvent, useCallback, useEffect, useId, useRef, useState } from 'react'
 import { type ApiError, api, apiWithEtag, uploadFile } from '../api'
 import { centsToInput, formatBytes, formatCents, formatDateTime, parseEuro } from '../format'

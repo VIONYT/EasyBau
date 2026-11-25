@@ -1,4 +1,4 @@
-import type { MeasurementSheetSummary, ReportSummary } from '@opc/schemas'
+import type { MeasurementSheetSummary, ReportSummary } from '@easybau/schemas'
 import { api } from '../api'
 
 /**

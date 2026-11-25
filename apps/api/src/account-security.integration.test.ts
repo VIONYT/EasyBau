@@ -1,4 +1,4 @@
-import type { EmailChangeInfo, EmailChangeRequested, Me } from '@opc/schemas'
+import type { EmailChangeInfo, EmailChangeRequested, Me } from '@easybau/schemas'
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
 import { deviceLabel } from './routes/security-notices.js'
 import { Client, createHarness, type Harness } from './testing/harness.js'

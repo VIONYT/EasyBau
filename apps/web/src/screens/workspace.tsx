@@ -1,4 +1,4 @@
-import type { ContactDetail, ContactSummary, Me, Page } from '@opc/schemas'
+import type { ContactDetail, ContactSummary, Me, Page } from '@easybau/schemas'
 import { useCallback, useEffect, useId, useState } from 'react'
 import { api } from '../api'
 import { Field, FormError, optional, useForm } from '../forms'

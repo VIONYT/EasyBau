@@ -9,10 +9,10 @@
 # storage: Belegarchiv (ADR 0009), RustFS with Object Lock (WORM), internal only. External S3 instead:
 #   COMPOSE_FILE=compose.yaml:compose.external-s3.yaml and ARCHIVE_S3_* in .env (see .env.example).
 
-name: openplancraft
+name: easybau
 
 x-app: &app
-  image: ${IMAGE_PREFIX:-ghcr.io/vionyt/openplancraft}-app:${APP_VERSION:-latest}
+  image: ${IMAGE_PREFIX:-ghcr.io/vionyt/easybau}-app:${APP_VERSION:-latest}
   build:
     context: .
     dockerfile: docker/app.Dockerfile
@@ -40,7 +40,7 @@ x-app-env: &app-env
   APP_VERSION: ${APP_VERSION:-0.0.0-dev}
   PROFILE: ${PROFILE:-compact}
   LOG_LEVEL: ${LOG_LEVEL:-info}
-  DATABASE_URL: postgres://${POSTGRES_USER:-openplancraft}:${POSTGRES_PASSWORD:?POSTGRES_PASSWORD fehlt in .env}@db:5432/${POSTGRES_DB:-openplancraft}
+  DATABASE_URL: postgres://${POSTGRES_USER:-easybau}:${POSTGRES_PASSWORD:?POSTGRES_PASSWORD fehlt in .env}@db:5432/${POSTGRES_DB:-easybau}
   DATABASE_POOL_MAX: ${DATABASE_POOL_MAX:-5}
   MIGRATE_ON_START: ${MIGRATE_ON_START:-true}
   APP_SECRET: ${APP_SECRET:?APP_SECRET fehlt in .env (openssl rand -hex 32)}
@@ -81,7 +81,7 @@ x-app-env: &app-env
 
 services:
   proxy:
-    image: ${IMAGE_PREFIX:-ghcr.io/vionyt/openplancraft}-web:${APP_VERSION:-latest}
+    image: ${IMAGE_PREFIX:-ghcr.io/vionyt/easybau}-web:${APP_VERSION:-latest}
     build:
       context: .
       dockerfile: docker/web.Dockerfile
@@ -118,8 +118,8 @@ services:
     image: postgres:17-alpine
     restart: unless-stopped
     environment:
-      POSTGRES_DB: ${POSTGRES_DB:-openplancraft}
-      POSTGRES_USER: ${POSTGRES_USER:-openplancraft}
+      POSTGRES_DB: ${POSTGRES_DB:-easybau}
+      POSTGRES_USER: ${POSTGRES_USER:-easybau}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?POSTGRES_PASSWORD fehlt in .env}
       POSTGRES_INITDB_ARGS: --data-checksums
     # Tuned for the compact profile (ADR 0002); raise for "standard".
@@ -142,7 +142,7 @@ services:
   # E-invoice validator (ADR 0007): XRechnung UBL and ZUGFeRD/Factur-X CII against EN 16931 and the
   # XRechnung rules of KoSIT. Only reachable inside the stack; about 300 MB RAM (heap 256 MB).
   kosit:
-    image: ${IMAGE_PREFIX:-ghcr.io/vionyt/openplancraft}-kosit:${KOSIT_IMAGE_VERSION:-latest}
+    image: ${IMAGE_PREFIX:-ghcr.io/vionyt/easybau}-kosit:${KOSIT_IMAGE_VERSION:-latest}
     build:
       context: .
       dockerfile: docker/kosit.Dockerfile
@@ -208,7 +208,7 @@ services:
   # Daily backup of database and Ablage (ADR 0005). Same image as db, idles in a sleep loop.
   backup:
     # PostgreSQL client tools + restic for the encrypted copy off site (ADR 0005, 0011).
-    image: ${IMAGE_PREFIX:-ghcr.io/vionyt/openplancraft}-backup:${APP_VERSION:-latest}
+    image: ${IMAGE_PREFIX:-ghcr.io/vionyt/easybau}-backup:${APP_VERSION:-latest}
     build:
       context: .
       dockerfile: docker/backup.Dockerfile
@@ -221,8 +221,8 @@ services:
     tmpfs: [/tmp]
     environment:
       PGHOST: db
-      PGDATABASE: ${POSTGRES_DB:-openplancraft}
-      PGUSER: ${POSTGRES_USER:-openplancraft}
+      PGDATABASE: ${POSTGRES_DB:-easybau}
+      PGUSER: ${POSTGRES_USER:-easybau}
       PGPASSWORD: ${POSTGRES_PASSWORD:?POSTGRES_PASSWORD fehlt in .env}
       BACKUP_TIME: ${BACKUP_TIME:-02:30}
       BACKUP_KEEP_DAYS: ${BACKUP_KEEP_DAYS:-14}
@@ -247,7 +247,7 @@ services:
       - ./infra/backup:/opt/backup:ro
       # Read-write only for restore (infra/restore.sh).
       - files:/data/files
-      # Named volume "backups" or a host path such as /mnt/nas/openplancraft.
+      # Named volume "backups" or a host path such as /mnt/nas/easybau.
       - ${BACKUP_DIR:-backups}:/backups
       # Files for *_FILE secrets (restic password, S3 key) and SSH keys for sftp: targets.
       - ${OFFSITE_SECRETS_DIR:-./infra/backup/secrets}:/run/offsite:ro

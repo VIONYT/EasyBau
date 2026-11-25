@@ -1,4 +1,4 @@
-import type { CatalogImportResult } from '@opc/schemas'
+import type { CatalogImportResult } from '@easybau/schemas'
 import { useId, useState } from 'react'
 import { type ApiError, api } from '../api'
 import { FormError } from '../forms'

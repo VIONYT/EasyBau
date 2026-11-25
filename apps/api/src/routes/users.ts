@@ -1,5 +1,5 @@
-import { withTenant } from '@opc/db'
-import { addDays, germanDate } from '@opc/domain'
+import { withTenant } from '@easybau/db'
+import { addDays, germanDate } from '@easybau/domain'
 import {
   acceptInvitationRequest,
   type InvitationInfo,
@@ -10,7 +10,7 @@ import {
   type MemberSummary,
   type RoleSummary,
   updateMemberRequest,
-} from '@opc/schemas'
+} from '@easybau/schemas'
 import type { FastifyInstance } from 'fastify'
 import { z } from 'zod'
 import { inTenant, publicOrigin, requirePermission, type Services } from '../context.js'

@@ -5,7 +5,7 @@ import type {
   InviteResponse,
   MemberSummary,
   RoleSummary,
-} from '@opc/schemas'
+} from '@easybau/schemas'
 import { useCallback, useEffect, useId, useState } from 'react'
 import { type ApiError, api, downloadFile } from '../api'
 import { formatDateTime } from '../format'

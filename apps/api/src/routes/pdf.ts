@@ -1,7 +1,7 @@
 import { Readable } from 'node:stream'
-import type { Tx } from '@opc/db'
-import type { LetterheadValues } from '@opc/domain'
-import { addFacturXMetadata } from '@opc/einvoice'
+import type { Tx } from '@easybau/db'
+import type { LetterheadValues } from '@easybau/domain'
+import { addFacturXMetadata } from '@easybau/einvoice'
 import {
   documentLetter,
   isUsableImage,
@@ -10,8 +10,8 @@ import {
   reportLetter,
   type SiteLetterContext,
   sheetLetter,
-} from '@opc/pdf-templates'
-import type { DocumentDetail } from '@opc/schemas'
+} from '@easybau/pdf-templates'
+import type { DocumentDetail } from '@easybau/schemas'
 import type { FastifyInstance, FastifyReply } from 'fastify'
 import { z } from 'zod'
 import { openArtifact, readArtifact, storeArtifact } from '../artifacts.js'

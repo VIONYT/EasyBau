@@ -1,5 +1,5 @@
 import { deflateSync } from 'node:zlib'
-import { documentLetter, renderLetterPdf } from '@opc/pdf-templates'
+import { documentLetter, renderLetterPdf } from '@easybau/pdf-templates'
 import { describe, expect, it } from 'vitest'
 import { invoice, item, standardItems, UNIT_CODES } from './fixtures.test-support.js'
 import {

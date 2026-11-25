@@ -4,7 +4,7 @@ import type {
   ReportDetail,
   ReportSummary,
   ReportTemplateSummary,
-} from '@opc/schemas'
+} from '@easybau/schemas'
 import { useEffect, useState } from 'react'
 import { type ApiError, api, mutate } from '../api'
 import { formatDateTime, formatInputNumber } from '../format'

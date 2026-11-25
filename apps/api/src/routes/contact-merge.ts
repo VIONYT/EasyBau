@@ -1,5 +1,5 @@
-import type { Tx } from '@opc/db'
-import { type MergeContactResult, mergeContactRequest } from '@opc/schemas'
+import type { Tx } from '@easybau/db'
+import { type MergeContactResult, mergeContactRequest } from '@easybau/schemas'
 import type { FastifyInstance } from 'fastify'
 import { z } from 'zod'
 import { inTenant, requirePermission, type Services } from '../context.js'

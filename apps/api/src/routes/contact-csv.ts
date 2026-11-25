@@ -1,5 +1,5 @@
-import type { Tx } from '@opc/db'
-import { csv, parseCsv } from '@opc/exports'
+import type { Tx } from '@easybau/db'
+import { csv, parseCsv } from '@easybau/exports'
 import {
   CONTACT_CSV_COLUMNS,
   type ContactImportResult,
@@ -8,7 +8,7 @@ import {
   contactListQuery,
   createContactRequest,
   importContactsRequest,
-} from '@opc/schemas'
+} from '@easybau/schemas'
 import type { FastifyInstance } from 'fastify'
 import { z } from 'zod'
 import { inTenant, requirePermission, type Services } from '../context.js'

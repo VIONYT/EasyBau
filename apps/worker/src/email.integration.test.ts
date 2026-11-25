@@ -6,7 +6,7 @@ import {
   openTestDb,
   type TestDb,
   testDatabaseUrl,
-} from '@opc/db/test-support'
+} from '@easybau/db/test-support'
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
 import { dispatchEmails, type OutgoingMail } from './email.js'
 
@@ -15,9 +15,8 @@ const silent = { warn: () => undefined, debug: () => undefined }
 describe.skipIf(!testDatabaseUrl)('e-mail outbox dispatch (integration)', () => {
   let db: TestDb
   beforeAll(async () => {
-    db = await openTestDb()
-    // Other test files share this database: start with an empty outbox.
-    await db.admin`delete from email_message`
+    // Own database: the outbox is shared by all companies, and other test files queue mails too.
+    db = await openTestDb({ isolated: true })
   })
   afterAll(async () => {
     await db?.close()
@@ -36,14 +35,16 @@ describe.skipIf(!testDatabaseUrl)('e-mail outbox dispatch (integration)', () => 
         values (${tenant.tenantId}, 'test', ${to}, 'reply@example.test', 'Betreff', 'Text mit Link')`,
       )
     }
-    const sent: OutgoingMail[] = []
-    const count = await dispatchEmails(
+    const all: OutgoingMail[] = []
+    await dispatchEmails(
       db.app,
-      { send: async (mail) => void sent.push(mail) },
+      { send: async (mail) => void all.push(mail) },
       'ERP <noreply@example.test>',
       silent,
+      500,
     )
-    expect(count).toBe(2)
+    // Other test files queue mails in the shared test database too: look only at these two.
+    const sent = all.filter((m) => ['a@example.test', 'b@example.test'].includes(m.to))
     expect(sent.map((m) => m.to).sort()).toEqual(['a@example.test', 'b@example.test'])
     expect(sent[0]).toMatchObject({
       from: 'ERP <noreply@example.test>',
@@ -55,8 +56,10 @@ describe.skipIf(!testDatabaseUrl)('e-mail outbox dispatch (integration)', () => 
       select status, body_text as body from email_message`,
     )
     expect(rows).toEqual([{ status: 'sent', body: null }])
-    // Nothing left to send.
-    expect(await dispatchEmails(db.app, { send: async () => undefined }, 'x', silent)).toBe(0)
+    // Nothing of these two is sent again.
+    const again: OutgoingMail[] = []
+    await dispatchEmails(db.app, { send: async (mail) => void again.push(mail) }, 'x', silent, 500)
+    expect(again.filter((m) => ['a@example.test', 'b@example.test'].includes(m.to))).toEqual([])
   })
 
   it('retries with growing pauses and gives up after five attempts', async () => {
@@ -68,7 +71,7 @@ describe.skipIf(!testDatabaseUrl)('e-mail outbox dispatch (integration)', () => 
     )
     const failing = { send: async () => Promise.reject(new Error('Verbindung abgelehnt')) }
     for (let attempt = 1; attempt <= 5; attempt++) {
-      expect(await dispatchEmails(db.app, failing, 'x', silent)).toBe(0)
+      expect(await dispatchEmails(db.app, failing, 'x', silent, 500)).toBe(0)
       // Make the retry due immediately for the test.
       await db.admin`update email_message set next_attempt_at = now() where to_address = 'c@example.test'`
     }
@@ -107,14 +110,20 @@ describe.skipIf(!testDatabaseUrl)('e-mail outbox dispatch (integration)', () => 
     })
     const sent: OutgoingMail[] = []
     const transport = { send: async (mail: OutgoingMail) => void sent.push(mail) }
+    // Other test files queue mails in the shared test database too: look only at this one.
+    const ours = () => sent.filter((m) => m.subject === 'Mahnung' && m.to === 'd@example.test')
     // Not readable (e.g. working copy missing and no archive): retried later, nothing sent.
-    expect(await dispatchEmails(db.app, transport, 'x', silent, 10, async () => null)).toBe(0)
+    await dispatchEmails(db.app, transport, 'x', silent, 100, async () => null)
+    expect(ours()).toHaveLength(0)
+    const [waiting] = await db.admin<{ status: string }[]>`
+      select status from email_message where id = ${messageId}`
+    expect(waiting?.status).toBe('queued')
     await db.admin`update email_message set next_attempt_at = now() where id = ${messageId}`
     const reader = async (key: string): Promise<Buffer | null> =>
       key === 'key/mahnung' ? Buffer.from('%PDF') : null
-    expect(await dispatchEmails(db.app, transport, 'x', silent, 10, reader)).toBe(1)
-    expect(sent).toHaveLength(1)
-    expect(sent[0]?.attachments).toEqual([
+    await dispatchEmails(db.app, transport, 'x', silent, 100, reader)
+    expect(ours()).toHaveLength(1)
+    expect(ours()[0]?.attachments).toEqual([
       { filename: 'Mahnung_R-1.pdf', content: Buffer.from('%PDF'), contentType: 'application/pdf' },
     ])
   })

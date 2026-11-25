@@ -1,5 +1,5 @@
-import { withTenant } from '@opc/db'
-import type { DocumentDetail, DocumentEmailDraft, EmailTemplateSettings } from '@opc/schemas'
+import { withTenant } from '@easybau/db'
+import type { DocumentDetail, DocumentEmailDraft, EmailTemplateSettings } from '@easybau/schemas'
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
 import { Client, createHarness, type Harness } from './testing/harness.js'
 

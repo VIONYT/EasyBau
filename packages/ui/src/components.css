@@ -89,7 +89,7 @@
   border-bottom: 1px solid var(--color-border);
 }
 
-/* Tones of Notice and Badge from @opc/ui. */
+/* Tones of Notice and Badge from @easybau/ui. */
 .notice--info {
   color: var(--color-text);
 }

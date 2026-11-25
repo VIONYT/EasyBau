@@ -3,7 +3,7 @@
 #   sh infra/restore.sh                 list backups
 #   sh infra/restore.sh NAME [--yes]    restore backup NAME (e.g. 2026-11-09_023000)
 # Run in the directory with compose.yaml and .env. Other compose options via DC, e.g.
-#   DC="docker compose --env-file /etc/openplancraft.env" sh infra/restore.sh NAME
+#   DC="docker compose --env-file /etc/easybau.env" sh infra/restore.sh NAME
 # The .env must contain the same APP_SECRET as at the time of the backup (2FA, IBAN).
 set -eu
 DC=${DC:-docker compose}

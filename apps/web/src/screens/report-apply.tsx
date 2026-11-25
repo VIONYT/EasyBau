@@ -1,4 +1,4 @@
-import type { BillableReport, DocumentDetail } from '@opc/schemas'
+import type { BillableReport, DocumentDetail } from '@easybau/schemas'
 import { useEffect, useId, useState } from 'react'
 import { type ApiError, api, apiWithEtag } from '../api'
 import { formatDateTime, formatInputNumber } from '../format'

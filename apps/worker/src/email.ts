@@ -1,5 +1,5 @@
-import type { Config } from '@opc/config'
-import type { Sql } from '@opc/db'
+import type { Config } from '@easybau/config'
+import type { Sql } from '@easybau/db'
 import nodemailer from 'nodemailer'
 import type { Logger } from 'pino'
 

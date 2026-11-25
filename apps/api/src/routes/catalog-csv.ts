@@ -1,6 +1,6 @@
-import type { Tx } from '@opc/db'
-import { Decimal, toCents } from '@opc/domain'
-import { csv, germanAmount, parseCsv } from '@opc/exports'
+import type { Tx } from '@easybau/db'
+import { Decimal, toCents } from '@easybau/domain'
+import { csv, germanAmount, parseCsv } from '@easybau/exports'
 import {
   CATALOG_CSV_COLUMNS,
   type CatalogImportResult,
@@ -9,7 +9,7 @@ import {
   importCatalogCsvRequest,
   type UpdateCatalogItemRequest,
   updateCatalogItemRequest,
-} from '@opc/schemas'
+} from '@easybau/schemas'
 import type { FastifyInstance } from 'fastify'
 import { inTenant, requirePermission, type Services } from '../context.js'
 import { HttpError, parse } from '../http.js'

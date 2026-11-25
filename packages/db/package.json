@@ -1,5 +1,5 @@
 {
-  "name": "@opc/db",
+  "name": "@easybau/db",
   "version": "0.0.0",
   "private": true,
   "type": "module",
@@ -21,7 +21,7 @@
     "migrate": "tsx --conditions=source src/cli/migrate.ts"
   },
   "dependencies": {
-    "@opc/config": "workspace:*",
+    "@easybau/config": "workspace:*",
     "postgres": "4.1.1"
   },
   "files": [

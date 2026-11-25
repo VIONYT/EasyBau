@@ -1,4 +1,4 @@
-import type { Me, SecurityOverview, TotpSetupResponse } from '@opc/schemas'
+import type { Me, SecurityOverview, TotpSetupResponse } from '@easybau/schemas'
 import { useCallback, useEffect, useState } from 'react'
 import { type ApiError, api, downloadFile } from '../api'
 import { type ContrastMode, readContrast, saveContrast } from '../contrast'

@@ -13,7 +13,7 @@ describe.skipIf(!testDatabaseUrl)('project filing (integration)', () => {
   let root: Sql
   let admin: Sql
   let app: Sql
-  const name = `opc_filing_test_${Date.now().toString(36)}`
+  const name = `easybau_filing_test_${Date.now().toString(36)}`
   const ids = { tenant: '', user: '', project: '', otherTenant: '', otherProject: '' }
 
   const asTenant = <T>(tenantId: string, fn: Parameters<typeof withTenant<T>>[2]) =>
@@ -46,7 +46,7 @@ describe.skipIf(!testDatabaseUrl)('project filing (integration)', () => {
     app = createSql({ DATABASE_URL: url.toString(), DATABASE_POOL_MAX: 3 })
 
     // Schema as of 0007, with data …
-    const before = await mkdtemp(join(tmpdir(), 'opc-before-0008-'))
+    const before = await mkdtemp(join(tmpdir(), 'easybau-before-0008-'))
     for (const file of await readdir(MIGRATIONS_DIR)) {
       if (file.endsWith('.sql') && file < '0008')
         await copyFile(join(MIGRATIONS_DIR, file), join(before, file))

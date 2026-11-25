@@ -41,7 +41,7 @@ describe.skipIf(!testDatabaseUrl || fixtures.length === 0)(
     })
 
     async function database(label: string): Promise<{ sql: Sql; url: string }> {
-      const name = `opc_upgrade_${label}_${Date.now().toString(36)}${Math.random().toString(36).slice(2, 5)}`
+      const name = `easybau_upgrade_${label}_${Date.now().toString(36)}${Math.random().toString(36).slice(2, 5)}`
       await root.unsafe(`create database ${name}`)
       created.push(name)
       await ensureAppRole(root)
@@ -55,7 +55,7 @@ describe.skipIf(!testDatabaseUrl || fixtures.length === 0)(
 
     /** Migrations up to `version` in a separate directory (released migrations never change). */
     async function migrationsUpTo(version: number): Promise<string> {
-      const dir = await mkdtemp(join(tmpdir(), 'opc-migrations-'))
+      const dir = await mkdtemp(join(tmpdir(), 'easybau-migrations-'))
       for (const file of await readdir(MIGRATIONS_DIR)) {
         if (Number(file.slice(0, 4)) <= version)
           await copyFile(join(MIGRATIONS_DIR, file), join(dir, file))

@@ -1,10 +1,15 @@
 import { randomUUID } from 'node:crypto'
 import { rm } from 'node:fs/promises'
 import { join } from 'node:path'
-import { withTenant } from '@opc/db'
-import type { DocumentDetail, OperationsStatus } from '@opc/schemas'
-import { type ArchiveStore, FsObjectStore, MemoryArchiveStore, S3ArchiveStore } from '@opc/storage'
-import { archivePending, verifyRequested } from '@opc/worker'
+import { withTenant } from '@easybau/db'
+import type { DocumentDetail, OperationsStatus } from '@easybau/schemas'
+import {
+  type ArchiveStore,
+  FsObjectStore,
+  MemoryArchiveStore,
+  S3ArchiveStore,
+} from '@easybau/storage'
+import { archivePending, verifyRequested } from '@easybau/worker'
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
 import { Client, createHarness, type Harness } from './testing/harness.js'
 

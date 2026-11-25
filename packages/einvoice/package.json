@@ -1,5 +1,5 @@
 {
-  "name": "@opc/einvoice",
+  "name": "@easybau/einvoice",
   "version": "0.0.0",
   "private": true,
   "type": "module",
@@ -16,11 +16,11 @@
     "typecheck": "tsc -p tsconfig.json --noEmit"
   },
   "dependencies": {
-    "@opc/schemas": "workspace:*",
+    "@easybau/schemas": "workspace:*",
     "decimal.js": "10.6.0"
   },
   "devDependencies": {
-    "@opc/domain": "workspace:*",
-    "@opc/pdf-templates": "workspace:*"
+    "@easybau/domain": "workspace:*",
+    "@easybau/pdf-templates": "workspace:*"
   }
 }

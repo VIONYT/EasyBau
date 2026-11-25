@@ -1,11 +1,11 @@
-import { settlementSuggestion } from '@opc/domain'
+import { settlementSuggestion } from '@easybau/domain'
 import type {
   AdjustmentKind,
   DocumentDetail,
   PaymentMethod,
   Receivable,
   ReceivableStatus,
-} from '@opc/schemas'
+} from '@easybau/schemas'
 import { useId, useState } from 'react'
 import { type ApiError, api } from '../api'
 import { centsToInput, formatCents, formatDateTime, parseEuro } from '../format'

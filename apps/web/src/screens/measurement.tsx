@@ -3,7 +3,7 @@ import {
   MEASUREMENT_TEMPLATES,
   measurementLineQuantity,
   tryEvaluateFormula,
-} from '@opc/domain'
+} from '@easybau/domain'
 import type {
   Me,
   MeasurableDocumentRef,
@@ -12,7 +12,7 @@ import type {
   MeasurementLocation,
   MeasurementSheetDetail,
   UnitSummary,
-} from '@opc/schemas'
+} from '@easybau/schemas'
 import { type FormEvent, useCallback, useEffect, useMemo, useState } from 'react'
 import { ApiError, api, apiWithEtag, mutate } from '../api'
 import { formatDateTime, formatInputNumber, formatQuantity, formatUnitAmount } from '../format'

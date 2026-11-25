@@ -5,7 +5,7 @@ import type {
   DunningLevel,
   DunningNotice,
   DunningOverview,
-} from '@opc/schemas'
+} from '@easybau/schemas'
 import { useCallback, useEffect, useId, useState } from 'react'
 import { type ApiError, api } from '../api'
 import { centsToInput, formatCents, formatDateTime, parseEuro } from '../format'

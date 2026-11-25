@@ -1,4 +1,4 @@
-import type { Tx } from '@opc/db'
+import type { Tx } from '@easybau/db'
 import {
   createProjectRequest,
   type Page,
@@ -9,7 +9,7 @@ import {
   type TeamMember,
   type UpdateProjectRequest,
   updateProjectRequest,
-} from '@opc/schemas'
+} from '@easybau/schemas'
 import type { FastifyInstance } from 'fastify'
 import { z } from 'zod'
 import {

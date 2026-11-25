@@ -1,6 +1,6 @@
-import type { Tx } from '@opc/db'
-import { type ChangeOrderStatus, contractTotals, Decimal, quantityDeviation } from '@opc/domain'
-import { germanDate } from '@opc/exports'
+import type { Tx } from '@easybau/db'
+import { type ChangeOrderStatus, contractTotals, Decimal, quantityDeviation } from '@easybau/domain'
+import { germanDate } from '@easybau/exports'
 import {
   changeOrderEvidenceRequest,
   type EvidenceItem,
@@ -8,7 +8,7 @@ import {
   type ProjectContract,
   type SheetVariance,
   varianceChangeOrderRequest,
-} from '@opc/schemas'
+} from '@easybau/schemas'
 import type { FastifyInstance } from 'fastify'
 import { z } from 'zod'
 import {

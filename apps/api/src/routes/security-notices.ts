@@ -1,4 +1,4 @@
-import { type Sql, withTenant } from '@opc/db'
+import { type Sql, withTenant } from '@easybau/db'
 import type { FastifyReply, FastifyRequest } from 'fastify'
 import type { AuthContext, Services } from '../context.js'
 import { randomToken, sha256 } from '../security/crypto.js'

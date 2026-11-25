@@ -1,4 +1,4 @@
-import type { Tx } from '@opc/db'
+import type { Tx } from '@easybau/db'
 import {
   addDays,
   type BaseRate,
@@ -8,7 +8,7 @@ import {
   germanDate,
   type LetterheadValues,
   nextDunningLevel,
-} from '@opc/domain'
+} from '@easybau/domain'
 import {
   DUNNING_TITLE,
   type DunningLetterSnapshot,
@@ -16,7 +16,7 @@ import {
   dunningLetter,
   fillDunningText,
   renderLetterPdf,
-} from '@opc/pdf-templates'
+} from '@easybau/pdf-templates'
 import {
   type BaseInterestRate,
   baseInterestRateRequest,
@@ -32,7 +32,7 @@ import {
   dunningBatchRequest,
   dunningSettingsRequest,
   sendDunningRequest,
-} from '@opc/schemas'
+} from '@easybau/schemas'
 import type { FastifyInstance } from 'fastify'
 import { z } from 'zod'
 import { openArtifact, storeArtifact } from '../artifacts.js'

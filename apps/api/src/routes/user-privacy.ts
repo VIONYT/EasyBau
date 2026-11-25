@@ -1,4 +1,4 @@
-import type { Sql, Tx } from '@opc/db'
+import type { Sql, Tx } from '@easybau/db'
 import type { FastifyInstance, FastifyReply } from 'fastify'
 import { z } from 'zod'
 import { inTenant, requireAuth, requirePermission, type Services } from '../context.js'

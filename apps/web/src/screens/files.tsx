@@ -1,5 +1,5 @@
-import type { FileSummary, FolderSummary, Me } from '@opc/schemas'
-import { UPLOAD_EXTENSIONS } from '@opc/schemas/constants'
+import type { FileSummary, FolderSummary, Me } from '@easybau/schemas'
+import { UPLOAD_EXTENSIONS } from '@easybau/schemas/constants'
 import { type DragEvent, useCallback, useEffect, useState } from 'react'
 import { type ApiError, api, uploadFile } from '../api'
 import { formatBytes, formatDateTime } from '../format'

@@ -1,4 +1,4 @@
-import type { Me, SetupStatus } from '@opc/schemas'
+import type { Me, SetupStatus } from '@easybau/schemas'
 import { useEffect, useState } from 'react'
 import { ApiError, api } from './api'
 import { t } from './i18n'

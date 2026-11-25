@@ -4,7 +4,7 @@ import type {
   DocumentItem,
   FileSummary,
   TargetPriceResult,
-} from '@opc/schemas'
+} from '@easybau/schemas'
 import { useEffect, useId, useState } from 'react'
 import { type ApiError, api, apiWithEtag, uploadFile } from '../api'
 import { formatCents, parseEuro } from '../format'

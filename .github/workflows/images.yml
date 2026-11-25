@@ -20,7 +20,7 @@ permissions:
 
 env:
   # Central image base name (ADR 0001: the product name is configured in one place).
-  IMAGE_BASENAME: openplancraft
+  IMAGE_BASENAME: easybau
 
 jobs:
   images:

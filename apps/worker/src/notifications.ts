@@ -1,4 +1,4 @@
-import type { Sql } from '@opc/db'
+import type { Sql } from '@easybau/db'
 import type { Logger } from 'pino'
 
 /** Read notifications older than this are deleted (they are only hints with a link). */

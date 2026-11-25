@@ -3,7 +3,7 @@
  * no account data). "system" follows the operating system setting (prefers-contrast).
  */
 export type ContrastMode = 'system' | 'high' | 'normal'
-const KEY = 'opc.contrast'
+const KEY = 'easybau.contrast'
 
 export function readContrast(): ContrastMode {
   try {

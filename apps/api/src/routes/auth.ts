@@ -11,7 +11,7 @@ import {
   type TotpSetupResponse,
   totpDisableRequest,
   totpEnableRequest,
-} from '@opc/schemas'
+} from '@easybau/schemas'
 import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify'
 import { mfaSetupRequired, requireAuth, type Services, sessionCookieName } from '../context.js'
 import { HttpError, parse } from '../http.js'

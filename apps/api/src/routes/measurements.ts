@@ -1,11 +1,11 @@
-import type { Tx } from '@opc/db'
+import type { Tx } from '@easybau/db'
 import {
   FormulaError,
   type FormulaVariables,
   measurementLineQuantity,
   quantityVariance,
   sumQuantities,
-} from '@opc/domain'
+} from '@easybau/domain'
 import {
   type CreateLineRequest,
   createLineRequest,
@@ -22,7 +22,7 @@ import {
   updateLineRequest,
   updateLocationRequest,
   updateSheetRequest,
-} from '@opc/schemas'
+} from '@easybau/schemas'
 import type { FastifyInstance, FastifyReply } from 'fastify'
 import { z } from 'zod'
 import { applyInvoiceMeasurements, billingDoc } from '../billing.js'

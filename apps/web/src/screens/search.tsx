@@ -1,4 +1,4 @@
-import type { NotificationList, SearchHit, SearchResult } from '@opc/schemas'
+import type { NotificationList, SearchHit, SearchResult } from '@easybau/schemas'
 import { useCallback, useEffect, useId, useState } from 'react'
 import { type ApiError, api } from '../api'
 import { formatDateTime } from '../format'

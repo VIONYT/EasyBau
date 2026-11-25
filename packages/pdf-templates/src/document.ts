@@ -4,8 +4,8 @@ import {
   germanDate,
   giroCodePayload,
   type LetterheadValues,
-} from '@opc/domain'
-import type { DocumentDetail } from '@opc/schemas'
+} from '@easybau/domain'
+import type { DocumentDetail } from '@easybau/schemas'
 import { type LogoPosition, letterFrame } from './frame.js'
 import type { LetterPdfInput } from './types.js'
 

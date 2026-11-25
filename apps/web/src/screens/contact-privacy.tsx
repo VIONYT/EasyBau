@@ -1,5 +1,5 @@
-import type { ContactDetail, ContactPrivacy, EraseContactResult } from '@opc/schemas'
-import { Button, FormError, Notice } from '@opc/ui'
+import type { ContactDetail, ContactPrivacy, EraseContactResult } from '@easybau/schemas'
+import { Button, FormError, Notice } from '@easybau/ui'
 import { useState } from 'react'
 import { type ApiError, api, downloadFile } from '../api'
 import { formatDateTime } from '../format'

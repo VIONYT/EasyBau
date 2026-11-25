@@ -1,11 +1,11 @@
 import { createPrivateKey, createSign } from 'node:crypto'
-import type { Tx } from '@opc/db'
+import type { Tx } from '@easybau/db'
 import {
   type IncomingMailAuth,
   type IncomingMailRun,
   type IncomingMailSettings,
   incomingMailSettingsRequest,
-} from '@opc/schemas'
+} from '@easybau/schemas'
 import type { FastifyBaseLogger, FastifyInstance } from 'fastify'
 import { ImapFlow } from 'imapflow'
 import { simpleParser } from 'mailparser'
@@ -449,7 +449,7 @@ export async function pollIncomingMailboxes(
     // Several API instances: only one fetches (session lock, released below).
     const [lock] = await reserved<
       { ok: boolean }[]
-    >`select pg_try_advisory_lock(hashtext('opc.incoming_mail')) as ok`
+    >`select pg_try_advisory_lock(hashtext('easybau.incoming_mail')) as ok`
     if (!lock?.ok) return 0
     try {
       const tenants = await reserved<{ tenantId: string }[]>`
@@ -462,7 +462,7 @@ export async function pollIncomingMailboxes(
       }
       return imported
     } finally {
-      await reserved`select pg_advisory_unlock(hashtext('opc.incoming_mail'))`
+      await reserved`select pg_advisory_unlock(hashtext('easybau.incoming_mail'))`
     }
   } finally {
     reserved.release()

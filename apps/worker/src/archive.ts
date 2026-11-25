@@ -1,6 +1,6 @@
 import { createHash } from 'node:crypto'
-import { type Sql, withTenant } from '@opc/db'
-import { type ArchiveStore, type ObjectStore, retainUntilOf } from '@opc/storage'
+import { type Sql, withTenant } from '@easybau/db'
+import { type ArchiveStore, type ObjectStore, retainUntilOf } from '@easybau/storage'
 import type { Logger } from 'pino'
 
 interface PendingArtifact {

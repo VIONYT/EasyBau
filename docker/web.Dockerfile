@@ -15,13 +15,13 @@ COPY packages/schemas/package.json packages/schemas/
 COPY packages/domain/package.json packages/domain/
 COPY packages/ui/package.json packages/ui/
 RUN --mount=type=secret,id=extra_ca --mount=type=cache,id=pnpm,target=/pnpm/store \
-    pnpm install --frozen-lockfile --filter=@opc/web...
+    pnpm install --frozen-lockfile --filter=@easybau/web...
 COPY apps/web apps/web
 COPY packages/schemas packages/schemas
 COPY packages/domain packages/domain
 COPY packages/ui packages/ui
 COPY tsconfig.base.json ./
-RUN --mount=type=secret,id=extra_ca pnpm --filter=@opc/web build
+RUN --mount=type=secret,id=extra_ca pnpm --filter=@easybau/web build
 
 FROM caddy:2-alpine AS runtime
 COPY infra/Caddyfile /etc/caddy/Caddyfile

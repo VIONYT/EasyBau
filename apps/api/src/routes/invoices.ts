@@ -1,7 +1,11 @@
 import { createHash } from 'node:crypto'
-import type { Tx } from '@opc/db'
-import { addDays } from '@opc/domain'
-import { type CancelInvoiceResult, cancelInvoiceRequest, type FinalizeCheck } from '@opc/schemas'
+import type { Tx } from '@easybau/db'
+import { addDays } from '@easybau/domain'
+import {
+  type CancelInvoiceResult,
+  cancelInvoiceRequest,
+  type FinalizeCheck,
+} from '@easybau/schemas'
 import type { FastifyInstance } from 'fastify'
 import { z } from 'zod'
 import { billingDoc, invoiceFinalizeCheck, legalNotesOf } from '../billing.js'

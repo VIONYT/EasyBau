@@ -1,5 +1,5 @@
-import type { Me, ReportDetail, ReportSection, SignerRole, UnitSummary } from '@opc/schemas'
-import { WEATHER_CONDITIONS } from '@opc/schemas/constants'
+import type { Me, ReportDetail, ReportSection, SignerRole, UnitSummary } from '@easybau/schemas'
+import { WEATHER_CONDITIONS } from '@easybau/schemas/constants'
 import { type ChangeEvent, useCallback, useEffect, useMemo, useState } from 'react'
 import { ApiError, api, apiWithEtag, mutate } from '../api'
 import { formatDateTime, formatInputNumber } from '../format'

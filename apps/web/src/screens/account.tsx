@@ -5,7 +5,7 @@ import type {
   Me,
   PasswordResetInfo,
   PasswordResetRequested,
-} from '@opc/schemas'
+} from '@easybau/schemas'
 import { useEffect, useState } from 'react'
 import { type ApiError, api } from '../api'
 import { Field, FormError, useForm, value } from '../forms'

@@ -1,4 +1,4 @@
-import { withTenant } from '@opc/db'
+import { withTenant } from '@easybau/db'
 import type {
   CatalogFolder,
   CatalogItem,
@@ -6,7 +6,7 @@ import type {
   ImportResult,
   SupplierArticle,
   UnitSummary,
-} from '@opc/schemas'
+} from '@easybau/schemas'
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
 import { Client, createHarness, type Harness } from './testing/harness.js'
 

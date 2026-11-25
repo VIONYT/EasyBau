@@ -4,7 +4,7 @@ import type {
   InvoiceListItem,
   Me,
   ReceivableStatus,
-} from '@opc/schemas'
+} from '@easybau/schemas'
 import { useCallback, useEffect, useId, useState } from 'react'
 import { type ApiError, api, downloadFile } from '../api'
 import { formatCents, formatDateTime } from '../format'

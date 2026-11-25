@@ -1,5 +1,5 @@
 {
-  "name": "@opc/worker",
+  "name": "@easybau/worker",
   "version": "0.0.0",
   "private": true,
   "type": "module",
@@ -15,10 +15,10 @@
     "typecheck": "tsc -p tsconfig.json --noEmit"
   },
   "dependencies": {
-    "@opc/config": "workspace:*",
-    "@opc/db": "workspace:*",
-    "@opc/domain": "workspace:*",
-    "@opc/storage": "workspace:*",
+    "@easybau/config": "workspace:*",
+    "@easybau/db": "workspace:*",
+    "@easybau/domain": "workspace:*",
+    "@easybau/storage": "workspace:*",
     "nodemailer": "10.6.0",
     "pg-boss": "12.38.2",
     "pino": "10.4.0"

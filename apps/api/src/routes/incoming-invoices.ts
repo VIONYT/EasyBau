@@ -1,13 +1,13 @@
 import { createHash } from 'node:crypto'
 import { Readable } from 'node:stream'
-import type { Tx } from '@opc/db'
-import { type CostType, incomingProblems, incomingWarnings, rateKey } from '@opc/domain'
+import type { Tx } from '@easybau/db'
+import { type CostType, incomingProblems, incomingWarnings, rateKey } from '@easybau/domain'
 import {
   extractPdfEinvoice,
   type IncomingEinvoice,
   IncomingEinvoiceError,
   readIncomingEinvoice,
-} from '@opc/einvoice'
+} from '@easybau/einvoice'
 import {
   type BusinessArea,
   closeIncomingRequest,
@@ -25,8 +25,8 @@ import {
   updateBusinessAreaRequest,
   updateIncomingRequest,
   uploadIncomingQuery,
-} from '@opc/schemas'
-import { detectFileType, sanitizeFilename } from '@opc/storage'
+} from '@easybau/schemas'
+import { detectFileType, sanitizeFilename } from '@easybau/storage'
 import type { FastifyInstance } from 'fastify'
 import { z } from 'zod'
 import { openArtifact, storeIncomingOriginal } from '../artifacts.js'

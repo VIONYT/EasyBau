@@ -1,11 +1,11 @@
-import type { Tx } from '@opc/db'
+import type { Tx } from '@easybau/db'
 import {
   type AuditChainCheck,
   type AuditChainStatus,
   type AuditEventItem,
   type AuditEventList,
   auditEventQuery,
-} from '@opc/schemas'
+} from '@easybau/schemas'
 import type { FastifyInstance } from 'fastify'
 import { inTenant, requirePermission, type Services } from '../context.js'
 import { decodeCursor, encodeCursor, parse } from '../http.js'

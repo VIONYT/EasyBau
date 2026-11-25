@@ -1,5 +1,5 @@
-import type { ContactDetail, ContactSummary, Page, PaymentTerm } from '@opc/schemas'
-import { color } from '@opc/ui'
+import type { ContactDetail, ContactSummary, Page, PaymentTerm } from '@easybau/schemas'
+import { color } from '@easybau/ui'
 import { useCallback, useEffect, useId, useState } from 'react'
 import { type ApiError, api, apiWithEtag } from '../api'
 import { Field, FormError, SelectField, TextArea, useForm, value } from '../forms'

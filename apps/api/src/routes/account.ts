@@ -1,4 +1,4 @@
-import type { Sql } from '@opc/db'
+import type { Sql } from '@easybau/db'
 import {
   type AdminPasswordReset,
   accountTokenRequest,
@@ -11,7 +11,7 @@ import {
   type PasswordResetRequested,
   passwordResetConfirm,
   passwordResetRequest,
-} from '@opc/schemas'
+} from '@easybau/schemas'
 import type { FastifyInstance, FastifyRequest } from 'fastify'
 import { z } from 'zod'
 import {

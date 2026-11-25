@@ -1,8 +1,8 @@
 import { randomInt } from 'node:crypto'
-import { buildApi } from '@opc/api'
-import { ConfigError, loadConfig, runsApi, runsWorker } from '@opc/config'
-import { createSql, migrate, pingDatabase, type Sql } from '@opc/db'
-import { startWorker, type Worker } from '@opc/worker'
+import { buildApi } from '@easybau/api'
+import { ConfigError, loadConfig, runsApi, runsWorker } from '@easybau/config'
+import { createSql, migrate, pingDatabase, type Sql } from '@easybau/db'
+import { startWorker, type Worker } from '@easybau/worker'
 import { type Logger, pino } from 'pino'
 
 /**

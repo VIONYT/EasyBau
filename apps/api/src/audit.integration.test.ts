@@ -4,7 +4,7 @@ import type {
   InviteResponse,
   MemberSummary,
   OperationsStatus,
-} from '@opc/schemas'
+} from '@easybau/schemas'
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
 import { Client, createHarness, type Harness } from './testing/harness.js'
 

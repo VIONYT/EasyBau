@@ -1,5 +1,5 @@
-import { createSql, migrate, type Sql, withTenant } from '@opc/db'
-import { ensureAppRole } from '@opc/db/test-support'
+import { createSql, migrate, type Sql, withTenant } from '@easybau/db'
+import { ensureAppRole } from '@easybau/db/test-support'
 import type { FastifyInstance, LightMyRequestResponse } from 'fastify'
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
 import { buildApi, hashPassword } from './index.js'
@@ -19,7 +19,7 @@ async function createDatabase(): Promise<{ url: string; drop: () => Promise<void
     { DATABASE_URL: baseUrl as string, DATABASE_POOL_MAX: 1 },
     { mode: 'admin' },
   )
-  const name = `opc_api_test_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 6)}`
+  const name = `easybau_api_test_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 6)}`
   await admin.unsafe(`create database ${name}`)
   await ensureAppRole(admin)
   const url = new URL(baseUrl as string)

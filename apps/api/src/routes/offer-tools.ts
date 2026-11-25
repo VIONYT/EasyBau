@@ -6,8 +6,8 @@ import {
   scaleMarkupPercent,
   targetPriceRatios,
   toCents,
-} from '@opc/domain'
-import { type TargetPriceResult, targetPriceRequest } from '@opc/schemas'
+} from '@easybau/domain'
+import { type TargetPriceResult, targetPriceRequest } from '@easybau/schemas'
 import type { FastifyInstance } from 'fastify'
 import { z } from 'zod'
 import { inTenant, requirePermission, type Services } from '../context.js'

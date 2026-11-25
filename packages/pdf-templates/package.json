@@ -1,5 +1,5 @@
 {
-  "name": "@opc/pdf-templates",
+  "name": "@easybau/pdf-templates",
   "version": "0.0.0",
   "private": true,
   "type": "module",
@@ -22,8 +22,8 @@
   },
   "dependencies": {
     "@myriaddreamin/typst-ts-node-compiler": "0.7.0",
-    "@opc/domain": "workspace:*",
-    "@opc/schemas": "workspace:*",
+    "@easybau/domain": "workspace:*",
+    "@easybau/schemas": "workspace:*",
     "uqr": "0.1.3"
   }
 }

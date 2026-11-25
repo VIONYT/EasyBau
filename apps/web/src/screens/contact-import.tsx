@@ -1,4 +1,4 @@
-import type { ContactImportResult } from '@opc/schemas'
+import type { ContactImportResult } from '@easybau/schemas'
 import { useId, useState } from 'react'
 import { type ApiError, api } from '../api'
 import { FormError } from '../forms'

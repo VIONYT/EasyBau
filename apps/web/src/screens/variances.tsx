@@ -1,4 +1,4 @@
-import type { DocumentDetail, MeasurementSheetDetail, SheetVariance } from '@opc/schemas'
+import type { DocumentDetail, MeasurementSheetDetail, SheetVariance } from '@easybau/schemas'
 import { useEffect, useId, useState } from 'react'
 import { type ApiError, api } from '../api'
 import { formatInputNumber } from '../format'

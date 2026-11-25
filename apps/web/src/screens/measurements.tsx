@@ -1,5 +1,5 @@
-import type { Me, MeasurementSheetDetail, MeasurementSheetSummary } from '@opc/schemas'
-import { MEASUREMENT_KINDS } from '@opc/schemas/constants'
+import type { Me, MeasurementSheetDetail, MeasurementSheetSummary } from '@easybau/schemas'
+import { MEASUREMENT_KINDS } from '@easybau/schemas/constants'
 import { useEffect, useState } from 'react'
 import { type ApiError, api, mutate } from '../api'
 import { formatDateTime } from '../format'

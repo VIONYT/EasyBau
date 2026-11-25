@@ -12,13 +12,13 @@ import type {
   SupplierArticle,
   TaxRateSummary,
   UnitSummary,
-} from '@opc/schemas'
+} from '@easybau/schemas'
 import {
   CHANGE_ORDER_BASES,
   COST_KINDS,
   PRICED_POSITION_TYPES,
   TAX_MODES,
-} from '@opc/schemas/constants'
+} from '@easybau/schemas/constants'
 import { type FormEvent, useCallback, useEffect, useId, useState } from 'react'
 import { ApiError, api, apiWithEtag } from '../api'
 import {

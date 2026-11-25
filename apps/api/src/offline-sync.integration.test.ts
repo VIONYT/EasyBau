@@ -1,5 +1,5 @@
 import { randomUUID } from 'node:crypto'
-import type { MeasurementSheetDetail, ReportDetail } from '@opc/schemas'
+import type { MeasurementSheetDetail, ReportDetail } from '@easybau/schemas'
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
 import { Client, createHarness, type Harness } from './testing/harness.js'
 

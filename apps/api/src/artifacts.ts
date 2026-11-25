@@ -1,6 +1,6 @@
 import { Readable } from 'node:stream'
-import type { Tx } from '@opc/db'
-import type { DocumentArchive } from '@opc/schemas'
+import type { Tx } from '@easybau/db'
+import type { DocumentArchive } from '@easybau/schemas'
 import { type AuthContext, type Services, servicesOf } from './context.js'
 
 const MAX_ARTIFACT_BYTES = 50 * 1024 * 1024

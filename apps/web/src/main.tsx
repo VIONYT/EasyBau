@@ -4,8 +4,8 @@ import { createRoot } from 'react-dom/client'
 import { App } from './App'
 import { applyContrast } from './contrast'
 import { startOfflineSync } from './offline/client'
-import '@opc/ui/tokens.css'
-import '@opc/ui/components.css'
+import '@easybau/ui/tokens.css'
+import '@easybau/ui/components.css'
 import './styles.css'
 
 // Offline shell (ADR 0010): the service worker updates itself; data sync runs in the app.

@@ -1,5 +1,5 @@
-import { withTenant } from '@opc/db'
-import type { LoginResponse, Me, MfaMethod } from '@opc/schemas'
+import { withTenant } from '@easybau/db'
+import type { LoginResponse, Me, MfaMethod } from '@easybau/schemas'
 import type { FastifyReply, FastifyRequest } from 'fastify'
 import {
   type AuthContext,

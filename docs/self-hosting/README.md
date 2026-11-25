@@ -92,7 +92,7 @@ Google lässt IMAP mit dem normalen Passwort nicht zu (Gmail nur mit App-Passwor
 1. **Dienstkonto anlegen:** Google Cloud Console › Projekt wählen oder anlegen › IAM und Verwaltung › Dienstkonten › Dienstkonto erstellen (keine Rollen nötig). Unter „Schlüssel“ einen neuen JSON-Schlüssel erstellen und herunterladen. Die „Eindeutige ID“ (Client-ID) des Dienstkontos notieren.
 2. **Domainweite Delegierung:** Google-Admin-Konsole › Sicherheit › Zugriffs- und Datenverwaltung › API-Steuerung › Domainweite Delegierung › Neu hinzufügen: Client-ID des Dienstkontos, Bereich `https://mail.google.com/`.
 3. **IMAP erlauben:** Admin-Konsole › Apps › Google Workspace › Gmail › Endnutzerzugriff › IMAP-Zugriff aktivieren (für die Organisationseinheit des Postfachs).
-4. In OpenPlancraft Postfach-Adresse eintragen, die JSON-Schlüsseldatei hochladen und „Jetzt abrufen“ testen.
+4. In EasyBau Postfach-Adresse eintragen, die JSON-Schlüsseldatei hochladen und „Jetzt abrufen“ testen.
 
 Gespeichert werden nur E-Mail-Adresse und privater Schlüssel des Dienstkontos (verschlüsselt mit `APP_SECRET`, nie angezeigt). Bei jedem Abruf signiert der Server ein Token für das Postfach, tauscht es bei `oauth2.googleapis.com` gegen ein Zugriffstoken und meldet sich per IMAP (XOAUTH2) bei `imap.gmail.com:993` an – beide Adressen müssen ausgehend erreichbar sein. Hinweis: Die domainweite Delegierung mit `https://mail.google.com/` erlaubt dem Dienstkonto den Zugriff auf **alle** Postfächer der Domain; die Schlüsseldatei daher wie ein Administratorpasswort behandeln und nach dem Hochladen löschen.
 
@@ -109,7 +109,7 @@ Microsoft 365 nimmt IMAP nicht mehr mit Passwort an. Dafür gibt es unter Einste
    Add-MailboxPermission -Identity rechnungen@firma.de -User <Objekt-ID der Unternehmensanwendung> -AccessRights FullAccess
    ```
    Die Objekt-ID steht unter Entra › Unternehmensanwendungen (nicht die der App-Registrierung). Ohne diesen Schritt meldet der Abruf „Microsoft 365 hat die Anmeldung am Postfach abgelehnt“.
-5. In OpenPlancraft Postfach-Adresse, Verzeichnis-ID, Anwendungs-ID und geheimen Clientschlüssel eintragen und „Jetzt abrufen“ testen.
+5. In EasyBau Postfach-Adresse, Verzeichnis-ID, Anwendungs-ID und geheimen Clientschlüssel eintragen und „Jetzt abrufen“ testen.
 
 Der Schlüssel wird wie das Passwort verschlüsselt gespeichert und nie angezeigt. Bei jedem Abruf holt der Server ein Zugriffstoken bei `login.microsoftonline.com` und meldet sich per IMAP (XOAUTH2) bei `outlook.office365.com:993` an – beide Adressen müssen ausgehend erreichbar sein. Andere Microsoft-Dienste werden nicht angesprochen; ohne diese Einstellung verbindet sich der Server nie mit Microsoft.
 
@@ -246,6 +246,16 @@ git pull && docker compose up -d --build
 ```
 
 Datenbank-Migrationen laufen beim Start automatisch (`MIGRATE_ON_START=true`). Eine bereits angewendete Migration wird nie verändert; der Start bricht ab, falls doch.
+
+### Umbenennung OpenPlancraft → EasyBau (Stand 2026-11-25)
+
+Compose-Projekt, Volumes und Images heißen jetzt `easybau` (`easybau_db`, `easybau_files` …, `ghcr.io/vionyt/easybau-*`), Datenbank und Datenbankbenutzer in neuen Installationen ebenfalls `easybau`. Eine **bestehende** Installation aus der Zeit davor behält ihre Daten so:
+
+1. In der `.env` ergänzen: `COMPOSE_PROJECT_NAME=openplancraft` – dann findet Compose die alten Volumes (`openplancraft_*`) wieder. `POSTGRES_DB`/`POSTGRES_USER` stehen in einer alten `.env` schon auf `openplancraft` und bleiben so.
+2. Steht in der `.env` ein eigenes `IMAGE_PREFIX=ghcr.io/vionyt/openplancraft`, auf `ghcr.io/vionyt/easybau` ändern (neue Images erscheinen nur noch dort).
+3. `docker compose pull && docker compose up -d`.
+
+Wer lieber ganz umstellt: Sicherung erstellen, neue Installation mit den neuen Namen aufsetzen und die Sicherung mit `infra/restore.sh` einspielen (Abschnitt 6).
 
 ## 9. Prüfen
 

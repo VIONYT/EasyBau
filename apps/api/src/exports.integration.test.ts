@@ -3,8 +3,8 @@ import { createHash } from 'node:crypto'
 import { mkdtemp, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { withTenant } from '@opc/db'
-import type { DocumentDetail } from '@opc/schemas'
+import { withTenant } from '@easybau/db'
+import type { DocumentDetail } from '@easybau/schemas'
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
 import { Client, createHarness, type Harness } from './testing/harness.js'
 
@@ -316,7 +316,7 @@ describe.skipIf(!process.env.DATABASE_URL)('Exporte (integration)', () => {
     expect(res.statusCode, res.body).toBe(200)
     const zip = zipEntries(res.rawPayload)
     const manifest = JSON.parse(zip.get('manifest.json')?.toString('utf8') ?? '{}')
-    expect(manifest).toMatchObject({ format: 'openplancraft-export', version: 1 })
+    expect(manifest).toMatchObject({ format: 'easybau-export', version: 1 })
     expect(manifest.tables.document).toBe(2)
     expect(manifest.files).toHaveLength(1)
     expect(manifest.tables.incoming_invoice).toBe(1)
@@ -339,7 +339,7 @@ describe.skipIf(!process.env.DATABASE_URL)('Exporte (integration)', () => {
 
     // The archive is a valid ZIP for standard tools. Info-ZIP and BusyBox (Alpine test image)
     // print different messages, but both exit non-zero on a damaged archive (execFileSync throws).
-    const dir = await mkdtemp(join(tmpdir(), 'opc-export-'))
+    const dir = await mkdtemp(join(tmpdir(), 'easybau-export-'))
     await writeFile(join(dir, 'export.zip'), res.rawPayload)
     try {
       execFileSync('unzip', ['-tq', join(dir, 'export.zip')], { stdio: 'pipe' })

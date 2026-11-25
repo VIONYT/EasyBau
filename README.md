@@ -81,7 +81,7 @@ Voraussetzungen: Node 26 (siehe `.nvmrc`), pnpm in der Version aus `package.json
 ```bash
 pnpm install
 docker compose -f compose.yaml -f compose.dev.yaml up -d db kosit
-DATABASE_URL=postgres://openplancraft:<passwort>@localhost:5432/openplancraft KOSIT_URL=http://localhost:8081 pnpm dev
+DATABASE_URL=postgres://easybau:<passwort>@localhost:5432/easybau KOSIT_URL=http://localhost:8081 pnpm dev
 ```
 
 ```bash

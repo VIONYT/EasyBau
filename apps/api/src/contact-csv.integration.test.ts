@@ -1,5 +1,5 @@
-import { parseCsv } from '@opc/exports'
-import type { ContactDetail, ContactImportResult, ContactSummary, Page } from '@opc/schemas'
+import { parseCsv } from '@easybau/exports'
+import type { ContactDetail, ContactImportResult, ContactSummary, Page } from '@easybau/schemas'
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
 import { Client, createHarness, type Harness } from './testing/harness.js'
 

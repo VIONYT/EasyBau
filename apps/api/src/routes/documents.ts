@@ -1,5 +1,5 @@
 import { createHash } from 'node:crypto'
-import type { Tx } from '@opc/db'
+import type { Tx } from '@easybau/db'
 import {
   CalculationError,
   COUNTED_POSITION_TYPES,
@@ -14,7 +14,7 @@ import {
   rateForTimeUnit,
   roundTo,
   type TaxCategory,
-} from '@opc/domain'
+} from '@easybau/domain'
 import {
   type CostKind,
   type CreateDocumentRequest,
@@ -37,7 +37,7 @@ import {
   type UnitSummary,
   updateDocumentRequest,
   updateItemRequest,
-} from '@opc/schemas'
+} from '@easybau/schemas'
 import type { FastifyInstance, FastifyReply } from 'fastify'
 import { z } from 'zod'
 import { archiveSummary } from '../artifacts.js'

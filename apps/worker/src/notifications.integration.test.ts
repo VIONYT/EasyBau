@@ -1,4 +1,4 @@
-import { createTenant, openTestDb, type TestDb, testDatabaseUrl } from '@opc/db/test-support'
+import { createTenant, openTestDb, type TestDb, testDatabaseUrl } from '@easybau/db/test-support'
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
 import { purgeReadNotifications } from './notifications.js'
 

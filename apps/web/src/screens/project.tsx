@@ -1,4 +1,4 @@
-import type { Me, ProjectDetail } from '@opc/schemas'
+import type { Me, ProjectDetail } from '@easybau/schemas'
 import { useCallback, useEffect, useState } from 'react'
 import { type ApiError, apiWithEtag } from '../api'
 import { FormError } from '../forms'
