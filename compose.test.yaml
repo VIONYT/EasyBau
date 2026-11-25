@@ -33,7 +33,7 @@ services:
 
   # Belegarchiv as in the stack (ADR 0009): RustFS, fixed test keys instead of the keys volume.
   storage:
-    image: rustfs/rustfs:1.0.5@sha256:b81d16a90ee25bd9511280127ca1471788c6e874cf0f0da759645f46b2dc1d74
+    image: rustfs/rustfs:1.0.6@sha256:ee717072290bec9b11abfc0365f8310b00df1cd9b3639943edae47bdef05044a
     environment:
       RUSTFS_ACCESS_KEY: archiv-root
       RUSTFS_SECRET_KEY: archiv-test-root-secret
@@ -46,7 +46,7 @@ services:
       retries: 30
 
   storage-setup:
-    image: rustfs/rustfs:1.0.5@sha256:b81d16a90ee25bd9511280127ca1471788c6e874cf0f0da759645f46b2dc1d74
+    image: rustfs/rustfs:1.0.6@sha256:ee717072290bec9b11abfc0365f8310b00df1cd9b3639943edae47bdef05044a
     entrypoint: ["sh", "/opt/storage/setup.sh"]
     environment:
       STORAGE_ROOT_USER: archiv-root
