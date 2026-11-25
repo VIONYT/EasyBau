@@ -22,7 +22,7 @@
   },
   "dependencies": {
     "@opc/config": "workspace:*",
-    "postgres": "4.1.0"
+    "postgres": "4.1.1"
   },
   "files": [
     "dist",
