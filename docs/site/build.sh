@@ -9,7 +9,7 @@
 set -eu
 
 out=${1:?Ausgabeverzeichnis fehlt}
-repo=${2:-https://github.com/VIONYT/OpenPlancraft}
+repo=${2:-https://github.com/VIONYT/EasyBau}
 site=${3:-}
 root=$(cd "$(dirname "$0")/../.." && pwd)
 

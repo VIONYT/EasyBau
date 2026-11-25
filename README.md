@@ -46,7 +46,7 @@ Alle Oberflächen: [Benutzerhandbuch](docs/handbuch/README.md).
 Voraussetzung: ein Server (oder Rechner) mit Docker und mindestens 2 GB RAM.
 
 ```bash
-git clone https://github.com/VIONYT/OpenPlancraft.git easybau && cd easybau
+git clone https://github.com/VIONYT/EasyBau.git easybau && cd easybau
 cp .env.example .env        # POSTGRES_PASSWORD und APP_SECRET setzen, für einen Server APP_DOMAIN
 docker compose up -d
 docker compose logs app | grep Einrichtungscode
@@ -66,7 +66,7 @@ Alles Weitere: [Betriebsdokumentation](docs/self-hosting/README.md).
 
 | Für | Dokument |
 |---|---|
-| Anwender im Büro und auf der Baustelle | [Benutzerhandbuch](docs/handbuch/README.md) – auch als Website mit Suche: <https://vionyt.github.io/OpenPlancraft/> (GitHub Pages, sobald freigeschaltet) |
+| Anwender im Büro und auf der Baustelle | [Benutzerhandbuch](docs/handbuch/README.md) – auch als Website mit Suche: <https://vionyt.github.io/EasyBau/> (GitHub Pages, sobald freigeschaltet) |
 | Betreiber (Installation, Updates, Sicherung, Wiederherstellung) | [Betriebsdokumentation](docs/self-hosting/README.md) |
 | Inhaber, Steuerberatung (GoBD, DSGVO) | [Vorlage Verfahrensdokumentation](docs/verfahrensdokumentation/README.md) mit Löschkonzept |
 | Entwickler | [DESIGN.md](DESIGN.md) (Architektur, Datenmodell, UX) · [CLAUDE.md](CLAUDE.md) (Regeln, Konventionen, offene Punkte) · [Architekturentscheidungen](docs/adr/) · [CHANGELOG](CHANGELOG.md) |
