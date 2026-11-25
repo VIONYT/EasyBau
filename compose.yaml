@@ -155,7 +155,7 @@ services:
   # once into the volume "archive-keys" and never reaches the app; the app uses a restricted key
   # (ARCHIVE_S3_ACCESS_KEY/SECRET_KEY) that can write and read but never delete (storage-setup).
   storage-keys:
-    image: rustfs/rustfs:1.0.5@sha256:b81d16a90ee25bd9511280127ca1471788c6e874cf0f0da759645f46b2dc1d74
+    image: rustfs/rustfs:1.0.6@sha256:ee717072290bec9b11abfc0365f8310b00df1cd9b3639943edae47bdef05044a
     user: "0"
     entrypoint: ["sh", "/opt/storage/keys.sh"]
     network_mode: none
@@ -166,7 +166,7 @@ services:
       - ./infra/storage:/opt/storage:ro
 
   storage:
-    image: rustfs/rustfs:1.0.5@sha256:b81d16a90ee25bd9511280127ca1471788c6e874cf0f0da759645f46b2dc1d74
+    image: rustfs/rustfs:1.0.6@sha256:ee717072290bec9b11abfc0365f8310b00df1cd9b3639943edae47bdef05044a
     restart: unless-stopped
     read_only: true
     tmpfs: [/tmp]
@@ -189,7 +189,7 @@ services:
         condition: service_completed_successfully
 
   storage-setup:
-    image: rustfs/rustfs:1.0.5@sha256:b81d16a90ee25bd9511280127ca1471788c6e874cf0f0da759645f46b2dc1d74
+    image: rustfs/rustfs:1.0.6@sha256:ee717072290bec9b11abfc0365f8310b00df1cd9b3639943edae47bdef05044a
     entrypoint: ["sh", "/opt/storage/setup.sh"]
     read_only: true
     tmpfs: [/tmp]
