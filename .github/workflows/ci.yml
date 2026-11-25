@@ -43,6 +43,11 @@ jobs:
         run: |
           base="${{ github.event_name == 'pull_request' && format('origin/{0}', github.base_ref) || github.event.before }}"
           if [ -z "$base" ] || [ "$base" = "0000000000000000000000000000000000000000" ]; then base=HEAD^; fi
+          # After a force-push (e.g. Dependabot rebasing its branch) the previous head is gone:
+          # compare with the point where the branch left main instead.
+          if ! git rev-parse --verify --quiet "$base^{commit}" >/dev/null; then
+            base=$(git merge-base HEAD origin/main)
+          fi
           sh infra/check-migrations.sh "$base"
       - name: Archive image pinned consistently (ADR 0009, Dependabot)
         run: sh infra/check-pinned-images.sh

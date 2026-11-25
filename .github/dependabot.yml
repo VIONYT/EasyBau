@@ -32,6 +32,11 @@ updates:
     commit-message:
       prefix: "chore(deps)"
       include: scope
+    ignore:
+      # backup.Dockerfile must use the same PostgreSQL major as the db service in compose.yaml:
+      # pg_dump/pg_restore of a newer major are not guaranteed to restore into the older server.
+      - dependency-name: postgres
+        update-types: ["version-update:semver-major"]
 
   # npm packages of the pnpm workspace (apps/*, packages/*).
   - package-ecosystem: npm

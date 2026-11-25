@@ -26,8 +26,8 @@
     "tsx": "4.23.15",
     "turbo": "2.11.10",
     "typescript": "5.9.3",
-    "vitest": "4.1.0",
-    "@vitest/coverage-v8": "4.1.0",
+    "vitest": "4.1.12",
+    "@vitest/coverage-v8": "4.1.12",
     "@playwright/test": "1.63.0"
   }
 }

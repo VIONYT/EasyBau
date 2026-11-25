@@ -3,3 +3,9 @@ packages:
   - packages/*
 onlyBuiltDependencies:
   - esbuild
+# Security fixes in transitive dependencies (Dependabot): workbox-build (via vite-plugin-pwa, only
+# used while building the web app) still asks for glob 11, patched only from glob 14.0.2
+# (GHSA-3g3m-2fjr-6pw4), which also brings minimatch 11 (GHSA-g3hv-75wg-m249).
+# Remove once workbox-build depends on a fixed glob.
+overrides:
+  workbox-build>glob: ^14.0.2
