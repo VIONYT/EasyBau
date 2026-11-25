@@ -265,6 +265,16 @@ const de = {
   'contacts.filter.archived': 'Archivierte Kontakte',
   'contacts.archived': 'archiviert',
   'contacts.archive': 'Archivieren',
+  'merge.title': 'Dublette zusammenführen',
+  'merge.open': 'Mit anderem Kontakt zusammenführen',
+  'merge.hint':
+    'Dieser Kontakt geht im gewählten auf: Projekte, Entwürfe, Ansprechpartner, Eingangsrechnungen in Prüfung sowie fehlende Telefonnummern, E-Mail-Adressen und Anschriften wandern dorthin. Festgeschriebene Dokumente behalten ihren Empfänger. Dieser Kontakt wird archiviert.',
+  'merge.into': 'Bleibender Kontakt',
+  'merge.confirm':
+    '„{from}“ wird mit „{into}“ zusammengeführt. Das lässt sich nicht rückgängig machen.',
+  'merge.submit': 'Zusammenführen',
+  'merge.done':
+    'Zusammengeführt mit „{name}“ – dieser Kontakt ist archiviert und wird nicht mehr verwendet.',
   'privacy.title': 'Datenschutz',
   'privacy.hint':
     'Auskunft (Art. 15 DSGVO) lädt alle gespeicherten Daten dieses Kontakts als Datei herunter. Löschen anonymisiert den Kontakt; steht er in festgeschriebenen Belegen, wird er bis zum Ende der Aufbewahrungsfrist gesperrt und danach automatisch gelöscht.',
@@ -574,6 +584,7 @@ const de = {
   'doc.header': 'Kopfdaten',
   'doc.subject': 'Betreff',
   'doc.date': 'Datum',
+  'doc.contactPerson': 'Ansprechpartner (z. Hd.)',
   'doc.recipient': 'Empfänger',
   'doc.place': 'Leistungsort',
   'doc.serviceFrom': 'Leistung von',
@@ -858,10 +869,15 @@ const de = {
   'ev.kind.file': 'Datei',
   'ev.locked': 'unterschrieben/gesperrt',
   'ev.choose': 'Auswählen …',
-  'var.title': 'Mehrmengen',
+  'var.title': 'Mehr- und Mindermengen',
   'var.hint':
     'Gemessene Mengen über der beauftragten Menge (alle Leistungsaufmaße), abzüglich der Mengen, die schon in Nachträgen stehen.',
   'var.none': 'Keine Mehrmengen gegenüber dem Auftrag.',
+  'var.lineLess': 'beauftragt {ordered}, gemessen {measured}',
+  'var.over110':
+    '{percent} % der beauftragten Menge: Für die Menge über 110 % kann ein neuer Einheitspreis verlangt werden (VOB/B § 2 Abs. 3 Nr. 2) – im Nachtrag anpassen.',
+  'var.under90':
+    'Nur {percent} % der beauftragten Menge: Steht die Menge endgültig fest, kann der Einheitspreis erhöht werden (VOB/B § 2 Abs. 3 Nr. 3), z. B. für Gemeinkosten, die nicht mehr gedeckt sind.',
   'var.line': 'beauftragt {ordered}, gemessen {measured}, Mehrmenge {extra}',
   'var.create': 'Nachtrag aus Mehrmengen anlegen',
   'rep.title': 'Berichte',
@@ -1616,8 +1632,10 @@ const de = {
   'ver.title': 'Versionen',
   'ver.label': 'Version {n}',
   'ver.draft': 'Entwurf',
+  'ver.superseded': 'ersetzt',
   'ver.create': 'Neue Version anlegen',
-  'ver.outdated': 'Es gibt eine neuere Version dieses Angebots.',
+  'ver.outdated':
+    'Es gibt eine neuere Version dieses Angebots. Sobald sie fertiggestellt ist, gilt diese Version als ersetzt: Folgedokumente (z. B. Auftragsbestätigung) nur noch aus der neuesten Version.',
   'img.title': 'Bild einfügen',
   'img.file': 'Bild aus der Projektablage',
   'img.choose': '– Bild wählen –',

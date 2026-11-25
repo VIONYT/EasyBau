@@ -24,6 +24,13 @@ Nach **Fertigstellen** und Versand:
 
 Projektmitglieder werden über die Entscheidung benachrichtigt; die **Vertragssumme** im Projekt aktualisiert sich.
 
+## Mehr- und Mindermengen (VOB/B § 2 Abs. 3)
+
+Im Leistungsaufmaß zeigt **Mehr- und Mindermengen** jede Vertragsposition, deren gemessene Menge mehr als 10 % von der beauftragten abweicht:
+
+- **über 110 %:** Für die Menge über 110 % kann ein neuer Einheitspreis verlangt werden (§ 2 Abs. 3 Nr. 2). Der Nachtrag aus Mehrmengen übernimmt zunächst den bisherigen Preis – passen Sie ihn im Nachtrag an.
+- **unter 90 %:** Steht die Menge endgültig fest, kann der Einheitspreis für die ausgeführte Menge erhöht werden (§ 2 Abs. 3 Nr. 3), etwa weil Baustellengemeinkosten nicht mehr gedeckt sind. EasyBau zeigt nur den Hinweis; die Preiserhöhung vereinbaren Sie per Nachtrag.
+
 ## Mehrmengen richtig abrechnen
 
 Ist ein Mehrmengen-Nachtrag beauftragt, rechnet die Vertragsposition über das Aufmaß nur noch die gemessene Menge **abzüglich** der Nachtragsmenge ab – die Mehrmenge steht nur im Nachtrag. So wird nichts doppelt berechnet. Wurde die Mehrmenge schon vorher abgerechnet, enthält die nächste Rechnung an der Vertragsposition eine Korrekturmenge (negativ).

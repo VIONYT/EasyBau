@@ -17,6 +17,10 @@ Jeder geöffnete Kontakt hat eine eigene Adresse (`/kontakte/…`), die Sie z. B
 
 ![Kontakt bearbeiten](../screenshots/macbook-kontakt.png)
 
+### Dubletten zusammenführen
+
+Gibt es einen Kunden doppelt, öffnen Sie die Dublette und wählen **Mit anderem Kontakt zusammenführen** und den Kontakt, der bleiben soll. Projekte, Entwürfe, Ansprechpartner, Eingangsrechnungen in Prüfung sowie fehlende Telefonnummern, E-Mail-Adressen und Anschriften wandern zum bleibenden Kontakt; hat er noch keine Kunden- oder Kreditorennummer, übernimmt er die der Dublette. Festgeschriebene Dokumente behalten ihren Empfänger (GoBD). Die Dublette wird archiviert, zeigt „Zusammengeführt mit …“ und lässt sich nicht mehr verwenden. Zusammenführen geht nur zwischen Kontakten derselben Art (Person/Organisation) und lässt sich nicht rückgängig machen.
+
 ### Datenschutz: Auskunft und Löschen
 
 Fragt ein Kunde nach seinen Daten oder verlangt die Löschung (DSGVO), finden Sie beides im Kontakt unter **Datenschutz**:

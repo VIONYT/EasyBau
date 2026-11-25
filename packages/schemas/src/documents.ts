@@ -108,6 +108,8 @@ export const updateDocumentRequest = z
     serviceTo: isoDate.nullable(),
     placeOfPerformance: optionalText(500),
     contactId: id.nullable(),
+    /** Ansprechpartner („z. Hd.“): a person linked to the organization of the document. */
+    contactPersonId: id.nullable(),
     introText: optionalText(10_000),
     closingText: optionalText(10_000),
     paymentDueDays: z.number().int().min(0).max(365).nullable(),
@@ -463,6 +465,8 @@ export interface IssuerEinvoiceData {
 export interface DocumentDetail extends DocumentSummary {
   project: { id: string; number: string | null; name: string }
   contact: { id: string; displayName: string } | null
+  /** Ansprechpartner („z. Hd.“ in the address block). */
+  contactPerson: { id: string; displayName: string } | null
   placeOfPerformance: string | null
   serviceFrom: string | null
   serviceTo: string | null
@@ -597,7 +601,12 @@ export interface SheetVariance {
   measuredQuantity: string
   /** Already in other change orders (not rejected). */
   claimedQuantity: string
+  /** Mehrmenge not yet in a change order (0: only listed for the hint below). */
   extraQuantity: string
+  /** Measured quantity in percent of the ordered one. */
+  measuredPercent: string | null
+  /** VOB/B § 2 Abs. 3: over 110 % (new price possible) or under 90 % (price increase possible). */
+  deviation: 'over_110' | 'under_90' | null
 }
 
 // ---- Zielpreis „Preis anpassen“ (P2.12) ----------------------------------------------------------

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { acceptedPart, contractTotals } from './contract.js'
+import { acceptedPart, contractTotals, quantityDeviation } from './contract.js'
 
 describe('contractTotals (Vertragssumme)', () => {
   it('is the main contract plus accepted change orders only', () => {
@@ -38,5 +38,22 @@ describe('contractTotals (Vertragssumme)', () => {
     expect(acceptedPart({ status: 'partially_accepted', netCents: 5n, acceptedNetCents: 2n })).toBe(
       2n,
     )
+  })
+})
+
+describe('quantityDeviation (VOB/B § 2 Abs. 3)', () => {
+  it('flags more than 110 % and less than 90 % of the ordered quantity', () => {
+    expect(quantityDeviation('100', '110')).toEqual({ percent: '110', rule: null })
+    expect(quantityDeviation('100', '110,5'.replace(',', '.'))).toEqual({
+      percent: '111',
+      rule: 'over_110',
+    })
+    expect(quantityDeviation('100', '90')).toEqual({ percent: '90', rule: null })
+    expect(quantityDeviation('100', '89.9')).toEqual({ percent: '90', rule: 'under_90' })
+    expect(quantityDeviation('40', '0')).toEqual({ percent: '0', rule: 'under_90' })
+  })
+
+  it('has no ratio without an ordered quantity', () => {
+    expect(quantityDeviation('0', '5')).toEqual({ percent: null, rule: null })
   })
 })

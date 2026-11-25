@@ -6,13 +6,18 @@ import type { FastifyInstance } from 'fastify'
 import { z } from 'zod'
 import { type AuthContext, inTenant, requirePermission, type Services } from '../context.js'
 import { notFound, parse } from '../http.js'
+import { hitRateLimit } from '../security/sessions.js'
 import { listInvoices, todayIn } from './receivables.js'
 
 /**
  * Benachrichtigungen (P2.8): per person, written in the same transaction as the event
  * (Bericht unterschrieben, Nachtrag entschieden). „Rechnung überfällig“ is created when the
- * person with the right to dun opens the list, from the invoice list (`receivableState`).
+ * person with the right to dun opens the list, from the invoice list (`receivableState`) – at
+ * most once an hour per person and day, not on every poll (the app asks every 5 minutes).
  */
+
+/** The invoice list is evaluated for overdue invoices at most this often per person. */
+const OVERDUE_REFRESH_SECONDS = 3600
 
 const idParam = z.object({ id: z.uuid('Ungültige ID.') })
 const ISO = (tx: Tx, column: string) =>
@@ -93,8 +98,15 @@ export function registerNotificationRoutes(app: FastifyInstance, services: Servi
   app.get('/api/v1/notifications', async (request): Promise<NotificationList> => {
     const auth = requirePermission(request)
     const today = todayIn(services.now())
+    // A new key every day, so an invoice that became overdue overnight shows up in the morning.
+    const due = await hitRateLimit(
+      services.sql,
+      `overdue:${auth.tenantId}:${auth.userId}:${today}`,
+      1,
+      OVERDUE_REFRESH_SECONDS,
+    )
     return inTenant(services, auth, async (tx) => {
-      await refreshOverdue(tx, auth, today)
+      if (due.allowed) await refreshOverdue(tx, auth, today)
       return list(tx, auth)
     })
   })

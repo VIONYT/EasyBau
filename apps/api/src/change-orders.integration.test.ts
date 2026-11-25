@@ -123,6 +123,9 @@ describe.skipIf(!process.env.DATABASE_URL)('Nachträge und Vertragssumme (integr
         orderedQuantity: '100',
         measuredQuantity: '112.5',
         extraQuantity: '12.5',
+        // VOB/B § 2 Abs. 3 Nr. 2: more than 110 % – a new price may be agreed.
+        measuredPercent: '113',
+        deviation: 'over_110',
       },
     ])
 

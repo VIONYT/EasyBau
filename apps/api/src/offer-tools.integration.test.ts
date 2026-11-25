@@ -276,6 +276,18 @@ describe.skipIf(!process.env.DATABASE_URL)(
       expect(dashboard.openOffers.map((o: { number: string }) => o.number)).toEqual([
         `${finished.number}-V3`,
       ])
+      // A replaced version is no longer the basis of an Auftragsbestätigung.
+      const fromOld = await admin.post(`/api/v1/projects/${projectId}/documents`, {
+        type: 'order_confirmation',
+        sourceDocumentId: v2.id,
+      })
+      expect(fromOld.statusCode).toBe(409)
+      expect(fromOld.json().detail).toMatch(/durch Version 3 .* ersetzt/)
+      const fromNewest = await admin.post(`/api/v1/projects/${projectId}/documents`, {
+        type: 'order_confirmation',
+        sourceDocumentId: v3.id,
+      })
+      expect(fromNewest.statusCode, fromNewest.body).toBe(201)
     })
   },
 )

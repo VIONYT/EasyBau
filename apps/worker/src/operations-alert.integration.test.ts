@@ -33,9 +33,12 @@ describe.skipIf(!testDatabaseUrl)('Betriebswarnung per E-Mail (integration)', ()
       values ('easybau-alt', 'ok', now() - interval '31 hours', now() - interval '30 hours', null),
              ('easybau-neu', 'failed', now() - interval '2 hours', now() - interval '1 hour', 'Datenträger voll')`
 
+    // Other test files may check all audit chains at any time (shared test database): check this
+    // company's chain first, so the problems below depend only on this test.
+    await db.admin`select check_all_audit_chains()`
     const first = await ours()
     expect(first).toMatchObject({ sent: 'alert', recipients: 1 })
-    expect(first?.problems).toEqual(['backup_old', 'backup_failed', 'audit_never'])
+    expect(first?.problems).toEqual(['backup_old', 'backup_failed'])
     const [mail] = await mails()
     expect(mail?.to).toMatch(/@example\.test$/)
     expect(mail?.subject).toMatch(/^EasyBau: Bitte Betrieb prüfen \(Warnung \d+\)$/)

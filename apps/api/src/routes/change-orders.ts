@@ -1,5 +1,5 @@
 import type { Tx } from '@opc/db'
-import { type ChangeOrderStatus, contractTotals, Decimal } from '@opc/domain'
+import { type ChangeOrderStatus, contractTotals, Decimal, quantityDeviation } from '@opc/domain'
 import { germanDate } from '@opc/exports'
 import {
   changeOrderEvidenceRequest,
@@ -173,6 +173,14 @@ interface VarianceRow {
  * in other change orders (not rejected).
  */
 async function variancesOf(tx: Tx, sheetId: string): Promise<(VarianceRow & { extra: string })[]> {
+  return (await measuredItemsOf(tx, sheetId)).filter((row) => new Decimal(row.extra).gt(0))
+}
+
+/** All contract positions measured on the sheet with their Mehrmenge (≤ 0: none). */
+async function measuredItemsOf(
+  tx: Tx,
+  sheetId: string,
+): Promise<(VarianceRow & { extra: string })[]> {
   const rows = await tx<VarianceRow[]>`
     select i.id, i.oz, i.short_text as "shortText", trim_scale(i.quantity)::text as quantity,
            i.unit_id as "unitId", i.unit_symbol as "unitSymbol", i.unit_unece_code as "unitUnece",
@@ -198,12 +206,12 @@ async function variancesOf(tx: Tx, sheetId: string): Promise<(VarianceRow & { ex
       and (d.type = 'order_confirmation'
            or (d.type = 'change_order' and co.status in ('accepted', 'partially_accepted')))
     order by d.created_at, string_to_array(coalesce(i.oz, '0'), '.')::int[], i.sort`
-  return rows.flatMap((row) => {
+  return rows.map((row) => {
     const extra = new Decimal(row.measured)
       .minus(row.quantity)
       .minus(row.claimed)
       .toDecimalPlaces(row.decimals ?? 2, Decimal.ROUND_DOWN)
-    return extra.gt(0) ? [{ ...row, extra: extra.toString() }] : []
+    return { ...row, extra: Decimal.max(extra, 0).toString() }
   })
 }
 
@@ -249,16 +257,25 @@ export function registerChangeOrderRoutes(app: FastifyInstance, services: Servic
         select s.id from measurement_sheet s join project p on p.id = s.project_id
         where s.id = ${id} and ${projectVisibility(tx, auth)}`
       if (!sheet) throw notFound('Das Aufmaßblatt')
-      return (await variancesOf(tx, id)).map((v) => ({
-        itemId: v.id,
-        oz: v.oz,
-        shortText: v.shortText,
-        unit: v.unitSymbol,
-        orderedQuantity: v.quantity,
-        measuredQuantity: v.measured,
-        claimedQuantity: v.claimed,
-        extraQuantity: v.extra,
-      }))
+      // Mehrmengen, plus positions more than 10 % below the order (VOB/B § 2 Abs. 3 Nr. 3).
+      return (await measuredItemsOf(tx, id)).flatMap((v) => {
+        const { percent, rule } = quantityDeviation(v.quantity, v.measured)
+        if (new Decimal(v.extra).lte(0) && rule !== 'under_90') return []
+        return [
+          {
+            itemId: v.id,
+            oz: v.oz,
+            shortText: v.shortText,
+            unit: v.unitSymbol,
+            orderedQuantity: v.quantity,
+            measuredQuantity: v.measured,
+            claimedQuantity: v.claimed,
+            extraQuantity: v.extra,
+            measuredPercent: percent,
+            deviation: rule,
+          },
+        ]
+      })
     })
   })
 

@@ -6,7 +6,7 @@ Im Projekt unter **Dokumente › Neues Dokument** die Art wählen (Angebot, Kost
 
 ## Kopfdaten
 
-Unter **Kopfdaten**: Betreff, Datum, **Empfänger**, Leistungsort, Bindefrist, Gesamtrabatt, **Steuerfall** (normal, § 13b, steuerfrei), Anfangs- und Schlusstext, **Lohnkostenanteil ausweisen (§ 35a EStG)**.
+Unter **Kopfdaten**: Betreff, Datum, **Empfänger**, **Ansprechpartner (z. Hd.)** – eine Person, die im Kontakt der Organisation als Ansprechpartner verknüpft ist; sie steht als „z. Hd. …“ im Anschriftfeld –, Leistungsort, Bindefrist, Gesamtrabatt, **Steuerfall** (normal, § 13b, steuerfrei), Anfangs- und Schlusstext, **Lohnkostenanteil ausweisen (§ 35a EStG)**.
 
 ## Leistungsverzeichnis
 
@@ -41,7 +41,7 @@ Der Kunde nennt ein Budget? **Preis anpassen (Zielpreis)** – gewünschten Nett
 
 ### Versionen
 
-Ändert sich ein fertiges Angebot, legt **Neue Version anlegen** eine bearbeitbare Kopie an. Beim Fertigstellen bekommt sie die Nummer mit Zusatz, z. B. `A-00101-V2`. In der Übersicht zählt nur die neueste Version als offenes Angebot.
+Ändert sich ein fertiges Angebot, legt **Neue Version anlegen** eine bearbeitbare Kopie an. Beim Fertigstellen bekommt sie die Nummer mit Zusatz, z. B. `A-00101-V2`. In der Übersicht zählt nur die neueste Version als offenes Angebot. Sobald eine neuere Version fertiggestellt ist, gelten ältere als **ersetzt**: Eine Auftragsbestätigung oder ein anderes Folgedokument lässt sich nur noch aus der neuesten Version erstellen.
 
 ## Auftragsbestätigung (Hauptauftrag)
 

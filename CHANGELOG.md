@@ -14,9 +14,14 @@ Alle wesentlichen Änderungen, vor allem solche, die Betreiber betreffen (neue V
 - **Regiestunden im Lohnkostenanteil (§ 35a EStG):** Aus Regieberichten übernommene Stunden bekommen eine Lohn-Kalkulation aus der Lohngruppe und zählen damit als Arbeitskosten (vorher 0 €).
 
 ### Geändert
+- **„Rechnung überfällig“** wird höchstens einmal pro Stunde und Person ausgewertet statt bei jedem Abruf der Benachrichtigungen (alle 5 Minuten); alte Zähler der Anfragebegrenzung räumt der nächtliche Aufräum-Job mit weg.
 - **Basis-Images aktualisiert:** App und Web laufen auf **Node 26** (vorher 22). Node 26 enthält kein corepack mehr; die Images installieren pnpm jetzt direkt in der Version aus `package.json` → `packageManager`. KoSIT-Validator auf **Eclipse Temurin 25** (vorher 21), Download-Stufe auf **Alpine 3.24**. CI-Actions auf die aktuellen Hauptversionen (checkout/setup-node v7, Docker-Actions v4/v6/v7). Für Betreiber ändert sich nichts außer neuen Images (`docker compose pull` bzw. `--build`); Entwickler brauchen lokal Node 26 (`.nvmrc`).
 
 ### Neu
+- **Kontakte zusammenführen:** Dubletten im Kontakt über „Mit anderem Kontakt zusammenführen“; Projekte, Entwürfe, Ansprechpartner, Eingangsrechnungen in Prüfung und fehlende Kanäle/Anschriften wandern zum bleibenden Kontakt, festgeschriebene Belege bleiben unverändert. Datenbank-Migration `0041_contact_merge`.
+- **Ansprechpartner („z. Hd.“) im Dokument:** im Dokumentkopf wählbar (Personen, die mit der Empfänger-Organisation verknüpft sind), erscheint im Anschriftfeld.
+- **Ersetzte Angebotsversionen:** Ist eine neuere Version fertiggestellt, ist die ältere „ersetzt“; Folgedokumente nur noch aus der neuesten Version.
+- **Mehr- und Mindermengen nach VOB/B § 2 Abs. 3:** Hinweise bei über 110 % (neuer Preis möglich) und unter 90 % (Preiserhöhung möglich) im Leistungsaufmaß.
 - **Eigene E-Mail-Adresse ändern** (Sicherheit › E-Mail-Adresse): mit aktuellem Passwort; der Link geht an die neue Adresse, die alte wird benachrichtigt. Ohne E-Mail-Versand gilt die Adresse sofort (unbestätigt).
 - **Sicherheitshinweise per E-Mail** (nur mit SMTP): bei geändertem oder zurückgesetztem Passwort, bei Anmeldung von einem neuen Gerät (erkannt an einem dauerhaften Cookie `device`, nur dessen SHA-256 wird gespeichert) und an die alte Adresse bei geänderter E-Mail-Adresse. Datenbank-Migration `0040_account_security`.
 - **Designsystem als Paket (`packages/ui`):** Farben, Abstände, Schriftgrößen und Touch-Ziele als Tokens (DESIGN.md §7.2) plus Basiskomponenten. Im Dunkelmodus ist Text auf Primärfarbe (Knöpfe, aktive Reiter) jetzt dunkel statt weiß und damit gut lesbar (WCAG AA).
