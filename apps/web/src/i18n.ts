@@ -277,6 +277,10 @@ const de = {
   'merge.submit': 'Zusammenführen',
   'merge.done':
     'Zusammengeführt mit „{name}“ – dieser Kontakt ist archiviert und wird nicht mehr verwendet.',
+  'privacy.projects':
+    'Die Projekte dieses Privatkunden verlieren beim Löschen Namen, Beschreibung und Baustellenanschrift und werden archiviert.',
+  'privacy.files':
+    'In den Projekten liegen {files} Dateien/Fotos und {reports} Berichte. Sie werden nicht automatisch gelöscht (oft Nachweise, z. B. für die Gewährleistung) – bitte in der Ablage prüfen und nicht mehr Benötigtes selbst löschen.',
   'privacy.title': 'Datenschutz',
   'privacy.hint':
     'Auskunft (Art. 15 DSGVO) lädt alle gespeicherten Daten dieses Kontakts als Datei herunter. Löschen anonymisiert den Kontakt; steht er in festgeschriebenen Belegen, wird er bis zum Ende der Aufbewahrungsfrist gesperrt und danach automatisch gelöscht.',
@@ -403,6 +407,10 @@ const de = {
   'security.keyNeverUsed': 'Noch nicht benutzt',
   'security.unsupported': 'Dieser Browser unterstützt keine Sicherheitsschlüssel.',
   'security.password': 'Passwort ändern',
+  'security.myData': 'Meine Daten',
+  'security.myDataHint':
+    'Auskunft nach Art. 15 DSGVO: alles, was zu Ihrem Zugang gespeichert ist (Konto, Sitzungen, Geräte, Mitgliedschaft und Ihre Daten in dieser Firma), als Datei.',
+  'security.myDataDownload': 'Auskunft herunterladen',
   'security.currentPassword': 'Aktuelles Passwort',
   'security.newPassword': 'Neues Passwort',
   'security.saved': 'Gespeichert.',
@@ -442,6 +450,8 @@ const de = {
   'audit.field': 'Feld',
   'audit.before': 'vorher',
   'audit.after': 'nachher',
+  'audit.redacted':
+    'Werte am {when} aus Datenschutzgründen entfernt (DSGVO, Löschkonzept) – der Eintrag selbst und die Prüfkette bleiben erhalten.',
   'audit.noChanges': 'Keine Felddaten (Ereignis wie Anmeldung oder Export).',
   'audit.record': 'Datensatz {id}',
   'audit.action.insert': 'Angelegt',
@@ -485,8 +495,10 @@ const de = {
   'users.role': 'Rolle',
   'users.roleOf': 'Rolle von {name}',
   'users.remove': 'Entfernen',
-  'users.removeConfirm': 'Diese Person aus der Firma entfernen?',
+  'users.removeConfirm':
+    'Diese Person aus der Firma entfernen? Gehört sie danach zu keiner Firma mehr, werden ihre Anmeldedaten (Passwort, zweiter Faktor, Geräte) gelöscht; ihr Name bleibt im Änderungsprotokoll.',
   'users.resetMfa': '2FA zurücksetzen',
+  'users.privacyReport': 'Auskunft (DSGVO)',
   'users.resetMfaConfirm': 'Zweiten Faktor (App und Schlüssel) dieser Person zurücksetzen?',
   'users.you': 'Sie',
   'users.mfa': '2FA',

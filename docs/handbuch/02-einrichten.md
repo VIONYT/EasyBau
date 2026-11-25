@@ -55,4 +55,6 @@ Unter **Benutzer › Person einladen** E-Mail-Adresse, Name und Rolle eingeben u
 | **Teammitglied (Baustelle)** | Aufmaß, Bautagebuch und Berichte der eigenen Projekte – ohne Preise |
 | **Steuerberatung / Prüfer (nur lesen)** | alles lesen und exportieren, **befristet** (höchstens ein Jahr), keine Änderungen |
 
+**Auskunft (DSGVO)** lädt alle zu einer Person gespeicherten Daten als Datei herunter (jede Person kann das für sich selbst unter **Sicherheit › Meine Daten**). **Entfernen** nimmt die Person aus der Firma; gehört sie danach zu keiner Firma mehr, werden ihre Anmeldedaten (Passwort, zweiter Faktor, Passkeys, Geräte, E-Mail-Adresse) gelöscht – ihr Name bleibt im Änderungsprotokoll.
+
 ![Benutzer](../screenshots/macbook-benutzer.png)

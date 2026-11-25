@@ -21,7 +21,7 @@ Beschreibung des Programms EasyBau; Einzelheiten stehen in der [Architektur (DES
 ## 3.3 Änderungsprotokoll (Audit-Kette)
 
 - Jede Änderung steuerrelevanter Daten (Stammdaten, Belege, Zahlungen, Einstellungen zu Steuern und Nummernkreisen …) schreibt in derselben Transaktion einen Eintrag mit Zeit, Person, Aktion, altem und neuem Stand.
-- Die Einträge je Firma sind durch eine Hash-Kette verbunden und können nicht geändert oder gelöscht werden (Datenbank-Trigger).
+- Die Einträge je Firma sind durch eine Hash-Kette verbunden und können nicht geändert oder gelöscht werden (Datenbank-Trigger). Seit Version mit Migration 0042 umfasst die Kette einen Hash des alten/neuen Stands statt des Stands selbst: Nach einer DSGVO-Löschung von Kontakten (bzw. der Projekte von Privatkunden) werden nur deren alte/neue Werte entfernt („geschwärzt“); Zeit, Person, Aktion und Datensatz bleiben erhalten und prüfbar, ungeschwärzte Werte werden weiter gegen ihren Hash geprüft. Ältere Einträge (vor 0042) bleiben unverändert und sind nicht schwärzbar.
 - Die Kette wird jede Nacht vollständig geprüft; dabei wird der letzte Eintrag verankert, sodass auch Kürzungen oder komplette Neuberechnungen auffallen. Ergebnis im Betriebs-Check; bei Problemen E-Mail an die Admins.
 - Einsicht: Bereich **Prüfung** (Filter nach Zeitraum, Beleg, Datensatz).
 

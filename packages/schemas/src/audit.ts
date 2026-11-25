@@ -44,6 +44,8 @@ export interface AuditEventItem {
   entityId: string | null
   /** Changed fields (update), all fields (insert/delete); technical columns left out. */
   changes: { field: string; before: unknown; after: unknown }[]
+  /** DSGVO: the values were removed after the record was erased (the chain stays verifiable). */
+  redactedAt: string | null
 }
 
 export interface AuditEventList {

@@ -82,6 +82,17 @@ export function ContactPrivacyPanel({
                   date: formatDateTime(plan.retentionEnd, 'date'),
                 })}
           </p>
+          {contact.kind === 'person' && plan.usage.projects ? (
+            <p className="hint">{t('privacy.projects')}</p>
+          ) : null}
+          {plan.usage.files + plan.usage.reports ? (
+            <p className="hint">
+              {tf('privacy.files', {
+                files: String(plan.usage.files),
+                reports: String(plan.usage.reports),
+              })}
+            </p>
+          ) : null}
           <div className="button-row">
             <Button variant="destructive" disabled={busy} onClick={erase}>
               {plan.action === 'erase' ? t('privacy.doErase') : t('privacy.doBlock')}

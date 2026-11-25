@@ -1,6 +1,6 @@
 import type { Me, SecurityOverview, TotpSetupResponse } from '@opc/schemas'
 import { useCallback, useEffect, useState } from 'react'
-import { type ApiError, api } from '../api'
+import { type ApiError, api, downloadFile } from '../api'
 import { formatDateTime } from '../format'
 import { Field, FormError, useForm, value } from '../forms'
 import { t } from '../i18n'
@@ -42,6 +42,7 @@ export function Security({ me, onChanged }: { me: Me; onChanged: () => void }) {
           <MySignatureCard />
           <EmailVerificationCard me={me} onChanged={onChanged} />
           <PasswordCard />
+          <MyDataCard />
         </>
       ) : (
         <p className="muted">{t('common.loading')}</p>
@@ -254,6 +255,29 @@ function PasswordCard() {
           {t('common.save')}
         </button>
       </form>
+    </div>
+  )
+}
+
+/** DSGVO Art. 15/20: everything stored about the own login, as a file. */
+function MyDataCard() {
+  const [error, setError] = useState<string | null>(null)
+  return (
+    <div className="panel">
+      <h2>{t('security.myData')}</h2>
+      <p className="hint">{t('security.myDataHint')}</p>
+      <FormError>{error}</FormError>
+      <button
+        type="button"
+        className="button ghost"
+        onClick={() =>
+          downloadFile('/api/v1/auth/privacy-report').catch((err: ApiError) =>
+            setError(err.message),
+          )
+        }
+      >
+        {t('security.myDataDownload')}
+      </button>
     </div>
   )
 }

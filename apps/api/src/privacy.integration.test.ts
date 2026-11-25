@@ -124,6 +124,67 @@ describe.skipIf(!process.env.DATABASE_URL)('Datenschutz bei Kontakten (integrati
       union all select 1 from contact where first_name = 'Lena'`,
     )
     expect(left).toHaveLength(0)
+    // Nor in the Änderungsprotokoll: the payload is removed, the hash chain stays intact.
+    const events = await withTenant(
+      h.sql,
+      { tenantId },
+      (tx) => tx<{ before: unknown; after: unknown; redacted: boolean }[]>`
+        select before, after, redacted_at is not null as redacted from audit_event
+        where entity = 'contact' and entity_id = ${lead.id} and hash_version = 2 order by seq`,
+    )
+    expect(events.filter((e) => e.redacted).length).toBeGreaterThanOrEqual(2)
+    expect(events.every((e) => e.before === null && e.after === null)).toBe(true)
+    const chain = await admin.post('/api/v1/audit/chain/check', {})
+    expect(chain.json().last).toMatchObject({ problem: null })
+    // Only redaction is allowed – any other change of the protocol is still refused.
+    await expect(
+      h.adminSql`update audit_event set action = 'x' where entity_id = ${lead.id}`,
+    ).rejects.toThrow(/append-only/)
+    await expect(
+      h.adminSql`update audit_event set after = '{}'::jsonb where entity_id = ${lead.id}`,
+    ).rejects.toThrow(/append-only/)
+  })
+
+  it('anonymises the projects of an erased private customer', async () => {
+    const person = (
+      await admin.post('/api/v1/contacts', {
+        kind: 'person',
+        firstName: 'Paula',
+        lastName: 'Privat',
+        assignCustomerNumber: true,
+      })
+    ).json() as ContactDetail
+    const project = (
+      await admin.post('/api/v1/projects', {
+        name: 'Bad Familie Privat',
+        customerId: person.id,
+        site: { street: 'Gartenweg 7', postalCode: '30161', city: 'Hannover' },
+      })
+    ).json()
+    // Only a draft: nothing to keep, so the contact is erased at once.
+    await admin.post(`/api/v1/projects/${project.id}/documents`, { type: 'quote' })
+    const plan = await privacy(person.id)
+    expect(plan).toMatchObject({ action: 'erase', usage: { projects: 1, files: 0, reports: 0 } })
+    expect(
+      (await admin.post(`/api/v1/contacts/${person.id}/erase`, { confirm: true })).json(),
+    ).toEqual({ result: 'erased', blockedUntil: null })
+    const [row] = await withTenant(
+      h.sql,
+      { tenantId },
+      (tx) => tx<{ name: string; street: string | null; city: string | null; archived: boolean }[]>`
+        select name, site_street as street, site_city as city, archived_at is not null as archived
+        from project where id = ${project.id}`,
+    )
+    expect(row).toMatchObject({ street: null, city: null, archived: true })
+    expect(row?.name).toMatch(/^(Projekt |Gelöschtes Projekt)/)
+    const [left] = await withTenant(
+      h.sql,
+      { tenantId },
+      (tx) => tx<{ n: number }[]>`
+        select count(*)::int as n from audit_event
+        where entity = 'project' and entity_id = ${project.id} and after::text like '%Gartenweg%'`,
+    )
+    expect(left?.n).toBe(0)
   })
 
   it('blocks a customer with a finalized invoice until the retention period ends', async () => {

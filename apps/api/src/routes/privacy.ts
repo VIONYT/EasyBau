@@ -23,14 +23,18 @@ async function privacyOf(tx: Tx, id: string): Promise<ContactPrivacy> {
            (select count(*)::int from document d
              where (d.contact_id = c.id or d.contact_person_id = c.id) and d.status <> 'draft')
              as "finalizedDocuments",
-           (select count(*)::int from incoming_invoice i where i.contact_id = c.id) as "incomingInvoices"
+           (select count(*)::int from incoming_invoice i where i.contact_id = c.id) as "incomingInvoices",
+           (select count(*)::int from file f join project p on p.id = f.project_id
+             where p.customer_id = c.id) as files,
+           (select count(*)::int from report r join project p on p.id = r.project_id
+             where p.customer_id = c.id) as reports
     from contact c where c.id = ${id}`
   if (!row) throw notFound('Der Kontakt')
-  const { projects, documents, finalizedDocuments, incomingInvoices, ...rest } = row
+  const { projects, documents, finalizedDocuments, incomingInvoices, files, reports, ...rest } = row
   return {
     ...rest,
     action: erasureAction(rest.retentionEnd, todayOf(tx)).action,
-    usage: { projects, documents, finalizedDocuments, incomingInvoices },
+    usage: { projects, documents, finalizedDocuments, incomingInvoices, files, reports },
   }
 }
 

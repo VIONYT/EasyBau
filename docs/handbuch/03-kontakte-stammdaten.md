@@ -30,7 +30,7 @@ Fragt ein Kunde nach seinen Daten oder verlangt die Löschung (DSGVO), finden Si
   - Steht der Kontakt in **keinem festgeschriebenen Beleg**, wird er sofort und endgültig anonymisiert (Name, Anschriften, Kommunikationswege und Verknüpfungen werden gelöscht).
   - Steht er in **Rechnungen oder anderen festgeschriebenen Belegen**, müssen diese aufbewahrt werden (§ 147 AO, § 257 HGB). Der Kontakt wird dann bis zum Ende der Aufbewahrungsfrist **gesperrt**: Er lässt sich nicht mehr ändern und nicht mehr für neue Projekte oder Dokumente verwenden. Am Tag nach Fristende löscht EasyBau ihn automatisch.
 
-Festgeschriebene Belege selbst behalten ihre Empfängerdaten unverändert (GoBD). Projektnamen, Baustellenanschriften und Dateien in der Ablage prüfen Sie bei einer Löschung bitte selbst.
+Festgeschriebene Belege selbst behalten ihre Empfängerdaten unverändert (GoBD). Die alten Werte des Kontakts werden auch aus dem Änderungsprotokoll entfernt. Bei **Privatkunden** verlieren deren Projekte Namen, Beschreibung und Baustellenanschrift und werden archiviert; Dateien, Fotos und Berichte in diesen Projekten nennt der Löschdialog – prüfen Sie sie in der Ablage und löschen Sie, was nicht mehr gebraucht wird.
 
 ## Stammdaten
 

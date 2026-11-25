@@ -226,6 +226,9 @@ export interface ContactPrivacy {
     documents: number
     finalizedDocuments: number
     incomingInvoices: number
+    /** Files and photos in the Ablage of the customer's projects (checked by the company). */
+    files: number
+    reports: number
   }
   blockedAt: string | null
   blockedUntil: string | null

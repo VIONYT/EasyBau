@@ -264,6 +264,10 @@ function EventRow({ event: e }: { event: AuditEventItem }) {
               </tbody>
             </table>
           </div>
+        ) : e.redactedAt ? (
+          <p className="muted">
+            {tf('audit.redacted', { when: formatDateTime(e.redactedAt, 'date') })}
+          </p>
         ) : (
           <p className="muted">{t('audit.noChanges')}</p>
         )}

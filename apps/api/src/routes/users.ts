@@ -20,6 +20,7 @@ import { hashPassword, verifyPassword } from '../security/passwords.js'
 import { audit, finishLogin, rateLimit } from './auth-common.js'
 import { queueEmail } from './email.js'
 import { todayOf } from './receivables.js'
+import { eraseOrphanLogin, registerUserPrivacyRoutes } from './user-privacy.js'
 
 const userParam = z.object({ userId: z.uuid('Ungültige ID.') })
 const idParam = z.object({ id: z.uuid('Ungültige ID.') })
@@ -61,6 +62,7 @@ function lastAdminError(error: unknown): never {
 }
 
 export function registerUserRoutes(app: FastifyInstance, services: Services) {
+  registerUserPrivacyRoutes(app, services)
   const { sql } = services
 
   app.get('/api/v1/roles', async (request): Promise<RoleSummary[]> => {
@@ -147,6 +149,10 @@ export function registerUserRoutes(app: FastifyInstance, services: Services) {
     })
     await sql`delete from user_session where user_id = ${userId} and active_tenant_id = ${auth.tenantId}`
     await audit(services, auth.tenantId, auth.userId, 'member_removed', userId)
+    // DSGVO: a login without any company keeps only its name (Änderungsprotokoll).
+    if (await eraseOrphanLogin(sql, userId)) {
+      await audit(services, auth.tenantId, auth.userId, 'login_erased', userId)
+    }
     return reply.status(204).send()
   })
 
