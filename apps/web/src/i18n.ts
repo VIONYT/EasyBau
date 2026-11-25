@@ -23,6 +23,8 @@ const de = {
   'off.discardConfirm': 'Diese Änderung verwerfen? Sie wird nicht übertragen.',
   'off.logoutWaiting':
     'Es warten noch Änderungen auf Übertragung. Sie bleiben auf diesem Gerät und werden nach der nächsten Anmeldung mit diesem Konto übertragen. Trotzdem abmelden?',
+  'off.siteOnlineOnly':
+    'Ohne Netz nicht verfügbar: PDF, Unterschreiben und Löschen – sobald wieder Netz da ist, erscheinen die Knöpfe.',
   'off.notSynced': 'noch nicht übertragen',
   'off.notCached': 'Offline: Diese Ansicht ist auf dem Gerät noch nicht gespeichert.',
   'off.onlineOnly': 'Das geht nur mit Verbindung.',

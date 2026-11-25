@@ -23,7 +23,7 @@ Auf Baustellen gibt es oft kein oder nur schwaches Netz (Keller, Rohbau, Land). 
 7. **„Offline verfügbar machen“** am Projekt lädt Aufmaß und Bautagebuch (letzte 30 Berichte) vorab auf das Gerät.
 
 ## Offline nicht möglich (bewusst)
-Neue Aufmaßblätter und Räume, Unterschreiben (gemeinsames Aufmaß, Bericht), PDFs, Mengenübernahme, Löschen von Berichten, alle Finanzdokumente. Diese Schaltflächen melden ohne Netz „Der Server ist nicht erreichbar“.
+Unterschreiben (gemeinsames Aufmaß, Bericht), PDFs, Mengenübernahme, Löschen von Berichten, Blättern und Fotos, alle Finanzdokumente. Diese Schaltflächen sind ohne Netz ausgeblendet (`useOnline()`). *Nachtrag 2026-11-25:* Neue Aufmaßblätter und Räume gehen inzwischen offline (eigene IDs vom Gerät wie bei Zeilen und Berichten).
 
 ## Folgen
 - Kein neuer Container, keine neue Variable. Caddy liefert App-Hülle und Service Worker mit `Cache-Control: no-cache`, gehashte Dateien ein Jahr gecacht.

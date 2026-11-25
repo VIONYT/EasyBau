@@ -63,6 +63,38 @@ describe.skipIf(!process.env.DATABASE_URL)('Offline-Sync (integration)', () => {
     expect(patched.json().lines[0].resultQty).toBe('10.63')
   })
 
+  it('creates sheets and rooms with the client id once, even when sent again', async () => {
+    const id = randomUUID()
+    const body = { id, kind: 'survey', measuredOn: '2026-11-07' }
+    const first = await admin.post(`/api/v1/projects/${projectId}/measurement-sheets`, body)
+    expect(first.statusCode, first.body).toBe(201)
+    expect(first.json()).toMatchObject({ id, kind: 'survey', title: 'Angebotsaufmaß 2' })
+    const again = await admin.post(`/api/v1/projects/${projectId}/measurement-sheets`, body)
+    expect(again.statusCode).toBe(200)
+    const sheets = (await admin.get(`/api/v1/projects/${projectId}/measurement-sheets`)).json()
+    expect(sheets.filter((s: { id: string }) => s.id === id)).toHaveLength(1)
+    const otherProject = (await admin.post('/api/v1/projects', { name: 'Anderswo' })).json().id
+    expect(
+      (await admin.post(`/api/v1/projects/${otherProject}/measurement-sheets`, body)).statusCode,
+    ).toBe(409)
+
+    const room = { id: randomUUID(), name: 'Bad', variables: { L: '2.5', B: '1.8' } }
+    const created = await admin.post(`/api/v1/measurement-sheets/${id}/locations`, room)
+    expect(created.statusCode, created.body).toBe(201)
+    expect(created.json().locations).toMatchObject([{ id: room.id, name: 'Bad', path: 'Bad' }])
+    const child = { id: randomUUID(), name: 'Dusche', parentId: room.id }
+    await admin.post(`/api/v1/measurement-sheets/${id}/locations`, child)
+    const repeated = await admin.post(`/api/v1/measurement-sheets/${id}/locations`, room)
+    expect(repeated.statusCode).toBe(200)
+    expect(repeated.json().locations.map((l: { path: string }) => l.path)).toEqual([
+      'Bad',
+      'Bad › Dusche',
+    ])
+    expect(
+      (await admin.post(`/api/v1/measurement-sheets/${sheet.id}/locations`, room)).statusCode,
+    ).toBe(409)
+  })
+
   it('creates a report with the client id once and takes photos in one request', async () => {
     const id = randomUUID()
     const body = { id, templateKey: 'daily_site_report', reportDate: '2026-11-07' }

@@ -401,6 +401,17 @@ export function registerMeasurementRoutes(app: FastifyInstance, services: Servic
     const input = parse(createSheetRequest, request.body)
     const sheet = await inTenant(services, auth, async (tx) => {
       const project = await requireVisibleProject(tx, auth, id)
+      // Offline capture sends its own id: the same sheet again (sync retry) changes nothing.
+      if (input.id) {
+        const [existing] = await tx<{ projectId: string }[]>`
+          select project_id as "projectId" from measurement_sheet where id = ${input.id}`
+        if (existing) {
+          if (existing.projectId !== id) {
+            throw new HttpError(409, 'Diese Blatt-ID gehört zu einem anderen Projekt.')
+          }
+          return { sheet: await loadSheet(tx, auth, input.id), created: false }
+        }
+      }
       if (project.archived) {
         throw new HttpError(409, 'Das Projekt ist archiviert. Bitte zuerst wiederherstellen.')
       }
@@ -408,6 +419,7 @@ export function registerMeasurementRoutes(app: FastifyInstance, services: Servic
         select count(*)::int + 1 as n from measurement_sheet where project_id = ${id} and kind = ${input.kind}`
       const [created] = await tx<{ id: string }[]>`
         insert into measurement_sheet ${tx({
+          ...(input.id ? { id: input.id } : {}),
           tenant_id: auth.tenantId,
           project_id: id,
           kind: input.kind,
@@ -415,10 +427,10 @@ export function registerMeasurementRoutes(app: FastifyInstance, services: Servic
           ...(input.measuredOn ? { measured_on: input.measuredOn } : {}),
           created_by: auth.userId,
         })} returning id`
-      return loadSheet(tx, auth, (created as { id: string }).id)
+      return { sheet: await loadSheet(tx, auth, (created as { id: string }).id), created: true }
     })
-    reply.header('location', `/api/v1/measurement-sheets/${sheet?.id}`)
-    return sendSheet(reply, sheet, 201)
+    reply.header('location', `/api/v1/measurement-sheets/${sheet.sheet?.id}`)
+    return sendSheet(reply, sheet.sheet, sheet.created ? 201 : 200)
   })
 
   app.get('/api/v1/projects/:id/measurable-items', async (request): Promise<MeasurableItem[]> => {
@@ -513,21 +525,32 @@ export function registerMeasurementRoutes(app: FastifyInstance, services: Servic
     const auth = requirePermission(request, 'measurement.write')
     const { id } = parse(sheetParam, request.params)
     const input = parse(locationRequest, request.body)
-    const sheet = await inTenant(services, auth, async (tx) => {
+    const result = await inTenant(services, auth, async (tx) => {
       await sheetOf(tx, auth, id, { forUpdate: true })
+      if (input.id) {
+        const [existing] = await tx<{ sheetId: string }[]>`
+          select sheet_id as "sheetId" from measurement_location where id = ${input.id}`
+        if (existing) {
+          if (existing.sheetId !== id) {
+            throw new HttpError(409, 'Diese Raum-ID gehört zu einem anderen Aufmaßblatt.')
+          }
+          return { sheet: await loadSheet(tx, auth, id), created: false }
+        }
+      }
       if (input.parentId) {
         await checkLocation(tx, id, input.parentId).catch(() => {
           throw invalid({ parentId: 'Unbekannter übergeordneter Bereich.' })
         })
       }
       await tx`
-        insert into measurement_location (tenant_id, sheet_id, parent_id, name, variables, sort)
-        values (${auth.tenantId}, ${id}, ${input.parentId ?? null}, ${input.name}, ${tx.json(input.variables)},
+        insert into measurement_location (id, tenant_id, sheet_id, parent_id, name, variables, sort)
+        values (coalesce(${input.id ?? null}::uuid, uuid_v7()), ${auth.tenantId}, ${id}, ${input.parentId ?? null},
+                ${input.name}, ${tx.json(input.variables)},
                 (select coalesce(max(sort), 0) + 10 from measurement_location where sheet_id = ${id}))`
       await touch(tx, id)
-      return loadSheet(tx, auth, id)
+      return { sheet: await loadSheet(tx, auth, id), created: true }
     })
-    return sendSheet(reply, sheet, 201)
+    return sendSheet(reply, result.sheet, result.created ? 201 : 200)
   })
 
   app.patch('/api/v1/measurement-sheets/:id/locations/:locationId', async (request, reply) => {

@@ -18,6 +18,7 @@ Alle wesentlichen Änderungen, vor allem solche, die Betreiber betreffen (neue V
 - **Basis-Images aktualisiert:** App und Web laufen auf **Node 26** (vorher 22). Node 26 enthält kein corepack mehr; die Images installieren pnpm jetzt direkt in der Version aus `package.json` → `packageManager`. KoSIT-Validator auf **Eclipse Temurin 25** (vorher 21), Download-Stufe auf **Alpine 3.24**. CI-Actions auf die aktuellen Hauptversionen (checkout/setup-node v7, Docker-Actions v4/v6/v7). Für Betreiber ändert sich nichts außer neuen Images (`docker compose pull` bzw. `--build`); Entwickler brauchen lokal Node 26 (`.nvmrc`).
 
 ### Neu
+- **Offline auf der Baustelle erweitert:** neue Aufmaßblätter und Räume lassen sich ohne Netz anlegen (eigene IDs vom Gerät, wiederholtes Senden legt nichts doppelt an); noch nicht übertragene Fotos zeigen eine Vorschau; Knöpfe, die nur mit Netz gehen (PDF, Unterschreiben, Löschen), sind offline ausgeblendet.
 - **Kontakte zusammenführen:** Dubletten im Kontakt über „Mit anderem Kontakt zusammenführen“; Projekte, Entwürfe, Ansprechpartner, Eingangsrechnungen in Prüfung und fehlende Kanäle/Anschriften wandern zum bleibenden Kontakt, festgeschriebene Belege bleiben unverändert. Datenbank-Migration `0041_contact_merge`.
 - **Ansprechpartner („z. Hd.“) im Dokument:** im Dokumentkopf wählbar (Personen, die mit der Empfänger-Organisation verknüpft sind), erscheint im Anschriftfeld.
 - **Ersetzte Angebotsversionen:** Ist eine neuere Version fertiggestellt, ist die ältere „ersetzt“; Folgedokumente nur noch aus der neuesten Version.

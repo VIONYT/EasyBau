@@ -64,6 +64,37 @@ export function useOfflineStatus(): OfflineStatus {
   return state
 }
 
+/**
+ * The server is reachable: actions that need it (PDF, Unterschreiben, Löschen, Mengenübernahme)
+ * are shown only then – offline they could only fail.
+ */
+export function useOnline(): boolean {
+  const s = useOfflineStatus()
+  return s.online && !s.usingCache
+}
+
+/** Local picture of a photo that waits in the outbox (preview until it is transferred). */
+export function useWaitingPhoto(resource: string, filename: string): string | null {
+  const { entries } = useOfflineStatus()
+  const entry = entries.find(
+    (e) =>
+      e.resource === resource &&
+      e.blob &&
+      new URL(e.path, 'http://local').searchParams.get('filename') === filename,
+  )
+  const [url, setUrl] = useState<string | null>(null)
+  useEffect(() => {
+    if (!entry?.blob) {
+      setUrl(null)
+      return
+    }
+    const objectUrl = URL.createObjectURL(entry.blob)
+    setUrl(objectUrl)
+    return () => URL.revokeObjectURL(objectUrl)
+  }, [entry?.blob])
+  return url
+}
+
 /** The signed-in account: cache and outbox of another account are not used. */
 export async function setOfflineOwner(me: Pick<Me, 'user' | 'tenant'> | null) {
   const next = me ? ownerOf(me) : null
