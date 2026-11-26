@@ -10,7 +10,7 @@ Eingangsrechnung mit Kostenzuweisung. Alle Daten sind erfunden.
 Stand ein, wendet alle neueren Migrationen an und prüft: keine Tabelle verliert Zeilen, die
 Audit-Kette jeder Firma ist intakt, das Schema gleicht einer frisch migrierten Datenbank.
 
-**Pflege:** Vor jedem Release einen Abzug des Release-Stands hinzufügen und ältere behalten,
+**Pflege:** Vorhanden: `upgrade-0037.sql`, `upgrade-0042.sql` (Stand vor `v0.1.0`). Vor jedem Release einen Abzug des Release-Stands hinzufügen und ältere behalten,
 solange Installationen von dort aus aktualisiert werden sollen:
 
 ```bash
