@@ -829,6 +829,8 @@ const de = {
   'dash.siteOnly':
     'Ohne Verbindung: Forderungen, Angebote und Eingangsrechnungen erscheinen, sobald der Server wieder erreichbar ist.',
   'dash.until': 'bis {date}',
+  'dash.siteDay': 'Bauzeit: Tag {day}',
+  'dash.siteDayOf': 'Bauzeit: Tag {day} von {days}',
   'dash.offers': 'Offene Angebote und Nachträge',
   'dash.offersNone': 'Keine offenen Angebote oder Nachträge.',
   'dash.validUntil': 'gültig bis {date}',
@@ -839,7 +841,7 @@ const de = {
   'dash.status.sent': 'versendet',
   'dash.recent': 'Zuletzt bearbeitete Projekte',
   'search.label': 'Suchen',
-  'search.placeholder': 'Suchen …',
+  'search.placeholder': 'Suchen',
   'search.title': 'Suche: „{q}“',
   'search.tooShort': 'Bitte mindestens 2 Zeichen eingeben.',
   'search.none': 'Nichts gefunden.',

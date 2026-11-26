@@ -179,7 +179,7 @@ legend {
 }
 
 .list-link.unread strong {
-  font-weight: 700;
+  font-weight: 600;
 }
 
 .list-link.unread {
@@ -247,7 +247,7 @@ legend {
   color: var(--color-text);
   background: transparent;
   border: 1px solid var(--color-border);
-  border-radius: 999px;
+  border-radius: 10px;
   cursor: pointer;
 }
 
@@ -570,7 +570,7 @@ a.button {
 }
 
 .amount--strong {
-  font-weight: 700;
+  font-weight: 600;
 }
 
 .amount {
@@ -753,7 +753,7 @@ details.panel > summary {
 .totals .grand {
   padding-top: var(--space-2);
   border-top: 2px solid var(--color-text);
-  font-weight: 700;
+  font-weight: 600;
   font-size: 1.125rem;
 }
 
@@ -873,7 +873,7 @@ details.panel > summary {
 
 .file-kind {
   font-size: 1.25rem;
-  font-weight: 700;
+  font-weight: 600;
 }
 
 .file-info {
@@ -1067,7 +1067,7 @@ details.panel > summary {
   display: block;
   margin: 0 0 var(--space-2);
   font-size: 1.125rem;
-  font-weight: 700;
+  font-weight: 600;
 }
 
 legend.h2 {
@@ -1698,7 +1698,7 @@ fieldset.plain {
   white-space: nowrap;
 }
 .deduction-table .rest-row > * {
-  font-weight: 700;
+  font-weight: 600;
   border-bottom: 0;
 }
 @media (max-width: 34rem) {
@@ -2022,7 +2022,7 @@ fieldset.plain {
 
 .receivable-sums .is-strong,
 .invoice-sums .is-strong {
-  font-weight: 700;
+  font-weight: 600;
   border-top: 1px solid var(--color-border);
   padding-top: var(--space-1);
 }
@@ -2500,4 +2500,80 @@ fieldset.plain {
 }
 .mail-log-files {
   padding-left: var(--space-4);
+}
+
+/* --- unslop (2026-11-26): Richtung „sachlich, robust, ruhig“ – Bauplan und Baustelle ---------- */
+
+/* Strong text at 600: hierarchy comes from size and colour, not from heavy weights. */
+strong,
+b {
+  font-weight: 600;
+}
+
+/* Signature: a dimension line (Maßkette) under section headings – a hairline with end ticks,
+   as on a construction drawing. Only on panel headings, nowhere else. */
+.panel > h2::after {
+  content: "";
+  display: block;
+  height: 7px;
+  margin-top: var(--space-2);
+  background:
+    linear-gradient(var(--color-border), var(--color-border)) center / 100% 1px no-repeat,
+    linear-gradient(var(--color-muted), var(--color-muted)) left center / 1px 7px no-repeat,
+    linear-gradient(var(--color-muted), var(--color-muted)) right center / 1px 7px no-repeat;
+  opacity: 0.6;
+}
+
+/* Moment 1: open receivables – the one figure of the overview that carries the brand colour. */
+.amount-hero {
+  margin: 0;
+  font-size: var(--font-size-3xl);
+  font-weight: 600;
+  line-height: 1.15;
+  font-variant-numeric: tabular-nums;
+  color: var(--color-primary);
+}
+
+/* Moment 2: Bauzeit of today's sites as a measured line. */
+.site-span {
+  display: grid;
+  gap: var(--space-1);
+  font-size: var(--font-size-sm);
+  font-variant-numeric: tabular-nums;
+}
+.site-span__track {
+  position: relative;
+  display: block;
+  height: 4px;
+  background: var(--color-border);
+  border-radius: 2px;
+  overflow: hidden;
+}
+.site-span__fill {
+  position: absolute;
+  inset: 0 auto 0 0;
+  background: var(--color-primary);
+  border-radius: 2px;
+}
+
+/* Recent projects: the status sits quietly next to the project on wider screens. */
+@media (min-width: 601px) {
+  .list li.list-link:has(> .status-select) {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    align-items: center;
+  }
+  .list-link > .status-select {
+    padding: 0 var(--space-4) 0 0;
+  }
+}
+.list-link > .status-select .select {
+  max-width: 11rem;
+  font-size: var(--font-size-sm);
+  padding-block: var(--space-1);
+}
+
+/* Cards in the overview grid: the grid gap is the only spacing between them. */
+.dashboard > .panel {
+  margin-bottom: 0;
 }

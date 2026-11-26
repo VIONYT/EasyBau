@@ -70,8 +70,9 @@ export function Dashboard({ me, navigate }: { me: Me; navigate: Navigate }) {
       {label}
     </a>
   )
+  // Signal colour only when there is something to act on (0,00 € overdue is not a warning).
   const sum = (key: 'open' | 'overdue' | 'dunned', s: DashboardSum) => (
-    <div className={`receivable-sum receivable-sum--${key}`}>
+    <div className={`receivable-sum${s.cents ? ` receivable-sum--${key}` : ''}`}>
       <span className="muted">{t(`dash.receivables.${key}` as TextKey)}</span>
       <strong className="amount">{money(s.cents)}</strong>
       <span className="muted">{tn('dash.count', s.count)}</span>
@@ -115,7 +116,7 @@ export function Dashboard({ me, navigate }: { me: Me; navigate: Navigate }) {
           {data.receivables ? (
             <section className="panel" aria-labelledby={`${id}-rec`}>
               <h2 id={`${id}-rec`}>{t('dash.receivables')}</h2>
-              <p className="amount-big">{money(data.receivables.total.cents)}</p>
+              <p className="amount-hero">{money(data.receivables.total.cents)}</p>
               <div className="dashboard-sums">
                 {sum('open', data.receivables.open)}
                 {sum('overdue', data.receivables.overdue)}
@@ -169,6 +170,7 @@ export function Dashboard({ me, navigate }: { me: Me; navigate: Navigate }) {
                           .filter(Boolean)
                           .join(' · ')}
                       </span>
+                      <SiteSpan start={p.startDate} end={p.endDate} today={data.today} />
                     </a>
                   </li>
                 ))}
@@ -272,5 +274,38 @@ export function Dashboard({ me, navigate }: { me: Me; navigate: Navigate }) {
         </div>
       ) : null}
     </section>
+  )
+}
+
+const DAY = 86_400_000
+const dayOf = (iso: string) => Date.parse(`${iso}T00:00:00Z`)
+
+/**
+ * Bauzeit as a measured line: „Tag 25 von 117“ with a thin bar for how much of the planned
+ * period has passed (not progress of the work). Without an end date only the day is shown.
+ */
+function SiteSpan({
+  start,
+  end,
+  today,
+}: {
+  start: string | null
+  end: string | null
+  today: string
+}) {
+  if (!start) return null
+  const day = Math.floor((dayOf(today) - dayOf(start)) / DAY) + 1
+  if (day < 1) return null
+  if (!end)
+    return <span className="site-span muted">{tf('dash.siteDay', { day: String(day) })}</span>
+  const days = Math.floor((dayOf(end) - dayOf(start)) / DAY) + 1
+  const share = Math.min(100, Math.round((day / days) * 100))
+  return (
+    <span className="site-span muted">
+      {tf('dash.siteDayOf', { day: String(day), days: String(days) })}
+      <span className="site-span__track" aria-hidden="true">
+        <span className="site-span__fill" style={{ width: `${share}%` }} />
+      </span>
+    </span>
   )
 }

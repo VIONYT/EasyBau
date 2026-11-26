@@ -74,7 +74,7 @@ async function siteOverview(tx: Tx, auth: AuthContext, today: string): Promise<D
   const todaysSites = await tx<DashboardDto['todaysSites']>`
     select p.id, p.number, p.name,
            nullif(concat_ws(', ', p.site_street, nullif(concat_ws(' ', p.site_postal_code, p.site_city), '')), '') as site,
-           to_char(p.end_date, 'YYYY-MM-DD') as "endDate"
+           to_char(p.start_date, 'YYYY-MM-DD') as "startDate", to_char(p.end_date, 'YYYY-MM-DD') as "endDate"
     from project p left join project_status s on s.id = p.status_id
     where p.archived_at is null and coalesce(s.is_closed, false) = false
       and exists (select 1 from project_member m where m.project_id = p.id and m.user_id = ${auth.userId})

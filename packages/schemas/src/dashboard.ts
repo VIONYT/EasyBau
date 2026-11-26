@@ -44,6 +44,8 @@ export interface DashboardDto {
     number: string | null
     name: string
     site: string | null
+    /** Projektzeitraum: Zeitbalken „Tag x von y“ (start is always set for today's sites). */
+    startDate: string | null
     endDate: string | null
   }[]
 }

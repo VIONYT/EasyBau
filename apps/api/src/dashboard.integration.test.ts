@@ -142,7 +142,12 @@ describe.skipIf(!process.env.DATABASE_URL)(
         ['change_order', 'sent', 45_000],
       ])
       expect(dashboard.todaysSites).toMatchObject([
-        { id: projectId, site: 'Lindenweg 4, 30159 Hannover', endDate: '2026-12-20' },
+        {
+          id: projectId,
+          site: 'Lindenweg 4, 30159 Hannover',
+          startDate: '2026-11-01',
+          endDate: '2026-12-20',
+        },
       ])
     })
 
