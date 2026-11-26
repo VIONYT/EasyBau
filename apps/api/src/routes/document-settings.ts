@@ -8,6 +8,9 @@ import {
   type FileNamePlaceholder,
   fileNameFrom,
   isFederalState,
+  type Letterhead,
+  type LetterheadValues,
+  letterheadGaps,
   publicHolidays,
 } from '@easybau/domain'
 import { documentTitle } from '@easybau/pdf-templates'
@@ -28,6 +31,7 @@ import { TooLargeError } from '@easybau/storage'
 import type { FastifyInstance } from 'fastify'
 import { inTenant, requireAuth, requirePermission, type Services } from '../context.js'
 import { HttpError, notFound, parse } from '../http.js'
+import { liveIssuer } from './documents.js'
 import { todayOf } from './receivables.js'
 
 /**
@@ -381,7 +385,22 @@ export function registerDocumentSettingsRoutes(app: FastifyInstance, services: S
             >`select settings -> 'incomingMail' as mailbox from tenant where id = current_tenant_id()`
           : []
       const mailbox = mail?.mailbox?.enabled ? mail.mailbox : null
+      // Briefpapier: Pflichtangaben that the letterhead would not print (people who may edit it).
+      const issuer = auth.permissions.has('tenant.manage') ? await liveIssuer(tx) : null
+      const gaps =
+        issuer?.letterhead && issuer.values
+          ? letterheadGaps(issuer.letterhead as Letterhead, issuer.values as LetterheadValues)
+          : []
+      const [admins] = auth.permissions.has('users.manage')
+        ? await tx<{ n: number }[]>`
+            select count(*)::int as n from membership m
+            join role r on r.id = m.role_id join app_user u on u.id = m.user_id
+            where r.key = 'admin' and u.is_active and u.totp_enabled_at is null
+              and not exists (select 1 from webauthn_credential w where w.user_id = u.id)`
+        : []
       return companyNotices({
+        letterheadGaps: gaps,
+        adminsWithoutSecondFactor: admins?.n ?? 0,
         company: { ...rest, iban: hasIban ? 'set' : null },
         canManageCompany: auth.permissions.has('tenant.manage'),
         emailVerified: services.config.SMTP_ENABLED ? (user?.verified ?? false) : null,

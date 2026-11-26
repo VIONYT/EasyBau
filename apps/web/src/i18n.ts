@@ -1044,6 +1044,8 @@ const de = {
     'Aus diesem Angebot einen Nachtrag zum Hauptauftrag machen (Nummerierung N01 …).',
   'q.changeOrderNeedsContract':
     'Erst möglich, wenn das Projekt eine Auftragsbestätigung (Hauptauftrag) hat.',
+  'co.priceReview':
+    'Mehrmenge über 110 % der LV-Menge: {list}. Für den Teil über 110 % kann nach VOB/B § 2 Abs. 3 Nr. 2 ein neuer Einheitspreis vereinbart werden – der bisherige Preis bleibt, bis Sie ihn ändern.',
   'q.changeOrderInfo': 'Nachtrag zum Hauptauftrag',
   'q.convert': 'Umschalten',
   'q.validUntil': 'Bindefrist (gültig bis)',

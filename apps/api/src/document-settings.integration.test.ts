@@ -130,6 +130,10 @@ describe.skipIf(!process.env.DATABASE_URL)(
         'company_iban',
         'company_email',
         'company_federal_state',
+        // The default letterhead prints address and tax number – still empty.
+        'letterhead_gaps',
+        // The test harness does not enforce the second factor for admins.
+        'admins_without_mfa',
         'email_unverified',
       ])
       // The invitation link proved the inbox; company data is not the team member's business.
@@ -149,7 +153,7 @@ describe.skipIf(!process.env.DATABASE_URL)(
       expect(saved.statusCode, saved.body).toBe(200)
       expect(
         ((await admin.get('/api/v1/notices')).json() as CompanyNoticeEntry[]).map((n) => n.key),
-      ).toEqual(['email_unverified'])
+      ).toEqual(['admins_without_mfa', 'email_unverified'])
     })
 
     it('lists the statutory holidays of the state plus own ones', async () => {

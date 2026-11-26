@@ -24,6 +24,10 @@ export interface CompanyNoticeInput {
    * Rechnungseingang per E-Mail, only for people who may change the settings and only while the
    * mailbox is fetched: failed runs in a row and the expiry date of the Microsoft 365 secret.
    */
+  /** Pflichtangaben missing in the letterhead (people who may change it). */
+  letterheadGaps?: readonly ('name' | 'address' | 'tax_id')[]
+  /** Admins of the company without a second factor (people who manage users). */
+  adminsWithoutSecondFactor?: number
   incomingMail?: {
     failedRuns: number
     lastError: string | null
@@ -45,6 +49,8 @@ export type CompanyNoticeKey =
   | 'company_federal_state'
   | 'email_unverified'
   | 'incoming_mail_failing'
+  | 'letterhead_gaps'
+  | 'admins_without_mfa'
   | 'incoming_mail_secret_expiring'
 
 export interface CompanyNotice {
@@ -109,6 +115,29 @@ export function companyNotices(input: CompanyNoticeInput): CompanyNotice[] {
         route: COMPANY,
       })
     }
+  }
+  const gaps = input.letterheadGaps ?? []
+  if (gaps.length) {
+    const labels = {
+      name: 'Firmenname',
+      address: 'Anschrift',
+      tax_id: 'Steuernummer oder USt-IdNr.',
+    }
+    notices.push({
+      key: 'letterhead_gaps',
+      severity: 'required',
+      message: `Im Briefpapier fehlt: ${gaps.map((g) => labels[g]).join(', ')} – Pflichtangaben auf Rechnungen (§ 14 UStG).`,
+      route: '/einstellungen?bereich=letterhead',
+    })
+  }
+  if (input.adminsWithoutSecondFactor) {
+    const one = input.adminsWithoutSecondFactor === 1
+    notices.push({
+      key: 'admins_without_mfa',
+      severity: 'recommended',
+      message: `${input.adminsWithoutSecondFactor} ${one ? 'Person' : 'Personen'} mit Administratorrechten ${one ? 'meldet' : 'melden'} sich ohne zweiten Faktor an.`,
+      route: '/benutzer',
+    })
   }
   const mail = input.incomingMail
   if (mail && mail.failedRuns >= INCOMING_MAIL_FAILURE_NOTICE) {

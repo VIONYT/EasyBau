@@ -153,6 +153,15 @@ export function DocumentScreen({ me, id, navigate }: { me: Me; id: string; navig
       {doc.type === 'quote' || doc.type === 'change_order' ? (
         <ChangeOrderSwitch doc={doc} editable={editable} apply={apply} />
       ) : null}
+      {doc.changeOrderInfo?.priceReview.length ? (
+        <p className="notice inline warning" role="note">
+          {tf('co.priceReview', {
+            list: doc.changeOrderInfo.priceReview
+              .map((p) => `${[p.oz, p.shortText].filter(Boolean).join(' ')} (${p.percent} %)`)
+              .join(', '),
+          })}
+        </p>
+      ) : null}
       {doc.type === 'change_order' && doc.changeOrderInfo ? (
         <EvidencePanel
           doc={doc}

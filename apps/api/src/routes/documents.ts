@@ -11,6 +11,7 @@ import {
   isConvertible,
   type PositionType,
   priceItem,
+  quantityDeviation,
   rateForTimeUnit,
   roundTo,
   type TaxCategory,
@@ -733,6 +734,26 @@ export async function loadDocument(
                     where i.document_id = ${id} and dec.accepted order by i.sort, i.id`
                 ).map((r) => r.id)
               : null,
+          priceReview: (
+            await tx<
+              {
+                itemId: string
+                oz: string | null
+                shortText: string | null
+                ordered: string
+                total: string
+              }[]
+            >`
+              select i.id as "itemId", i.oz, i.short_text as "shortText", o.quantity::text as ordered,
+                     (o.quantity + i.quantity)::text as total
+              from document_item i join document_item o on o.id = i.variance_of_item_id
+              where i.document_id = ${id} order by i.sort, i.id`
+          ).flatMap(({ ordered, total, ...item }) => {
+            const deviation = quantityDeviation(ordered, total)
+            return deviation.rule === 'over_110' && deviation.percent
+              ? [{ ...item, percent: deviation.percent }]
+              : []
+          }),
         }
       : null,
     canConvertToChangeOrder: canConvert,

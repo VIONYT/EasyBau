@@ -7,6 +7,7 @@ import {
   footerColumnWeights,
   formatIban,
   LETTERHEAD_FIELDS,
+  letterheadGaps,
   PAPER_FORMATS,
 } from './letterhead.js'
 
@@ -74,5 +75,22 @@ describe('Briefpapier DIN 5008 B', () => {
       ]),
     ).toEqual([15, 32, 10])
     expect(footerColumnWeights([])).toEqual([])
+  })
+
+  it('finds Pflichtangaben the letterhead does not print', () => {
+    const values = {
+      Firma: 'Muster Bau GmbH',
+      Straße: 'Werkstraße 2',
+      PLZ: '30169',
+      Ort: 'Hannover',
+      Steuernummer: '25/123/45678',
+    }
+    expect(letterheadGaps(defaultLetterhead(), values)).toEqual([])
+    // Only the USt-IdNr. is printed, but the company has none.
+    const vatOnly = { ...defaultLetterhead(), footer: ['{Firma}', 'USt-IdNr. {USt-IdNr}'] }
+    expect(letterheadGaps(vatOnly, values)).toEqual(['tax_id'])
+    expect(letterheadGaps(vatOnly, { ...values, 'USt-IdNr': 'DE123456789' })).toEqual([])
+    const bare = { ...defaultLetterhead(), texts: [], footer: [], senderLine: '{Unbekannt}' }
+    expect(letterheadGaps(bare, values)).toEqual(['name', 'address', 'tax_id'])
   })
 })

@@ -188,3 +188,26 @@ export function clampToPage(
     y: round(Math.min(Math.max(y, 0), maxY)),
   }
 }
+
+export type LetterheadGap = 'name' | 'address' | 'tax_id'
+
+/**
+ * Pflichtangaben des Ausstellers (§ 14 Abs. 4 Nr. 1–2 UStG) that the letterhead does not print:
+ * a placeholder counts only if it is used somewhere and the company has a value for it.
+ */
+export function letterheadGaps(letterhead: Letterhead, values: LetterheadValues): LetterheadGap[] {
+  const all = [letterhead.senderLine, ...letterhead.footer, ...letterhead.texts.map((t) => t.text)]
+  const used = new Set<LetterheadField>()
+  for (const text of all) {
+    for (const match of text.matchAll(PLACEHOLDER)) {
+      const key = KNOWN.get((match[1] as string).trim().toLowerCase())
+      if (key) used.add(key)
+    }
+  }
+  const shown = (key: LetterheadField) => used.has(key) && Boolean(values[key]?.trim())
+  const gaps: LetterheadGap[] = []
+  if (!shown('Firma')) gaps.push('name')
+  if (!(shown('Straße') && shown('PLZ') && shown('Ort'))) gaps.push('address')
+  if (!shown('Steuernummer') && !shown('USt-IdNr')) gaps.push('tax_id')
+  return gaps
+}

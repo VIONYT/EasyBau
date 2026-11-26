@@ -523,6 +523,11 @@ export interface DocumentDetail extends DocumentSummary {
     evidence: EvidenceItem[]
     /** Teilbeauftragung: ids of the ordered positions; null unless partially accepted. */
     acceptedItemIds: string[] | null
+    /**
+     * Mehrmengen über 110 % der LV-Menge (VOB/B § 2 Abs. 3 Nr. 2): for the part above 110 % a new
+     * Einheitspreis may be agreed – the price stays as it is unless changed by hand.
+     */
+    priceReview: { itemId: string; oz: string | null; shortText: string | null; percent: string }[]
   } | null
   /** Schalter „Nachtragsangebot“ possible (draft quote/change order with a main contract). */
   canConvertToChangeOrder: boolean
