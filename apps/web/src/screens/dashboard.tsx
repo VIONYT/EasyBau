@@ -5,7 +5,7 @@ import { formatCents, formatDateTime } from '../format'
 import { FormError } from '../forms'
 import { type TextKey, t, tf } from '../i18n'
 import type { Navigate } from '../router'
-import { StatusBadge } from './projects'
+import { ProjectStatusSelect, StatusBadge, useStatuses } from './projects'
 
 const HIDE_KEY = 'easybau.dashboard.hideAmounts'
 
@@ -36,6 +36,9 @@ export function Dashboard({ me, navigate }: { me: Me; navigate: Navigate }) {
   const [error, setError] = useState<string | null>(null)
   const [siteOnly, setSiteOnly] = useState(false)
   const [hide, setHide] = useHideAmounts()
+  // Status direkt ändern (online; the offline overview only shows it).
+  const canChangeStatus = me.permissions.includes('project.write') && !siteOnly
+  const statuses = useStatuses()
   useEffect(() => {
     const site = () => api<DashboardSiteDto>('GET', '/api/v1/dashboard/site')
     api<DashboardDto>('GET', '/api/v1/dashboard')
@@ -242,8 +245,26 @@ export function Dashboard({ me, navigate }: { me: Me; navigate: Navigate }) {
                       <span className="muted">
                         {[p.customer?.displayName, p.siteCity].filter(Boolean).join(' · ')}
                       </span>
-                      {p.status ? <StatusBadge status={p.status} /> : null}
+                      {p.status && !canChangeStatus ? <StatusBadge status={p.status} /> : null}
                     </a>
+                    {canChangeStatus ? (
+                      <ProjectStatusSelect
+                        project={p}
+                        statuses={statuses}
+                        onChanged={(status) =>
+                          setData((d) =>
+                            d
+                              ? {
+                                  ...d,
+                                  recentProjects: d.recentProjects.map((x) =>
+                                    x.id === p.id ? { ...x, status } : x,
+                                  ),
+                                }
+                              : d,
+                          )
+                        }
+                      />
+                    ) : null}
                   </li>
                 ))}
               </ul>

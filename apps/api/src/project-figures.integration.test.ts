@@ -185,6 +185,22 @@ describe.skipIf(!process.env.DATABASE_URL)('Projektkennzahlen (integration)', ()
 
     // Monteure see no money.
     expect((await worker.get(`/api/v1/projects/${projectId}/figures`)).statusCode).toBe(403)
+
+    // The same figures as columns of the project list (only visible projects, at most 30).
+    const other = (await admin.post('/api/v1/projects', { name: 'Leer' })).json()
+    const list = await admin.get(`/api/v1/projects/figures?ids=${projectId},${other.id}`)
+    expect(list.statusCode, list.body).toBe(200)
+    expect(list.json()[projectId]).toEqual({
+      contractNetCents: result.contractNetCents,
+      billedNetCents: 146_000,
+      billedPercent: result.billedPercent,
+      openReceivableCents: result.openReceivableCents,
+      unbilledNetCents: result.unbilledNetCents,
+    })
+    expect(list.json()[other.id]).toMatchObject({ contractNetCents: null, billedNetCents: 0 })
+    await admin.post(`/api/v1/projects/${other.id}/archive`, {})
+    expect((await admin.get('/api/v1/projects/figures?ids=kaputt')).statusCode).toBe(400)
+    expect((await worker.get(`/api/v1/projects/figures?ids=${projectId}`)).statusCode).toBe(403)
   })
 
   it('filters the project list by Zeitraum', async () => {

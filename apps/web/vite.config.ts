@@ -48,8 +48,9 @@ export default defineConfig({
   server: {
     port: 5173,
     proxy: {
-      '/api': 'http://localhost:3000',
-      '/readyz': 'http://localhost:3000',
+      // Keep the Host header: the API rejects state-changing requests whose Origin is another host (CSRF).
+      '/api': { target: 'http://localhost:3000', changeOrigin: false },
+      '/readyz': { target: 'http://localhost:3000', changeOrigin: false },
     },
   },
   build: { target: 'es2022', sourcemap: true },

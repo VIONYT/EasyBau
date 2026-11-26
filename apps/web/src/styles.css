@@ -2406,3 +2406,14 @@ fieldset.plain {
   border-radius: 50%;
   border: 1px solid var(--color-border);
 }
+
+/* Projektstatus direkt in Liste und Übersicht ändern */
+.list-link .status-select {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  padding: 0 var(--space-3) var(--space-2);
+}
+.project-figures-line {
+  display: block;
+}
