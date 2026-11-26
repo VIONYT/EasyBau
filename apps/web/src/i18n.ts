@@ -1687,6 +1687,8 @@ const de = {
   'mail.files': 'Weitere Anhänge',
   // ---- Angebot (P2.12) ----
   'tp.title': 'Preis anpassen (Zielpreis)',
+  'tp.lock': 'Positionen festhalten ({n})',
+  'tp.lockLegend': 'Preis dieser Positionen nicht ändern',
   'tp.hint':
     'Gewünschte Nettosumme eingeben. Bei Positionen mit Kalkulation werden nur die Zuschläge angepasst, die Kosten bleiben. Positionen ohne Kalkulation behalten ihren Preis.',
   'tp.target': 'Ziel-Nettosumme',
@@ -1715,6 +1717,9 @@ const de = {
   'img.caption': 'Bildunterschrift (optional)',
   'img.add': 'Bild einfügen',
   'stm.save': 'In Stammdaten speichern',
+  'stm.folder': 'Ordner in den Stammdaten',
+  'stm.folderDefault': 'Erster Ordner der Leistungen',
+  'stm.saveAnyway': 'Trotzdem speichern',
   'stm.saved': 'In Stammdaten',
   'cc.export': 'CSV exportieren',
   'cc.import': 'CSV importieren',

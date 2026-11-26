@@ -141,6 +141,7 @@ interface CostRow {
   unitDecimals: number | null
   unitCostCents: string
   markupPercent: string
+  wageGroupId: string | null
 }
 
 async function loadItems(tx: Tx, documentId: string): Promise<ItemRow[]> {
@@ -164,7 +165,7 @@ async function loadCostLines(tx: Tx, documentId: string): Promise<Map<string, Co
     select c.id, c.document_item_id as "itemId", c.cost_kind as kind, c.description,
            trim_scale(c.quantity)::text as quantity, c.unit_id as "unitId", u.symbol as "unitSymbol",
            u.decimals as "unitDecimals", c.unit_cost_cents::text as "unitCostCents",
-           trim_scale(c.markup_percent)::text as "markupPercent"
+           trim_scale(c.markup_percent)::text as "markupPercent", c.wage_group_id as "wageGroupId"
     from item_calc_component c left join unit u on u.id = c.unit_id
     where c.document_id = ${documentId}
     order by c.sort, c.id`
@@ -677,6 +678,7 @@ export async function loadDocument(
           : null,
         unitCostCents: Number(l.unitCostCents),
         markupPercent: l.markupPercent,
+        wageGroupId: l.wageGroupId,
       })),
       calculation: calc
         ? {
@@ -1515,6 +1517,16 @@ export function registerDocumentRoutes(app: FastifyInstance, services: Services)
             select cost_kind as kind, percent::text as percent from surcharge`
         ).map((r) => [r.kind, r.percent]),
       )
+      // Lohngruppen only of this company (the foreign key alone does not see RLS).
+      const groups = [...new Set(input.lines.map((l) => l.wageGroupId).filter(Boolean))] as string[]
+      if (groups.length) {
+        const found = await tx`select id from wage_group where id in ${tx(groups)}`
+        if (found.length !== groups.length) {
+          throw new HttpError(400, 'Die Eingaben sind unvollständig oder ungültig.', {
+            lines: 'Unbekannte Lohngruppe.',
+          })
+        }
+      }
       await tx`delete from item_calc_component where document_item_id = ${itemId}`
       for (const [index, line] of input.lines.entries()) {
         await tx`
@@ -1529,6 +1541,7 @@ export function registerDocumentRoutes(app: FastifyInstance, services: Services)
             unit_id: line.unitId ?? null,
             unit_cost_cents: line.unitCostCents,
             markup_percent: line.markupPercent ?? defaults.get(line.kind) ?? '0',
+            wage_group_id: line.kind === 'labor' ? (line.wageGroupId ?? null) : null,
           })}`
       }
       await tx`update document_item set calc_mode = ${input.calcMode} where id = ${itemId}`

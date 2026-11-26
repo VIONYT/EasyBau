@@ -219,6 +219,8 @@ export const calculationRequest = z.object({
         unitCostCents: cents.refine((v) => v >= 0, 'Kosten dürfen nicht negativ sein.'),
         /** Zuschlag in percent; omitted: company default for the cost kind. */
         markupPercent: decimalText('Zuschlag', 4, 4).nullish(),
+        /** Lohn: Lohngruppe the hourly rate comes from (kept when the line is saved again). */
+        wageGroupId: id.nullish(),
       }),
     )
     .max(50),
@@ -351,6 +353,7 @@ export interface CostLine {
   unit: UnitRef | null
   unitCostCents: number
   markupPercent: string
+  wageGroupId: string | null
 }
 
 export interface DocumentTaxLine {
@@ -650,4 +653,6 @@ export interface TargetPriceResult {
 /** „In Stammdaten speichern“: the position (with its Kalkulation) as a new Leistung. */
 export const saveToCatalogRequest = z.object({
   folderId: z.uuid('Ungültige ID.').nullish(),
+  /** Save although a Leistung with the same Kurztext and Einheit exists. */
+  allowDuplicate: z.boolean().default(false),
 })

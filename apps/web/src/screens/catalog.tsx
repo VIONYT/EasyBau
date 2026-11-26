@@ -256,6 +256,7 @@ interface ComponentInput {
   unitId: string
   cost: string
   markup: string
+  wageGroupId?: string | null
 }
 
 function ItemForm({
@@ -295,6 +296,7 @@ function ItemForm({
       unitId: c.unit?.id ?? '',
       cost: centsToInput(c.unitCostCents),
       markup: formatInputNumber(c.markupPercent),
+      wageGroupId: c.wageGroupId,
     })) ?? [],
   )
   const [error, setError] = useState<string | null>(null)
@@ -335,6 +337,7 @@ function ItemForm({
           unitId: c.unitId || null,
           unitCostCents: money(c.cost, `${t('q.calcCost')} (${i + 1})`) ?? 0,
           markupPercent: c.markup || null,
+          wageGroupId: c.kind === 'labor' ? (c.wageGroupId ?? null) : null,
         })),
       }
     } catch (err) {

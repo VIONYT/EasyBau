@@ -39,6 +39,7 @@ import { documentLabel, StatusChip } from './documents'
 import { DunningPanel } from './dunning'
 import { EvidencePanel } from './evidence'
 import {
+  ImageCaptionForm,
   ImagePositionForm,
   ImagePositionView,
   SaveToCatalogButton,
@@ -615,6 +616,16 @@ function Positions({
                   }}
                   onCancel={() => setCalcId(null)}
                 />
+              ) : editingId === item.id && item.positionType === 'image' ? (
+                <ImageCaptionForm
+                  doc={doc}
+                  item={item}
+                  onDone={(result) => {
+                    apply(result)
+                    setEditingId(null)
+                  }}
+                  onCancel={() => setEditingId(null)}
+                />
               ) : editingId === item.id ? (
                 <ItemForm
                   doc={doc}
@@ -647,16 +658,14 @@ function Positions({
                           {t('q.calc')}
                         </button>
                       ) : null}
-                      {item.positionType !== 'image' ? (
-                        <button
-                          type="button"
-                          className="button ghost icon"
-                          aria-label={`${t('common.edit')}: ${item.shortText ?? t('doc.pos.text')}`}
-                          onClick={() => setEditingId(item.id)}
-                        >
-                          ✎
-                        </button>
-                      ) : null}
+                      <button
+                        type="button"
+                        className="button ghost icon"
+                        aria-label={`${t('common.edit')}: ${item.shortText ?? t('doc.pos.text')}`}
+                        onClick={() => setEditingId(item.id)}
+                      >
+                        ✎
+                      </button>
                       <button
                         type="button"
                         className="button ghost icon"
@@ -1729,6 +1738,8 @@ type CostLineInput = {
   unitId: string
   cost: string
   markup: string
+  /** Lohngruppe of a labor line (kept when saved again, e.g. from Regieberichte). */
+  wageGroupId?: string | null
 }
 
 function CalculationForm({
@@ -1757,6 +1768,7 @@ function CalculationForm({
           unitId: l.unit?.id ?? '',
           cost: centsToInput(l.unitCostCents),
           markup: formatInputNumber(l.markupPercent),
+          wageGroupId: l.wageGroupId,
         }))
       : [
           {
@@ -1793,6 +1805,7 @@ function CalculationForm({
               unitId: l.unitId || null,
               unitCostCents: cents,
               markupPercent: l.markup.trim() || null,
+              wageGroupId: l.kind === 'labor' ? (l.wageGroupId ?? null) : null,
             }
           }),
         }
