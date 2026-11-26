@@ -1502,6 +1502,8 @@ const de = {
   's.d.expense.other': 'Aufwand Sonstiges',
   's.d.expense.reverseCharge': 'Bauleistungen § 13b (Automatikkonto)',
   's.d.creditor': 'Kreditorenkonto (Sammelkreditor)',
+  's.d.autoCreditor':
+    'Lieferanten ohne Kreditorennummer beim Bestätigen einer Eingangsrechnung eine Nummer aus dem Nummernkreis „Kreditoren“ geben',
   's.d.incomingHint':
     'Aufwandskonten werden mit BU-Schlüssel 9 (19 % Vorsteuer) bzw. 8 (7 %) gebucht, § 13b auf dem Automatikkonto. Leere Felder = Standard des Kontenrahmens.',
   's.c.name': 'Firmenname',
@@ -1535,6 +1537,7 @@ const de = {
   's.n.kind.delivery_note': 'Lieferscheine',
   's.n.kind.invoice': 'Rechnungen',
   's.n.kind.credit_note': 'Gutschriften',
+  's.n.kind.creditor': 'Kreditoren (DATEV-Personenkonten der Lieferanten)',
   's.n.pattern': 'Schema',
   's.n.patternHint':
     'Schema mit Platzhaltern: {Jahr} = 2026, {JJ} = 26, {Monat} = 11, {Nummer} = fortlaufende Nummer mit führenden Nullen. Beispiele: R{Jahr}-{Nummer} → R2026-00101, R{Nummer}-{Jahr} → R00101-2026. Jährlich neu beginnen geht nur mit Jahr im Schema.',
@@ -1750,10 +1753,17 @@ const de = {
   'in.filter.target': 'Zuweisung',
   'in.filter.anyTarget': 'Alle Projekte und Betriebsbereiche',
   'in.byLine': 'Je Rechnungsposition zuweisen ({n})',
+  'in.byLineHint':
+    'Zu- und Abschläge auf Belegebene (z. B. Rabatt, Fracht) werden anteilig auf die Positionen ihres Steuersatzes verteilt.',
+  'in.restAllowance': 'Abschlag auf Belegebene (keiner Position zuzuordnen)',
+  'in.restCharge': 'Zuschlag auf Belegebene (keiner Position zuzuordnen)',
+  'in.allowance': 'Abschlag {reason} ({rate} %)',
+  'in.charge': 'Zuschlag {reason} ({rate} %)',
   'in.byLineConfirm':
     'Die bisherigen Zuweisungen durch je eine Zuweisung pro Rechnungsposition ersetzen?',
   'in.viaEmail': 'Per E-Mail eingegangen von {from} – Betreff: {subject}',
   'contacts.creditorNumber': 'Kreditorennummer (DATEV)',
+  'contacts.assignCreditor': 'Kreditorennummer aus dem Nummernkreis vergeben',
   'contacts.creditorNumberHint':
     'Für Lieferanten: eigenes Personenkonto im DATEV-Export (z. B. 70001). Ohne Nummer wird der Sammelkreditor verwendet.',
   'fig.costs': 'Kosten aus Eingangsrechnungen',
@@ -1778,6 +1788,18 @@ const de = {
   'im.run': 'Jetzt abrufen',
   'im.lastRun':
     'Letzter Abruf {at}: {messages} E-Mail(s), {imported} Rechnung(en) übernommen, {duplicates} schon vorhanden, {ignored} andere Anhänge, {failed} später erneut.',
+  'im.log': 'Protokoll der abgerufenen E-Mails',
+  'im.logHint':
+    'Je E-Mail: Absender, Betreff und was mit jedem Anhang geschah. Einträge werden nach 90 Tagen gelöscht.',
+  'im.noSubject': '(ohne Betreff)',
+  'im.retry': 'bleibt ungelesen, wird erneut abgerufen',
+  'im.noAttachments': 'Keine Anhänge.',
+  'im.result.imported': 'als Eingangsrechnung übernommen',
+  'im.result.duplicate': 'bereits vorhanden',
+  'im.result.ignored': 'übersprungen',
+  'im.result.failed': 'Fehler',
+  'im.open': 'öffnen',
+  'im.more': 'Ältere E-Mails anzeigen',
   'im.never': 'Noch nicht abgerufen.',
   'im.auth': 'Anmeldung',
   'im.auth.password': 'Benutzername und Passwort (IMAP)',

@@ -205,6 +205,7 @@ describe.skipIf(!process.env.DATABASE_URL)('Eingangsrechnungen (integration)', (
       canEdit: true,
     })
     expect(zugferd.einvoice?.lines[0]).toMatchObject({ name: 'Wände streichen', netCents: 100_000 })
+    expect(zugferd.einvoice?.allowanceCharges).toEqual([])
     expect(zugferd.problems.map((p) => p.message)).toEqual([
       'Die Kosten sind noch keinem Projekt oder Betriebsbereich zugewiesen.',
     ])

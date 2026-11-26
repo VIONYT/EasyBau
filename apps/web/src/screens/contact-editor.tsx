@@ -158,6 +158,18 @@ export function ContactEditor({
     setChannels(channels.map((ch, i) => (i === index ? { ...ch, ...patch } : ch)))
   // DSGVO: blocked or erased contacts are read only (the server refuses changes as well).
   const restricted = Boolean(c.blockedUntil || c.erasedAt)
+  // Kreditorennummer aus dem Nummernkreis „Kreditoren“ (Einstellungen › Nummernkreise).
+  const assignCreditor = async () => {
+    setActionError(null)
+    try {
+      await api('POST', `/api/v1/contacts/${id}/creditor-number`, {})
+      const result = await apiWithEtag<ContactDetail>('GET', `/api/v1/contacts/${id}`)
+      apply(result)
+      onSaved(result.data)
+    } catch (err) {
+      setActionError((err as ApiError).message)
+    }
+  }
   const archive = async () => {
     setActionError(null)
     try {
@@ -508,6 +520,11 @@ export function ContactEditor({
             defaultValue={c.creditorNumber ?? ''}
             error={form.fieldErrors.creditorNumber}
           />
+          {canWrite && !restricted && !c.creditorNumber ? (
+            <button type="button" className="button ghost small auto" onClick={assignCreditor}>
+              {t('contacts.assignCreditor')}
+            </button>
+          ) : null}
           <Field
             label={t('contacts.einvoiceEmail')}
             name="einvoiceEmail"

@@ -310,6 +310,8 @@ export const datevSettingsRequest = z.object({
     .regex(/^\d{5,9}$/, 'Kreditorenkonto: 5–9 Ziffern.')
     .nullable()
     .default(null),
+  /** Lieferanten ohne Kreditorennummer bekommen beim Bestätigen einer Eingangsrechnung eine. */
+  autoCreditorNumbers: z.boolean().default(false),
 })
 export type DatevSettings = z.infer<typeof datevSettingsRequest>
 

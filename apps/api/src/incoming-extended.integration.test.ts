@@ -2,6 +2,8 @@ import { generateKeyPairSync } from 'node:crypto'
 import type {
   IncomingInvoiceDetail,
   IncomingInvoiceList,
+  IncomingMailLogEntry,
+  IncomingMailLogPage,
   IncomingMailRun,
   IncomingMailSettings,
   ProjectFiguresDto,
@@ -205,12 +207,48 @@ describe.skipIf(!process.env.DATABASE_URL)('Eingangsrechnungen ausbauen (integra
       emailSubject: 'Rechnung TS-200',
       supplierName: 'Trockenbau Süd GmbH',
     })
+    // Protokoll je E-Mail: newest first, the result of every attachment.
+    const log = (
+      await admin.get('/api/v1/settings/incoming-mail/log')
+    ).json() as IncomingMailLogPage
+    expect(log.items.map((e) => [e.subject, e.outcome])).toEqual([
+      ['Angebote', 'done'],
+      ['Foto', 'done'],
+      ['Rechnung TS-200', 'done'],
+    ])
+    const first = log.items[2] as IncomingMailLogEntry
+    expect(first.from).toBe('Trockenbau Süd <rechnung@trockenbau.example>')
+    expect(first.attachments).toEqual([
+      { filename: 'TS-200.xml', result: 'imported', incomingInvoiceId: fromMail?.id },
+      { filename: 'AGB.txt', result: 'ignored', reason: 'kein Rechnungsformat' },
+      { filename: 'logo.png', result: 'ignored', reason: 'Bild im E-Mail-Text' },
+    ])
+    expect(log.items[0]?.attachments).toEqual([])
+    const paged = (
+      await admin.get('/api/v1/settings/incoming-mail/log?limit=2')
+    ).json() as IncomingMailLogPage
+    expect(paged.items).toHaveLength(2)
+    const rest = (
+      await admin.get(
+        `/api/v1/settings/incoming-mail/log?limit=2&cursor=${encodeURIComponent(paged.nextCursor as string)}`,
+      )
+    ).json() as IncomingMailLogPage
+    expect(rest.items.map((e) => e.subject)).toEqual(['Rechnung TS-200'])
+    expect(rest.nextCursor).toBeNull()
     // Again: already received, nothing twice
     inbox.done = []
     const again = (
       await admin.post('/api/v1/settings/incoming-mail/run', {})
     ).json() as IncomingMailRun
     expect(again).toMatchObject({ imported: 0, duplicates: 2 })
+    const latest = (
+      await admin.get('/api/v1/settings/incoming-mail/log?limit=3')
+    ).json() as IncomingMailLogPage
+    expect(latest.items.find((e) => e.subject === 'Rechnung TS-200')?.attachments[0]).toEqual({
+      filename: 'TS-200.xml',
+      result: 'duplicate',
+      incomingInvoiceId: fromMail?.id,
+    })
     const settings = (
       await admin.get('/api/v1/settings/incoming-mail')
     ).json() as IncomingMailSettings
@@ -414,7 +452,23 @@ describe.skipIf(!process.env.DATABASE_URL)('Eingangsrechnungen ausbauen (integra
       '1',
       '2',
     ])
+    // Kreditorennummer aus dem Nummernkreis beim Bestätigen (Einstellungen › DATEV)
+    expect(
+      (
+        await admin.put('/api/v1/settings/datev', {
+          consultantNumber: null,
+          clientNumber: null,
+          chart: 'SKR03',
+          fiscalYearStartMonth: 1,
+          accountLength: 4,
+          revenueAccounts: {},
+          bankAccount: null,
+          autoCreditorNumbers: true,
+        })
+      ).statusCode,
+    ).toBe(200)
     expect((await admin.post(`/api/v1/incoming-invoices/${id}/confirm`, {})).statusCode).toBe(200)
+    expect((await admin.get(`/api/v1/contacts/${supplierId}`)).json().creditorNumber).toBe('70001')
     detail = await admin.get(`/api/v1/incoming-invoices/${id}`)
     const paid = await admin.post(`/api/v1/incoming-invoices/${id}/payment`, {
       paidOn: '2026-11-07',
@@ -471,6 +525,28 @@ describe.skipIf(!process.env.DATABASE_URL)('Eingangsrechnungen ausbauen (integra
           creditorNumber: 'K-1',
         })
       ).statusCode,
+    ).toBe(400)
+    // Vergabe von Hand (Knopf im Kontakt): next free number, only once.
+    const nord = (
+      await admin.post('/api/v1/contacts', {
+        kind: 'organization',
+        organizationName: 'Baustoff Ost',
+      })
+    ).json() as { id: string }
+    const assigned = await admin.post(`/api/v1/contacts/${nord.id}/creditor-number`, {})
+    expect(assigned.statusCode, assigned.body).toBe(200)
+    expect(assigned.json()).toEqual({ creditorNumber: '70002' })
+    expect((await admin.post(`/api/v1/contacts/${nord.id}/creditor-number`, {})).statusCode).toBe(
+      409,
+    )
+    const sequences = (await admin.get('/api/v1/settings/number-sequences')).json() as {
+      kind: string
+      preview: string
+    }[]
+    expect(sequences.at(-1)).toMatchObject({ kind: 'creditor', preview: '70003' })
+    expect(
+      (await admin.patch('/api/v1/settings/number-sequences/creditor', { pattern: 'K-{Nummer}' }))
+        .statusCode,
     ).toBe(400)
     await admin.put('/api/v1/settings/datev', {
       consultantNumber: '1234567',

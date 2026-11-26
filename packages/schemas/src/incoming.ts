@@ -152,6 +152,14 @@ export interface IncomingEinvoiceView {
     vatCategory: string | null
     vatRate: string | null
   }[]
+  /** Document-level allowances/charges (BG-20/21); missing in invoices received before 2026-11-26. */
+  allowanceCharges?: {
+    charge: boolean
+    amountCents: number | null
+    reason: string | null
+    vatCategory: string | null
+    vatRate: string | null
+  }[]
   vatBreakdown: {
     category: string | null
     rate: string | null
@@ -325,6 +333,34 @@ export interface IncomingMailRun {
   /** Runs with an error in a row (0 after a successful run). */
   failedRuns: number
 }
+
+/** Protokoll je E-Mail: what happened to one attachment. */
+export interface IncomingMailLogAttachment {
+  filename: string
+  result: 'imported' | 'duplicate' | 'ignored' | 'failed'
+  /** The incoming invoice created (imported) or already there (duplicate). */
+  incomingInvoiceId?: string
+  reason?: string | null
+}
+
+export interface IncomingMailLogEntry {
+  id: string
+  fetchedAt: string
+  from: string | null
+  subject: string | null
+  /** done = marked read/moved; retry = stays unread and is fetched again. */
+  outcome: 'done' | 'retry'
+  attachments: IncomingMailLogAttachment[]
+}
+
+export interface IncomingMailLogPage {
+  items: IncomingMailLogEntry[]
+  nextCursor: string | null
+}
+
+export const incomingMailLogQuery = listQuery.omit({ q: true }).extend({
+  limit: z.coerce.number().int().min(1).max(100).default(25),
+})
 
 export interface IncomingMailSettings {
   /** Allowed by the operator (INCOMING_MAIL_ENABLED). */

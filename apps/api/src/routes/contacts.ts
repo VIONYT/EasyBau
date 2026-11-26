@@ -145,6 +145,30 @@ export async function usableContact(tx: Tx, id: string): Promise<boolean> {
   )
 }
 
+const CREDITOR_NUMBER = /^[0-9]{5,9}$/
+
+/**
+ * Kreditorennummer aus dem Nummernkreis „Kreditoren“ (C.9): draws the next number for a contact
+ * without one. Returns the number, or null if the contact already has one. The schema must give
+ * 5–9 digits (DATEV personal account); otherwise nothing is drawn (the transaction rolls back).
+ */
+export async function assignCreditorNumber(tx: Tx, contactId: string): Promise<string | null> {
+  const [contact] = await tx<{ creditorNumber: string | null }[]>`
+    select creditor_number as "creditorNumber" from contact where id = ${contactId} for update`
+  if (!contact) throw notFound('Der Kontakt')
+  if (contact.creditorNumber) return null
+  const [row] = await tx<{ n: string }[]>`select next_number('creditor') as n`
+  const number = row?.n ?? ''
+  if (!CREDITOR_NUMBER.test(number)) {
+    throw new HttpError(
+      422,
+      `Der Nummernkreis „Kreditoren“ ergibt „${number}“ – eine Kreditorennummer braucht 5 bis 9 Ziffern. Bitte unter Einstellungen › Nummernkreise anpassen.`,
+    )
+  }
+  await tx`update contact set creditor_number = ${number} where id = ${contactId}`
+  return number
+}
+
 export function mergedContact(): HttpError {
   return new HttpError(
     409,
@@ -352,6 +376,21 @@ export function registerContactRoutes(app: FastifyInstance, services: Services) 
       if (!deleted.count) throw notFound('Der Kontakt')
     })
     return reply.status(204).send()
+  })
+
+  app.post('/api/v1/contacts/:id/creditor-number', async (request) => {
+    const auth = requirePermission(request, 'contacts.write')
+    const { id } = parse(idParam, request.params)
+    return inTenant(services, auth, async (tx) => {
+      if (!(await usableContact(tx, id))) {
+        const exists = (await tx`select 1 from contact where id = ${id}`).length > 0
+        if (!exists) throw notFound('Der Kontakt')
+        throw new HttpError(409, 'Dieser Kontakt ist gesperrt oder zusammengeführt.')
+      }
+      const number = await assignCreditorNumber(tx, id)
+      if (!number) throw new HttpError(409, 'Der Kontakt hat bereits eine Kreditorennummer.')
+      return { creditorNumber: number }
+    })
   })
 
   app.post('/api/v1/contacts/:id/links', async (request, reply) => {

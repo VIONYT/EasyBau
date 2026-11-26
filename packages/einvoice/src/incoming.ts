@@ -38,6 +38,15 @@ export interface IncomingLine {
   vatRate: string | null
 }
 
+/** Document-level allowance (BG-20) or charge (BG-21). */
+export interface IncomingAllowanceCharge {
+  charge: boolean
+  amountCents: bigint | null
+  reason: string | null
+  vatCategory: string | null
+  vatRate: string | null
+}
+
 export interface IncomingVatBreakdown {
   category: string | null
   rate: string | null
@@ -74,6 +83,8 @@ export interface IncomingEinvoice {
     terms: string | null
   }
   lines: IncomingLine[]
+  /** Allowances and charges on document level (not those of single lines). */
+  allowanceCharges: IncomingAllowanceCharge[]
   vatBreakdown: IncomingVatBreakdown[]
   totals: {
     lineNetCents: bigint | null
@@ -258,6 +269,13 @@ function readCii(root: XmlElement): IncomingEinvoice {
         vatRate: decimalText(textAt(lineSettlement, 'ApplicableTradeTax', 'RateApplicablePercent')),
       }
     }),
+    allowanceCharges: childrenOf(settlement, 'SpecifiedTradeAllowanceCharge').map((item) => ({
+      charge: textAt(item, 'ChargeIndicator', 'Indicator')?.toLowerCase() === 'true',
+      amountCents: centsOf(textAt(item, 'ActualAmount')),
+      reason: textAt(item, 'Reason'),
+      vatCategory: textAt(item, 'CategoryTradeTax', 'CategoryCode'),
+      vatRate: decimalText(textAt(item, 'CategoryTradeTax', 'RateApplicablePercent')),
+    })),
     vatBreakdown: childrenOf(settlement, 'ApplicableTradeTax').map((tax) => ({
       category: textAt(tax, 'CategoryCode'),
       rate: decimalText(textAt(tax, 'RateApplicablePercent')),
@@ -363,6 +381,13 @@ function readUbl(root: XmlElement): IncomingEinvoice {
         vatRate: decimalText(textAt(item, 'ClassifiedTaxCategory', 'Percent')),
       }
     }),
+    allowanceCharges: childrenOf(root, 'AllowanceCharge').map((item) => ({
+      charge: textAt(item, 'ChargeIndicator')?.toLowerCase() === 'true',
+      amountCents: centsOf(textAt(item, 'Amount')),
+      reason: textAt(item, 'AllowanceChargeReason'),
+      vatCategory: textAt(item, 'TaxCategory', 'ID'),
+      vatRate: decimalText(textAt(item, 'TaxCategory', 'Percent')),
+    })),
     vatBreakdown: childrenOf(taxTotal, 'TaxSubtotal').map((sub) => ({
       category: textAt(sub, 'TaxCategory', 'ID'),
       rate: decimalText(textAt(sub, 'TaxCategory', 'Percent')),

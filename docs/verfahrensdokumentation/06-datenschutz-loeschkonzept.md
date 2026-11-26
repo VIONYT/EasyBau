@@ -14,6 +14,7 @@
 | Eingangsrechnungen | Lieferanten, deren Ansprechpartner | Name, Anschrift, Bankverbindung, Rechnungsdaten | wie oben | Steuerberatung | 10 Jahre [[bzw. 8 Jahre, s. o.]] |
 | Baustellendokumentation (Aufmaß, Bautagebuch, Fotos, Unterschriften) | Kunden, Mitarbeitende, ggf. Dritte auf Fotos | Namen, Unterschriften, Fotos, Arbeitszeiten je Bericht | Vertrag, Beweissicherung (lit. b, f) | Auftraggeber | [[z. B. Ende der Gewährleistung (5 Jahre nach Abnahme) bzw. Aufbewahrung, wenn abrechnungsrelevant]] |
 | Benutzerkonten | Mitarbeitende, Steuerberatung | Name, E-Mail, Anmeldedaten, zweiter Faktor, Änderungsprotokoll | Arbeitsverhältnis / Zugriffsschutz (§ 26 BDSG, lit. c, f) | – | [[Deaktivierung bei Austritt; Protokolleinträge wie die Belege]] |
+| Rechnungseingang per E-Mail (Protokoll) | Absender der E-Mails an das Rechnungspostfach | Absenderadresse, Betreff, Dateinamen der Anhänge, Zeitpunkt | Prüfung des Rechnungseingangs (lit. f) | – | 90 Tage (automatisch, nächtlicher Lauf) |
 | E-Mail-Versand | Empfänger | Adresse, Betreff, Zeitpunkt (Inhalt wird nach dem Versand gelöscht) | Vertrag | [[E-Mail-Anbieter]] | [[…]] |
 
 ## 6.2 Technische und organisatorische Maßnahmen (Art. 32 DSGVO)

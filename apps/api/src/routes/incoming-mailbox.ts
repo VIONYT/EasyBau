@@ -2,15 +2,19 @@ import { createPrivateKey, createSign } from 'node:crypto'
 import type { Tx } from '@easybau/db'
 import {
   type IncomingMailAuth,
+  type IncomingMailLogAttachment,
+  type IncomingMailLogEntry,
+  type IncomingMailLogPage,
   type IncomingMailRun,
   type IncomingMailSettings,
+  incomingMailLogQuery,
   incomingMailSettingsRequest,
 } from '@easybau/schemas'
 import type { FastifyBaseLogger, FastifyInstance } from 'fastify'
 import { ImapFlow } from 'imapflow'
 import { simpleParser } from 'mailparser'
 import { inTenant, requirePermission, type Services } from '../context.js'
-import { HttpError, parse } from '../http.js'
+import { decodeCursor, encodeCursor, HttpError, parse } from '../http.js'
 import { ingestIncomingInvoice } from './incoming-invoices.js'
 
 /**
@@ -366,6 +370,22 @@ function reasonOf(error: unknown, access: MailboxAccess): string {
   return 'Das Postfach konnte nicht abgerufen werden.'
 }
 
+/** Protokoll je E-Mail: one row per fetched message (deleted after 90 days by the worker). */
+async function logMail(
+  services: Services,
+  system: { tenantId: string; userId: null },
+  message: MailMessage,
+  outcome: 'done' | 'retry',
+  attachments: IncomingMailLogAttachment[],
+) {
+  await inTenant(services, system, async (tx) => {
+    await tx`
+      insert into incoming_mail_log (tenant_id, fetched_at, mail_from, subject, outcome, attachments)
+      values (current_tenant_id(), ${new Date(services.now())}, ${message.from?.slice(0, 500) ?? null},
+              ${message.subject?.slice(0, 500) ?? null}, ${outcome}, ${tx.json(attachments as never)})`
+  })
+}
+
 /** Fetches one company's mailbox once. The result is stored as `lastRun`. */
 export async function pollMailbox(
   services: Services,
@@ -394,33 +414,53 @@ export async function pollMailbox(
       for (const message of await connection.unread(MESSAGES_PER_RUN)) {
         run.messages += 1
         let retry = false
+        const results: IncomingMailLogAttachment[] = []
         for (const attachment of message.attachments) {
+          const filename = attachment.filename.slice(0, 255)
           // Pictures embedded in the text (signature logos) are no invoices; PDFs/XML always count.
           const embeddedPicture = attachment.inline && !/\.(pdf|xml)$/i.test(attachment.filename)
           if (!INVOICE_EXTENSIONS.test(attachment.filename) || embeddedPicture) {
             run.ignored += 1
+            results.push({
+              filename,
+              result: 'ignored',
+              reason: embeddedPicture ? 'Bild im E-Mail-Text' : 'kein Rechnungsformat',
+            })
             continue
           }
           try {
-            await ingestIncomingInvoice(
+            const incomingInvoiceId = await ingestIncomingInvoice(
               services,
               system,
               { filename: attachment.filename, data: attachment.content },
               { via: 'email', from: message.from, subject: message.subject },
             )
             run.imported += 1
+            results.push({ filename, result: 'imported', incomingInvoiceId })
           } catch (error) {
             const status = error instanceof HttpError ? error.statusCode : 500
-            if (status === 409) run.duplicates += 1
-            else if (status === 415 || status === 400 || status === 413) run.ignored += 1
-            else {
+            const reason = error instanceof HttpError ? error.message : null
+            if (status === 409) {
+              run.duplicates += 1
+              const existing = error instanceof HttpError ? error.errors?.existingId : undefined
+              results.push({
+                filename,
+                result: 'duplicate',
+                ...(existing ? { incomingInvoiceId: existing } : {}),
+              })
+            } else if (status === 415 || status === 400 || status === 413) {
+              run.ignored += 1
+              results.push({ filename, result: 'ignored', reason })
+            } else {
               // Temporary (database, storage): the message stays unread and is tried again.
               run.failed += 1
               retry = true
+              results.push({ filename, result: 'failed', reason: 'vorübergehender Fehler' })
             }
           }
         }
         if (!retry) await connection.done(message.uid)
+        await logMail(services, system, message, retry ? 'retry' : 'done', results)
       }
     } catch (error) {
       run.error = reasonOf(error, access)
@@ -479,6 +519,27 @@ export function registerIncomingMailboxRoutes(
   app.get('/api/v1/settings/incoming-mail', async (request): Promise<IncomingMailSettings> => {
     const auth = requirePermission(request, 'settings.read')
     return inTenant(services, auth, async (tx) => view(services, await storedMailbox(tx)))
+  })
+
+  app.get('/api/v1/settings/incoming-mail/log', async (request): Promise<IncomingMailLogPage> => {
+    const auth = requirePermission(request, 'settings.read')
+    const { cursor, limit } = parse(incomingMailLogQuery, request.query)
+    const after = decodeCursor(cursor, 2) as [string, string] | null
+    return inTenant(services, auth, async (tx) => {
+      const rows = await tx<(IncomingMailLogEntry & { sortAt: string })[]>`
+        select id, to_char(fetched_at at time zone 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS.US"Z"') as "fetchedAt",
+               fetched_at::text as "sortAt", mail_from as "from", subject, outcome, attachments
+        from incoming_mail_log
+        ${after ? tx`where (fetched_at, id) < (${after[0]}::timestamptz, ${after[1]}::uuid)` : tx``}
+        order by fetched_at desc, id desc
+        limit ${limit + 1}`
+      const page = rows.slice(0, limit)
+      const last = page.at(-1)
+      return {
+        items: page.map(({ sortAt: _sortAt, ...entry }) => entry),
+        nextCursor: rows.length > limit && last ? encodeCursor([last.sortAt, last.id]) : null,
+      }
+    })
   })
 
   app.put('/api/v1/settings/incoming-mail', async (request): Promise<IncomingMailSettings> => {

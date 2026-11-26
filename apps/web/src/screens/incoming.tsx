@@ -1,3 +1,4 @@
+import { distributeAllowanceCharges } from '@easybau/domain'
 import type {
   BusinessArea,
   CostType,
@@ -669,6 +670,7 @@ export function IncomingInvoiceScreen({ id, navigate }: { id: string; navigate: 
               areas={areas}
               errors={fieldErrors}
               lines={detail.einvoice?.lines ?? []}
+              allowanceCharges={detail.einvoice?.allowanceCharges ?? []}
             />
           ) : (
             <ReadOnlyData detail={detail} />
@@ -860,6 +862,22 @@ function EinvoiceView({
         </div>
       ) : null}
       <dl className="receivable-sums">
+        {(einvoice.allowanceCharges ?? []).map((a, index) => (
+          // biome-ignore lint/suspicious/noArrayIndexKey: allowances are fixed for this invoice
+          <div key={`ac-${index}`}>
+            <dt>
+              {tf(a.charge ? 'in.charge' : 'in.allowance', {
+                reason: a.reason ?? '',
+                rate: (a.vatRate ?? '').replace('.', ','),
+              })}
+            </dt>
+            <dd className="amount">
+              {formatCents(
+                a.amountCents === null ? null : a.charge ? a.amountCents : -a.amountCents,
+              )}
+            </dd>
+          </div>
+        ))}
         {einvoice.vatBreakdown.map((v) => (
           <div key={`${v.category}-${v.rate}`}>
             <dt>
@@ -940,6 +958,7 @@ function ReviewForm({
   areas,
   errors,
   lines,
+  allowanceCharges,
 }: {
   form: Form
   update: (patch: Partial<Form>) => void
@@ -948,6 +967,8 @@ function ReviewForm({
   errors: Record<string, string>
   /** Positions of the e-invoice: „Je Rechnungsposition zuweisen“. */
   lines: NonNullable<IncomingInvoiceDetail['einvoice']>['lines']
+  /** Document-level allowances/charges (BG-20/21), spread over the lines of their rate. */
+  allowanceCharges: NonNullable<NonNullable<IncomingInvoiceDetail['einvoice']>['allowanceCharges']>
 }) {
   const id = useId()
   const rates = form.taxLines.map((l) => rateOf(l.rate)).filter(Boolean)
@@ -990,16 +1011,38 @@ function ReviewForm({
   const byLine = () => {
     const target = form.allocations[0]?.target ?? ''
     const costType = form.allocations[0]?.costType ?? 'material'
+    const spread = distributeAllowanceCharges(
+      usableLines.map((l) => ({ netCents: BigInt(l.netCents as number), ratePercent: l.vatRate })),
+      allowanceCharges
+        .filter((a) => a.amountCents !== null)
+        .map((a) => ({
+          charge: a.charge,
+          amountCents: BigInt(a.amountCents as number),
+          ratePercent: a.vatRate,
+        })),
+    )
     update({
-      allocations: usableLines.map((l, index) => ({
-        key: ++rowKey,
-        target,
-        costType,
-        rate: (l.vatRate ?? rates[0] ?? '0').replace('.', ','),
-        net: centsToInput(l.netCents as number),
-        description: [l.id ?? String(index + 1), l.name].filter(Boolean).join(' '),
-        lineId: l.id ?? String(index + 1),
-      })),
+      allocations: [
+        ...usableLines.map((l, index) => ({
+          key: ++rowKey,
+          target,
+          costType,
+          rate: (l.vatRate ?? rates[0] ?? '0').replace('.', ','),
+          net: centsToInput(Number(spread.netCents[index])),
+          description: [l.id ?? String(index + 1), l.name].filter(Boolean).join(' '),
+          lineId: l.id ?? String(index + 1),
+        })),
+        // Allowances/charges that fit no line stay a row of their own, to be assigned by hand.
+        ...spread.rest.map((r) => ({
+          key: ++rowKey,
+          target,
+          costType,
+          rate: (r.ratePercent ?? rates[0] ?? '0').replace('.', ','),
+          net: centsToInput(Number(r.netCents)),
+          description: t(r.netCents < 0n ? 'in.restAllowance' : 'in.restCharge'),
+          lineId: null,
+        })),
+      ],
     })
   }
 
@@ -1268,6 +1311,9 @@ function ReviewForm({
             </button>
           ) : null}
         </div>
+        {usableLines.length > 1 && allowanceCharges.length ? (
+          <p className="muted">{t('in.byLineHint')}</p>
+        ) : null}
       </fieldset>
       <div className="field">
         <label htmlFor={`${id}-note`}>{t('in.note')}</label>

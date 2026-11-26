@@ -9,6 +9,8 @@ import type {
   DunningSettings,
   EmailTemplateSettings,
   HolidayList,
+  IncomingMailLogEntry,
+  IncomingMailLogPage,
   IncomingMailRun,
   IncomingMailSettings,
   Me,
@@ -1247,6 +1249,11 @@ function DatevSettingsForm() {
           onChange={(v) => setData({ ...data, creditorAccount: nullable(v) })}
         />
       </div>
+      <Check
+        label={t('s.d.autoCreditor')}
+        checked={data.autoCreditorNumbers}
+        onChange={(v) => setData({ ...data, autoCreditorNumbers: v })}
+      />
       <div className="button-row">
         <button
           type="button"
@@ -2160,6 +2167,75 @@ function IncomingMailForm() {
         {save.message}
         {fetchNow.message}
       </div>
+      <IncomingMailLog refreshKey={run?.at ?? null} />
     </Panel>
+  )
+}
+
+/** Protokoll je E-Mail: the last fetched messages and what happened to each attachment. */
+function IncomingMailLog({ refreshKey }: { refreshKey: string | null }) {
+  const [items, setItems] = useState<IncomingMailLogEntry[] | null>(null)
+  const [next, setNext] = useState<string | null>(null)
+  const [error, setError] = useState<string | null>(null)
+  const load = useCallback(async (cursor: string | null) => {
+    try {
+      const page = await api<IncomingMailLogPage>(
+        'GET',
+        `/api/v1/settings/incoming-mail/log${cursor ? `?cursor=${encodeURIComponent(cursor)}` : ''}`,
+      )
+      setItems((current) => (cursor ? [...(current ?? []), ...page.items] : page.items))
+      setNext(page.nextCursor)
+    } catch (err) {
+      setError((err as ApiError).message)
+    }
+  }, [])
+  // biome-ignore lint/correctness/useExhaustiveDependencies: reload after each manual fetch
+  useEffect(() => {
+    void load(null)
+  }, [load, refreshKey])
+  if (error) return <FormError>{error}</FormError>
+  if (!items?.length) return null
+  return (
+    <section className="mail-log" aria-label={t('im.log')}>
+      <h3>{t('im.log')}</h3>
+      <p className="hint">{t('im.logHint')}</p>
+      <ul className="mail-log-list">
+        {items.map((entry) => (
+          <li key={entry.id} className="mail-log-entry">
+            <div>
+              <strong>{entry.subject || t('im.noSubject')}</strong>{' '}
+              <span className="muted">
+                {entry.from ?? ''} · {new Date(entry.fetchedAt).toLocaleString('de-DE')}
+                {entry.outcome === 'retry' ? ` · ${t('im.retry')}` : ''}
+              </span>
+            </div>
+            {entry.attachments.length ? (
+              <ul className="mail-log-files muted">
+                {entry.attachments.map((a, index) => (
+                  // biome-ignore lint/suspicious/noArrayIndexKey: attachments of one logged mail
+                  <li key={index}>
+                    {a.filename}: {t(`im.result.${a.result}` as TextKey)}
+                    {a.reason ? ` (${a.reason})` : ''}
+                    {a.incomingInvoiceId ? (
+                      <>
+                        {' '}
+                        <a href={`/eingangsrechnungen/${a.incomingInvoiceId}`}>{t('im.open')}</a>
+                      </>
+                    ) : null}
+                  </li>
+                ))}
+              </ul>
+            ) : (
+              <p className="muted">{t('im.noAttachments')}</p>
+            )}
+          </li>
+        ))}
+      </ul>
+      {next ? (
+        <button type="button" className="button ghost small auto" onClick={() => load(next)}>
+          {t('im.more')}
+        </button>
+      ) : null}
+    </section>
   )
 }
