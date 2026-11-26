@@ -35,7 +35,7 @@ import {
 } from '@easybau/schemas'
 import type { FastifyInstance } from 'fastify'
 import { z } from 'zod'
-import { openArtifact, storeArtifact } from '../artifacts.js'
+import { assertNotPurged, openArtifact, storeArtifact } from '../artifacts.js'
 import { type AuthContext, inTenant, requirePermission, type Services } from '../context.js'
 import { HttpError, notFound, parse } from '../http.js'
 import { automaticAttachments, patternFileName } from './document-settings.js'
@@ -337,6 +337,9 @@ async function queueNoticeEmail(
       'Der E-Mail-Versand ist nicht eingerichtet (SMTP_HOST und SMTP_FROM in der .env). Bitte das PDF herunterladen und selbst versenden.',
     )
   }
+  const [invoice] = await tx<{ id: string }[]>`
+    select invoice_id as id from dunning_notice where id = ${notice.id}`
+  if (invoice) await assertNotPurged(tx, invoice.id)
   const [artifact] = await tx<{ id: string }[]>`
     select id from document_artifact where dunning_notice_id = ${notice.id}`
   if (!artifact) throw notFound('Das PDF der Mahnung')
@@ -580,6 +583,7 @@ export function registerDunningRoutes(app: FastifyInstance, services: Services) 
         where n.id = ${id}`
       // Project visibility via the invoice.
       if (!row || !(await loadDocument(tx, auth, row.invoiceId))) return null
+      await assertNotPurged(tx, row.invoiceId)
       const data = await openArtifact(services, row.key)
       return data ? { data, filename: await noticeFileName(tx, id) } : null
     })

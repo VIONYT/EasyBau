@@ -452,6 +452,42 @@ const de = {
   'sig.client': 'Unterschrift Auftraggeber',
   'sig.other': 'Unterschrift weitere Person',
   'nav.audit': 'Prüfung',
+  'ret.title': 'Aufbewahrung und Löschen nach Fristende',
+  'ret.hint':
+    'Nach Ablauf der Aufbewahrungsfrist dürfen personenbezogene Daten in Belegen nicht länger gespeichert werden (DSGVO Art. 17). Anonymisieren behält Nummer, Datum, Art und Beträge; Empfänger, Texte und Positionsbeschreibungen werden ersetzt, die Originale (PDF, E-Rechnung) gelöscht. Das ist endgültig. Rechnungen und Gutschriften: Frist unten, alle anderen Belege und Mahnungen 6 Jahre, jeweils ab Ende des Belegjahres.',
+  'ret.years': 'Aufbewahrungsfrist für Rechnungen und Gutschriften (Jahre)',
+  'ret.yearsHint':
+    '8 bis 30 Jahre. Seit 2025 gelten für Buchungsbelege 8 Jahre (BEG IV) – vorher mit dem Steuerberater klären. Bereits archivierte Originale behalten ihre Sperrfrist.',
+  'ret.yearsInfo': 'Aufbewahrungsfrist für Rechnungen und Gutschriften: {n} Jahre.',
+  'ret.due': '{n} Belege mit abgelaufener Frist',
+  'ret.due.one': '1 Beleg mit abgelaufener Frist',
+  'ret.dueCaption': 'Belege mit abgelaufener Aufbewahrungsfrist',
+  'ret.none': 'Keine Belege mit abgelaufener Frist.',
+  'ret.more': 'Es gibt weitere Belege; angezeigt werden die ältesten 500.',
+  'ret.select': 'Auswahl',
+  'ret.selectAll': 'Erste 100 auswählen',
+  'ret.document': 'Beleg',
+  'ret.date': 'Datum',
+  'ret.end': 'Frist bis',
+  'ret.recipient': 'Empfänger · Projekt',
+  'ret.originals': 'Originale',
+  'ret.purge': '{n} Belege anonymisieren …',
+  'ret.purge.one': '1 Beleg anonymisieren …',
+  'ret.busy': 'Wird anonymisiert …',
+  'ret.confirm':
+    '{n} Belege endgültig anonymisieren? Empfänger, Texte und Originale werden gelöscht; das lässt sich nicht rückgängig machen.',
+  'ret.confirm.one':
+    '1 Beleg endgültig anonymisieren? Empfänger, Texte und Originale werden gelöscht; das lässt sich nicht rückgängig machen.',
+  'ret.result': '{n} Belege anonymisiert.',
+  'ret.result.one': '1 Beleg anonymisiert.',
+  'ret.log': 'Löschprotokoll',
+  'ret.logEmpty': 'Noch keine Belege anonymisiert.',
+  'ret.approved': 'Anonymisiert · freigegeben von',
+  'ret.originalsDeleted': '{n} gelöscht',
+  'ret.filesPending': '{n} noch in der Arbeitskopie',
+  'ret.archivePending': '{n} noch im Archiv (Betreiber: archive-purge.sh)',
+  'doc.purged':
+    'Dieser Beleg wurde nach Ablauf der Aufbewahrungsfrist anonymisiert. Nummer, Datum und Beträge bleiben erhalten; Empfänger, Texte und Originale sind gelöscht.',
   'audit.auditorHint':
     'Sie haben lesenden Zugriff für die Prüfung (Datenzugriff Z1): Projekte, Dokumente, Rechnungen und das Änderungsprotokoll ansehen sowie Exporte für den Datenträger (Z3) erstellen. Ihr Zugang ist befristet.',
   'audit.chainHint':

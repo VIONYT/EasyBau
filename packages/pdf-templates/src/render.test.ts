@@ -73,6 +73,7 @@ function sampleDocument(items = 3): DocumentDetail {
     },
     recipient: { name: 'Wohnbau Nord eG', lines: ['Lindenweg 4', '30159 Hannover'] },
     finalizedAt: '2026-11-21T10:00:00.000Z',
+    purgedAt: null,
     changeOrderInfo: null,
     canConvertToChangeOrder: false,
     items: Array.from({ length: items }, (_, i) => ({

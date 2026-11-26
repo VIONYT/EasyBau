@@ -171,7 +171,7 @@ async function belegeOf(tx: Tx, documentIds: string[]): Promise<BelegRow[]> {
     from document_artifact a
     join document d on d.id = a.document_id
     left join artifact_archive r on r.artifact_id = a.id
-    where a.document_id in ${tx(documentIds)}
+    where a.document_id in ${tx(documentIds)} and d.purged_at is null
       and a.kind in ('pdf', 'zugferd_pdf', 'zugferd_xml', 'xrechnung_xml', 'validation_report')
     order by d.document_date, d.number, a.created_at`
 }
@@ -291,7 +291,7 @@ async function ensureOriginals(
     (tx) =>
       tx<{ id: string }[]>`
       select d.id from document d
-      where d.id in ${tx(documentIds)}
+      where d.id in ${tx(documentIds)} and d.purged_at is null
         and not exists (select 1 from document_artifact a
                         where a.document_id = d.id and a.kind in ('pdf', 'zugferd_pdf'))`,
   )

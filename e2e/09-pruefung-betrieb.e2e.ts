@@ -32,6 +32,22 @@ test('Prüfung: Änderungsprotokoll, Hash-Kette und befristeter Prüferzugang', 
   await expectNoHorizontalScroll(page)
   if (SCREENSHOTS) await page.screenshot({ path: `${SCREENSHOTS}/pruefung.png`, fullPage: true })
 
+  // Aufbewahrung (C.12): nothing due in a new stack; the period for invoices can be set (8–30).
+  const retention = page.locator('.panel').filter({
+    has: page.getByRole('heading', { name: 'Aufbewahrung und Löschen nach Fristende' }),
+  })
+  await expect(retention.getByText('Keine Belege mit abgelaufener Frist.')).toBeVisible()
+  await expect(retention.getByText('Noch keine Belege anonymisiert.')).toBeVisible()
+  const years = retention.getByLabel(/Aufbewahrungsfrist für Rechnungen/)
+  await expect(years).toHaveValue('10')
+  await years.fill('7')
+  await retention.getByRole('button', { name: 'Speichern' }).click()
+  await expect(retention.getByText(/Mindestens 8 Jahre/)).toBeVisible()
+  await years.fill('10')
+  await retention.getByRole('button', { name: 'Speichern' }).click()
+  await expect(retention.getByText('Gespeichert.')).toBeVisible()
+  await expectNoHorizontalScroll(page)
+
   // Prüfer (Steuerberatung/Betriebsprüfung): only with an end date, read-only.
   await page.getByRole('button', { name: 'Benutzer' }).click()
   await page.getByLabel('E-Mail-Adresse').fill('pruefer@finanzamt.example')
@@ -52,6 +68,9 @@ test('Prüfung: Änderungsprotokoll, Hash-Kette und befristeter Prüferzugang', 
   await auditorPage.getByRole('button', { name: 'Prüfung' }).click()
   await expect(auditorPage.getByText(/Ihr Zugang ist befristet/)).toBeVisible()
   await expect(auditorPage.getByRole('heading', { name: 'Exporte' })).toBeVisible()
+  await expect(
+    auditorPage.getByText('Aufbewahrungsfrist für Rechnungen und Gutschriften: 10 Jahre.'),
+  ).toBeVisible()
   await expectNoHorizontalScroll(auditorPage)
   await auditor.close()
 })

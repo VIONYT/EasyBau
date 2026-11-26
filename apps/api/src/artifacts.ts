@@ -2,6 +2,7 @@ import { Readable } from 'node:stream'
 import type { Tx } from '@easybau/db'
 import type { DocumentArchive } from '@easybau/schemas'
 import { type AuthContext, type Services, servicesOf } from './context.js'
+import { HttpError } from './http.js'
 
 const MAX_ARTIFACT_BYTES = 50 * 1024 * 1024
 
@@ -15,7 +16,8 @@ export type ArtifactKind =
 
 /**
  * Archives an original of a finalized document (insert-only, SHA-256, locked for the retention
- * period: 10 years from the end of the calendar year of the document, § 147 AO). The file is
+ * period from the end of the calendar year of the document: invoices and credit notes the
+ * company's retention_years (default 10, § 147 AO), other documents 6 years (Handelsbriefe)). The file is
  * committed to the store inside the transaction; a rollback leaves at most an unreferenced file.
  */
 export async function storeArtifact(
@@ -55,7 +57,10 @@ export async function storeArtifact(
              ${artifact.mime}, ${artifact.format ?? null}, ${validatedAt}::timestamptz,
              ${artifact.sourceArtifactId ?? null}, ${artifact.dunningNoticeId ?? null},
              (date_trunc('year', coalesce(${artifact.retentionFrom ?? null}::date, document_date))
-               + make_interval(years => ${(artifact.retentionYears ?? 10) + 1}) - interval '1 day')::date
+               + make_interval(years => 1 + coalesce(${artifact.retentionYears ?? null}::int,
+                   case when type in ('invoice', 'credit_note')
+                        then (select retention_years from tenant t where t.id = document.tenant_id)
+                        else 6 end)) - interval '1 day')::date
       from document where id = ${documentId}`
     await pending.commit(key)
     return artifactId
@@ -89,12 +94,29 @@ export async function storeIncomingOriginal(
       select ${artifactId}, tenant_id, id, 'incoming_original', ${key}, ${pending.sha256},
              ${pending.sizeBytes}, ${original.mime},
              (date_trunc('year', (received_at at time zone 'Europe/Berlin')::date)
-               + make_interval(years => 11) - interval '1 day')::date
+               + make_interval(years => 1 + (select retention_years from tenant t
+                                              where t.id = incoming_invoice.tenant_id))
+               - interval '1 day')::date
       from incoming_invoice where id = ${incomingInvoiceId}`
     await pending.commit(key)
     return artifactId
   } finally {
     await pending.discard()
+  }
+}
+
+/**
+ * Originals of a document anonymised after its retention period (C.12, migration 0047) are gone:
+ * no download, no new rendering, no e-mail.
+ */
+export async function assertNotPurged(tx: Tx, documentId: string): Promise<void> {
+  const [row] = await tx<{ purged: boolean }[]>`
+    select purged_at is not null as purged from document where id = ${documentId}`
+  if (row?.purged) {
+    throw new HttpError(
+      410,
+      'Der Beleg wurde nach Ablauf der Aufbewahrungsfrist anonymisiert; die Originale sind gelöscht.',
+    )
   }
 }
 

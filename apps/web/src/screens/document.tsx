@@ -144,7 +144,11 @@ export function DocumentScreen({ me, id, navigate }: { me: Me; id: string; navig
           {t('doc.cancels').replace('{number}', doc.cancels.number)}
         </p>
       ) : null}
-      {doc.status !== 'draft' && !doc.cancelledBy ? (
+      {doc.purgedAt ? (
+        <p className="notice inline" role="status">
+          {t('doc.purged')}
+        </p>
+      ) : doc.status !== 'draft' && !doc.cancelledBy ? (
         <p className="notice inline" role="status">
           {t('doc.locked')}
         </p>
@@ -184,7 +188,7 @@ export function DocumentScreen({ me, id, navigate }: { me: Me; id: string; navig
         apply={apply}
         navigate={navigate}
       />
-      {doc.finalizedAt ? (
+      {doc.finalizedAt && !doc.purgedAt ? (
         <DocumentEmailPanel
           doc={doc}
           canWrite={me.permissions.includes('document.write')}
@@ -1342,25 +1346,29 @@ function DocumentActions({
   }
   return (
     <div className="doc-actions">
-      <a
-        className={buttonClass({ variant: 'ghost', width: 'natural' })}
-        href={`/dokumente/${doc.id}/druck`}
-        onClick={(e) => {
-          e.preventDefault()
-          navigate({ view: 'print', id: doc.id })
-        }}
-      >
-        {t('q.preview')}
-      </a>
-      <a
-        className={buttonClass({ variant: 'ghost', width: 'natural' })}
-        href={`/api/v1/documents/${doc.id}/pdf`}
-        target="_blank"
-        rel="noopener"
-      >
-        {t('doc.pdf')}
-      </a>
-      {doc.einvoice?.files.map((file) => (
+      {doc.purgedAt ? null : (
+        <>
+          <a
+            className={buttonClass({ variant: 'ghost', width: 'natural' })}
+            href={`/dokumente/${doc.id}/druck`}
+            onClick={(e) => {
+              e.preventDefault()
+              navigate({ view: 'print', id: doc.id })
+            }}
+          >
+            {t('q.preview')}
+          </a>
+          <a
+            className={buttonClass({ variant: 'ghost', width: 'natural' })}
+            href={`/api/v1/documents/${doc.id}/pdf`}
+            target="_blank"
+            rel="noopener"
+          >
+            {t('doc.pdf')}
+          </a>
+        </>
+      )}
+      {(doc.purgedAt ? [] : (doc.einvoice?.files ?? [])).map((file) => (
         <a
           key={file.format}
           className={buttonClass({ variant: 'ghost', width: 'natural' })}

@@ -6822,6 +6822,88 @@
         }
       }
     },
+    "/api/v1/retention": {
+      "get": {
+        "operationId": "getApiV1Retention",
+        "tags": [
+          "retention"
+        ],
+        "description": "Recht: `audit.read`",
+        "responses": {
+          "2XX": {
+            "description": "Erfolg (JSON, Typen in packages/schemas)"
+          },
+          "default": {
+            "description": "Fehler",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/retention/log": {
+      "get": {
+        "operationId": "getApiV1RetentionLog",
+        "tags": [
+          "retention"
+        ],
+        "description": "Recht: `audit.read`",
+        "responses": {
+          "2XX": {
+            "description": "Erfolg (JSON, Typen in packages/schemas)"
+          },
+          "default": {
+            "description": "Fehler",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/retention/purge": {
+      "post": {
+        "operationId": "postApiV1RetentionPurge",
+        "tags": [
+          "retention"
+        ],
+        "description": "Recht: `tenant.manage`",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/purgeDocumentsRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "2XX": {
+            "description": "Erfolg (JSON, Typen in packages/schemas)"
+          },
+          "default": {
+            "description": "Fehler",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/v1/roles": {
       "get": {
         "operationId": "getApiV1Roles",
@@ -7961,6 +8043,40 @@
             "application/json": {
               "schema": {
                 "$ref": "#/components/schemas/paymentTermRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "2XX": {
+            "description": "Erfolg (JSON, Typen in packages/schemas)"
+          },
+          "default": {
+            "description": "Fehler",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/settings/retention": {
+      "put": {
+        "operationId": "putApiV1SettingsRetention",
+        "tags": [
+          "retention"
+        ],
+        "description": "Recht: `tenant.manage`",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/retentionSettingsRequest"
               }
             }
           }
@@ -11986,6 +12102,29 @@
           "status"
         ]
       },
+      "purgeDocumentsRequest": {
+        "type": "object",
+        "properties": {
+          "documentIds": {
+            "minItems": 1,
+            "maxItems": 100,
+            "type": "array",
+            "items": {
+              "type": "string",
+              "format": "uuid",
+              "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+            }
+          },
+          "confirm": {
+            "type": "boolean",
+            "const": true
+          }
+        },
+        "required": [
+          "documentIds",
+          "confirm"
+        ]
+      },
       "recordAdjustmentRequest": {
         "type": "object",
         "properties": {
@@ -12138,6 +12277,19 @@
         },
         "required": [
           "name"
+        ]
+      },
+      "retentionSettingsRequest": {
+        "type": "object",
+        "properties": {
+          "retentionYears": {
+            "type": "integer",
+            "minimum": 8,
+            "maximum": 30
+          }
+        },
+        "required": [
+          "retentionYears"
         ]
       },
       "saveMySignatureRequest": {

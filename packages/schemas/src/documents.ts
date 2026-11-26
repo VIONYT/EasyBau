@@ -515,6 +515,8 @@ export interface DocumentDetail extends DocumentSummary {
   }
   recipient: PartyAddress | null
   finalizedAt: string | null
+  /** Anonymised after the retention period (C.12): texts replaced, originals deleted. */
+  purgedAt: string | null
   /** Change orders: main contract, reason. */
   changeOrderInfo: {
     contractId: string

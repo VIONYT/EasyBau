@@ -611,6 +611,7 @@ export async function loadDocument(
 ): Promise<(DocumentDetail & { etag: string }) | null> {
   const [row] = await tx<DocumentRow[]>`
     select ${summaryColumns(tx)}, d.updated_at as "updatedRaw", ${ISO(tx, 'd.finalized_at')} as "finalizedAt",
+           ${ISO(tx, 'd.purged_at')} as "purgedAt",
            json_build_object('id', p.id, 'number', p.number, 'name', p.name) as project,
            case when c.id is null then null else json_build_object('id', c.id, 'displayName', c.display_name) end as contact,
            case when cp.id is null then null else json_build_object('id', cp.id, 'displayName', cp.display_name) end as "contactPerson",

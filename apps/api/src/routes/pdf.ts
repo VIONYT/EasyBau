@@ -14,7 +14,7 @@ import {
 import type { DocumentDetail, MeasurementSheetDetail } from '@easybau/schemas'
 import type { FastifyInstance, FastifyReply } from 'fastify'
 import { z } from 'zod'
-import { openArtifact, readArtifact, storeArtifact } from '../artifacts.js'
+import { assertNotPurged, openArtifact, readArtifact, storeArtifact } from '../artifacts.js'
 import {
   type AuthContext,
   inTenant,
@@ -253,6 +253,7 @@ export async function documentPdf(
     if (!doc.finalizedAt) {
       return { data: await render(tx, services, doc, 'ENTWURF'), filename }
     }
+    await assertNotPurged(tx, id)
     // Serialise the first rendering of the archived original.
     await tx`select id from document where id = ${id} for update`
     const [archived] = await tx<{ key: string }[]>`

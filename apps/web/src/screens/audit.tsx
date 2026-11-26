@@ -5,6 +5,7 @@ import { type ApiError, api } from '../api'
 import { formatDateTime } from '../format'
 import { FormError } from '../forms'
 import { type TextKey, t, tf } from '../i18n'
+import { RetentionPanel } from './retention'
 import { auditText, ExportPanel } from './system'
 
 /** Areas of the Änderungsprotokoll that can be filtered (entity names of the database). */
@@ -64,6 +65,7 @@ export function AuditScreen({ me }: { me: Me }) {
       <ChainPanel />
       <EventsPanel />
       {me.permissions.includes('export.run') ? <ExportPanel /> : null}
+      <RetentionPanel canManage={me.permissions.includes('tenant.manage')} />
     </section>
   )
 }

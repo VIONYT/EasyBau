@@ -189,6 +189,7 @@ export function invoice(items: DocumentItem[], options: InvoiceOptions = {}): Do
       ...options.recipient,
     },
     finalizedAt: '2026-11-21T10:00:00.000Z',
+    purgedAt: null,
     changeOrderInfo: null,
     canConvertToChangeOrder: false,
     items,

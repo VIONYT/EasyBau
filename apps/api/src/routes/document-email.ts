@@ -21,6 +21,7 @@ import {
 } from '@easybau/schemas'
 import type { FastifyInstance } from 'fastify'
 import { z } from 'zod'
+import { assertNotPurged } from '../artifacts.js'
 import { type AuthContext, inTenant, requirePermission, type Services } from '../context.js'
 import { HttpError, notFound, parse } from '../http.js'
 import {
@@ -82,6 +83,7 @@ interface ArtifactRow {
 }
 
 async function originalsOf(tx: Tx, doc: DocumentDetail) {
+  await assertNotPurged(tx, doc.id)
   const pdfName = await documentFileName(tx, doc)
   const rows = await tx<ArtifactRow[]>`
     select id, kind, format from document_artifact

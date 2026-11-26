@@ -48,6 +48,7 @@ import { registerProjectRoutes } from './routes/projects.js'
 import { registerReceivableRoutes } from './routes/receivables.js'
 import { registerReportBillingRoutes } from './routes/report-billing.js'
 import { registerReportRoutes } from './routes/reports.js'
+import { registerRetentionRoutes } from './routes/retention.js'
 import { registerSettingsRoutes } from './routes/settings.js'
 import { registerSignatureRoutes } from './routes/signatures.js'
 import { registerUserRoutes } from './routes/users.js'
@@ -288,6 +289,7 @@ export function buildApi({
   registerAccountRoutes(app, services)
   registerContactCsvRoutes(app, services)
   registerPrivacyRoutes(app, services)
+  registerRetentionRoutes(app, services)
   registerProjectFigureRoutes(app, services)
   registerDashboardRoutes(app, services)
   registerNotificationRoutes(app, services)

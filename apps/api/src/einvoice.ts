@@ -8,7 +8,7 @@ import {
 import type { DocumentDetail, EinvoiceFormat, EinvoiceSummary } from '@easybau/schemas'
 import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify'
 import { z } from 'zod'
-import { openArtifact, storeArtifact } from './artifacts.js'
+import { assertNotPurged, openArtifact, storeArtifact } from './artifacts.js'
 import {
   type AuthContext,
   inTenant,
@@ -149,6 +149,7 @@ export function registerEinvoiceRoutes(app: FastifyInstance, services: Services)
     const file = await inTenant(services, auth, async (tx) => {
       const doc = await loadDocument(tx, auth, id)
       if (!doc?.number) return null
+      await assertNotPurged(tx, id)
       const key = report
         ? (
             await tx<{ key: string }[]>`

@@ -4,6 +4,9 @@ Alle wesentlichen Änderungen, vor allem solche, die Betreiber betreffen (neue V
 
 ## Unveröffentlicht
 
+### Neu
+- **Belege nach Ablauf der Aufbewahrungsfrist anonymisieren (DSGVO, ADR 0012, Migration 0047):** „Prüfung › Aufbewahrung und Löschen nach Fristende“ listet festgeschriebene Belege mit abgelaufener Frist. Nach Freigabe durch einen Admin werden Empfänger, Texte, Positionsbeschreibungen, Mahnungsschreiben und E-Mails ersetzt und die Originale gelöscht; Nummer, Datum und Beträge bleiben. Ein Löschprotokoll bleibt als Nachweis. Die Aufbewahrungsfrist für Rechnungen und Gutschriften ist jetzt einstellbar (8–30 Jahre, Standard 10). Andere Belege und Mahnungen werden 6 Jahre aufbewahrt; neue Originale werden mit dieser Frist gesperrt (vorher pauschal 10 Jahre). **Betreiber:** Die Kopien im Belegarchiv löscht das neue Skript `sh infra/archive-purge.sh` (mit `--dry-run` zum Ansehen), am besten einmal im Jahr. Bei externem S3 siehe `docs/self-hosting/`.
+
 ### Behoben
 - **Offline angelegte Aufmaßblätter** zeigen im Zurück-Link sofort Projektnummer und -name (vorher leer bis zur Übertragung).
 - **Entwicklungsserver:** Der Vite-Proxy schrieb den Host-Header um, sodass die API jede ändernde Anfrage aus dem Browser als fremde Website ablehnte (nur `pnpm dev`, nicht der Docker-Stack).
