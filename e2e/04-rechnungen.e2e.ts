@@ -1,4 +1,5 @@
 import { expect, test } from '@playwright/test'
+import { createCustomer, createOrderConfirmation, createProject } from './fixtures'
 import {
   type AdminSession,
   expectNoHorizontalScroll,
@@ -12,8 +13,20 @@ test.describe.configure({ mode: 'serial' })
 
 // Logged-in admin with the virtual security key (from 01-einrichtung, or restored from disk).
 let page: AdminSession['page']
+// Own data (C.11): a customer still without address (the invoice check names it), a project and
+// a finalized Auftragsbestätigung to invoice from.
+const CUSTOMER = 'Wohnungsbau Kastanienhof eG'
+const PROJECT = 'Fassade Kastanienhof'
+let ab = { id: '', number: '' }
 test.beforeAll(async ({ browser }) => {
   ;({ page } = await session(browser))
+  if (!SETUP_TOKEN) return
+  const customerId = await createCustomer(page, CUSTOMER, { withAddress: false })
+  const project = await createProject(page, PROJECT, customerId)
+  ab = await createOrderConfirmation(page, project.id, customerId, [
+    { shortText: 'Fassade reinigen', quantity: '120', unitPriceCents: 1450 },
+    { shortText: 'Fassadenanstrich', quantity: '120', unitPriceCents: 2890, laborMinutes: 20 },
+  ])
 })
 
 test('Rechnung: Pflichtangaben, Festschreiben und Korrigieren per Storno', async () => {
@@ -22,13 +35,13 @@ test('Rechnung: Pflichtangaben, Festschreiben und Korrigieren per Storno', async
 
   // Rechnung aus der Auftragsbestätigung
   await page.getByRole('button', { name: 'Projekte' }).click()
-  await page.getByRole('link', { name: /Sanierung Lindenweg/ }).click()
+  await page.getByRole('link', { name: PROJECT }).click()
   await page.getByRole('button', { name: 'Dokumente' }).click()
   await page.getByRole('button', { name: 'Neues Dokument' }).click()
   await page.getByRole('radio', { name: 'Rechnung', exact: true }).check()
   const source = page.getByLabel('Positionen übernehmen aus')
-  const ab = await source.locator('option', { hasText: 'AB-00101' }).getAttribute('value')
-  await source.selectOption(ab as string)
+  const abOption = await source.locator('option', { hasText: ab.number }).getAttribute('value')
+  await source.selectOption(abOption as string)
   await page.getByRole('button', { name: 'Dokument erstellen' }).click()
   await expect(page.getByRole('heading', { name: 'Rechnung', exact: true })).toBeVisible()
   const invoiceUrl = page.url()
@@ -59,13 +72,13 @@ test('Rechnung: Pflichtangaben, Festschreiben und Korrigieren per Storno', async
   ).toBe(200)
   // Kundenanschrift und E-Rechnungsdaten im Kontakt (XRechnung an die E-Rechnungs-Adresse)
   await page.getByRole('button', { name: 'Kontakte' }).click()
-  await page.getByRole('button', { name: /Wohnbau Nord eG/ }).click()
+  await page.getByRole('button', { name: CUSTOMER }).click()
   const editor = page.locator('.contact-editor')
-  await editor.getByLabel('Straße und Hausnummer').fill('Lindenweg 4')
+  await editor.getByLabel('Straße und Hausnummer').fill('Kastanienhof 12')
   await editor.getByLabel('PLZ').fill('30159')
   await editor.getByLabel('Ort').fill('Hannover')
   await editor.getByLabel('Format').selectOption('xrechnung_ubl')
-  await editor.getByLabel('E-Mail für E-Rechnungen').fill('rechnung@wohnbau-nord.example')
+  await editor.getByLabel('E-Mail für E-Rechnungen').fill('rechnung@kastanienhof.example')
   await expectNoHorizontalScroll(page)
   if (SCREENSHOTS)
     await page.screenshot({ path: `${SCREENSHOTS}/kontakt-erechnung.png`, fullPage: true })
@@ -83,20 +96,22 @@ test('Rechnung: Pflichtangaben, Festschreiben und Korrigieren per Storno', async
   // Festschreiben mit Vorschau der Nummer
   await page.getByRole('button', { name: 'Rechnung festschreiben …' }).click()
   await expect(page.getByText('Alle Pflichtangaben sind vorhanden.')).toBeVisible()
-  await expect(page.getByText('Die Rechnung erhält die Nummer')).toContainText('R-00101')
+  const preview = page.getByText('Die Rechnung erhält die Nummer')
+  await expect(preview).toContainText(/R-\d+/)
+  const number = /R-\d+/.exec((await preview.textContent()) ?? '')?.[0] as string
   await expectNoHorizontalScroll(page)
   if (SCREENSHOTS)
     await page.screenshot({ path: `${SCREENSHOTS}/rechnung-festschreiben.png`, fullPage: true })
   await expect(page.getByText(/E-Rechnung .* KoSIT-Validator geprüft/)).toBeVisible()
   await page.getByRole('button', { name: 'Jetzt festschreiben' }).click()
-  await expect(page.getByText(/^R-00101/)).toBeVisible()
+  await expect(page.getByText(new RegExp(`^${number}`))).toBeVisible()
   await expect(page.getByText('Fertiggestellt', { exact: true })).toBeVisible()
   // E-Rechnung: ZUGFeRD im PDF und XRechnung, beide vom KoSIT-Validator geprüft
   await expect(page.getByText(/E-Rechnung geprüft \(ZUGFeRD, XRechnung UBL\)/)).toBeVisible()
   const invoiceId = invoiceUrl.split('/').pop() as string
   const xrechnung = await page.request.get(`/api/v1/documents/${invoiceId}/einvoice/xrechnung_ubl`)
   expect(xrechnung.status()).toBe(200)
-  expect(await xrechnung.text()).toContain('<cbc:ID>R-00101</cbc:ID>')
+  expect(await xrechnung.text()).toContain(`<cbc:ID>${number}</cbc:ID>`)
   const pdf = await page.request.get(`/api/v1/documents/${invoiceId}/pdf`)
   expect((await pdf.body()).toString('latin1')).toContain('/F (factur-x.xml)')
   // Revisionssicheres Archiv: the worker copies the originals into the archive (RustFS) with Object Lock.
@@ -144,9 +159,9 @@ test('Rechnung: Pflichtangaben, Festschreiben und Korrigieren per Storno', async
   // Rechnungsliste mit Status, Summen und Filter
   await page.getByRole('button', { name: 'Rechnungen', exact: true }).click()
   await expect(page.getByRole('heading', { name: 'Rechnungen', exact: true })).toBeVisible()
-  await expect(page.getByRole('link', { name: /R-00101/ })).toContainText('angemahnt')
+  await expect(page.getByRole('link', { name: new RegExp(number) })).toContainText('angemahnt')
   await page.getByLabel('Status').selectOption('dunned')
-  await expect(page.getByText('Rechnungen: 1')).toBeVisible()
+  await expect(page.getByRole('link', { name: new RegExp(number) })).toBeVisible()
   await expectNoHorizontalScroll(page)
   if (SCREENSHOTS)
     await page.screenshot({ path: `${SCREENSHOTS}/rechnungsliste.png`, fullPage: true })
@@ -163,11 +178,11 @@ test('Rechnung: Pflichtangaben, Festschreiben und Korrigieren per Storno', async
   await expect(page.getByRole('heading', { name: 'Rechnung', exact: true })).toBeVisible()
   await expect(page.getByText('Entwurf', { exact: true }).first()).toBeVisible()
 
-  // Im Projekt: R-00101 gesperrt und ausgegraut, Stornorechnung R-00102
-  await page.getByRole('link', { name: /Sanierung Lindenweg/ }).click()
-  await expect(page.getByText('storniert durch R-00102')).toBeVisible()
-  await expect(page.locator('.is-cancelled .locked-number')).toHaveText('R-00101')
-  await expect(page.getByText('Storno zu Rechnung R-00101').first()).toBeVisible()
+  // Im Projekt: die Rechnung gesperrt und ausgegraut, Stornorechnung mit eigener Nummer
+  await page.getByRole('link', { name: PROJECT }).click()
+  await expect(page.getByText(/storniert durch R-\d+/)).toBeVisible()
+  await expect(page.locator('.is-cancelled .locked-number')).toHaveText(number)
+  await expect(page.getByText(`Storno zu Rechnung ${number}`).first()).toBeVisible()
   await expectNoHorizontalScroll(page)
   if (SCREENSHOTS)
     await page.screenshot({ path: `${SCREENSHOTS}/rechnung-storno.png`, fullPage: true })
@@ -201,9 +216,7 @@ test('Eingangsrechnung: XRechnung empfangen, prüfen, zuweisen, bestätigen und 
   // Kostenzuweisung: the open net amount goes to the project
   await page.getByRole('button', { name: 'Zuweisung hinzufügen' }).click()
   const target = page.getByLabel('Zuweisung 1')
-  const project = await target
-    .locator('option', { hasText: 'Sanierung Lindenweg' })
-    .getAttribute('value')
+  const project = await target.locator('option', { hasText: PROJECT }).getAttribute('value')
   await target.selectOption(project as string)
   await page.getByLabel('Kostenart').selectOption('material')
   await expect(page.getByLabel('Netto-Betrag')).toHaveValue('400,00')
@@ -212,7 +225,7 @@ test('Eingangsrechnung: XRechnung empfangen, prüfen, zuweisen, bestätigen und 
     await page.screenshot({ path: `${SCREENSHOTS}/eingangsrechnung-pruefen.png`, fullPage: true })
   await page.getByRole('button', { name: 'Prüfung bestätigen' }).click()
   await expect(page.locator('.invoice-head .chip')).toHaveText('offen')
-  await expect(page.getByText('Sanierung Lindenweg').first()).toBeVisible()
+  await expect(page.getByText(PROJECT).first()).toBeVisible()
 
   // Zahlstatus
   await page.getByRole('button', { name: 'Als bezahlt markieren' }).click()
@@ -234,10 +247,10 @@ test('Eingangsrechnung: XRechnung empfangen, prüfen, zuweisen, bestätigen und 
 
   // Filter Zuweisung and Zeitraum (P2.4)
   const filterTarget = page.getByLabel('Zuweisung', { exact: true })
-  const lindenweg = await filterTarget
-    .locator('option', { hasText: 'Sanierung Lindenweg' })
+  const ownProject = await filterTarget
+    .locator('option', { hasText: PROJECT })
     .getAttribute('value')
-  await filterTarget.selectOption(lindenweg as string)
+  await filterTarget.selectOption(ownProject as string)
   await expect(page.getByRole('link', { name: /Holzhandel Süd GmbH/ })).toBeVisible()
   await page.getByLabel('Rechnungsdatum von').fill('2030-01-01')
   await expect(page.getByRole('link', { name: /Holzhandel Süd GmbH/ })).toHaveCount(0)
