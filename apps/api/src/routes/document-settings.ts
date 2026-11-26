@@ -101,6 +101,23 @@ export async function documentFileName(
   return fileNameFrom(fileNamePattern, fileNameValues(doc), extension)
 }
 
+/** Holidays of the company (statutory of its Bundesland + own) for the given years, as ISO dates. */
+export async function holidayDates(tx: Tx, years: number[]): Promise<Set<string>> {
+  const [tenant] = await tx<{ state: string | null }[]>`
+    select federal_state as state from tenant where id = current_tenant_id()`
+  const state = isFederalState(tenant?.state) ? tenant.state : null
+  const dates = new Set<string>()
+  for (const year of years) {
+    if (state && year >= 1995 && year <= 2199)
+      for (const h of publicHolidays(year, state)) dates.add(h.date)
+  }
+  const own = await tx<{ date: string }[]>`
+    select to_char(day, 'YYYY-MM-DD') as date from holiday
+    where extract(year from day)::int in ${tx(years)}`
+  for (const h of own) dates.add(h.date)
+  return dates
+}
+
 export async function attachmentFiles(tx: Tx): Promise<AttachmentFile[]> {
   return tx<AttachmentFile[]>`
     select id, name, size_bytes::float8 as "sizeBytes",

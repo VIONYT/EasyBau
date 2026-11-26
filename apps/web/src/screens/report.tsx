@@ -1,5 +1,12 @@
-import type { Me, ReportDetail, ReportSection, SignerRole, UnitSummary } from '@easybau/schemas'
-import { WEATHER_CONDITIONS } from '@easybau/schemas/constants'
+import type {
+  Me,
+  MeasurementSheetSummary,
+  ReportDetail,
+  ReportSection,
+  SignerRole,
+  UnitSummary,
+} from '@easybau/schemas'
+import { CHECKLIST_STATES, WEATHER_CONDITIONS } from '@easybau/schemas/constants'
 import { type ChangeEvent, useCallback, useEffect, useMemo, useState } from 'react'
 import { ApiError, api, apiWithEtag, mutate } from '../api'
 import { formatDateTime, formatInputNumber } from '../format'
@@ -31,7 +38,18 @@ const EDITABLE = new Set([
   'text',
   'yes_no',
   'deadline',
+  'checklist',
+  'measurement',
 ])
+
+/** VOB/B § 15 Abs. 3: Übergabe und Rückgabe der Stundenlohnzettel. */
+export function dayworkText(deadline: NonNullable<ReportDetail['daywork']>): string {
+  const date = (iso: string | null) => (iso ? formatDateTime(iso, 'date') : '')
+  return tf(`rep.daywork.${deadline.state}` as TextKey, {
+    submitBy: date(deadline.submitBy),
+    returnBy: date(deadline.returnBy),
+  })
+}
 
 const sectionTitle = (section: ReportSection) =>
   section.label ?? t(`d.section.${section.type}` as TextKey) ?? section.id
@@ -75,7 +93,7 @@ function toRequest(sections: ReportSection[], data: Data): Data {
         Object.fromEntries(
           Object.entries(row).map(([k, v]) => [
             k,
-            k === 'name' || k === 'description' ? v : blank(v),
+            k === 'name' || k === 'description' || k === 'label' ? v : blank(v),
           ]),
         ),
       )
@@ -93,6 +111,7 @@ export function ReportScreen({ me, id, navigate }: { me: Me; id: string; navigat
   const [data, setData] = useState<Data>({})
   const [reportDate, setReportDate] = useState('')
   const [period, setPeriod] = useState({ from: '', to: '' })
+  const [submittedOn, setSubmittedOn] = useState('')
   const [dirty, setDirty] = useState(false)
   // Sections changed since the last save: only these are sent (others keep the server state).
   const [touched, setTouched] = useState<Set<string>>(new Set())
@@ -109,6 +128,7 @@ export function ReportScreen({ me, id, navigate }: { me: Me; id: string; navigat
       setData(toInput(next.data as Data))
       setReportDate(next.reportDate)
       setPeriod({ from: next.serviceFrom ?? '', to: next.serviceTo ?? '' })
+      setSubmittedOn(next.submittedOn ?? '')
       setDirty(false)
       setTouched(new Set())
     },
@@ -123,6 +143,16 @@ export function ReportScreen({ me, id, navigate }: { me: Me; id: string; navigat
       .then(setUnits)
       .catch(() => undefined)
   }, [id, apply])
+
+  const projectId = report?.projectId
+  const needsSheets = report?.template.sections.some((s) => s.type === 'measurement') ?? false
+  const [sheets, setSheets] = useState<MeasurementSheetSummary[]>([])
+  useEffect(() => {
+    if (!projectId || !needsSheets) return
+    api<MeasurementSheetSummary[]>('GET', `/api/v1/projects/${projectId}/measurement-sheets`)
+      .then(setSheets)
+      .catch(() => undefined)
+  }, [projectId, needsSheets])
 
   const run = async (call: () => Promise<{ data: ReportDetail; etag: string | null }>) => {
     setBusy(true)
@@ -156,6 +186,7 @@ export function ReportScreen({ me, id, navigate }: { me: Me; id: string; navigat
   const editable = report.status === 'draft' && me.permissions.includes('report.write')
   const sections = report.template.sections
   const servicePeriod = sections.some((s) => s.type === 'header' && s.servicePeriod)
+  const daywork = report.template.key === 'daywork_report'
   const update = (sectionId: string, value: Record<string, unknown>) => {
     setTouched((current) => new Set(current).add(sectionId))
     setData((d) => ({ ...d, [sectionId]: value }))
@@ -168,6 +199,7 @@ export function ReportScreen({ me, id, navigate }: { me: Me; id: string; navigat
     const body = {
       reportDate,
       ...(servicePeriod ? { serviceFrom: period.from || null, serviceTo: period.to || null } : {}),
+      ...(daywork ? { submittedOn: submittedOn || null } : {}),
       data: Object.fromEntries(Object.entries(changed).filter(([key]) => touched.has(key))),
     }
     const ok = await run(() =>
@@ -184,6 +216,7 @@ export function ReportScreen({ me, id, navigate }: { me: Me; id: string; navigat
             reportDate,
             serviceFrom: servicePeriod ? period.from || null : base.serviceFrom,
             serviceTo: servicePeriod ? period.to || null : base.serviceTo,
+            submittedOn: daywork ? submittedOn || null : base.submittedOn,
             data: { ...base.data, ...body.data },
           }
         },
@@ -301,6 +334,25 @@ export function ReportScreen({ me, id, navigate }: { me: Me; id: string; navigat
               ))}
             </div>
           ) : null}
+          {daywork ? (
+            <div className="field">
+              <label htmlFor="submitted-on">{t('rep.daywork.submittedOn')}</label>
+              <input
+                id="submitted-on"
+                type="date"
+                value={submittedOn}
+                onChange={(e) => {
+                  setSubmittedOn(e.target.value)
+                  setDirty(true)
+                }}
+              />
+              {report.daywork ? (
+                <p className={report.daywork.state === 'submit_overdue' ? 'warning' : 'hint'}>
+                  {dayworkText(report.daywork)}
+                </p>
+              ) : null}
+            </div>
+          ) : null}
         </div>
 
         {sections.map((section) => {
@@ -355,6 +407,21 @@ export function ReportScreen({ me, id, navigate }: { me: Me; id: string; navigat
                     </label>
                   ))}
                 </fieldset>
+              )
+            case 'checklist':
+              return <Checklist key={section.id} section={section} value={value} set={set} />
+            case 'measurement':
+              return (
+                <MeasurementSection
+                  key={section.id}
+                  section={section}
+                  value={value}
+                  set={set}
+                  units={units}
+                  sheets={sheets}
+                  linked={report.linkedSheets}
+                  navigate={navigate}
+                />
               )
             case 'deadline':
               return (
@@ -630,6 +697,122 @@ function QuantityRows({ section, value, set, units }: SectionProps & { units: Un
         {t('d.row.add')}
       </button>
     </fieldset>
+  )
+}
+
+function Checklist({ section, value, set }: SectionProps) {
+  const { rows, change, add, remove } = useRows(value, set, { label: '', state: '', note: '' })
+  return (
+    <fieldset className="panel">
+      <legend className="h2">{sectionTitle(section)}</legend>
+      <ul className="rows">
+        {rows.map((row, i) => (
+          // biome-ignore lint/suspicious/noArrayIndexKey: rows have no id; order is the identity
+          <li key={i} className="row-card">
+            <div className="row-with-action">
+              <div className="field">
+                <label htmlFor={`${section.id}-${i}-label`}>{t('rep.check.point')}</label>
+                <input
+                  id={`${section.id}-${i}-label`}
+                  value={row.label ?? ''}
+                  onChange={(e) => change(i, 'label', e.target.value)}
+                />
+              </div>
+              <RowActions label={t('d.row.remove')} onRemove={() => remove(i)} />
+            </div>
+            <fieldset className="segmented">
+              <legend className="visually-hidden">{t('rep.check.result')}</legend>
+              {CHECKLIST_STATES.map((state) => (
+                <label key={state}>
+                  <input
+                    type="radio"
+                    name={`${section.id}-${i}-state`}
+                    checked={row.state === state}
+                    onChange={() => change(i, 'state', state)}
+                  />
+                  {t(`rep.check.${state}` as TextKey)}
+                </label>
+              ))}
+            </fieldset>
+            <div className="field">
+              <label htmlFor={`${section.id}-${i}-note`}>{t('rep.check.note')}</label>
+              <input
+                id={`${section.id}-${i}-note`}
+                value={row.note ?? ''}
+                onChange={(e) => change(i, 'note', e.target.value)}
+              />
+            </div>
+          </li>
+        ))}
+      </ul>
+      <button type="button" className="button ghost small" onClick={add}>
+        {t('rep.check.add')}
+      </button>
+    </fieldset>
+  )
+}
+
+/** Aufmaß im Bericht: an Aufmaßblatt of the project and/or simple dimensions. */
+function MeasurementSection({
+  section,
+  value,
+  set,
+  units,
+  sheets,
+  linked,
+  navigate,
+}: SectionProps & {
+  units: UnitSummary[]
+  sheets: MeasurementSheetSummary[]
+  linked: ReportDetail['linkedSheets']
+  navigate: Navigate
+}) {
+  const sheetId = (value.sheetId as string | null | undefined) ?? ''
+  // The linked sheet is known from the report even when the project list is not loaded (offline).
+  const options = [...sheets, ...linked.filter((l) => !sheets.some((s) => s.id === l.id))] as {
+    id: string
+    title: string
+    measuredOn: string
+    status: string
+  }[]
+  return (
+    <div className="panel">
+      <div className="field">
+        <label htmlFor={`${section.id}-sheet`}>{sectionTitle(section)}</label>
+        <select
+          id={`${section.id}-sheet`}
+          className="select"
+          value={sheetId}
+          onChange={(e) => set({ ...value, sheetId: e.target.value || null })}
+        >
+          <option value="">{t('rep.measure.noSheet')}</option>
+          {options.map((sheet) => (
+            <option key={sheet.id} value={sheet.id}>
+              {sheet.title} · {sheet.measuredOn.split('-').reverse().join('.')}
+              {sheet.status === 'signed' ? ` · ${t('rep.measure.signed')}` : ''}
+            </option>
+          ))}
+        </select>
+        {section.linkedSheet ? <p className="hint">{t('rep.measure.linkedHint')}</p> : null}
+      </div>
+      {sheetId ? (
+        <button
+          type="button"
+          className="button ghost small"
+          onClick={() => navigate({ view: 'measurement', id: sheetId })}
+        >
+          {t('rep.measure.open')}
+        </button>
+      ) : null}
+      {section.linkedSheet ? null : (
+        <QuantityRows
+          section={{ ...section, label: t('rep.measure.rows') }}
+          value={value}
+          set={set}
+          units={units}
+        />
+      )}
+    </div>
   )
 }
 

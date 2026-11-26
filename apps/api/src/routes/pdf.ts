@@ -11,7 +11,7 @@ import {
   type SiteLetterContext,
   sheetLetter,
 } from '@easybau/pdf-templates'
-import type { DocumentDetail } from '@easybau/schemas'
+import type { DocumentDetail, MeasurementSheetDetail } from '@easybau/schemas'
 import type { FastifyInstance, FastifyReply } from 'fastify'
 import { z } from 'zod'
 import { openArtifact, readArtifact, storeArtifact } from '../artifacts.js'
@@ -194,12 +194,18 @@ export async function reportPdf(services: Services, auth: AuthContext, id: strin
       report.signatures.map((s) => s.imageAssetId),
     )
     assets.push(...signatures.assets)
+    const sheets = new Map<string, MeasurementSheetDetail>()
+    for (const linked of report.linkedSheets) {
+      const sheet = await loadSheet(tx, auth, linked.id)
+      if (sheet) sheets.set(sheet.id, sheet)
+    }
     const { logoPosition, ...letter } = reportLetter(report, {
       ...(await siteContext(tx, report.projectId)),
       signatureImages: signatures.images,
       units,
       photos,
       skippedPhotos: Math.min(report.photos.length, MAX_PHOTOS) - photos.length,
+      sheets,
     })
     const pdf = renderLetterPdf(
       { ...letter, logo: await logoFor(tx, services, logoPosition) },

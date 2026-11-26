@@ -24,8 +24,21 @@ Unter **Berichte › Neuer Bericht** wählen Sie die **Art des Berichts**:
 | **Einsatzbericht** | Kundendienst- und Reparatureinsätze |
 | **Abnahmeprotokoll** | Abnahme mit Mängeln und Unterschriften |
 | **Bedenkenanzeige** / **Behinderungsanzeige** | schriftliche Anzeige nach VOB/B, mit Datum und Unterschrift |
+| **Baustellenbegehung** | Checkliste (in Ordnung / Mangel / entfällt mit Bemerkung), Wichtiges für das Angebot, Maße oder ein verknüpftes Aufmaßblatt, Fotos |
+| **Checkliste** | frei zusammengestellte Prüfpunkte mit Ergebnis und Fotos |
+| **Aufmaß** | Bericht zu einem Aufmaßblatt des Projekts, das mit abgedruckt und gemeinsam unterschrieben wird |
 
-Jeder Bericht lässt sich als **PDF/A** herunterladen.
+Ein mit einem Bericht verknüpftes Aufmaßblatt lässt sich nicht mehr löschen. Jeder Bericht lässt sich als **PDF/A** herunterladen.
+
+### Fristen für Regieberichte (Stundenlohnzettel)
+
+Nach VOB/B § 15 Abs. 3 reichen Sie Stundenlohnzettel wöchentlich beim Auftraggeber ein; er gibt sie innerhalb von **6 Werktagen** unterschrieben zurück, sonst gelten sie als anerkannt. Im Regiebericht tragen Sie **An den Auftraggeber übergeben am** ein. Die Berichtsliste zeigt dann:
+
+- **Übergeben bis …** – erster Arbeitstag nach der Woche, in der gearbeitet wurde (rot, wenn überfällig),
+- **Rückgabe durch den Auftraggeber bis …** – Übergabe + 6 Werktage (Montag bis Samstag ohne Feiertage Ihres Bundeslands und Ihre eigenen Feiertage; fällt das Ende auf Samstag, Sonntag oder Feiertag, gilt der nächste Arbeitstag),
+- **gilt als anerkannt**, wenn die Frist ohne Unterschrift abgelaufen ist.
+
+Die Berechnung ist ein Hinweis – abweichende Vereinbarungen im Vertrag gehen vor.
 
 ![Bericht auf dem iPhone](../screenshots/iphone-bericht.png)
 

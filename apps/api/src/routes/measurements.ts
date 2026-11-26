@@ -480,6 +480,19 @@ export function registerMeasurementRoutes(app: FastifyInstance, services: Servic
           'Zeilen dieses Aufmaßes wurden bereits abgerechnet. Es kann nicht gelöscht werden.',
         )
       }
+      // A report refers to the sheet (Aufmaß-Bericht, Baustellenbegehung): keep it as evidence.
+      const [report] = await tx<{ name: string }[]>`
+        select t.name from report r join report_template t on t.id = r.template_id,
+          jsonb_each(r.data) as section
+        where r.project_id = (select project_id from measurement_sheet where id = ${id})
+          and jsonb_typeof(section.value) = 'object' and section.value ->> 'sheetId' = ${id}::text
+        limit 1`
+      if (report) {
+        throw new HttpError(
+          409,
+          `Das Aufmaß ist in einem Bericht („${report.name}“) verknüpft und kann nicht gelöscht werden.`,
+        )
+      }
       await tx`delete from measurement_sheet where id = ${id}`
     })
     return reply.status(204).send()

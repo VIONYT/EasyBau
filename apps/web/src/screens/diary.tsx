@@ -11,6 +11,7 @@ import { formatDateTime, formatInputNumber } from '../format'
 import { Field, FormError, useForm, value } from '../forms'
 import { type TextKey, t, tf } from '../i18n'
 import type { Navigate } from '../router'
+import { dayworkText } from './report'
 
 export function weatherText(weather: ReportSummary['weather']): string {
   if (!weather) return ''
@@ -109,9 +110,12 @@ export function ProjectReports({
           data: {},
           photos: [],
           signatures: [],
+          linkedSheets: [],
           completedAt: null,
           billable: template.billable,
           billedInvoice: null,
+          submittedOn: null,
+          daywork: null,
         }),
         alsoUpdate: [
           {
@@ -131,6 +135,8 @@ export function ProjectReports({
                 updatedAt: new Date().toISOString(),
                 billable: template.billable,
                 billedInvoice: null,
+                submittedOn: null,
+                daywork: null,
               } satisfies ReportSummary,
               ...(list as ReportSummary[]),
             ],
@@ -224,6 +230,13 @@ export function ProjectReports({
                     </span>
                   ) : r.billable && r.status === 'signed' && !diary ? (
                     <span className="chip chip--pay-open">{t('rep.unbilled')}</span>
+                  ) : null}
+                  {r.daywork && r.daywork.state !== 'returned' ? (
+                    <span
+                      className={`chip chip--${r.daywork.state === 'submit_overdue' || r.daywork.state === 'deemed_accepted' ? 'pay-overdue' : 'pay-open'}`}
+                    >
+                      {dayworkText(r.daywork)}
+                    </span>
                   ) : null}
                 </span>
                 <span className="muted">

@@ -109,7 +109,12 @@ export const SUPPORTED_SECTION_TYPES = [
   'signatures',
   'yes_no',
   'deadline',
+  'checklist',
+  'measurement',
 ] as const
+
+/** Checkliste in Berichten: in Ordnung, Mangel/offen, entfällt. */
+export const CHECKLIST_STATES = ['ok', 'issue', 'na'] as const
 
 export const SIGNER_ROLES = ['contractor', 'client', 'other'] as const
 

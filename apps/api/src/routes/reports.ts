@@ -1,4 +1,5 @@
 import type { Tx } from '@easybau/db'
+import { dayworkDeadline } from '@easybau/domain'
 import {
   addReportPhotoRequest,
   createReportRequest,
@@ -28,8 +29,10 @@ import {
   type Services,
 } from '../context.js'
 import { checkIfMatch, etagOf, HttpError, notFound, parse } from '../http.js'
+import { holidayDates } from './document-settings.js'
 import { storeUploadedFile } from './files.js'
 import { notify, projectMembersExcept } from './notifications.js'
+import { todayOf } from './receivables.js'
 import { ownSignature } from './signatures.js'
 
 const projectParam = z.object({ id: z.uuid('Ungültige ID.') })
@@ -89,6 +92,8 @@ interface ReportRow {
   updatedAt: string
   updatedRaw: Date
   billedInvoice: ReportSummary['billedInvoice']
+  submittedOn: string | null
+  serviceToDate: string | null
 }
 
 function reportColumns(tx: Tx) {
@@ -100,7 +105,9 @@ function reportColumns(tx: Tx) {
     case when u.id is null then null else json_build_object('id', u.id, 'displayName', u.display_name) end as "createdBy",
     r.created_by as "createdById", ${ISO(tx, 'r.updated_at')} as "updatedAt", r.updated_at as "updatedRaw",
     (select json_build_object('id', b.id, 'number', b.number) from document b
-     where b.id = r.billed_in_invoice_id and b.status <> 'cancelled') as "billedInvoice"`
+     where b.id = r.billed_in_invoice_id and b.status <> 'cancelled') as "billedInvoice",
+    to_char(r.submitted_on, 'YYYY-MM-DD') as "submittedOn",
+    to_char(r.service_to, 'YYYY-MM-DD') as "serviceToDate"`
 }
 
 const fromReports = (tx: Tx) => tx`
@@ -109,7 +116,21 @@ const fromReports = (tx: Tx) => tx`
   join project p on p.id = r.project_id
   left join app_user u on u.id = r.created_by`
 
-function toSummary(row: ReportRow): ReportSummary {
+const DAYWORK = 'daywork_report'
+
+interface DeadlineContext {
+  today: string
+  holidays: ReadonlySet<string>
+}
+
+/** Today and the company holidays around it (deadlines of Stundenlohnzettel). */
+async function deadlineContext(tx: Tx): Promise<DeadlineContext> {
+  const today = todayOf(tx)
+  const year = Number(today.slice(0, 4))
+  return { today, holidays: await holidayDates(tx, [year - 1, year, year + 1]) }
+}
+
+function toSummary(row: ReportRow, ctx: DeadlineContext): ReportSummary {
   const sections = row.templateSnapshot ?? row.sections
   return {
     id: row.id,
@@ -124,6 +145,17 @@ function toSummary(row: ReportRow): ReportSummary {
     createdBy: row.createdBy,
     updatedAt: row.updatedAt,
     billable: row.billable,
+    submittedOn: row.submittedOn,
+    daywork:
+      row.templateKey === DAYWORK
+        ? dayworkDeadline({
+            performedOn: row.serviceToDate ?? row.reportDate,
+            submittedOn: row.submittedOn,
+            returned: row.status === 'signed',
+            today: ctx.today,
+            holidays: ctx.holidays,
+          })
+        : null,
     billedInvoice: row.billedInvoice,
   }
 }
@@ -165,8 +197,17 @@ export async function loadReport(
            image_asset_id as "imageAssetId"
     from report_signature where report_id = ${id} order by signed_at, id`
   const sections = row.templateSnapshot ?? row.sections
+  const sheetIds = sections
+    .filter((s) => s.type === 'measurement')
+    .map((s) => (row.data[s.id] as { sheetId?: string | null } | undefined)?.sheetId)
+    .filter((v): v is string => Boolean(v))
+  const linkedSheets = sheetIds.length
+    ? await tx<ReportDetail['linkedSheets']>`
+        select id, title, to_char(measured_on, 'YYYY-MM-DD') as "measuredOn", status
+        from measurement_sheet where id in ${tx(sheetIds)} order by measured_on, title`
+    : []
   return {
-    ...toSummary(row),
+    ...toSummary(row, await deadlineContext(tx)),
     project: row.project,
     template: {
       id: row.templateId,
@@ -181,6 +222,7 @@ export async function loadReport(
     data: row.data,
     photos,
     signatures,
+    linkedSheets,
     completedAt: row.completedAt,
     etag: etagOf(row.updatedRaw),
   }
@@ -206,10 +248,11 @@ async function lockOpen(tx: Tx, auth: AuthContext, id: string) {
       projectId: string
       createdBy: string | null
       sections: ReportSection[]
+      templateKey: string
     }[]
   >`
     select r.id, r.status, r.updated_at as "updatedAt", r.project_id as "projectId", r.created_by as "createdBy",
-           t.sections
+           t.sections, t.key as "templateKey"
     from report r join report_template t on t.id = r.template_id join project p on p.id = r.project_id
     where r.id = ${id} and ${projectVisibility(tx, auth)}
     for update of r`
@@ -268,6 +311,14 @@ async function initialData(
       case 'deadline':
         data[section.id] = { date: null }
         break
+      case 'checklist':
+        data[section.id] = {
+          rows: (section.items ?? []).map((label) => ({ label, state: null, note: null })),
+        }
+        break
+      case 'measurement':
+        data[section.id] = { sheetId: null, rows: [] }
+        break
       default:
         break
     }
@@ -278,11 +329,13 @@ async function initialData(
 /** Validates the given sections against the template and returns the cleaned values. */
 async function validateData(
   tx: Tx,
+  projectId: string,
   sections: ReportSection[],
   input: Record<string, unknown>,
 ): Promise<Record<string, unknown>> {
   const result: Record<string, unknown> = {}
   const unitIds = new Set<string>()
+  const sheetIds = new Map<string, string>()
   for (const [key, raw] of Object.entries(input)) {
     const section = sections.find((s) => s.id === key)
     const schema = section ? SECTION_VALUE_SCHEMAS[section.type] : undefined
@@ -297,13 +350,21 @@ async function validateData(
       }
       throw invalid(errors)
     }
-    const value = parsed.data as { rows?: { unitId?: string | null }[] }
+    const value = parsed.data as { rows?: { unitId?: string | null }[]; sheetId?: string | null }
     for (const row of value.rows ?? []) if (row.unitId) unitIds.add(row.unitId)
+    if (value.sheetId) sheetIds.set(value.sheetId, key)
     result[key] = parsed.data
   }
   if (unitIds.size) {
     const found = await tx`select id from unit where id in ${tx([...unitIds])} and is_active`
     if (found.length !== unitIds.size) throw invalid({ data: 'Unbekannte Einheit.' })
+  }
+  // Aufmaßblätter only of the same project (references stay inside a project).
+  for (const [sheetId, key] of sheetIds) {
+    const [sheet] = await tx`
+      select 1 from measurement_sheet where id = ${sheetId} and project_id = ${projectId}`
+    if (!sheet)
+      throw invalid({ [`data.${key}.sheetId`]: 'Unbekanntes Aufmaßblatt in diesem Projekt.' })
   }
   return result
 }
@@ -325,15 +386,16 @@ export function registerReportRoutes(app: FastifyInstance, services: Services) {
     const auth = requireAuth(request)
     const { id } = parse(projectParam, request.params)
     const { template } = parse(reportListQuery, request.query)
-    const rows = await inTenant(services, auth, async (tx) => {
+    return inTenant(services, auth, async (tx) => {
       await requireVisibleProject(tx, auth, id)
-      return tx<ReportRow[]>`
+      const rows = await tx<ReportRow[]>`
         select ${reportColumns(tx)} from ${fromReports(tx)}
         where r.project_id = ${id} and (${template ?? null}::text is null or t.key = ${template ?? null})
         order by r.report_date desc, r.created_at desc
         limit 500`
+      const ctx = await deadlineContext(tx)
+      return rows.map((row) => toSummary(row, ctx))
     })
-    return rows.map(toSummary)
   })
 
   app.post('/api/v1/projects/:id/reports', async (request, reply) => {
@@ -401,12 +463,19 @@ export function registerReportRoutes(app: FastifyInstance, services: Services) {
       if (input.reportDate !== undefined) columns.report_date = input.reportDate
       if (input.serviceFrom !== undefined) columns.service_from = input.serviceFrom
       if (input.serviceTo !== undefined) columns.service_to = input.serviceTo
+      if (input.submittedOn !== undefined) {
+        if (current.templateKey !== DAYWORK && input.submittedOn !== null)
+          throw invalid({ submittedOn: 'Nur Regieberichte (Stundenlohnzettel) werden übergeben.' })
+        if (input.submittedOn && input.submittedOn > todayOf(tx))
+          throw invalid({ submittedOn: 'Das Übergabedatum darf nicht in der Zukunft liegen.' })
+        columns.submitted_on = input.submittedOn
+      }
       const from = input.serviceFrom
       const to = input.serviceTo
       if (from && to && to < from)
         throw invalid({ serviceTo: 'Das Ende darf nicht vor dem Beginn liegen.' })
       if (input.data) {
-        const values = await validateData(tx, current.sections, input.data)
+        const values = await validateData(tx, current.projectId, current.sections, input.data)
         await tx`update report set data = data || ${tx.json(values as never)} where id = ${id}`
       }
       if (Object.keys(columns).length) {

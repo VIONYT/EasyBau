@@ -1,11 +1,17 @@
 import { z } from 'zod'
 import { id, isoDate, optionalText, text } from './common.js'
-import { SIGNER_ROLES, type SUPPORTED_SECTION_TYPES, WEATHER_CONDITIONS } from './constants.js'
+import {
+  CHECKLIST_STATES,
+  SIGNER_ROLES,
+  type SUPPORTED_SECTION_TYPES,
+  WEATHER_CONDITIONS,
+} from './constants.js'
 import { decimalText } from './documents.js'
 
 export type SectionType = (typeof SUPPORTED_SECTION_TYPES)[number]
 export type SignerRole = (typeof SIGNER_ROLES)[number]
 export type WeatherCondition = (typeof WEATHER_CONDITIONS)[number]
+export type ChecklistState = (typeof CHECKLIST_STATES)[number]
 
 export interface ReportSection {
   id: string
@@ -19,6 +25,10 @@ export interface ReportSection {
   servicePeriod?: boolean
   /** text: follow-up documents that can be started from this section (Vorkommnisse). */
   actions?: ('obstruction_notice' | 'change_order')[]
+  /** measurement: the section refers to an Aufmaßblatt of the project (Aufmaß-Bericht). */
+  linkedSheet?: boolean
+  /** checklist: points the list starts with (custom templates). */
+  items?: string[]
 }
 
 export interface ReportTemplateSummary {
@@ -72,6 +82,22 @@ export const equipmentValue = z.object({
 export const textValue = z.object({ text: z.string().max(20_000).default('') })
 export const yesNoValue = z.object({ value: z.boolean().nullable() })
 export const deadlineValue = z.object({ date: isoDate.nullable() })
+export const checklistValue = z.object({
+  rows: z
+    .array(
+      z.object({
+        label: text(500),
+        state: z.enum(CHECKLIST_STATES).nullable().default(null),
+        note: optionalText(1000),
+      }),
+    )
+    .max(200),
+})
+/** Aufmaß im Bericht: an Aufmaßblatt of the project and/or simple dimensions (Baustellenbegehung). */
+export const measurementValue = z.object({
+  sheetId: id.nullable().default(null),
+  rows: quantityRowsValue.shape.rows.default([]),
+})
 
 /** Validation per section type; header, photos and signatures have no free values. */
 export const SECTION_VALUE_SCHEMAS: Partial<Record<SectionType, z.ZodType>> = {
@@ -83,6 +109,8 @@ export const SECTION_VALUE_SCHEMAS: Partial<Record<SectionType, z.ZodType>> = {
   text: textValue,
   yes_no: yesNoValue,
   deadline: deadlineValue,
+  checklist: checklistValue,
+  measurement: measurementValue,
 }
 
 export type WeatherValue = z.infer<typeof weatherValue>
@@ -90,6 +118,8 @@ export type StaffValue = z.infer<typeof staffValue>
 export type QuantityRowsValue = z.infer<typeof quantityRowsValue>
 export type EquipmentValue = z.infer<typeof equipmentValue>
 export type TextValue = z.infer<typeof textValue>
+export type ChecklistValue = z.infer<typeof checklistValue>
+export type MeasurementValue = z.infer<typeof measurementValue>
 
 // ---- Requests ------------------------------------------------------------------------------------
 
@@ -105,6 +135,8 @@ export const updateReportRequest = z
     reportDate: isoDate,
     serviceFrom: isoDate.nullable(),
     serviceTo: isoDate.nullable(),
+    /** Regiebericht: day it was handed to the client (VOB/B § 15 Abs. 3). */
+    submittedOn: isoDate.nullable(),
     /** Section values by section id; each given section is replaced as a whole. */
     data: z.record(z.string().max(50), z.unknown()),
   })
@@ -161,6 +193,16 @@ export interface ReportSummary {
   billable: boolean
   /** Invoice the report was billed with (not cancelled); null while unbilled. */
   billedInvoice: { id: string; number: string | null } | null
+  /** Regiebericht: handed to the client on (VOB/B § 15 Abs. 3). */
+  submittedOn: string | null
+  /** Regiebericht: deadlines for handing over and returning (else null). */
+  daywork: DayworkDeadlineDto | null
+}
+
+export interface DayworkDeadlineDto {
+  state: 'to_submit' | 'submit_overdue' | 'waiting' | 'deemed_accepted' | 'returned'
+  submitBy: string | null
+  returnBy: string | null
 }
 
 /** Report as candidate for an invoice draft (GET /documents/:id/reports). */
@@ -203,5 +245,7 @@ export interface ReportDetail extends ReportSummary {
   data: Record<string, unknown>
   photos: ReportPhoto[]
   signatures: ReportSignature[]
+  /** Aufmaßblätter referenced by measurement sections. */
+  linkedSheets: { id: string; title: string; measuredOn: string; status: string }[]
   completedAt: string | null
 }

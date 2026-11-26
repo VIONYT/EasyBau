@@ -1,7 +1,9 @@
 import { formatUnitQuantity, germanDate, type LetterheadValues } from '@easybau/domain'
 import type {
+  ChecklistValue,
   EquipmentValue,
   MeasurementSheetDetail,
+  MeasurementValue,
   QuantityRowsValue,
   ReportDetail,
   StaffValue,
@@ -45,8 +47,8 @@ const SHEET_KIND: Record<string, string> = {
   performance: 'Leistungsaufmaß',
 }
 
-/** Aufmaßblatt (DESIGN.md §4.3) as letter: lines per room, quantities per LV position, signatures. */
-export function sheetLetter(sheet: MeasurementSheetDetail, ctx: SiteLetterContext): SiteLetter {
+/** Lines of an Aufmaßblatt grouped by room (also used in reports that link the sheet). */
+export function sheetLinesTable(sheet: MeasurementSheetDetail): LetterBlock {
   const itemOf = new Map(sheet.items.map((s) => [s.item.id, s.item]))
   const locationOf = new Map(sheet.locations.map((l) => [l.id, l]))
   const rows: Extract<LetterBlock, { kind: 'table' }>['rows'] = []
@@ -80,15 +82,18 @@ export function sheetLetter(sheet: MeasurementSheetDetail, ctx: SiteLetterContex
     })
   }
 
-  const blocks: LetterBlock[] = [
-    {
-      kind: 'table',
-      columns: ['Pos.', 'Beschreibung', 'Rechenweg', 'Menge'],
-      widths: ['auto', '1fr', '1fr', 'auto'],
-      align: ['left', 'left', 'left', 'right'],
-      rows,
-    },
-  ]
+  return {
+    kind: 'table',
+    columns: ['Pos.', 'Beschreibung', 'Rechenweg', 'Menge'],
+    widths: ['auto', '1fr', '1fr', 'auto'],
+    align: ['left', 'left', 'left', 'right'],
+    rows,
+  }
+}
+
+/** Aufmaßblatt (DESIGN.md §4.3) as letter: lines per room, quantities per LV position, signatures. */
+export function sheetLetter(sheet: MeasurementSheetDetail, ctx: SiteLetterContext): SiteLetter {
+  const blocks: LetterBlock[] = [sheetLinesTable(sheet)]
   if (sheet.items.length) {
     blocks.push(
       { kind: 'heading', text: 'Mengen je LV-Position' },
@@ -194,8 +199,15 @@ const SECTION_LABEL: Record<string, string> = {
   materials: 'Material',
   equipment: 'Geräte',
   text: 'Notizen',
+  checklist: 'Checkliste',
+  measurement: 'Aufmaß',
   photos: 'Fotos',
   signatures: 'Unterschriften',
+}
+const CHECKLIST: Record<string, string> = {
+  ok: 'in Ordnung',
+  issue: 'Mangel / offen',
+  na: 'entfällt',
 }
 const ROLE: Record<string, string> = {
   contractor: 'Auftragnehmer',
@@ -219,6 +231,8 @@ export function reportLetter(
     photos: { path: string; caption: string | null }[]
     /** Photos that could not be embedded (format, damaged file). */
     skippedPhotos?: number
+    /** Aufmaßblätter linked in measurement sections. */
+    sheets?: Map<string, MeasurementSheetDetail>
   },
 ): SiteLetter {
   const blocks: LetterBlock[] = []
@@ -338,6 +352,57 @@ export function reportLetter(
       case 'deadline': {
         const d = (value as { date?: string | null } | undefined)?.date
         blocks.push({ kind: 'facts', rows: [{ label, value: d ? germanDate(d) : '–' }] })
+        break
+      }
+      case 'checklist': {
+        const c = value as ChecklistValue | undefined
+        if (!c?.rows.length) break
+        blocks.push(
+          { kind: 'heading', text: label },
+          {
+            kind: 'table',
+            columns: ['Punkt', 'Ergebnis', 'Bemerkung'],
+            widths: ['1fr', 'auto', '1fr'],
+            align: ['left', 'left', 'left'],
+            rows: c.rows.map((r) => ({
+              cells: [r.label, r.state ? (CHECKLIST[r.state] ?? r.state) : '–', r.note ?? ''],
+              group: false,
+              strong: r.state === 'issue',
+            })),
+          },
+        )
+        break
+      }
+      case 'measurement': {
+        const m = value as MeasurementValue | undefined
+        const sheet = m?.sheetId ? ctx.sheets?.get(m.sheetId) : undefined
+        if (!sheet && !m?.rows?.length) break
+        blocks.push({ kind: 'heading', text: label })
+        if (sheet) {
+          blocks.push(
+            {
+              kind: 'facts',
+              rows: [
+                { label: 'Aufmaßblatt', value: sheet.title },
+                { label: 'Aufmaß vom', value: germanDate(sheet.measuredOn) },
+              ],
+            },
+            sheetLinesTable(sheet),
+          )
+        }
+        if (m?.rows?.length) {
+          blocks.push({
+            kind: 'table',
+            columns: ['Beschreibung', 'Maß / Menge'],
+            widths: ['1fr', 'auto'],
+            align: ['left', 'right'],
+            rows: m.rows.map((r) => ({
+              cells: [r.description, r.quantity ? qty(r.quantity, unit(r.unitId)) : ''],
+              group: false,
+              strong: false,
+            })),
+          })
+        }
         break
       }
       case 'photos': {
