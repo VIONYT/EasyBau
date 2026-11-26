@@ -1,4 +1,5 @@
 import type { DocumentDetail, MeasurementSheetDetail, SheetVariance } from '@easybau/schemas'
+import { Button } from '@easybau/ui'
 import { useEffect, useId, useState } from 'react'
 import { type ApiError, api } from '../api'
 import { formatInputNumber } from '../format'
@@ -84,9 +85,9 @@ export function VariancePanel({
       )}
       <FormError>{error}</FormError>
       {extras.length ? (
-        <button type="button" className="button primary auto" disabled={busy} onClick={create}>
+        <Button type="button" variant="primary" disabled={busy} onClick={create}>
           {t('var.create')}
-        </button>
+        </Button>
       ) : null}
     </section>
   )

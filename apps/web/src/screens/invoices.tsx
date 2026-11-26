@@ -5,6 +5,7 @@ import type {
   Me,
   ReceivableStatus,
 } from '@easybau/schemas'
+import { Button } from '@easybau/ui'
 import { useCallback, useEffect, useId, useState } from 'react'
 import { type ApiError, api, downloadFile } from '../api'
 import { formatCents, formatDateTime } from '../format'
@@ -210,9 +211,9 @@ export function Invoices({ me, navigate }: { me: Me; navigate: Navigate }) {
             </div>
           </dl>
           <div className="actions start">
-            <button
+            <Button
               type="button"
-              className="button ghost auto"
+              variant="ghost"
               onClick={() =>
                 downloadFile(`/api/v1/invoices/export.csv?${queryOf(filter)}`).catch(
                   (err: ApiError) => setError(err.message),
@@ -220,7 +221,7 @@ export function Invoices({ me, navigate }: { me: Me; navigate: Navigate }) {
               }
             >
               {t('inv.list.csv')}
-            </button>
+            </Button>
           </div>
           {results ? (
             <div className="panel" role="status">
@@ -250,9 +251,9 @@ export function Invoices({ me, navigate }: { me: Me; navigate: Navigate }) {
             <div className="panel dunning-batch">
               <p>{tf('dun.batch.due', { n: String(due.length) })}</p>
               <div className="button-row">
-                <button
+                <Button
                   type="button"
-                  className="button ghost auto"
+                  variant="ghost"
                   onClick={() =>
                     setSelected(
                       selected.size === due.length ? new Set() : new Set(due.map((i) => i.id)),
@@ -260,7 +261,7 @@ export function Invoices({ me, navigate }: { me: Me; navigate: Navigate }) {
                   }
                 >
                   {t(selected.size === due.length ? 'dun.batch.none' : 'dun.batch.all')}
-                </button>
+                </Button>
                 <label className="check">
                   <input
                     type="checkbox"
@@ -269,14 +270,14 @@ export function Invoices({ me, navigate }: { me: Me; navigate: Navigate }) {
                   />
                   <span>{t('dun.batch.mail')}</span>
                 </label>
-                <button
+                <Button
                   type="button"
-                  className="button primary auto"
+                  variant="primary"
                   disabled={running || !selected.size}
                   onClick={runBatch}
                 >
                   {tf('dun.batch.run', { n: String(selected.size) })}
-                </button>
+                </Button>
               </div>
             </div>
           ) : null}
@@ -297,9 +298,9 @@ export function Invoices({ me, navigate }: { me: Me; navigate: Navigate }) {
             <p className="muted">{t('inv.list.empty')}</p>
           )}
           {list.nextCursor ? (
-            <button type="button" className="button ghost" onClick={more}>
+            <Button type="button" variant="ghost" width="natural" onClick={more}>
               {t('inv.list.more')}
-            </button>
+            </Button>
           ) : null}
         </>
       ) : (

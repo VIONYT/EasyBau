@@ -1,5 +1,6 @@
 import { defaultLetterhead } from '@easybau/domain'
 import type { DocumentDetail } from '@easybau/schemas'
+import { Button } from '@easybau/ui'
 import { useEffect, useState } from 'react'
 import { type ApiError, api } from '../api'
 import { formatCents, formatDateTime, formatQuantity, formatUnitAmount } from '../format'
@@ -86,9 +87,9 @@ export function PrintScreen({ id, navigate }: { id: string; navigate: Navigate }
         >
           {t('print.pdf')}
         </a>
-        <button type="button" className="button ghost" onClick={() => window.print()}>
+        <Button type="button" variant="ghost" width="natural" onClick={() => window.print()}>
           {t('print.print')}
-        </button>
+        </Button>
       </div>
 
       <ScaledPage>

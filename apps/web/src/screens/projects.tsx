@@ -9,6 +9,7 @@ import type {
   ProjectSummary,
   TeamMember,
 } from '@easybau/schemas'
+import { Button } from '@easybau/ui'
 import { useEffect, useId, useState } from 'react'
 import { type ApiError, api, apiWithEtag } from '../api'
 import { formatCents, formatDateTime } from '../format'
@@ -119,9 +120,9 @@ export function Projects({ me, navigate }: { me: Me; navigate: Navigate }) {
       <div className="section-head">
         <h1 id="projects-title">{t('nav.projects')}</h1>
         {me.permissions.includes('project.write') && !creating ? (
-          <button type="button" className="button primary auto" onClick={() => setCreating(true)}>
+          <Button type="button" variant="primary" onClick={() => setCreating(true)}>
             {t('projects.new')}
-          </button>
+          </Button>
         ) : null}
       </div>
       {creating ? (
@@ -205,9 +206,15 @@ export function Projects({ me, navigate }: { me: Me; navigate: Navigate }) {
           <span>{t('projects.filter.archived')}</span>
         </label>
         {active ? (
-          <button type="button" className="button ghost small" onClick={() => setFilter(NO_FILTER)}>
+          <Button
+            type="button"
+            variant="ghost"
+            width="natural"
+            size="small"
+            onClick={() => setFilter(NO_FILTER)}
+          >
             {t('projects.filter.reset')}
-          </button>
+          </Button>
         ) : null}
       </details>
       {canFigures ? (
@@ -450,9 +457,15 @@ export function ProjectForm({
       <fieldset>
         <legend>{t('projects.site')}</legend>
         {customerId ? (
-          <button type="button" className="button ghost small" onClick={takeCustomerAddress}>
+          <Button
+            type="button"
+            variant="ghost"
+            width="natural"
+            size="small"
+            onClick={takeCustomerAddress}
+          >
             {t('projects.useCustomerAddress')}
-          </button>
+          </Button>
         ) : null}
         <FormError>{addressError}</FormError>
         <div className="field">
@@ -530,12 +543,12 @@ export function ProjectForm({
         />
       </details>
       <div className="button-row">
-        <button type="submit" className="button primary auto" disabled={form.busy}>
+        <Button type="submit" variant="primary" disabled={form.busy}>
           {project ? t('common.save') : t('projects.create')}
-        </button>
-        <button type="button" className="button ghost" onClick={onCancel}>
+        </Button>
+        <Button type="button" variant="ghost" width="natural" onClick={onCancel}>
           {t('common.cancel')}
-        </button>
+        </Button>
       </div>
     </form>
   )

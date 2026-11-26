@@ -1,4 +1,5 @@
 import type { ContactColor, ContactDetail, ContactSummary, Me, Page } from '@easybau/schemas'
+import { Button } from '@easybau/ui'
 import { useCallback, useEffect, useId, useState } from 'react'
 import { api } from '../api'
 import { Field, FormError, optional, useForm } from '../forms'
@@ -142,9 +143,11 @@ export function Workspace({
         {locked ? null : (
           <>
             <SearchBox initial={current.view === 'search' ? current.q : ''} navigate={navigate} />
-            <button
+            <Button
               type="button"
-              className="button ghost bell"
+              variant="ghost"
+              width="natural"
+              className="bell"
               aria-current={current.view === 'notifications' ? 'page' : undefined}
               onClick={() => {
                 notifications.reload()
@@ -158,12 +161,12 @@ export function Workspace({
                   <span className="sr-only"> {t('notif.unreadShort')}</span>
                 </span>
               ) : null}
-            </button>
+            </Button>
           </>
         )}
-        <button type="button" className="button ghost logout" onClick={logout}>
+        <Button type="button" variant="ghost" width="natural" className="logout" onClick={logout}>
           {t('auth.logout')}
-        </button>
+        </Button>
       </header>
       <nav className="tabs" aria-label="Bereiche">
         {tabs
@@ -307,9 +310,9 @@ function Contacts({
             {t('contacts.export')}
           </a>
           {canWrite && !importing ? (
-            <button type="button" className="button ghost auto" onClick={() => setImporting(true)}>
+            <Button type="button" variant="ghost" onClick={() => setImporting(true)}>
               {t('contacts.import.title')}
-            </button>
+            </Button>
           ) : null}
         </div>
       </div>
@@ -429,9 +432,9 @@ function Contacts({
               />
             </div>
           )}
-          <button type="submit" className="button primary" disabled={form.busy}>
+          <Button type="submit" variant="primary" width="natural" disabled={form.busy}>
             {t('common.save')}
-          </button>
+          </Button>
         </form>
       ) : null}
       {selected ? (

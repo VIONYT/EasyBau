@@ -6,6 +6,7 @@ import type {
   MemberSummary,
   RoleSummary,
 } from '@easybau/schemas'
+import { Button } from '@easybau/ui'
 import { useCallback, useEffect, useId, useState } from 'react'
 import { type ApiError, api, downloadFile } from '../api'
 import { formatDateTime } from '../format'
@@ -90,9 +91,9 @@ export function Users() {
             link={reset.resetUrl}
             intro={tf('users.resetLinkIntro', { until: formatDateTime(reset.expiresAt) })}
           />
-          <button type="button" className="button ghost" onClick={() => setReset(null)}>
+          <Button type="button" variant="ghost" width="natural" onClick={() => setReset(null)}>
             {t('contacts.close')}
-          </button>
+          </Button>
         </div>
       ) : null}
       {!members ? <p className="muted">{t('common.loading')}</p> : null}
@@ -155,9 +156,10 @@ export function Users() {
                       }}
                     />
                   ) : null}
-                  <button
+                  <Button
                     type="button"
-                    className="button ghost"
+                    variant="ghost"
+                    width="natural"
                     onClick={() =>
                       act(async () => {
                         const sendEmail = emailEnabled && window.confirm(t('users.resetSendEmail'))
@@ -171,11 +173,12 @@ export function Users() {
                     }
                   >
                     {t('users.resetPassword')}
-                  </button>
+                  </Button>
                   {m.totpEnabled || m.webauthnCount ? (
-                    <button
+                    <Button
                       type="button"
-                      className="button ghost"
+                      variant="ghost"
+                      width="natural"
                       onClick={() =>
                         act(
                           () => api('POST', `/api/v1/users/${m.userId}/reset-mfa`),
@@ -184,20 +187,23 @@ export function Users() {
                       }
                     >
                       {t('users.resetMfa')}
-                    </button>
+                    </Button>
                   ) : null}
-                  <button
+                  <Button
                     type="button"
-                    className="button ghost"
+                    variant="ghost"
+                    width="natural"
                     onClick={() =>
                       act(() => downloadFile(`/api/v1/users/${m.userId}/privacy-report`))
                     }
                   >
                     {t('users.privacyReport')}
-                  </button>
-                  <button
+                  </Button>
+                  <Button
                     type="button"
-                    className="button ghost danger"
+                    variant="ghost"
+                    width="natural"
+                    danger
                     onClick={() =>
                       act(
                         () => api('DELETE', `/api/v1/users/${m.userId}`),
@@ -206,7 +212,7 @@ export function Users() {
                     }
                   >
                     {t('users.remove')}
-                  </button>
+                  </Button>
                 </span>
               )}
             </li>
@@ -253,9 +259,9 @@ export function Users() {
               {t('users.sendEmail')}
             </label>
           ) : null}
-          <button type="submit" className="button primary" disabled={invite.busy}>
+          <Button type="submit" variant="primary" width="natural" disabled={invite.busy}>
             {t('users.inviteSend')}
-          </button>
+          </Button>
         </form>
         {link ? <InviteLink link={link} /> : null}
         {link && emailQueued ? (
@@ -281,13 +287,14 @@ export function Users() {
                       : ''}
                   </span>
                 </span>
-                <button
+                <Button
                   type="button"
-                  className="button ghost"
+                  variant="ghost"
+                  width="natural"
                   onClick={() => act(() => api('DELETE', `/api/v1/invitations/${i.id}`))}
                 >
                   {t('users.revoke')}
-                </button>
+                </Button>
               </li>
             ))}
           </ul>
@@ -363,16 +370,17 @@ function InviteLink({ link, intro }: { link: string; intro?: string }) {
     <div className="stack" role="status">
       <p>{intro ?? t('users.inviteLink')}</p>
       <code className="secret">{link}</code>
-      <button
+      <Button
         type="button"
-        className="button ghost"
+        variant="ghost"
+        width="natural"
         onClick={async () => {
           await navigator.clipboard.writeText(link).catch(() => undefined)
           setCopied(true)
         }}
       >
         {copied ? t('users.copied') : t('users.copy')}
-      </button>
+      </Button>
     </div>
   )
 }

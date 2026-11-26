@@ -1,6 +1,6 @@
 import { DIN5008B, defaultLetterhead, LETTERHEAD_FIELDS } from '@easybau/domain'
 import type { LetterheadLayout, LetterheadSettings } from '@easybau/schemas'
-import { paper } from '@easybau/ui'
+import { Button, paper } from '@easybau/ui'
 import { useEffect, useId, useRef, useState } from 'react'
 import { ApiError, api, uploadFile } from '../api'
 import { FormError } from '../forms'
@@ -151,9 +151,9 @@ export function LetterheadEditor({ canEdit }: { canEdit: boolean }) {
       </div>
       {canEdit ? (
         <div className="button-row">
-          <button type="button" className="button ghost small" onClick={addText}>
+          <Button type="button" variant="ghost" width="natural" size="small" onClick={addText}>
             {t('lh.addText')}
-          </button>
+          </Button>
           <label className="button ghost small file-button">
             {layout.logo ? t('lh.replaceLogo') : t('lh.uploadLogo')}
             <input
@@ -213,16 +213,19 @@ export function LetterheadEditor({ canEdit }: { canEdit: boolean }) {
                 disabled={!canEdit}
                 onChange={(patch) => updatePosition('logo', patch)}
               />
-              <button
+              <Button
                 type="button"
-                className="button ghost danger small"
+                variant="ghost"
+                width="natural"
+                size="small"
+                danger
                 onClick={() => {
                   change({ ...layout, logo: null })
                   setSelected(null)
                 }}
               >
                 {t('lh.removeLogo')}
-              </button>
+              </Button>
             </section>
           ) : (
             <p className="muted">{t('lh.selectHint')}</p>
@@ -255,13 +258,15 @@ export function LetterheadEditor({ canEdit }: { canEdit: boolean }) {
             />
           ))}
           {canEdit && layout.footer.length < 4 ? (
-            <button
+            <Button
               type="button"
-              className="button ghost small"
+              variant="ghost"
+              width="natural"
+              size="small"
               onClick={() => change({ ...layout, footer: [...layout.footer, ''] })}
             >
               {t('lh.addColumn')}
-            </button>
+            </Button>
           ) : null}
         </div>
       </div>
@@ -274,17 +279,13 @@ export function LetterheadEditor({ canEdit }: { canEdit: boolean }) {
       ) : null}
       {canEdit ? (
         <div className="button-row">
-          <button
-            type="button"
-            className="button primary auto"
-            disabled={busy || !dirty}
-            onClick={save}
-          >
+          <Button type="button" variant="primary" disabled={busy || !dirty} onClick={save}>
             {t('common.save')}
-          </button>
-          <button
+          </Button>
+          <Button
             type="button"
-            className="button ghost"
+            variant="ghost"
+            width="natural"
             onClick={() => {
               if (window.confirm(t('lh.resetConfirm'))) {
                 change({ ...defaultLetterhead(), logo: layout.logo })
@@ -293,7 +294,7 @@ export function LetterheadEditor({ canEdit }: { canEdit: boolean }) {
             }}
           >
             {t('lh.reset')}
-          </button>
+          </Button>
         </div>
       ) : null}
     </div>
@@ -376,9 +377,16 @@ function TextInspector({
       </div>
       <Position value={text} disabled={disabled} onChange={onChange} />
       {disabled ? null : (
-        <button type="button" className="button ghost danger small" onClick={onRemove}>
+        <Button
+          type="button"
+          variant="ghost"
+          width="natural"
+          size="small"
+          danger
+          onClick={onRemove}
+        >
           {t('lh.removeText')}
-        </button>
+        </Button>
       )}
     </section>
   )
@@ -489,9 +497,9 @@ function TemplateField({
             ))}
           </select>
           {onRemove ? (
-            <button type="button" className="button ghost small" onClick={onRemove}>
+            <Button type="button" variant="ghost" width="natural" size="small" onClick={onRemove}>
               {t('lh.removeColumn')}
-            </button>
+            </Button>
           ) : null}
         </div>
       )}

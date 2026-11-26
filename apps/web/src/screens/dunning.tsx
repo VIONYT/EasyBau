@@ -6,6 +6,7 @@ import type {
   DunningNotice,
   DunningOverview,
 } from '@easybau/schemas'
+import { Button } from '@easybau/ui'
 import { useCallback, useEffect, useId, useState } from 'react'
 import { type ApiError, api } from '../api'
 import { centsToInput, formatCents, formatDateTime, parseEuro } from '../format'
@@ -88,9 +89,9 @@ export function DunningPanel({
             })}
           </p>
           {canWrite ? (
-            <button type="button" className="button primary auto" onClick={() => setCreating(true)}>
+            <Button type="button" variant="primary" onClick={() => setCreating(true)}>
               {tf('dun.create', { level: levelLabel(next.level) })}
-            </button>
+            </Button>
           ) : null}
         </div>
       ) : null}
@@ -174,9 +175,9 @@ function NoticeRow({
           {t('dun.pdf')}
         </a>
         {canMail ? (
-          <button type="button" className="button ghost auto" onClick={onMail}>
+          <Button type="button" variant="ghost" onClick={onMail}>
             {t('dun.sendMail')}
-          </button>
+          </Button>
         ) : null}
       </span>
       {mailing ? (
@@ -193,12 +194,12 @@ function NoticeRow({
           </div>
           <FormError>{error}</FormError>
           <div className="button-row">
-            <button type="submit" className="button primary auto" disabled={busy}>
+            <Button type="submit" variant="primary" disabled={busy}>
               {t('dun.sendMail')}
-            </button>
-            <button type="button" className="button ghost" onClick={onMail}>
+            </Button>
+            <Button type="button" variant="ghost" width="natural" onClick={onMail}>
               {t('common.cancel')}
-            </button>
+            </Button>
           </div>
         </form>
       ) : null}
@@ -426,12 +427,12 @@ function DunningForm({
       <p className="hint">{t('dun.final')}</p>
       <FormError>{error}</FormError>
       <div className="button-row">
-        <button type="submit" className="button primary auto" disabled={busy}>
+        <Button type="submit" variant="primary" disabled={busy}>
           {tf('dun.issue', { level: levelLabel(initial.level) })}
-        </button>
-        <button type="button" className="button ghost" onClick={onCancel}>
+        </Button>
+        <Button type="button" variant="ghost" width="natural" onClick={onCancel}>
           {t('common.cancel')}
-        </button>
+        </Button>
       </div>
     </form>
   )

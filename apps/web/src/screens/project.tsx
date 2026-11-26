@@ -1,4 +1,5 @@
 import type { Me, ProjectDetail } from '@easybau/schemas'
+import { Button } from '@easybau/ui'
 import { useCallback, useEffect, useState } from 'react'
 import { type ApiError, apiWithEtag } from '../api'
 import { FormError } from '../forms'
@@ -112,9 +113,9 @@ export function ProjectScreen({
           {project.name}
         </h1>
         {canWrite && !editing ? (
-          <button type="button" className="button ghost" onClick={() => setEditing(true)}>
+          <Button type="button" variant="ghost" width="natural" onClick={() => setEditing(true)}>
             {t('common.edit')}
-          </button>
+          </Button>
         ) : null}
       </div>
       <div className="head-meta">
@@ -140,9 +141,9 @@ export function ProjectScreen({
       <FormError>{error}</FormError>
       {siteWork && !project.archived ? (
         <div className="offline-prepare">
-          <button type="button" className="button ghost auto" onClick={prepare}>
+          <Button type="button" variant="ghost" onClick={prepare}>
             {t('off.prepare')}
-          </button>
+          </Button>
           {offline ? (
             <p className="hint" role="status">
               {offline}

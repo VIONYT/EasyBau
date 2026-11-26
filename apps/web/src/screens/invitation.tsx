@@ -1,4 +1,5 @@
 import type { InvitationInfo, LoginResponse, Me } from '@easybau/schemas'
+import { Button } from '@easybau/ui'
 import { useEffect, useState } from 'react'
 import { api } from '../api'
 import { Field, FormError, optional, useForm } from '../forms'
@@ -45,9 +46,9 @@ export function InvitationScreen({
         {needsSecondFactor ? (
           <>
             <p role="status">{t('invitation.loginNow')}</p>
-            <button type="button" className="button primary" onClick={onLogin}>
+            <Button type="button" variant="primary" width="natural" onClick={onLogin}>
               {t('auth.submit')}
-            </button>
+            </Button>
           </>
         ) : null}
         {info && !needsSecondFactor ? (
@@ -77,9 +78,9 @@ export function InvitationScreen({
               required
               error={form.fieldErrors.password}
             />
-            <button type="submit" className="button primary" disabled={form.busy}>
+            <Button type="submit" variant="primary" width="natural" disabled={form.busy}>
               {t('invitation.accept')}
-            </button>
+            </Button>
           </form>
         ) : null}
       </div>

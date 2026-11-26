@@ -1,3 +1,4 @@
+import { Button } from '@easybau/ui'
 import { t, tf } from '../i18n'
 import { discardChange, retryChange, syncNow, useOfflineStatus } from './client'
 
@@ -17,14 +18,16 @@ export function OfflineBar() {
           <span>
             {status.syncing ? t('off.syncing') : tf('off.pending', { n: String(pending.length) })}
           </span>
-          <button
+          <Button
             type="button"
-            className="button ghost small"
+            variant="ghost"
+            width="natural"
+            size="small"
             disabled={status.syncing}
             onClick={() => void syncNow()}
           >
             {t('off.syncNow')}
-          </button>
+          </Button>
         </div>
       ) : null}
       {failed.length ? (
@@ -38,23 +41,28 @@ export function OfflineBar() {
                   <span className="block muted">{entry.error}</span>
                 </span>
                 <span className="actions">
-                  <button
+                  <Button
                     type="button"
-                    className="button ghost small"
+                    variant="ghost"
+                    width="natural"
+                    size="small"
                     onClick={() => void retryChange(entry.seq as number)}
                   >
                     {t('off.retry')}
-                  </button>
-                  <button
+                  </Button>
+                  <Button
                     type="button"
-                    className="button ghost small danger"
+                    variant="ghost"
+                    width="natural"
+                    size="small"
+                    danger
                     onClick={() => {
                       if (window.confirm(t('off.discardConfirm')))
                         void discardChange(entry.seq as number)
                     }}
                   >
                     {t('off.discard')}
-                  </button>
+                  </Button>
                 </span>
               </li>
             ))}

@@ -6,6 +6,7 @@ import type {
   MeasurementSheetSummary,
   ReportSummary,
 } from '@easybau/schemas'
+import { Button } from '@easybau/ui'
 import { useEffect, useId, useState } from 'react'
 import { type ApiError, api, apiWithEtag } from '../api'
 import { formatDateTime } from '../format'
@@ -132,14 +133,16 @@ export function EvidencePanel({
                 </span>
               </span>
               {editable ? (
-                <button
+                <Button
                   type="button"
-                  className="button ghost small"
+                  variant="ghost"
+                  width="natural"
+                  size="small"
                   disabled={busy}
                   onClick={() => save(refs.filter((r) => !(r.kind === e.kind && r.id === e.id)))}
                 >
                   {t('ev.remove')}
-                </button>
+                </Button>
               ) : null}
             </li>
           ))}
@@ -148,9 +151,9 @@ export function EvidencePanel({
         <p className="muted">{t('ev.none')}</p>
       )}
       {editable && !adding ? (
-        <button type="button" className="button ghost auto" onClick={() => setAdding(true)}>
+        <Button type="button" variant="ghost" onClick={() => setAdding(true)}>
           {t('ev.add')}
-        </button>
+        </Button>
       ) : null}
       {adding ? (
         <div className="field">
@@ -171,9 +174,9 @@ export function EvidencePanel({
             })}
           </select>
           <div className="button-row">
-            <button
+            <Button
               type="button"
-              className="button primary auto"
+              variant="primary"
               disabled={busy || !choice}
               onClick={() => {
                 const [kind, refId] = choice.split(':') as [EvidenceKind, string]
@@ -181,10 +184,10 @@ export function EvidencePanel({
               }}
             >
               {t('ev.add')}
-            </button>
-            <button type="button" className="button ghost auto" onClick={() => setAdding(false)}>
+            </Button>
+            <Button type="button" variant="ghost" onClick={() => setAdding(false)}>
               {t('common.cancel')}
-            </button>
+            </Button>
           </div>
         </div>
       ) : null}

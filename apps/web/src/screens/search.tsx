@@ -1,4 +1,5 @@
 import type { NotificationList, SearchHit, SearchResult } from '@easybau/schemas'
+import { Button } from '@easybau/ui'
 import { useCallback, useEffect, useId, useState } from 'react'
 import { type ApiError, api } from '../api'
 import { formatDateTime } from '../format'
@@ -131,13 +132,13 @@ export function NotificationsScreen({
       <div className="section-head">
         <h1 id={`${id}-title`}>{t('notif.title')}</h1>
         {list?.unreadCount ? (
-          <button
+          <Button
             type="button"
-            className="button ghost auto"
+            variant="ghost"
             onClick={() => run(api<NotificationList>('POST', '/api/v1/notifications/read-all', {}))}
           >
             {t('notif.readAll')}
-          </button>
+          </Button>
         ) : null}
       </div>
       <FormError>{error}</FormError>

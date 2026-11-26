@@ -7,6 +7,7 @@ import type {
   UnitSummary,
 } from '@easybau/schemas'
 import { CHECKLIST_STATES, WEATHER_CONDITIONS } from '@easybau/schemas/constants'
+import { Button } from '@easybau/ui'
 import { type ChangeEvent, useCallback, useEffect, useMemo, useState } from 'react'
 import { ApiError, api, apiWithEtag, mutate } from '../api'
 import { formatDateTime, formatInputNumber } from '../format'
@@ -477,9 +478,9 @@ export function ReportScreen({ me, id, navigate }: { me: Me; id: string; navigat
 
       {editable ? (
         <div className="save-bar">
-          <button type="button" className="button primary auto" disabled={busy} onClick={save}>
+          <Button type="button" variant="primary" disabled={busy} onClick={save}>
             {t('d.save')}
-          </button>
+          </Button>
           {dirty ? <span className="warning">{t('d.unsaved')}</span> : null}
           {saved && !dirty ? (
             <span className="success" role="status">
@@ -496,9 +497,9 @@ export function ReportScreen({ me, id, navigate }: { me: Me; id: string; navigat
       {editable &&
       online &&
       (report.createdBy?.id === me.user.id || me.permissions.includes('project.write')) ? (
-        <button type="button" className="button ghost danger" onClick={remove}>
+        <Button type="button" variant="ghost" width="natural" danger onClick={remove}>
           {t('d.delete')}
-        </button>
+        </Button>
       ) : null}
     </section>
   )
@@ -565,14 +566,17 @@ function useRows(value: Record<string, unknown>, set: SectionProps['set'], empty
 
 function RowActions({ onRemove, label }: { onRemove: () => void; label: string }) {
   return (
-    <button
+    <Button
       type="button"
-      className="button ghost icon danger"
+      variant="ghost"
+      width="natural"
+      size="icon"
+      danger
       aria-label={label}
       onClick={onRemove}
     >
       ✕
-    </button>
+    </Button>
   )
 }
 
@@ -628,9 +632,9 @@ function Staff({ section, value, set }: SectionProps) {
         ))}
       </ul>
       <div className="button-row">
-        <button type="button" className="button ghost small" onClick={add}>
+        <Button type="button" variant="ghost" width="natural" size="small" onClick={add}>
           {t('d.row.add')}
-        </button>
+        </Button>
         <strong className="amount">
           {t('d.staff.total')}: {total} {t('d.hours')}
         </strong>
@@ -693,9 +697,9 @@ function QuantityRows({ section, value, set, units }: SectionProps & { units: Un
           </li>
         ))}
       </ul>
-      <button type="button" className="button ghost small" onClick={add}>
+      <Button type="button" variant="ghost" width="natural" size="small" onClick={add}>
         {t('d.row.add')}
-      </button>
+      </Button>
     </fieldset>
   )
 }
@@ -745,9 +749,9 @@ function Checklist({ section, value, set }: SectionProps) {
           </li>
         ))}
       </ul>
-      <button type="button" className="button ghost small" onClick={add}>
+      <Button type="button" variant="ghost" width="natural" size="small" onClick={add}>
         {t('rep.check.add')}
-      </button>
+      </Button>
     </fieldset>
   )
 }
@@ -796,13 +800,15 @@ function MeasurementSection({
         {section.linkedSheet ? <p className="hint">{t('rep.measure.linkedHint')}</p> : null}
       </div>
       {sheetId ? (
-        <button
+        <Button
           type="button"
-          className="button ghost small"
+          variant="ghost"
+          width="natural"
+          size="small"
           onClick={() => navigate({ view: 'measurement', id: sheetId })}
         >
           {t('rep.measure.open')}
-        </button>
+        </Button>
       ) : null}
       {section.linkedSheet ? null : (
         <QuantityRows
@@ -848,9 +854,9 @@ function Equipment({ section, value, set }: SectionProps) {
           </li>
         ))}
       </ul>
-      <button type="button" className="button ghost small" onClick={add}>
+      <Button type="button" variant="ghost" width="natural" size="small" onClick={add}>
         {t('d.row.add')}
-      </button>
+      </Button>
     </fieldset>
   )
 }
@@ -940,13 +946,16 @@ function Photos({
                 </a>
                 <span className="file-info">{p.caption ?? p.filename}</span>
                 {editable && online ? (
-                  <button
+                  <Button
                     type="button"
-                    className="button ghost small danger"
+                    variant="ghost"
+                    width="natural"
+                    size="small"
+                    danger
                     onClick={() => remove(p.fileId)}
                   >
                     {t('d.photo.remove')}
-                  </button>
+                  </Button>
                 ) : null}
               </li>
             ),
@@ -1084,9 +1093,9 @@ function Signatures({
           />
         </div>
       ))}
-      <button type="button" className="button primary auto" disabled={busy} onClick={sign}>
+      <Button type="button" variant="primary" disabled={busy} onClick={sign}>
         {t('d.sign')}
-      </button>
+      </Button>
     </div>
   )
 }
@@ -1160,15 +1169,15 @@ function FollowUps({
         {actions
           .filter((a) => a !== 'change_order' || me.permissions.includes('document.write'))
           .map((action) => (
-            <button
+            <Button
               key={action}
               type="button"
-              className="button ghost auto"
+              variant="ghost"
               disabled={busy}
               onClick={() => start(action)}
             >
               {t(`rep.action.${action}` as TextKey)}
-            </button>
+            </Button>
           ))}
       </div>
     </div>

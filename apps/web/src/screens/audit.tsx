@@ -1,4 +1,5 @@
 import type { AuditChainStatus, AuditEventItem, AuditEventList, Me } from '@easybau/schemas'
+import { Button } from '@easybau/ui'
 import { useCallback, useEffect, useId, useState } from 'react'
 import { type ApiError, api } from '../api'
 import { formatDateTime } from '../format'
@@ -108,9 +109,9 @@ function ChainPanel() {
         </p>
       ) : null}
       <FormError>{error}</FormError>
-      <button type="button" className="button ghost auto" disabled={busy} onClick={check}>
+      <Button type="button" variant="ghost" disabled={busy} onClick={check}>
         {busy ? t('audit.checking') : t('audit.checkNow')}
-      </button>
+      </Button>
     </div>
   )
 }
@@ -209,9 +210,9 @@ function EventsPanel() {
         <p className="muted">{t('common.loading')}</p>
       )}
       {list?.nextCursor ? (
-        <button type="button" className="button ghost" onClick={more}>
+        <Button type="button" variant="ghost" width="natural" onClick={more}>
           {t('inv.list.more')}
-        </button>
+        </Button>
       ) : null}
     </div>
   )

@@ -1,5 +1,5 @@
 import type { ContactDetail, ContactSummary, Page, PaymentTerm } from '@easybau/schemas'
-import { color } from '@easybau/ui'
+import { Button, color } from '@easybau/ui'
 import { useCallback, useEffect, useId, useState } from 'react'
 import { type ApiError, api, apiWithEtag } from '../api'
 import { Field, FormError, SelectField, TextArea, useForm, value } from '../forms'
@@ -190,9 +190,9 @@ export function ContactEditor({
           {c.number ? <span className="muted"> · {c.number}</span> : null}
           {c.archived ? <span className="badge"> {t('contacts.archived')}</span> : null}
         </h2>
-        <button type="button" className="button ghost auto" onClick={onClose}>
+        <Button type="button" variant="ghost" onClick={onClose}>
           {t('contacts.close')}
-        </button>
+        </Button>
       </div>
       <form
         key={`${c.id}-${contact.etag}`}
@@ -308,18 +308,22 @@ export function ContactEditor({
                 />
                 <span>{t('contacts.channel.primary')}</span>
               </label>
-              <button
+              <Button
                 type="button"
-                className="button ghost small"
+                variant="ghost"
+                width="natural"
+                size="small"
                 onClick={() => setChannels(channels.filter((_, i) => i !== index))}
               >
                 {t('contacts.channel.remove')}
-              </button>
+              </Button>
             </div>
           ))}
-          <button
+          <Button
             type="button"
-            className="button ghost small"
+            variant="ghost"
+            width="natural"
+            size="small"
             onClick={() =>
               setChannels([
                 ...channels,
@@ -333,7 +337,7 @@ export function ContactEditor({
             }
           >
             {t('contacts.channel.add')}
-          </button>
+          </Button>
 
           <h3>{t('contacts.address')}</h3>
           <Field
@@ -417,14 +421,17 @@ export function ContactEditor({
                     <option value="other">{t('contacts.addressKind.other')}</option>
                   </select>
                 </div>
-                <button
+                <Button
                   type="button"
-                  className="button ghost icon danger"
+                  variant="ghost"
+                  width="natural"
+                  size="icon"
+                  danger
                   aria-label={t('contacts.removeAddress')}
                   onClick={() => setOthers(others.filter((_, i) => i !== index))}
                 >
                   ✕
-                </button>
+                </Button>
               </div>
               <AddressFields
                 id={`${headingId}-o${index}`}
@@ -433,13 +440,15 @@ export function ContactEditor({
               />
             </div>
           ))}
-          <button
+          <Button
             type="button"
-            className="button ghost small"
+            variant="ghost"
+            width="natural"
+            size="small"
             onClick={() => setOthers([...others, emptyAddress('delivery')])}
           >
             {t('contacts.addAddress')}
-          </button>
+          </Button>
 
           <h3>{t('contacts.more')}</h3>
           <Field
@@ -521,9 +530,9 @@ export function ContactEditor({
             error={form.fieldErrors.creditorNumber}
           />
           {canWrite && !restricted && !c.creditorNumber ? (
-            <button type="button" className="button ghost small auto" onClick={assignCreditor}>
+            <Button type="button" variant="ghost" size="small" onClick={assignCreditor}>
               {t('contacts.assignCreditor')}
-            </button>
+            </Button>
           ) : null}
           <Field
             label={t('contacts.einvoiceEmail')}
@@ -534,9 +543,9 @@ export function ContactEditor({
             error={form.fieldErrors.einvoiceEmail}
           />
           {canWrite ? (
-            <button type="submit" className="button primary auto">
+            <Button type="submit" variant="primary">
               {t('common.save')}
-            </button>
+            </Button>
           ) : null}
         </fieldset>
       </form>
@@ -592,9 +601,9 @@ export function ContactEditor({
       <FormError>{actionError}</FormError>
       {canWrite && !restricted && !c.mergedInto ? (
         <div className="button-row">
-          <button type="button" className="button ghost auto" onClick={archive}>
+          <Button type="button" variant="ghost" onClick={archive}>
             {t(c.archived ? 'contacts.unarchive' : 'contacts.archive')}
-          </button>
+          </Button>
         </div>
       ) : null}
     </section>
@@ -680,15 +689,17 @@ function ContactLinks({
                 {l.role ? <span className="muted"> · {l.role}</span> : null}
               </span>
               {canWrite ? (
-                <button
+                <Button
                   type="button"
-                  className="button ghost small"
+                  variant="ghost"
+                  width="natural"
+                  size="small"
                   onClick={() =>
                     run(() => api('DELETE', `/api/v1/contacts/${contact.id}/links/${l.contactId}`))
                   }
                 >
                   {t('contacts.links.remove')}
-                </button>
+                </Button>
               ) : null}
             </li>
           ))}
@@ -697,13 +708,19 @@ function ContactLinks({
         <p className="muted">{t('contacts.links.none')}</p>
       )}
       {canWrite && !adding ? (
-        <button type="button" className="button ghost small" onClick={() => setAdding(true)}>
+        <Button
+          type="button"
+          variant="ghost"
+          width="natural"
+          size="small"
+          onClick={() => setAdding(true)}
+        >
           {t(
             contact.kind === 'organization'
               ? 'contacts.links.addPerson'
               : 'contacts.links.addOrganization',
           )}
-        </button>
+        </Button>
       ) : null}
       {adding ? (
         <div className="stack">
@@ -745,17 +762,17 @@ function ContactLinks({
             />
           </div>
           <div className="button-row">
-            <button
+            <Button
               type="button"
-              className="button primary auto"
+              variant="primary"
               disabled={!choice}
               onClick={() => run(() => link(choice))}
             >
               {t('contacts.links.save')}
-            </button>
-            <button type="button" className="button ghost auto" onClick={() => setAdding(false)}>
+            </Button>
+            <Button type="button" variant="ghost" onClick={() => setAdding(false)}>
               {t('common.cancel')}
-            </button>
+            </Button>
           </div>
         </div>
       ) : null}

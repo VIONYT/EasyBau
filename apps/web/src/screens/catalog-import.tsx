@@ -1,4 +1,5 @@
 import type { CatalogImportResult } from '@easybau/schemas'
+import { Button } from '@easybau/ui'
 import { useId, useState } from 'react'
 import { type ApiError, api } from '../api'
 import { FormError } from '../forms'
@@ -57,9 +58,9 @@ export function CatalogImport({
     <section className="panel" aria-labelledby={`${id}-title`}>
       <div className="panel-head">
         <h2 id={`${id}-title`}>{t('cc.importTitle')}</h2>
-        <button type="button" className="button ghost auto" onClick={onClose}>
+        <Button type="button" variant="ghost" onClick={onClose}>
           {t('contacts.close')}
-        </button>
+        </Button>
       </div>
       <p className="hint">{t('cc.importHint')}</p>
       <div className="field">
@@ -84,23 +85,13 @@ export function CatalogImport({
       </label>
       <FormError>{error}</FormError>
       <div className="button-row">
-        <button
-          type="button"
-          className="button ghost auto"
-          disabled={!text || busy}
-          onClick={() => run(true)}
-        >
+        <Button type="button" variant="ghost" disabled={!text || busy} onClick={() => run(true)}>
           {t('cc.preview')}
-        </button>
+        </Button>
         {result?.dryRun && changes ? (
-          <button
-            type="button"
-            className="button primary auto"
-            disabled={busy}
-            onClick={() => run(false)}
-          >
+          <Button type="button" variant="primary" disabled={busy} onClick={() => run(false)}>
             {t('cc.run')}
-          </button>
+          </Button>
         ) : null}
       </div>
       {result ? (

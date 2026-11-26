@@ -5,6 +5,7 @@ import type {
   ReportSummary,
   ReportTemplateSummary,
 } from '@easybau/schemas'
+import { Button } from '@easybau/ui'
 import { useEffect, useState } from 'react'
 import { type ApiError, api, mutate } from '../api'
 import { formatDateTime, formatInputNumber } from '../format'
@@ -157,9 +158,9 @@ export function ProjectReports({
       <div className="section-head">
         <h2>{t(diary ? 'd.title' : 'rep.title')}</h2>
         {canWrite && !creating ? (
-          <button type="button" className="button primary auto" onClick={() => setCreating(true)}>
+          <Button type="button" variant="primary" onClick={() => setCreating(true)}>
             {t(diary ? 'd.new' : 'rep.new')}
-          </button>
+          </Button>
         ) : null}
       </div>
       {creating ? (
@@ -188,12 +189,17 @@ export function ProjectReports({
             error={form.fieldErrors.reportDate}
           />
           <div className="button-row">
-            <button type="submit" className="button primary auto" disabled={form.busy}>
+            <Button type="submit" variant="primary" disabled={form.busy}>
               {t(diary ? 'd.create' : 'rep.create')}
-            </button>
-            <button type="button" className="button ghost" onClick={() => setCreating(false)}>
+            </Button>
+            <Button
+              type="button"
+              variant="ghost"
+              width="natural"
+              onClick={() => setCreating(false)}
+            >
               {t('common.cancel')}
-            </button>
+            </Button>
           </div>
         </form>
       ) : null}

@@ -1,4 +1,5 @@
 import type { DashboardDto, DashboardSiteDto, DashboardSum, Me } from '@easybau/schemas'
+import { Button } from '@easybau/ui'
 import { useEffect, useId, useState } from 'react'
 import { type ApiError, api } from '../api'
 import { formatCents, formatDateTime } from '../format'
@@ -90,24 +91,20 @@ export function Dashboard({ me, navigate }: { me: Me; navigate: Navigate }) {
       </div>
       <div className="button-row">
         {me.permissions.includes('project.write') ? (
-          <button
-            type="button"
-            className="button primary auto"
-            onClick={() => navigate({ view: 'projects' })}
-          >
+          <Button type="button" variant="primary" onClick={() => navigate({ view: 'projects' })}>
             {t('dash.action.project')}
-          </button>
+          </Button>
         ) : null}
         {data?.todaysSites[0] && me.permissions.includes('report.write') ? (
-          <button
+          <Button
             type="button"
-            className="button ghost auto"
+            variant="ghost"
             onClick={() =>
               navigate({ view: 'project', id: data.todaysSites[0]?.id as string, section: 'diary' })
             }
           >
             {t('dash.action.report')}
-          </button>
+          </Button>
         ) : null}
       </div>
       <FormError>{error}</FormError>

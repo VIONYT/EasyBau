@@ -1,5 +1,6 @@
 import type { FileSummary, FolderSummary, Me } from '@easybau/schemas'
 import { UPLOAD_EXTENSIONS } from '@easybau/schemas/constants'
+import { Button } from '@easybau/ui'
 import { type DragEvent, useCallback, useEffect, useState } from 'react'
 import { type ApiError, api, uploadFile } from '../api'
 import { formatBytes, formatDateTime } from '../format'
@@ -155,9 +156,9 @@ export function ProjectFiles({ me, projectId }: { me: Me; projectId: string }) {
             />
           </label>
           {current && canManageFolders && current.fileCount === 0 ? (
-            <button type="button" className="button ghost danger" onClick={deleteFolder}>
+            <Button type="button" variant="ghost" width="natural" danger onClick={deleteFolder}>
               {t('files.deleteFolder')}
-            </button>
+            </Button>
           ) : null}
           <p className="hint">
             {t('files.drop')} {current ? `${t('files.target')}: ${current.name}` : ''}
@@ -219,12 +220,12 @@ function NewFolder({
       <FormError>{form.error}</FormError>
       <Field label={t('files.folderName')} name="name" required error={form.fieldErrors.name} />
       <div className="button-row">
-        <button type="submit" className="button primary auto" disabled={form.busy}>
+        <Button type="submit" variant="primary" disabled={form.busy}>
           {t('common.add')}
-        </button>
-        <button type="button" className="button ghost" onClick={() => onDone(null)}>
+        </Button>
+        <Button type="button" variant="ghost" width="natural" onClick={() => onDone(null)}>
           {t('common.cancel')}
-        </button>
+        </Button>
       </div>
     </form>
   )
@@ -327,12 +328,12 @@ function FileCard({
             </select>
           </div>
           <div className="button-row">
-            <button type="submit" className="button primary auto" disabled={form.busy}>
+            <Button type="submit" variant="primary" disabled={form.busy}>
               {t('common.save')}
-            </button>
-            <button type="button" className="button ghost" onClick={() => setEditing(false)}>
+            </Button>
+            <Button type="button" variant="ghost" width="natural" onClick={() => setEditing(false)}>
               {t('common.cancel')}
-            </button>
+            </Button>
           </div>
         </form>
       ) : (
@@ -342,12 +343,25 @@ function FileCard({
           </a>
           {canEdit ? (
             <>
-              <button type="button" className="button ghost small" onClick={() => setEditing(true)}>
+              <Button
+                type="button"
+                variant="ghost"
+                width="natural"
+                size="small"
+                onClick={() => setEditing(true)}
+              >
                 {t('common.edit')}
-              </button>
-              <button type="button" className="button ghost small danger" onClick={remove}>
+              </Button>
+              <Button
+                type="button"
+                variant="ghost"
+                width="natural"
+                size="small"
+                danger
+                onClick={remove}
+              >
                 {t('common.delete')}
-              </button>
+              </Button>
             </>
           ) : null}
         </div>

@@ -6,6 +6,7 @@ import type {
   FileSummary,
   TargetPriceResult,
 } from '@easybau/schemas'
+import { Button } from '@easybau/ui'
 import { useEffect, useId, useState } from 'react'
 import { type ApiError, api, apiWithEtag, uploadFile } from '../api'
 import { formatCents, parseEuro } from '../format'
@@ -128,22 +129,22 @@ export function TargetPricePanel({ doc, apply }: { doc: Doc; apply: Apply }) {
         </div>
       ) : null}
       <div className="button-row">
-        <button
+        <Button
           type="button"
-          className="button ghost auto"
+          variant="ghost"
           disabled={busy || !target}
           onClick={() => void run(false)}
         >
           {t('tp.previewButton')}
-        </button>
-        <button
+        </Button>
+        <Button
           type="button"
-          className="button primary auto"
+          variant="primary"
           disabled={busy || !result || result.applied}
           onClick={() => void run(true)}
         >
           {t('tp.apply')}
-        </button>
+        </Button>
       </div>
     </details>
   )
@@ -205,9 +206,9 @@ export function VersionsPanel({
       {newest && newest.id !== doc.id ? <p className="hint">{t('ver.outdated')}</p> : null}
       <FormError>{error}</FormError>
       {canCreate ? (
-        <button
+        <Button
           type="button"
-          className="button ghost auto"
+          variant="ghost"
           onClick={async () => {
             setError(null)
             try {
@@ -219,7 +220,7 @@ export function VersionsPanel({
           }}
         >
           {t('ver.create')}
-        </button>
+        </Button>
       ) : null}
     </section>
   )
@@ -325,17 +326,17 @@ export function ImagePositionForm({
       </div>
       <FormError>{error}</FormError>
       <div className="button-row">
-        <button
+        <Button
           type="button"
-          className="button primary auto"
+          variant="primary"
           disabled={busy || !fileId}
           onClick={() => void submit()}
         >
           {t('img.add')}
-        </button>
-        <button type="button" className="button ghost auto" onClick={onCancel}>
+        </Button>
+        <Button type="button" variant="ghost" onClick={onCancel}>
           {t('common.cancel')}
-        </button>
+        </Button>
       </div>
     </div>
   )
@@ -400,12 +401,12 @@ export function ImageCaptionForm({
       </div>
       <FormError>{error}</FormError>
       <div className="button-row">
-        <button type="submit" className="button primary auto" disabled={busy}>
+        <Button type="submit" variant="primary" disabled={busy}>
           {t('common.save')}
-        </button>
-        <button type="button" className="button ghost auto" onClick={onCancel}>
+        </Button>
+        <Button type="button" variant="ghost" onClick={onCancel}>
           {t('common.cancel')}
-        </button>
+        </Button>
       </div>
     </form>
   )
@@ -454,14 +455,16 @@ export function SaveToCatalogButton({ doc, item }: { doc: Doc; item: DocumentIte
   }
   if (state === 'idle') {
     return (
-      <button
+      <Button
         type="button"
-        className="button ghost small"
+        variant="ghost"
+        width="natural"
+        size="small"
         aria-label={`${t('stm.save')}: ${item.shortText ?? ''}`}
         onClick={() => void open()}
       >
         {t('stm.save')}
-      </button>
+      </Button>
     )
   }
   const depth = (f: CatalogFolder): number => {
@@ -489,17 +492,25 @@ export function SaveToCatalogButton({ doc, item }: { doc: Doc; item: DocumentIte
       {duplicate ? <p className="warning">{duplicate}</p> : null}
       {error ? <span className="error">{error}</span> : null}
       <div className="button-row">
-        <button
+        <Button
           type="button"
-          className="button primary small"
+          variant="primary"
+          width="natural"
+          size="small"
           disabled={state === 'busy'}
           onClick={() => void save(Boolean(duplicate))}
         >
           {duplicate ? t('stm.saveAnyway') : t('stm.save')}
-        </button>
-        <button type="button" className="button ghost small" onClick={() => setState('idle')}>
+        </Button>
+        <Button
+          type="button"
+          variant="ghost"
+          width="natural"
+          size="small"
+          onClick={() => setState('idle')}
+        >
           {t('common.cancel')}
-        </button>
+        </Button>
       </div>
     </div>
   )

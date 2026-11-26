@@ -64,6 +64,15 @@ describe('components', () => {
     expect(html(createElement(Button, { type: 'submit', className: 'x' }, 'OK'))).toBe(
       '<button type="submit" class="button ghost secondary auto x">OK</button>',
     )
+    expect(html(createElement(Button, { variant: 'ghost', size: 'icon', danger: true }, '×'))).toBe(
+      '<button type="button" class="button ghost auto icon danger">×</button>',
+    )
+    expect(html(createElement(Button, { variant: 'primary', width: 'natural' }, 'Los'))).toBe(
+      '<button type="button" class="button primary">Los</button>',
+    )
+    expect(
+      html(createElement(Button, { variant: 'ghost', size: 'small', width: 'full' }, 'Mehr')),
+    ).toBe('<button type="button" class="button ghost full small">Mehr</button>')
   })
 
   it('announces errors and successes, not neutral notices', () => {

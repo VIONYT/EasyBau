@@ -6,6 +6,7 @@ import type {
   Receivable,
   ReceivableStatus,
 } from '@easybau/schemas'
+import { Button } from '@easybau/ui'
 import { useId, useState } from 'react'
 import { type ApiError, api } from '../api'
 import { centsToInput, formatCents, formatDateTime, parseEuro } from '../format'
@@ -133,13 +134,9 @@ export function ReceivablePanel({
                 {p.reference ? <span className="muted"> · {p.reference}</span> : null}
               </span>
               {canWrite && !p.reversedById && !p.reversesId ? (
-                <button
-                  type="button"
-                  className="button ghost auto"
-                  onClick={() => reverse('payments', p.id)}
-                >
+                <Button type="button" variant="ghost" onClick={() => reverse('payments', p.id)}>
                   {t('pay.reverse')}
-                </button>
+                </Button>
               ) : null}
             </li>
           ))}
@@ -156,21 +153,21 @@ export function ReceivablePanel({
               {canWrite && !a.reversedById && !a.reversesId ? (
                 <span className="entry-actions">
                   {a.kind === 'short_payment' || a.kind === 'other' ? (
-                    <button
+                    <Button
                       type="button"
-                      className="button ghost auto"
+                      variant="ghost"
                       onClick={() => toggleDisputed(a.id, !a.disputed)}
                     >
                       {a.disputed ? t('pay.accept') : t('pay.dispute')}
-                    </button>
+                    </Button>
                   ) : null}
-                  <button
+                  <Button
                     type="button"
-                    className="button ghost auto"
+                    variant="ghost"
                     onClick={() => reverse('adjustments', a.id)}
                   >
                     {t('pay.reverse')}
-                  </button>
+                  </Button>
                 </span>
               ) : null}
             </li>
@@ -184,27 +181,19 @@ export function ReceivablePanel({
       {canWrite && !closed && mode === null ? (
         <div className="actions start">
           {r.openCents > 0 ? (
-            <button
-              type="button"
-              className="button primary auto"
-              onClick={() => setMode('payment')}
-            >
+            <Button type="button" variant="primary" onClick={() => setMode('payment')}>
               {t('pay.record')}
-            </button>
+            </Button>
           ) : null}
           {r.openCents > 0 ? (
-            <button
-              type="button"
-              className="button ghost auto"
-              onClick={() => setMode('adjustment')}
-            >
+            <Button type="button" variant="ghost" onClick={() => setMode('adjustment')}>
               {t('pay.recordAdjustment')}
-            </button>
+            </Button>
           ) : null}
           {r.retentionHeldCents > 0 ? (
-            <button type="button" className="button ghost auto" onClick={() => setMode('release')}>
+            <Button type="button" variant="ghost" onClick={() => setMode('release')}>
               {t('pay.release')}
-            </button>
+            </Button>
           ) : null}
         </div>
       ) : null}
@@ -235,12 +224,12 @@ export function ReceivablePanel({
 function Buttons({ onCancel, disabled }: { onCancel: () => void; disabled: boolean }) {
   return (
     <div className="button-row">
-      <button type="submit" className="button primary auto" disabled={disabled}>
+      <Button type="submit" variant="primary" disabled={disabled}>
         {t('common.save')}
-      </button>
-      <button type="button" className="button ghost" onClick={onCancel}>
+      </Button>
+      <Button type="button" variant="ghost" width="natural" onClick={onCancel}>
         {t('common.cancel')}
-      </button>
+      </Button>
     </div>
   )
 }

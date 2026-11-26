@@ -1,4 +1,5 @@
 import type { BillableReport, DocumentDetail } from '@easybau/schemas'
+import { Button } from '@easybau/ui'
 import { useEffect, useId, useState } from 'react'
 import { type ApiError, api, apiWithEtag } from '../api'
 import { formatDateTime, formatInputNumber } from '../format'
@@ -34,9 +35,15 @@ export function ReportApplyPanel({
 
   if (!open) {
     return (
-      <button type="button" className="button ghost small" onClick={() => setOpen(true)}>
+      <Button
+        type="button"
+        variant="ghost"
+        width="natural"
+        size="small"
+        onClick={() => setOpen(true)}
+      >
         {t('rep.apply.title')}
-      </button>
+      </Button>
     )
   }
   const submit = async () => {
@@ -100,17 +107,12 @@ export function ReportApplyPanel({
       ) : null}
       <FormError>{error}</FormError>
       <div className="button-row">
-        <button
-          type="button"
-          className="button primary auto"
-          disabled={busy || !selected.size}
-          onClick={submit}
-        >
+        <Button type="button" variant="primary" disabled={busy || !selected.size} onClick={submit}>
           {t('rep.apply.submit')}
-        </button>
-        <button type="button" className="button ghost auto" onClick={() => setOpen(false)}>
+        </Button>
+        <Button type="button" variant="ghost" onClick={() => setOpen(false)}>
           {t('common.cancel')}
-        </button>
+        </Button>
       </div>
     </section>
   )

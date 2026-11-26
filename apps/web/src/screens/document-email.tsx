@@ -1,4 +1,5 @@
 import type { DocumentDetail, DocumentEmailDraft } from '@easybau/schemas'
+import { Button } from '@easybau/ui'
 import { useCallback, useEffect, useId, useState } from 'react'
 import { type ApiError, api } from '../api'
 import { formatDateTime } from '../format'
@@ -144,9 +145,9 @@ export function DocumentEmailPanel({
         </ul>
       ) : null}
       {canWrite && draft.enabled && !draft.blocked && !open ? (
-        <button type="button" className="button primary auto" onClick={() => setOpen(true)}>
+        <Button type="button" variant="primary" onClick={() => setOpen(true)}>
           {t(draft.history.length ? 'mail.sendAgain' : 'mail.send')}
-        </button>
+        </Button>
       ) : null}
       {open ? (
         <div className="mail-form">
@@ -278,17 +279,17 @@ export function DocumentEmailPanel({
           ) : null}
           <FormError>{error}</FormError>
           <div className="button-row">
-            <button
+            <Button
               type="button"
-              className="button primary auto"
+              variant="primary"
               disabled={busy || !form.to.trim()}
               onClick={send}
             >
               {t('mail.submit')}
-            </button>
-            <button type="button" className="button ghost auto" onClick={() => setOpen(false)}>
+            </Button>
+            <Button type="button" variant="ghost" onClick={() => setOpen(false)}>
               {t('common.cancel')}
-            </button>
+            </Button>
           </div>
         </div>
       ) : null}

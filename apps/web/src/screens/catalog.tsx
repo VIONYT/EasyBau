@@ -8,6 +8,7 @@ import type {
   UnitSummary,
 } from '@easybau/schemas'
 import { COST_KINDS } from '@easybau/schemas/constants'
+import { Button } from '@easybau/ui'
 import { useCallback, useEffect, useState } from 'react'
 import { ApiError, api, uploadFile } from '../api'
 import {
@@ -144,14 +145,14 @@ function ItemList({
             {t('cc.export')}
           </a>
           {canWrite && !importing ? (
-            <button type="button" className="button ghost auto" onClick={() => setImporting(true)}>
+            <Button type="button" variant="ghost" onClick={() => setImporting(true)}>
               {t('cc.import')}
-            </button>
+            </Button>
           ) : null}
           {canWrite && !editing ? (
-            <button type="button" className="button primary auto" onClick={() => setEditing('new')}>
+            <Button type="button" variant="primary" onClick={() => setEditing('new')}>
               {kind === 'service' ? t('c.newService') : t('c.newMaterial')}
-            </button>
+            </Button>
           ) : null}
         </span>
       </div>
@@ -224,21 +225,26 @@ function ItemList({
               </span>
               {canWrite ? (
                 <span className="actions">
-                  <button
+                  <Button
                     type="button"
-                    className="button ghost small"
+                    variant="ghost"
+                    width="natural"
+                    size="small"
                     onClick={() => setEditing(item)}
                   >
                     {t('common.edit')}
-                  </button>
-                  <button
+                  </Button>
+                  <Button
                     type="button"
-                    className="button ghost icon danger"
+                    variant="ghost"
+                    width="natural"
+                    size="icon"
+                    danger
                     aria-label={`${t('common.delete')}: ${item.shortText}`}
                     onClick={() => remove(item)}
                   >
                     ✕
-                  </button>
+                  </Button>
                 </span>
               ) : null}
             </li>
@@ -493,22 +499,27 @@ function ItemForm({
                         />
                       </div>
                     </div>
-                    <button
+                    <Button
                       type="button"
-                      className="button ghost icon danger"
+                      variant="ghost"
+                      width="natural"
+                      size="icon"
+                      danger
                       aria-label={t('d.row.remove')}
                       onClick={() => setComponents((all) => all.filter((_, j) => j !== i))}
                     >
                       ✕
-                    </button>
+                    </Button>
                   </div>
                 </li>
               )
             })}
           </ul>
-          <button
+          <Button
             type="button"
-            className="button ghost small"
+            variant="ghost"
+            width="natural"
+            size="small"
             onClick={() =>
               setComponents((all) => [
                 ...all,
@@ -524,7 +535,7 @@ function ItemForm({
             }
           >
             {t('q.calcAddLine')}
-          </button>
+          </Button>
         </fieldset>
       ) : null}
       {kind === 'material' || !components.length ? (
@@ -548,12 +559,12 @@ function ItemForm({
       ) : null}
       <FormError>{error}</FormError>
       <div className="button-row">
-        <button type="button" className="button primary auto" disabled={busy} onClick={save}>
+        <Button type="button" variant="primary" disabled={busy} onClick={save}>
           {t('common.save')}
-        </button>
-        <button type="button" className="button ghost" onClick={onCancel}>
+        </Button>
+        <Button type="button" variant="ghost" width="natural" onClick={onCancel}>
           {t('common.cancel')}
-        </button>
+        </Button>
       </div>
     </div>
   )
@@ -711,21 +722,26 @@ function SupplierCatalogs({ canWrite, units }: { canWrite: boolean; units: UnitS
                   </span>
                   {canWrite ? (
                     <span className="actions">
-                      <button
+                      <Button
                         type="button"
-                        className="button ghost small"
+                        variant="ghost"
+                        width="natural"
+                        size="small"
                         onClick={() => setEditing(c.id)}
                       >
                         {t('common.edit')}
-                      </button>
-                      <button
+                      </Button>
+                      <Button
                         type="button"
-                        className="button ghost icon danger"
+                        variant="ghost"
+                        width="natural"
+                        size="icon"
+                        danger
                         aria-label={`${t('c.deleteCatalog')}: ${c.name}`}
                         onClick={() => remove(c)}
                       >
                         ✕
-                      </button>
+                      </Button>
                     </span>
                   ) : null}
                 </>
@@ -796,12 +812,12 @@ function CatalogSettings({ catalog, onDone }: { catalog: SupplierCatalog; onDone
       </div>
       <FormError>{error}</FormError>
       <div className="button-row">
-        <button type="button" className="button primary auto" onClick={save}>
+        <Button type="button" variant="primary" onClick={save}>
           {t('common.save')}
-        </button>
-        <button type="button" className="button ghost" onClick={onDone}>
+        </Button>
+        <Button type="button" variant="ghost" width="natural" onClick={onDone}>
           {t('common.cancel')}
-        </button>
+        </Button>
       </div>
     </div>
   )
@@ -913,9 +929,15 @@ function ArticleSearch({ canWrite, units }: { canWrite: boolean; units: UnitSumm
                       ))}
                     </select>
                   ) : null}
-                  <button type="button" className="button ghost small" onClick={() => takeOver(a)}>
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    width="natural"
+                    size="small"
+                    onClick={() => takeOver(a)}
+                  >
                     {t('c.takeOver')}
-                  </button>
+                  </Button>
                 </span>
               ) : null}
             </li>
