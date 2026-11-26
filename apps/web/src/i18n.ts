@@ -936,7 +936,7 @@ const de = {
   'rep.fromReport': 'Siehe',
   'rep.daywork.submittedOn': 'An den Auftraggeber übergeben am',
   'rep.daywork.to_submit': 'Übergeben bis {submitBy}',
-  'rep.daywork.submit_overdue': 'Übergabe überfällig (seit {submitBy})',
+  'rep.daywork.submit_overdue': 'Übergabe überfällig (Frist war der {submitBy})',
   'rep.daywork.waiting': 'Rückgabe durch den Auftraggeber bis {returnBy}',
   'rep.daywork.deemed_accepted':
     'Nicht bis {returnBy} zurückgegeben – gilt als anerkannt (VOB/B § 15 Abs. 3)',

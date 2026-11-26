@@ -329,6 +329,7 @@ function Contacts({
           <label htmlFor={`${filterId}-kind`}>{t('contacts.filter.kind')}</label>
           <select
             id={`${filterId}-kind`}
+            className="select"
             value={filter.kind}
             onChange={(e) => setFilter({ ...filter, kind: e.target.value })}
           >
@@ -341,6 +342,7 @@ function Contacts({
           <label htmlFor={`${filterId}-customer`}>{t('contacts.filter.customer')}</label>
           <select
             id={`${filterId}-customer`}
+            className="select"
             value={filter.customer}
             onChange={(e) => setFilter({ ...filter, customer: e.target.value })}
           >
