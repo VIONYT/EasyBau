@@ -40,7 +40,10 @@ Mit eingerichtetem E-Mail-Versand bekommen Sie außerdem eine E-Mail, wenn
 
 - Ihr Passwort geändert oder zurückgesetzt wurde,
 - sich jemand mit Ihrem Zugang von einem **neuen Gerät** (Browser) angemeldet hat – das erste Gerät nach dem Einrichten zählt nicht,
-- Ihre E-Mail-Adresse geändert wurde (an die alte Adresse).
+- Ihre E-Mail-Adresse geändert wurde (an die alte Adresse),
+- ein Sicherheitsschlüssel oder Passkey hinzugefügt oder entfernt wurde,
+- die Authenticator-App eingerichtet oder entfernt wurde,
+- die Administration Ihre zweiten Faktoren zurückgesetzt hat.
 
 Waren Sie das nicht, ändern Sie sofort Ihr Passwort (oder nutzen **Passwort vergessen**) und informieren Sie die Administration.
 

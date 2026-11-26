@@ -37,7 +37,7 @@ import {
   setSessionCookie,
   useChallenge,
 } from './auth-common.js'
-import { passwordChangedNotice } from './security-notices.js'
+import { passwordChangedNotice, secondFactorNotice } from './security-notices.js'
 
 export { buildMe } from './auth-common.js'
 
@@ -274,6 +274,12 @@ export function registerAuthRoutes(app: FastifyInstance, services: Services) {
     await sql`update user_session set mfa_verified = true where id = ${auth.sessionId}`
     await deleteSessionsOfUser(sql, auth.userId, auth.sessionId)
     await audit(services, auth.tenantId, auth.userId, 'totp_enabled')
+    await secondFactorNotice(
+      services,
+      auth.userId,
+      'Authenticator-App eingerichtet',
+      'für Ihre Anmeldung wurde eine Authenticator-App als zweiter Faktor eingerichtet. Alle anderen Sitzungen wurden beendet',
+    )
     return reply.status(204).send()
   })
 
@@ -304,6 +310,12 @@ export function registerAuthRoutes(app: FastifyInstance, services: Services) {
     await sql`update app_user set totp_secret_enc = null, totp_enabled_at = null, totp_last_step = null
               where id = ${auth.userId}`
     await audit(services, auth.tenantId, auth.userId, 'totp_disabled')
+    await secondFactorNotice(
+      services,
+      auth.userId,
+      'Authenticator-App entfernt',
+      'die Authenticator-App wurde als zweiter Faktor Ihrer Anmeldung entfernt',
+    )
     return reply.status(204).send()
   })
 }

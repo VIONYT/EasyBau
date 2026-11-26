@@ -20,6 +20,7 @@ import { hashPassword, verifyPassword } from '../security/passwords.js'
 import { audit, finishLogin, rateLimit } from './auth-common.js'
 import { queueEmail } from './email.js'
 import { todayOf } from './receivables.js'
+import { noticeTime, securityNotice } from './security-notices.js'
 import { eraseOrphanLogin, registerUserPrivacyRoutes } from './user-privacy.js'
 
 const userParam = z.object({ userId: z.uuid('Ungültige ID.') })
@@ -183,6 +184,11 @@ export function registerUserRoutes(app: FastifyInstance, services: Services) {
     await sql`delete from webauthn_credential where user_id = ${userId}`
     await sql`delete from user_session where user_id = ${userId}`
     await audit(services, auth.tenantId, auth.userId, 'mfa_reset', userId)
+    await securityNotice(services, userId, 'Zweiter Faktor zurückgesetzt', [
+      `${auth.displayName} hat am ${noticeTime()} alle zweiten Faktoren Ihrer Anmeldung bei ${services.config.APP_NAME} entfernt (Authenticator-App, Sicherheitsschlüssel, Passkeys). Alle Sitzungen wurden beendet; bitte richten Sie nach der nächsten Anmeldung wieder einen zweiten Faktor ein.`,
+      '',
+      'Wenn Sie das nicht veranlasst haben, wenden Sie sich bitte sofort an die Administration Ihrer Firma.',
+    ])
     return reply.status(204).send()
   })
 

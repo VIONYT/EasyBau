@@ -82,6 +82,20 @@ export async function passwordChangedNotice(services: Services, userId: string) 
   ])
 }
 
+/** Notice after a change to the person's own second factor (TOTP, security key, passkey). */
+export async function secondFactorNotice(
+  services: Services,
+  userId: string,
+  subject: string,
+  what: string,
+) {
+  await securityNotice(services, userId, subject, [
+    `${what} (${services.config.APP_NAME}, ${noticeTime()}).`,
+    '',
+    NOT_YOU,
+  ])
+}
+
 const DEVICE_COOKIE_DAYS = 400
 const deviceCookieName = (secure: boolean) => (secure ? '__Host-device' : 'device')
 
