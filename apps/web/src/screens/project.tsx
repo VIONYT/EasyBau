@@ -221,12 +221,7 @@ export function ProjectScreen({
         <ProjectDocuments me={me} project={project} navigate={navigate} />
       ) : null}
       {section === 'measurements' ? (
-        <ProjectMeasurements
-          me={me}
-          projectId={project.id}
-          archived={project.archived}
-          navigate={navigate}
-        />
+        <ProjectMeasurements me={me} project={project} navigate={navigate} />
       ) : null}
       {section === 'diary' ? (
         <ProjectDiary

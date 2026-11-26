@@ -56,6 +56,8 @@ Unterschrieben wird mit Finger oder Stift direkt im Feld. Ihre eigene Unterschri
 
 Ohne Netz nicht möglich: Unterschreiben, PDFs, Löschen von Berichten, Blättern und Fotos, Preise und Rechnungen – diese Knöpfe sind offline ausgeblendet und erscheinen wieder, sobald Netz da ist. Bitte die App vor dem Abmelden einmal mit Netz öffnen, damit nichts liegen bleibt.
 
+Auf Android-Geräten mit Chrome oder Edge werden wartende Änderungen auch dann übertragen, wenn die App schon geschlossen ist, sobald wieder Netz da ist. Auf iPhone/iPad (Safari) und in Firefox geht das nicht: dort überträgt EasyBau beim nächsten Öffnen der App.
+
 ![Offline auf dem iPhone](../screenshots/iphone-offline.png)
 
 ## Fotos und Pläne

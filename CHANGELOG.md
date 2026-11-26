@@ -5,6 +5,7 @@ Alle wesentlichen Änderungen, vor allem solche, die Betreiber betreffen (neue V
 ## Unveröffentlicht
 
 ### Behoben
+- **Offline angelegte Aufmaßblätter** zeigen im Zurück-Link sofort Projektnummer und -name (vorher leer bis zur Übertragung).
 - **Entwicklungsserver:** Der Vite-Proxy schrieb den Host-Header um, sodass die API jede ändernde Anfrage aus dem Browser als fremde Website ablehnte (nur `pnpm dev`, nicht der Docker-Stack).
 - **Lohngruppe in der Kalkulation:** Beim erneuten Speichern einer Kalkulation (z. B. einer aus einem Regiebericht übernommenen Stundenposition) ging die Lohngruppe der Kostenzeile verloren.
 - **CSV-Import von Kontakten:** Personen mit Firma wurden einer in derselben Datei angelegten Organisation nicht zugeordnet, sondern legten sie ein zweites Mal an.
@@ -23,6 +24,7 @@ Alle wesentlichen Änderungen, vor allem solche, die Betreiber betreffen (neue V
 - **Basis-Images aktualisiert:** App und Web laufen auf **Node 26** (vorher 22). Node 26 enthält kein corepack mehr; die Images installieren pnpm jetzt direkt in der Version aus `package.json` → `packageManager`. KoSIT-Validator auf **Eclipse Temurin 25** (vorher 21), Download-Stufe auf **Alpine 3.24**. CI-Actions auf die aktuellen Hauptversionen (checkout/setup-node v7, Docker-Actions v4/v6/v7). Für Betreiber ändert sich nichts außer neuen Images (`docker compose pull` bzw. `--build`); Entwickler brauchen lokal Node 26 (`.nvmrc`).
 
 ### Neu
+- **Offline: Übertragung im Hintergrund (Background Sync)** – auf Android mit Chrome/Edge sendet der Service Worker wartende Aufmaßzeilen, Berichte und Fotos, sobald wieder Netz da ist, auch bei geschlossener App. Neuer Service Worker `sw.ts` (Workbox `injectManifest`); Safari/iOS und Firefox übertragen weiter beim Öffnen. Keine Änderung am Betrieb (Caddy liefert `/sw.js` wie bisher ohne Cache).
 - **Rechnungseingang: Protokoll je E-Mail** (Migration 0046): Einstellungen › Rechnungseingang zeigt jede abgerufene E-Mail mit Absender, Betreff und dem Ergebnis je Anhang (übernommen mit Link, schon vorhanden, übersprungen mit Grund, Fehler). Einträge werden nach 90 Tagen vom nächtlichen Aufräumlauf gelöscht.
 - **Zu- und Abschläge auf Belegebene** (BG-20/21) einer E-Rechnung werden gelesen, im Original angezeigt und bei „Je Rechnungsposition zuweisen“ anteilig auf die Positionen ihres Steuersatzes verteilt. Gilt für ab jetzt eingehende Rechnungen.
 - **Kreditorennummern aus dem Nummernkreis „Kreditoren“** (Standard `{Nummer}` ab 70001, nur 5–9 Ziffern): Knopf im Kontakt, optional automatisch beim Bestätigen einer Eingangsrechnung (Einstellungen › DATEV).

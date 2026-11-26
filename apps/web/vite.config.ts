@@ -12,6 +12,10 @@ export default defineConfig({
     // worker – the app keeps the site data itself in IndexedDB (src/offline).
     VitePWA({
       registerType: 'autoUpdate',
+      // Own service worker (src/sw.ts): app shell as before plus Background Sync of the outbox.
+      strategies: 'injectManifest',
+      srcDir: 'src',
+      filename: 'sw.ts',
       injectRegister: false,
       includeAssets: ['apple-touch-icon.png'],
       manifest: {
@@ -35,11 +39,8 @@ export default defineConfig({
           },
         ],
       },
-      workbox: {
+      injectManifest: {
         globPatterns: ['**/*.{js,css,html,png,svg,woff2}'],
-        navigateFallback: '/index.html',
-        navigateFallbackDenylist: [/^\/api\//, /^\/healthz/, /^\/readyz/],
-        cleanupOutdatedCaches: true,
       },
     }),
   ],
