@@ -4,7 +4,7 @@ import { useEffect, useId, useState } from 'react'
 import { type ApiError, api } from '../api'
 import { formatCents, formatDateTime } from '../format'
 import { FormError } from '../forms'
-import { type TextKey, t, tf } from '../i18n'
+import { type TextKey, t, tf, tn } from '../i18n'
 import type { Navigate } from '../router'
 import { ProjectStatusSelect, StatusBadge, useStatuses } from './projects'
 
@@ -74,7 +74,7 @@ export function Dashboard({ me, navigate }: { me: Me; navigate: Navigate }) {
     <div className={`receivable-sum receivable-sum--${key}`}>
       <span className="muted">{t(`dash.receivables.${key}` as TextKey)}</span>
       <strong className="amount">{money(s.cents)}</strong>
-      <span className="muted">{tf('dash.count', { count: String(s.count) })}</span>
+      <span className="muted">{tn('dash.count', s.count)}</span>
     </div>
   )
 
@@ -89,7 +89,7 @@ export function Dashboard({ me, navigate }: { me: Me; navigate: Navigate }) {
           </label>
         ) : null}
       </div>
-      <div className="button-row">
+      <div className="button-row dashboard-actions">
         {me.permissions.includes('project.write') ? (
           <Button type="button" variant="primary" onClick={() => navigate({ view: 'projects' })}>
             {t('dash.action.project')}

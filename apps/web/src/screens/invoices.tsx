@@ -10,7 +10,7 @@ import { useCallback, useEffect, useId, useState } from 'react'
 import { type ApiError, api, downloadFile } from '../api'
 import { formatCents, formatDateTime } from '../format'
 import { FormError } from '../forms'
-import { type TextKey, t, tf } from '../i18n'
+import { type TextKey, t, tf, tn } from '../i18n'
 import type { Navigate } from '../router'
 import { documentLabel } from './documents'
 import { ReceivableChip } from './payments'
@@ -249,7 +249,7 @@ export function Invoices({ me, navigate }: { me: Me; navigate: Navigate }) {
           ) : null}
           {canDun && due.length ? (
             <div className="panel dunning-batch">
-              <p>{tf('dun.batch.due', { n: String(due.length) })}</p>
+              <p>{tn('dun.batch.due', due.length)}</p>
               <div className="button-row">
                 <Button
                   type="button"

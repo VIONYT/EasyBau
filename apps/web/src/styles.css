@@ -169,6 +169,10 @@ legend {
   flex-direction: column;
 }
 
+.dashboard-sums .muted {
+  font-size: var(--font-size-sm);
+}
+
 .receivable-sum--overdue strong,
 .receivable-sum--dunned strong {
   color: var(--color-warning);
@@ -191,6 +195,48 @@ legend {
 
 .tabs button {
   flex: none;
+}
+
+/* Hidden areas on narrow screens: a soft edge on the side that scrolls (no colour, only fade). */
+.tabs[data-more-end="true"] {
+  mask-image: linear-gradient(to right, #000 calc(100% - 40px), transparent);
+}
+.tabs[data-more-start="true"] {
+  mask-image: linear-gradient(to left, #000 calc(100% - 40px), transparent);
+}
+.tabs[data-more-start="true"][data-more-end="true"] {
+  mask-image: linear-gradient(
+    to right,
+    transparent,
+    #000 40px,
+    #000 calc(100% - 40px),
+    transparent
+  );
+}
+
+/* Phones: search on its own line, notifications and sign-out side by side (not two rows). */
+@media (max-width: 600px) {
+  .topbar-search {
+    flex: 1 1 100%;
+    order: 1;
+  }
+  .topbar .bell,
+  .topbar .logout {
+    flex: 1 1 0;
+    order: 2;
+    margin-left: 0;
+    padding-inline: var(--space-4);
+    justify-content: center;
+  }
+  /* Two actions next to each other share one size (HIG buttons.md › Style). */
+  .dashboard-actions > .button {
+    flex: 1 1 0;
+    padding-inline: var(--space-4);
+  }
+}
+
+.dashboard-actions {
+  margin-bottom: var(--space-4);
 }
 
 .tabs button,
@@ -1149,6 +1195,13 @@ legend.h2 + * {
   border-radius: 50%;
   box-shadow: var(--shadow-raised);
   transition: transform 0.15s;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .switch-track,
+  .switch-thumb {
+    transition: none;
+  }
 }
 
 .switch input:checked + .switch-track {
@@ -2322,6 +2375,21 @@ fieldset.plain {
 }
 .notice-required {
   color: var(--color-warning);
+}
+.notice-summary {
+  /* list-item keeps the disclosure triangle (a flex summary loses it). */
+  display: list-item;
+  padding-block: var(--space-3);
+  min-height: var(--touch-min);
+  font-weight: 600;
+  cursor: pointer;
+}
+.notice-fix {
+  display: inline-flex;
+  align-items: center;
+  min-height: var(--touch-min);
+  padding: 0 var(--space-2);
+  font-weight: 600;
 }
 .attachment-row {
   flex-wrap: wrap;

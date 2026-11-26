@@ -1,6 +1,6 @@
 import type { ContactColor, ContactDetail, ContactSummary, Me, Page } from '@easybau/schemas'
 import { Button } from '@easybau/ui'
-import { useCallback, useEffect, useId, useState } from 'react'
+import { useCallback, useEffect, useId, useRef, useState } from 'react'
 import { api } from '../api'
 import { Field, FormError, optional, useForm } from '../forms'
 import { t, tf } from '../i18n'
@@ -135,6 +135,7 @@ export function Workspace({
           ? `search-${current.q}`
           : current.view
   const unread = notifications.list?.unreadCount ?? 0
+  const tabsRef = useTabsOverflow(activeTab ?? '')
   return (
     <div className="workspace">
       <header className="topbar">
@@ -168,13 +169,14 @@ export function Workspace({
           {t('auth.logout')}
         </Button>
       </header>
-      <nav className="tabs" aria-label="Bereiche">
+      <nav className="tabs" aria-label="Bereiche" ref={tabsRef}>
         {tabs
           .filter((item) => item.visible)
           .map((item) => (
             <button
               key={item.key}
               type="button"
+              data-tab={item.key}
               aria-current={activeTab === item.key ? 'page' : undefined}
               onClick={() => {
                 navigate({ view: item.key })
@@ -490,4 +492,31 @@ function List<T extends { id: string }>({
       ))}
     </ul>
   )
+}
+
+/**
+ * Navigation on narrow screens scrolls sideways: the active area is scrolled into view, and a soft
+ * edge shows on the side where more areas are hidden (no tab is ever hidden for good).
+ */
+function useTabsOverflow(active: string) {
+  const ref = useRef<HTMLElement>(null)
+  useEffect(() => {
+    const nav = ref.current
+    if (!nav) return
+    const update = () => {
+      nav.dataset.moreStart = String(nav.scrollLeft > 4)
+      nav.dataset.moreEnd = String(nav.scrollLeft + nav.clientWidth < nav.scrollWidth - 4)
+    }
+    nav
+      .querySelector(`[data-tab="${active}"]`)
+      ?.scrollIntoView({ block: 'nearest', inline: 'nearest' })
+    update()
+    nav.addEventListener('scroll', update, { passive: true })
+    window.addEventListener('resize', update)
+    return () => {
+      nav.removeEventListener('scroll', update)
+      window.removeEventListener('resize', update)
+    }
+  }, [active])
+  return ref
 }

@@ -115,7 +115,8 @@ const de = {
   'dun.title': 'Mahnungen',
   'dun.none': 'Noch keine Zahlungserinnerung oder Mahnung erstellt.',
   'dun.batch.filter': 'Mahnung fällig (Mahnvorschläge)',
-  'dun.batch.due': 'Bei {n} Rechnung(en) ist die nächste Mahnstufe fällig.',
+  'dun.batch.due': 'Bei {n} Rechnungen ist die nächste Mahnstufe fällig.',
+  'dun.batch.due.one': 'Bei 1 Rechnung ist die nächste Mahnstufe fällig.',
   'dun.batch.all': 'Alle fälligen auswählen',
   'dun.batch.none': 'Auswahl aufheben',
   'dun.batch.mail': 'Per E-Mail senden, wo die Adresse bekannt ist',
@@ -816,7 +817,8 @@ const de = {
   'dash.receivables.open': 'offen',
   'dash.receivables.overdue': 'überfällig',
   'dash.receivables.dunned': 'angemahnt',
-  'dash.count': '{count} Rechnung(en)',
+  'dash.count': '{count} Rechnungen',
+  'dash.count.one': '1 Rechnung',
   'dash.toInvoices': 'Zur Rechnungsliste',
   'dash.dunningDue': '{count} Mahnung(en) fällig',
   'dash.incoming': 'Eingangsrechnungen zu prüfen',
@@ -863,7 +865,8 @@ const de = {
   'fig.contract': 'Auftragssumme',
   'fig.billed': 'Abgerechnet',
   'fig.percent': '{percent} % der Auftragssumme',
-  'fig.invoices': '{count} Rechnung(en)',
+  'fig.invoices': '{count} Rechnungen',
+  'fig.invoices.one': '1 Rechnung',
   'fig.unbilled': 'Noch abzurechnen',
   'fig.overbilled': '{amount} über der Auftragssumme abgerechnet (freie Positionen, Regie).',
   'fig.paid': 'Bezahlt',
@@ -1673,6 +1676,10 @@ const de = {
   'notice.title': 'Hinweise',
   'notice.required': 'Pflichtangabe',
   'notice.fix': 'Beheben',
+  'notice.summary': '{n} Hinweise zur Einrichtung',
+  'notice.summary.one': '1 Hinweis zur Einrichtung',
+  'notice.summaryRequired': '{n} davon Pflichtangaben',
+  'notice.summaryRequired.one': '1 davon Pflichtangabe',
   'notice.company_address':
     'Name und vollständige Anschrift der Firma fehlen – Pflichtangabe auf Rechnungen.',
   'notice.company_tax_id':
@@ -1770,7 +1777,8 @@ const de = {
   'fig.costsHint':
     'Netto, nur bestätigte Eingangsrechnungen mit Zuweisung auf dieses Projekt. Eigene Lohnkosten fehlen noch (Zeiterfassung).',
   'fig.contribution': 'Vorläufiger Deckungsbeitrag',
-  'fig.costInvoices': '{n} Eingangsrechnung(en)',
+  'fig.costInvoices': '{n} Eingangsrechnungen',
+  'fig.costInvoices.one': '1 Eingangsrechnung',
   's.incomingMail': 'Rechnungseingang (E-Mail)',
   'im.hint':
     'Rechnungen, die an dieses Postfach geschickt werden, erscheinen automatisch unter „Eingangsrechnungen › Zu prüfen“. Verwendet werden Anhänge als PDF, XML (XRechnung/ZUGFeRD) und Fotos (JPG, PNG). Bitte ein eigenes Postfach nur für Rechnungen verwenden.',
@@ -1827,4 +1835,14 @@ export function t(key: TextKey): string {
 /** Text with placeholders: tf('q.calcSummary', { cost: '…' }) replaces {cost}. */
 export function tf(key: TextKey, values: Record<string, string>): string {
   return t(key).replace(/\{(\w+)\}/g, (_, name: string) => values[name] ?? `{${name}}`)
+}
+
+/** Singular/plural: uses `<key>.one` for exactly 1 when it exists, e.g. „1 Rechnung“/„3 Rechnungen“. */
+export function tn(key: TextKey, count: number, values: Record<string, string> = {}): string {
+  const one = `${key}.one` as TextKey
+  return tf(count === 1 && one in de ? one : key, {
+    ...values,
+    n: String(count),
+    count: String(count),
+  })
 }
