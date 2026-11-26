@@ -229,6 +229,8 @@ export interface ContactPrivacy {
     /** Files and photos in the Ablage of the customer's projects (checked by the company). */
     files: number
     reports: number
+    /** Duplicates merged into this contact; erased or blocked with it. */
+    duplicates: number
   }
   blockedAt: string | null
   blockedUntil: string | null
@@ -242,6 +244,8 @@ export const eraseContactRequest = z.object({
 export interface EraseContactResult {
   result: 'erased' | 'blocked'
   blockedUntil: string | null
+  /** Merged duplicates of the contact, erased or blocked with it. */
+  duplicates: { erased: number; blocked: number }
 }
 
 /** Kontakte zusammenführen: the contact of the URL is the duplicate, `intoId` stays. */

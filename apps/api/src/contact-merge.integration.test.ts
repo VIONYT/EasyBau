@@ -205,4 +205,15 @@ describe.skipIf(!process.env.DATABASE_URL)('Kontakte zusammenführen, z. Hd. (in
       ).statusCode,
     ).toBe(409)
   })
+
+  it('erases or blocks merged duplicates together with the contact (DSGVO)', async () => {
+    const plan = (await admin.get(`/api/v1/contacts/${target.id}/privacy`)).json()
+    expect(plan.usage.duplicates).toBe(1)
+    const res = await admin.post(`/api/v1/contacts/${target.id}/erase`, { confirm: true })
+    expect(res.statusCode, res.body).toBe(200)
+    // The duplicate keeps a finalised invoice: blocked until its retention period ends.
+    expect(res.json()).toMatchObject({ result: 'erased', duplicates: { erased: 0, blocked: 1 } })
+    const old = (await admin.get(`/api/v1/contacts/${duplicate.id}`)).json() as ContactDetail
+    expect(old.blockedUntil).toMatch(/^20\d\d-12-31$/)
+  })
 })

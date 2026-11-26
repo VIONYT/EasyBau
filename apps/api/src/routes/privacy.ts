@@ -11,6 +11,18 @@ const idParam = z.object({ id: z.uuid('Ungültige ID.') })
 
 const ISO = `'YYYY-MM-DD"T"HH24:MI:SS.MS"Z"'`
 
+/** Contacts merged into `id`, directly or over several merges (Kontakte zusammenführen). */
+async function duplicatesOf(tx: Tx, id: string): Promise<string[]> {
+  const rows = await tx<{ id: string }[]>`
+    with recursive merged as (
+      select c.id from contact c where c.merged_into_id = ${id}
+      union
+      select c.id from contact c join merged m on c.merged_into_id = m.id
+    )
+    select id from merged`
+  return rows.map((r) => r.id)
+}
+
 async function privacyOf(tx: Tx, id: string): Promise<ContactPrivacy> {
   const [row] = await tx<(Omit<ContactPrivacy, 'action' | 'usage'> & ContactPrivacy['usage'])[]>`
     select to_char(contact_retention_end(c.id), 'YYYY-MM-DD') as "retentionEnd",
@@ -29,12 +41,21 @@ async function privacyOf(tx: Tx, id: string): Promise<ContactPrivacy> {
            (select count(*)::int from report r join project p on p.id = r.project_id
              where p.customer_id = c.id) as reports
     from contact c where c.id = ${id}`
+  const duplicates = (await duplicatesOf(tx, id)).length
   if (!row) throw notFound('Der Kontakt')
   const { projects, documents, finalizedDocuments, incomingInvoices, files, reports, ...rest } = row
   return {
     ...rest,
     action: erasureAction(rest.retentionEnd, todayOf(tx)).action,
-    usage: { projects, documents, finalizedDocuments, incomingInvoices, files, reports },
+    usage: {
+      projects,
+      documents,
+      finalizedDocuments,
+      incomingInvoices,
+      files,
+      reports,
+      duplicates,
+    },
   }
 }
 
@@ -60,7 +81,9 @@ export function registerPrivacyRoutes(app: FastifyInstance, services: Services) 
     return inTenant(services, auth, (tx) => privacyOf(tx, id))
   })
 
-  // Löschen (Art. 17): erase now, or block until the retention period ends (Art. 18).
+  // Löschen (Art. 17): erase now, or block until the retention period ends (Art. 18). Duplicates
+  // merged into the contact (merged_into_id, with their finalised documents) are the same person
+  // and are erased or blocked with it, each after its own retention period.
   app.post('/api/v1/contacts/:id/erase', async (request): Promise<EraseContactResult> => {
     const auth = requirePermission(request, 'contacts.write')
     const { id } = parse(idParam, request.params)
@@ -69,20 +92,29 @@ export function registerPrivacyRoutes(app: FastifyInstance, services: Services) 
       await tx`select 1 from contact where id = ${id} for update`
       const privacy = await privacyOf(tx, id)
       if (privacy.erasedAt) throw new HttpError(409, 'Der Kontakt ist bereits gelöscht.')
-      const decision = erasureAction(privacy.retentionEnd, todayOf(tx))
-      if (decision.action === 'erase') {
-        await tx`select erase_contact(${id})`
+      const eraseOrBlock = async (contactId: string, current: ContactPrivacy) => {
+        const decision = erasureAction(current.retentionEnd, todayOf(tx))
+        if (decision.action === 'erase') {
+          await tx`select erase_contact(${contactId})`
+          await tx`insert into audit_event (tenant_id, actor_user_id, action, entity, entity_id, hash)
+                   values (${auth.tenantId}, ${auth.userId}, 'privacy_erase', 'contact', ${contactId}, ''::bytea)`
+          return { result: 'erased' as const, blockedUntil: null }
+        }
+        await tx`
+          update contact set blocked_at = coalesce(blocked_at, now()), blocked_until = ${decision.until},
+                             archived_at = coalesce(archived_at, now())
+          where id = ${contactId}`
         await tx`insert into audit_event (tenant_id, actor_user_id, action, entity, entity_id, hash)
-                 values (${auth.tenantId}, ${auth.userId}, 'privacy_erase', 'contact', ${id}, ''::bytea)`
-        return { result: 'erased', blockedUntil: null }
+                 values (${auth.tenantId}, ${auth.userId}, 'privacy_block', 'contact', ${contactId}, ''::bytea)`
+        return { result: 'blocked' as const, blockedUntil: decision.until }
       }
-      await tx`
-        update contact set blocked_at = coalesce(blocked_at, now()), blocked_until = ${decision.until},
-                           archived_at = coalesce(archived_at, now())
-        where id = ${id}`
-      await tx`insert into audit_event (tenant_id, actor_user_id, action, entity, entity_id, hash)
-               values (${auth.tenantId}, ${auth.userId}, 'privacy_block', 'contact', ${id}, ''::bytea)`
-      return { result: 'blocked', blockedUntil: decision.until }
+      const duplicates = { erased: 0, blocked: 0 }
+      for (const dup of await duplicatesOf(tx, id)) {
+        const current = await privacyOf(tx, dup)
+        if (current.erasedAt) continue
+        duplicates[(await eraseOrBlock(dup, current)).result] += 1
+      }
+      return { ...(await eraseOrBlock(id, privacy)), duplicates }
     })
   })
 
@@ -105,6 +137,8 @@ export function registerPrivacyRoutes(app: FastifyInstance, services: Services) 
         from contact where id = ${id}`
       if (!contact) throw notFound('Der Kontakt')
       const privacy = await privacyOf(tx, id)
+      // Belege of merged duplicates belong to the same person.
+      const ids = [id, ...(await duplicatesOf(tx, id))]
       const [company] = await tx<{ name: string; address: string | null; email: string | null }[]>`
         select name, nullif(concat_ws(', ', street, concat_ws(' ', postal_code, city)), '') as address,
                email from tenant where id = current_tenant_id()`
@@ -123,7 +157,7 @@ export function registerPrivacyRoutes(app: FastifyInstance, services: Services) 
       const projects = await tx`
         select number as "Nummer", name as "Name",
                nullif(concat_ws(', ', site_street, concat_ws(' ', site_postal_code, site_city)), '') as "Baustelle"
-        from project where customer_id = ${id} order by created_at`
+        from project where customer_id in ${tx(ids)} order by created_at`
       const documents = await tx`
         select d.type as "Art", d.number as "Nummer", to_char(d.document_date, 'YYYY-MM-DD') as "Datum",
                d.status as "Status", d.subject as "Betreff",
@@ -131,17 +165,17 @@ export function registerPrivacyRoutes(app: FastifyInstance, services: Services) 
         from document d
         left join lateral (select max(locked_until) as locked_until from document_artifact
                            where document_id = d.id) a on true
-        where d.contact_id = ${id} or d.contact_person_id = ${id}
+        where d.contact_id in ${tx(ids)} or d.contact_person_id in ${tx(ids)}
         order by d.document_date, d.number`
       const incoming = await tx`
         select i.invoice_number as "Rechnungsnummer", to_char(i.invoice_date, 'YYYY-MM-DD') as "Datum",
                i.status as "Status", i.supplier_name as "Lieferant"
-        from incoming_invoice i where i.contact_id = ${id} order by i.invoice_date`
+        from incoming_invoice i where i.contact_id in ${tx(ids)} order by i.invoice_date`
       const emails = await tx`
         select m.to_address as "An", m.subject as "Betreff", m.status as "Status",
                to_char(coalesce(m.sent_at, m.created_at) at time zone 'Europe/Berlin', 'YYYY-MM-DD HH24:MI') as "Zeit"
         from email_message m
-        where m.document_id in (select d.id from document d where d.contact_id = ${id})
+        where m.document_id in (select d.id from document d where d.contact_id in ${tx(ids)})
            or lower(m.to_address) in (select lower(value) from contact_channel
                                       where contact_id = ${id} and kind = 'email')
         order by m.created_at`

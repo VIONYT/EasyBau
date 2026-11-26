@@ -522,12 +522,14 @@ export async function liveRecipient(
   if (!c) return null
   // Ansprechpartner: „z. Hd. …“ as the first line under the name (DIN 5008).
   const [person] = contactPersonId
-    ? await tx<{ name: string }[]>`
-        select concat_ws(' ', nullif(salutation, ''), nullif(title, ''), first_name, last_name) as name
+    ? await tx<{ name: string; plain: string }[]>`
+        select concat_ws(' ', nullif(salutation, ''), nullif(title, ''), first_name, last_name) as name,
+               concat_ws(' ', nullif(title, ''), first_name, last_name) as plain
         from contact where id = ${contactPersonId} and kind = 'person'`
     : []
   const attention = person?.name ? [`z. Hd. ${person.name}`] : []
   const extra = {
+    contactPerson: person?.plain || null,
     private: c.private,
     vatId: c.vatId,
     // E-Rechnung: Kundennummer, Leitweg-ID, address and format (frozen with the document).

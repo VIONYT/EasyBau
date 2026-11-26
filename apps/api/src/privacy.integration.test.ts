@@ -94,7 +94,11 @@ describe.skipIf(!process.env.DATABASE_URL)('Datenschutz bei Kontakten (integrati
     expect((await admin.post(`/api/v1/contacts/${lead.id}/erase`, {})).statusCode).toBe(400)
     const res = await admin.post(`/api/v1/contacts/${lead.id}/erase`, { confirm: true })
     expect(res.statusCode, res.body).toBe(200)
-    expect(res.json()).toEqual({ result: 'erased', blockedUntil: null })
+    expect(res.json()).toEqual({
+      result: 'erased',
+      blockedUntil: null,
+      duplicates: { erased: 0, blocked: 0 },
+    })
 
     const erased = (await admin.get(`/api/v1/contacts/${lead.id}`)).json() as ContactDetail
     expect(erased).toMatchObject({
@@ -167,7 +171,7 @@ describe.skipIf(!process.env.DATABASE_URL)('Datenschutz bei Kontakten (integrati
     expect(plan).toMatchObject({ action: 'erase', usage: { projects: 1, files: 0, reports: 0 } })
     expect(
       (await admin.post(`/api/v1/contacts/${person.id}/erase`, { confirm: true })).json(),
-    ).toEqual({ result: 'erased', blockedUntil: null })
+    ).toEqual({ result: 'erased', blockedUntil: null, duplicates: { erased: 0, blocked: 0 } })
     const [row] = await withTenant(
       h.sql,
       { tenantId },
@@ -195,7 +199,11 @@ describe.skipIf(!process.env.DATABASE_URL)('Datenschutz bei Kontakten (integrati
       usage: { projects: 1, documents: 1, finalizedDocuments: 1 },
     })
     const res = await admin.post(`/api/v1/contacts/${customer.id}/erase`, { confirm: true })
-    expect(res.json()).toEqual({ result: 'blocked', blockedUntil: '2036-12-31' })
+    expect(res.json()).toEqual({
+      result: 'blocked',
+      blockedUntil: '2036-12-31',
+      duplicates: { erased: 0, blocked: 0 },
+    })
     const blocked = (await admin.get(`/api/v1/contacts/${customer.id}`)).json() as ContactDetail
     expect(blocked).toMatchObject({ blockedUntil: '2036-12-31', erasedAt: null, archived: true })
     // Kept for the retention period, but not used any more (Art. 18).

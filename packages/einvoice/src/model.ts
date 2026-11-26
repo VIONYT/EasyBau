@@ -44,7 +44,7 @@ export interface EinvoiceParty {
   /** BT-32 (seller only): Steuernummer, scheme FC. */
   taxNumber: string | null
   electronicAddress: ElectronicAddress | null
-  /** BG-6 seller contact (BT-41..43). */
+  /** BG-6 seller contact (BT-41..43) or BG-9 buyer contact (BT-56..58). */
   contact: { name: string | null; phone: string | null; email: string | null } | null
 }
 

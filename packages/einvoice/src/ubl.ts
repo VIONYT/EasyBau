@@ -140,7 +140,7 @@ export function toUbl(model: EinvoiceModel): string {
       el('cac:ProjectReference', null, text('cbc:ID', model.project?.id)),
     ),
     party('cac:AccountingSupplierParty', model.seller),
-    party('cac:AccountingCustomerParty', { ...model.buyer, contact: null }),
+    party('cac:AccountingCustomerParty', model.buyer),
     when(model.deliveryDate || model.deliveryCountry, () =>
       el(
         'cac:Delivery',

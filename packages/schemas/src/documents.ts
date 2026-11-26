@@ -428,6 +428,8 @@ export interface PartyAddress {
   buyerReference?: string | null
   einvoiceEmail?: string | null
   einvoiceFormat?: EinvoiceFormat | null
+  /** Ansprechpartner des Käufers (BT-56), frozen with the document. */
+  contactPerson?: string | null
 }
 
 /** E-Rechnung of a finalized invoice: the archived XML files, each validated by KoSIT. */

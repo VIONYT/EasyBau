@@ -344,7 +344,10 @@ export function einvoiceFromDocument(
     vatId: recipient.vatId ?? null,
     taxNumber: null,
     electronicAddress: electronicAddressOf(recipient),
-    contact: null,
+    // BG-9 Ansprechpartner des Käufers (BT-56), „z. Hd.“ of the document.
+    contact: recipient.contactPerson
+      ? { name: recipient.contactPerson, phone: null, email: null }
+      : null,
   }
 
   const preceding =

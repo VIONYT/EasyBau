@@ -279,6 +279,9 @@ const de = {
     'Zusammengeführt mit „{name}“ – dieser Kontakt ist archiviert und wird nicht mehr verwendet.',
   'privacy.projects':
     'Die Projekte dieses Privatkunden verlieren beim Löschen Namen, Beschreibung und Baustellenanschrift und werden archiviert.',
+  'privacy.duplicates':
+    '{n} zusammengeführte Dublette(n) gehören zu diesem Kontakt und werden mit gelöscht bzw. bis zum Ende ihrer eigenen Aufbewahrungsfrist gesperrt.',
+  'privacy.duplicatesDone': 'Zusammengeführte Dubletten mit erfasst: {n}.',
   'privacy.files':
     'In den Projekten liegen {files} Dateien/Fotos und {reports} Berichte. Sie werden nicht automatisch gelöscht (oft Nachweise, z. B. für die Gewährleistung) – bitte in der Ablage prüfen und nicht mehr Benötigtes selbst löschen.',
   'privacy.title': 'Datenschutz',
