@@ -9,7 +9,9 @@
       "!**/coverage",
       "!**/test-results",
       "!**/playwright-report",
-      "!**/*.md"
+      "!**/*.md",
+      "!.claude/skills",
+      "!docs/api/openapi.json"
     ]
   },
   "formatter": { "enabled": true, "indentStyle": "space", "indentWidth": 2, "lineWidth": 100 },

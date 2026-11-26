@@ -17,6 +17,7 @@
     "format": "biome format --write .",
     "check": "pnpm lint && pnpm typecheck && pnpm test",
     "db:migrate": "pnpm --filter @easybau/db migrate",
+    "openapi": "tsx --conditions=source apps/api/src/openapi/cli.ts",
     "test:coverage": "vitest run --coverage",
     "test:e2e": "playwright test -c e2e/playwright.config.ts"
   },
