@@ -1,6 +1,6 @@
 import { DIN5008B, defaultLetterhead, LETTERHEAD_FIELDS } from '@easybau/domain'
 import type { LetterheadLayout, LetterheadSettings } from '@easybau/schemas'
-import { Button, paper } from '@easybau/ui'
+import { Button, buttonClass, paper } from '@easybau/ui'
 import { useEffect, useId, useRef, useState } from 'react'
 import { ApiError, api, uploadFile } from '../api'
 import { FormError } from '../forms'
@@ -154,7 +154,14 @@ export function LetterheadEditor({ canEdit }: { canEdit: boolean }) {
           <Button type="button" variant="ghost" width="natural" size="small" onClick={addText}>
             {t('lh.addText')}
           </Button>
-          <label className="button ghost small file-button">
+          <label
+            className={buttonClass({
+              variant: 'ghost',
+              width: 'natural',
+              size: 'small',
+              className: 'file-button',
+            })}
+          >
             {layout.logo ? t('lh.replaceLogo') : t('lh.uploadLogo')}
             <input
               type="file"

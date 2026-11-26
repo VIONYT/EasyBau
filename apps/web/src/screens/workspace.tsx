@@ -1,5 +1,5 @@
 import type { ContactColor, ContactDetail, ContactSummary, Me, Page } from '@easybau/schemas'
-import { Button } from '@easybau/ui'
+import { Button, buttonClass } from '@easybau/ui'
 import { useCallback, useEffect, useId, useRef, useState } from 'react'
 import { api } from '../api'
 import { Field, FormError, optional, useForm } from '../forms'
@@ -305,7 +305,7 @@ function Contacts({
         <h1 id="contacts-title">{t('nav.contacts')}</h1>
         <div className="button-row">
           <a
-            className="button ghost auto"
+            className={buttonClass({ variant: 'ghost' })}
             href={`/api/v1/contacts/export.csv?${contactQuery('', filter)}`}
             download
           >

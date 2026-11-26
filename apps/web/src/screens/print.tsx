@@ -1,6 +1,6 @@
 import { defaultLetterhead } from '@easybau/domain'
 import type { DocumentDetail } from '@easybau/schemas'
-import { Button } from '@easybau/ui'
+import { Button, buttonClass } from '@easybau/ui'
 import { useEffect, useState } from 'react'
 import { type ApiError, api } from '../api'
 import { formatCents, formatDateTime, formatQuantity, formatUnitAmount } from '../format'
@@ -70,7 +70,7 @@ export function PrintScreen({ id, navigate }: { id: string; navigate: Navigate }
     <div className="print-page">
       <div className="no-print button-row print-tools">
         <a
-          className="button ghost"
+          className={buttonClass({ variant: 'ghost', width: 'natural' })}
           href={`/dokumente/${doc.id}`}
           onClick={(e) => {
             e.preventDefault()
@@ -80,7 +80,7 @@ export function PrintScreen({ id, navigate }: { id: string; navigate: Navigate }
           ← {t('print.back')}
         </a>
         <a
-          className="button primary auto"
+          className={buttonClass({ variant: 'primary' })}
           href={`/api/v1/documents/${doc.id}/pdf`}
           target="_blank"
           rel="noopener"

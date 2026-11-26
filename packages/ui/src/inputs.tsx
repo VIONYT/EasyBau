@@ -12,6 +12,11 @@ interface AffixFieldProps {
   required?: boolean
   inputMode?: 'decimal' | 'numeric' | 'text'
   onBlur?: (value: string, input: HTMLInputElement) => void
+  /** Controlled use (e.g. a suggested amount the screen updates); otherwise `defaultValue`. */
+  value?: string | undefined
+  onChange?: ((value: string) => void) | undefined
+  /** Marks the field invalid while typing (controlled use). */
+  invalid?: boolean | undefined
 }
 
 /** Input with a unit after the value (Input mit Einheit, DESIGN.md §7.2). */
@@ -25,6 +30,9 @@ export function UnitField({
   required,
   inputMode = 'decimal',
   onBlur,
+  value,
+  onChange,
+  invalid,
 }: AffixFieldProps) {
   const id = useId()
   const describedBy =
@@ -44,8 +52,10 @@ export function UnitField({
           inputMode={inputMode}
           autoComplete="off"
           required={required}
-          defaultValue={defaultValue}
-          aria-invalid={error ? true : undefined}
+          {...(value !== undefined
+            ? { value, onChange: (e) => onChange?.(e.currentTarget.value) }
+            : { defaultValue })}
+          aria-invalid={error || invalid ? true : undefined}
           aria-describedby={describedBy}
           onBlur={onBlur ? (e) => onBlur(e.currentTarget.value, e.currentTarget) : undefined}
         />

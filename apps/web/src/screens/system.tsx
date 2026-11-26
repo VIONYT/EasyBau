@@ -5,7 +5,7 @@ import type {
   Me,
   OperationsStatus,
 } from '@easybau/schemas'
-import { Button } from '@easybau/ui'
+import { Button, buttonClass } from '@easybau/ui'
 import { useCallback, useEffect, useId, useState } from 'react'
 import { type ApiError, api, downloadFile } from '../api'
 import { formatDateTime } from '../format'
@@ -183,14 +183,15 @@ export function ExportPanel() {
         <span>{t('sys.exportDatevBelege')}</span>
       </label>
       <div className="actions">
-        <button
+        <Button
           type="button"
-          className="button"
+          variant="ghost"
+          width="natural"
           disabled={busy !== null}
           onClick={() => run('datev')}
         >
           {busy === 'datev' ? t('sys.exportBusy') : t('sys.exportDatev')}
-        </button>
+        </Button>
         <Button
           type="button"
           variant="ghost"
@@ -205,7 +206,11 @@ export function ExportPanel() {
       <h3>{t('sys.exportFull')}</h3>
       <p className="muted">{t('sys.exportFullHint')}</p>
       {/* Plain link: the archive is streamed by the browser, not held in memory. */}
-      <a className="button ghost" href="/api/v1/exports/full" download>
+      <a
+        className={buttonClass({ variant: 'ghost', width: 'natural' })}
+        href="/api/v1/exports/full"
+        download
+      >
         {t('sys.exportFullButton')}
       </a>
     </div>

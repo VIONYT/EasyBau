@@ -1,6 +1,6 @@
 import type { FileSummary, FolderSummary, Me } from '@easybau/schemas'
 import { UPLOAD_EXTENSIONS } from '@easybau/schemas/constants'
-import { Button } from '@easybau/ui'
+import { Button, buttonClass } from '@easybau/ui'
 import { type DragEvent, useCallback, useEffect, useState } from 'react'
 import { type ApiError, api, uploadFile } from '../api'
 import { formatBytes, formatDateTime } from '../format'
@@ -129,7 +129,7 @@ export function ProjectFiles({ me, projectId }: { me: Me; projectId: string }) {
 
       {canUpload ? (
         <div className="upload-bar">
-          <label className="button primary auto file-button">
+          <label className={buttonClass({ variant: 'primary', className: 'file-button' })}>
             {t('files.upload')}
             <input
               type="file"
@@ -142,7 +142,13 @@ export function ProjectFiles({ me, projectId }: { me: Me; projectId: string }) {
               }}
             />
           </label>
-          <label className="button ghost file-button">
+          <label
+            className={buttonClass({
+              variant: 'ghost',
+              width: 'natural',
+              className: 'file-button',
+            })}
+          >
             {t('files.photo')}
             <input
               type="file"
@@ -338,7 +344,10 @@ function FileCard({
         </form>
       ) : (
         <div className="actions start">
-          <a className="button ghost small" href={`${url}?download=1`}>
+          <a
+            className={buttonClass({ variant: 'ghost', width: 'natural', size: 'small' })}
+            href={`${url}?download=1`}
+          >
             {t('files.download')}
           </a>
           {canEdit ? (

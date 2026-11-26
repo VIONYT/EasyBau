@@ -7,7 +7,7 @@ import type {
   UnitSummary,
 } from '@easybau/schemas'
 import { CHECKLIST_STATES, WEATHER_CONDITIONS } from '@easybau/schemas/constants'
-import { Button } from '@easybau/ui'
+import { Button, buttonClass } from '@easybau/ui'
 import { type ChangeEvent, useCallback, useEffect, useMemo, useState } from 'react'
 import { ApiError, api, apiWithEtag, mutate } from '../api'
 import { formatDateTime, formatInputNumber } from '../format'
@@ -278,7 +278,7 @@ export function ReportScreen({ me, id, navigate }: { me: Me; id: string; navigat
       {online ? (
         <div className="button-row">
           <a
-            className="button ghost"
+            className={buttonClass({ variant: 'ghost', width: 'natural' })}
             href={`/api/v1/reports/${report.id}/pdf`}
             target="_blank"
             rel="noopener"
@@ -963,7 +963,9 @@ function Photos({
         </ul>
       ) : null}
       {editable ? (
-        <label className="button ghost file-button">
+        <label
+          className={buttonClass({ variant: 'ghost', width: 'natural', className: 'file-button' })}
+        >
           {uploading ? t('d.photo.uploading') : t('d.photo.add')}
           <input
             type="file"

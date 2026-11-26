@@ -6,7 +6,7 @@ import type {
   DunningNotice,
   DunningOverview,
 } from '@easybau/schemas'
-import { Button } from '@easybau/ui'
+import { Button, buttonClass, MoneyField } from '@easybau/ui'
 import { useCallback, useEffect, useId, useState } from 'react'
 import { type ApiError, api } from '../api'
 import { centsToInput, formatCents, formatDateTime, parseEuro } from '../format'
@@ -167,7 +167,7 @@ function NoticeRow({
       </span>
       <span className="entry-actions">
         <a
-          className="button ghost auto"
+          className={buttonClass({ variant: 'ghost' })}
           href={`/api/v1/dunning-notices/${n.id}/pdf`}
           target="_blank"
           rel="noopener"
@@ -340,15 +340,13 @@ function DunningForm({
             onChange={(e) => setDays(e.target.value)}
           />
         </div>
-        <div className="field">
-          <label htmlFor={`${id}-fee`}>{t('dun.fee')}</label>
-          <input
-            id={`${id}-fee`}
-            inputMode="decimal"
-            value={fee}
-            onChange={(e) => setFee(e.target.value)}
-          />
-        </div>
+        <MoneyField
+          label={t('dun.fee')}
+          name="fee"
+          invalidText={t('doc.invalidAmount')}
+          value={fee}
+          onChange={setFee}
+        />
       </div>
       <label className="check">
         <input type="checkbox" checked={business} onChange={(e) => setBusiness(e.target.checked)} />

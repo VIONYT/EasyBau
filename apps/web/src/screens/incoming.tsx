@@ -11,7 +11,7 @@ import type {
   ProjectSummary,
 } from '@easybau/schemas'
 import { COST_TYPES, INCOMING_UPLOAD_EXTENSIONS } from '@easybau/schemas/constants'
-import { Button } from '@easybau/ui'
+import { Button, buttonClass, DataTable } from '@easybau/ui'
 import { type DragEvent, useCallback, useEffect, useId, useRef, useState } from 'react'
 import { type ApiError, api, apiWithEtag, uploadFile } from '../api'
 import { centsToInput, formatBytes, formatCents, formatDateTime, parseEuro } from '../format'
@@ -624,11 +624,16 @@ export function IncomingInvoiceScreen({ id, navigate }: { id: string; navigate: 
           </p>
           <div className="button-row">
             {detail.inline ? (
-              <a className="button ghost auto" href={original} target="_blank" rel="noopener">
+              <a
+                className={buttonClass({ variant: 'ghost' })}
+                href={original}
+                target="_blank"
+                rel="noopener"
+              >
                 {t('in.openOriginal')}
               </a>
             ) : null}
-            <a className="button ghost auto" href={`${original}?download=true`}>
+            <a className={buttonClass({ variant: 'ghost' })} href={`${original}?download=true`}>
               {t('in.download')}
             </a>
           </div>
@@ -817,44 +822,43 @@ function EinvoiceView({
           ))}
       </dl>
       {einvoice.lines.length ? (
-        <div className="table-scroll">
-          <table className="einvoice-lines">
-            <thead>
-              <tr>
-                <th scope="col" className="einvoice-cell">
-                  {t('in.line')}
-                </th>
-                <th scope="col" className="einvoice-cell num">
-                  {t('in.quantity')}
-                </th>
-                <th scope="col" className="einvoice-cell num">
-                  {t('in.price')}
-                </th>
-                <th scope="col" className="einvoice-cell num">
-                  {t('in.net')}
-                </th>
-              </tr>
-            </thead>
-            <tbody>
-              {einvoice.lines.map((line, index) => (
-                // biome-ignore lint/suspicious/noArrayIndexKey: lines are fixed for this invoice
-                <tr key={index}>
-                  <td className="einvoice-cell">
-                    {line.name}
-                    {line.description ? (
-                      <span className="muted block">{line.description}</span>
-                    ) : null}
-                  </td>
-                  <td className="einvoice-cell num">
-                    {line.quantity?.replace('.', ',')} {line.unitCode}
-                  </td>
-                  <td className="einvoice-cell num">{line.netPrice?.replace('.', ',')}</td>
-                  <td className="einvoice-cell num amount">{formatCents(line.netCents)}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
+        <DataTable
+          caption={t('in.lines')}
+          rows={einvoice.lines.map((line, index) => ({ ...line, index }))}
+          rowKey={(line) => String(line.index)}
+          columns={[
+            {
+              key: 'line',
+              header: t('in.line'),
+              cell: (line) => (
+                <>
+                  {line.name}
+                  {line.description ? (
+                    <span className="muted block">{line.description}</span>
+                  ) : null}
+                </>
+              ),
+            },
+            {
+              key: 'quantity',
+              header: t('in.quantity'),
+              numeric: true,
+              cell: (line) => `${line.quantity?.replace('.', ',') ?? ''} ${line.unitCode ?? ''}`,
+            },
+            {
+              key: 'price',
+              header: t('in.price'),
+              numeric: true,
+              cell: (line) => line.netPrice?.replace('.', ','),
+            },
+            {
+              key: 'net',
+              header: t('in.net'),
+              numeric: true,
+              cell: (line) => formatCents(line.netCents),
+            },
+          ]}
+        />
       ) : null}
       <dl className="receivable-sums">
         {(einvoice.allowanceCharges ?? []).map((a, index) => (

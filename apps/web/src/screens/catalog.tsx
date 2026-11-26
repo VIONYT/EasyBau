@@ -8,7 +8,7 @@ import type {
   UnitSummary,
 } from '@easybau/schemas'
 import { COST_KINDS } from '@easybau/schemas/constants'
-import { Button } from '@easybau/ui'
+import { Button, buttonClass } from '@easybau/ui'
 import { useCallback, useEffect, useState } from 'react'
 import { ApiError, api, uploadFile } from '../api'
 import {
@@ -138,7 +138,7 @@ function ItemList({
         <h2>{kind === 'service' ? t('c.services') : t('c.materials')}</h2>
         <span className="button-row">
           <a
-            className="button ghost auto"
+            className={buttonClass({ variant: 'ghost' })}
             href={`/api/v1/catalog/export.csv?kind=${kind}`}
             download
           >
@@ -642,7 +642,7 @@ function SupplierCatalogs({ canWrite, units }: { canWrite: boolean; units: UnitS
               </div>
             ) : null}
           </div>
-          <label className="button primary auto file-button">
+          <label className={buttonClass({ variant: 'primary', className: 'file-button' })}>
             {busy ? t('c.importing') : t('c.importFile')}
             <input
               type="file"

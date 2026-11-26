@@ -6,7 +6,7 @@ import type {
   Receivable,
   ReceivableStatus,
 } from '@easybau/schemas'
-import { Button } from '@easybau/ui'
+import { Button, MoneyField } from '@easybau/ui'
 import { useId, useState } from 'react'
 import { type ApiError, api } from '../api'
 import { centsToInput, formatCents, formatDateTime, parseEuro } from '../format'
@@ -303,17 +303,14 @@ function PaymentForm({
             onChange={(e) => setPaidOn(e.target.value)}
           />
         </div>
-        <div className="field">
-          <label htmlFor={`${id}-amount`}>{t('pay.amount')}</label>
-          <input
-            id={`${id}-amount`}
-            inputMode="decimal"
-            className="amount"
-            value={amount}
-            onChange={(e) => setAmount(e.target.value)}
-            aria-invalid={!valid ? true : undefined}
-          />
-        </div>
+        <MoneyField
+          label={t('pay.amount')}
+          name="amount"
+          invalidText={t('doc.invalidAmount')}
+          value={amount}
+          onChange={setAmount}
+          invalid={!valid}
+        />
       </div>
       <div className="row">
         <div className="field">
@@ -414,16 +411,13 @@ function AdjustmentForm({
             ))}
           </select>
         </div>
-        <div className="field">
-          <label htmlFor={`${id}-amount`}>{t('pay.amount')}</label>
-          <input
-            id={`${id}-amount`}
-            inputMode="decimal"
-            className="amount"
-            value={amount}
-            onChange={(e) => setAmount(e.target.value)}
-          />
-        </div>
+        <MoneyField
+          label={t('pay.amount')}
+          name="amount"
+          invalidText={t('doc.invalidAmount')}
+          value={amount}
+          onChange={setAmount}
+        />
       </div>
       <div className="field">
         <label htmlFor={`${id}-reason`}>
@@ -487,16 +481,13 @@ function ReleaseForm({
             onChange={(e) => setPaidOn(e.target.value)}
           />
         </div>
-        <div className="field">
-          <label htmlFor={`${id}-amount`}>{t('pay.amount')}</label>
-          <input
-            id={`${id}-amount`}
-            inputMode="decimal"
-            className="amount"
-            value={amount}
-            onChange={(e) => setAmount(e.target.value)}
-          />
-        </div>
+        <MoneyField
+          label={t('pay.amount')}
+          name="amount"
+          invalidText={t('doc.invalidAmount')}
+          value={amount}
+          onChange={setAmount}
+        />
       </div>
       <Buttons onCancel={onCancel} disabled={busy || !valid} />
     </form>

@@ -2115,22 +2115,6 @@ fieldset.plain {
   display: grid;
   gap: var(--space-1);
 }
-.table-scroll {
-  overflow-x: auto;
-  max-width: 100%;
-}
-.audit-changes {
-  width: 100%;
-  border-collapse: collapse;
-  font-size: 0.875rem;
-}
-.audit-cell {
-  text-align: left;
-  vertical-align: top;
-  padding: var(--space-1) var(--space-2);
-  border-bottom: 1px solid var(--color-border);
-  overflow-wrap: anywhere;
-}
 
 /* ---- Eingangsrechnungen ------------------------------------------------------------------- */
 .incoming.dragging {
@@ -2203,23 +2187,6 @@ fieldset.plain {
 .einvoice-parties h3 {
   font-size: 0.875rem;
   margin: var(--space-2) 0 var(--space-1);
-}
-.einvoice-lines {
-  width: 100%;
-  border-collapse: collapse;
-  font-size: 0.875rem;
-}
-.einvoice-cell {
-  text-align: left;
-  vertical-align: top;
-  padding: var(--space-1) var(--space-2);
-  border-bottom: 1px solid var(--color-border);
-  overflow-wrap: anywhere;
-}
-.einvoice-cell.num {
-  text-align: right;
-  font-variant-numeric: tabular-nums;
-  white-space: nowrap;
 }
 .incoming-payment {
   margin-top: var(--space-4);

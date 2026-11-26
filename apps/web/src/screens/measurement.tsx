@@ -13,7 +13,7 @@ import type {
   MeasurementSheetDetail,
   UnitSummary,
 } from '@easybau/schemas'
-import { Button } from '@easybau/ui'
+import { Button, buttonClass } from '@easybau/ui'
 import { type FormEvent, useCallback, useEffect, useMemo, useState } from 'react'
 import { ApiError, api, apiWithEtag, mutate } from '../api'
 import { formatDateTime, formatInputNumber, formatQuantity, formatUnitAmount } from '../format'
@@ -211,7 +211,7 @@ export function MeasurementScreen({
       {online ? (
         <div className="button-row">
           <a
-            className="button ghost"
+            className={buttonClass({ variant: 'ghost', width: 'natural' })}
             href={`/api/v1/measurement-sheets/${sheet.id}/pdf`}
             target="_blank"
             rel="noopener"

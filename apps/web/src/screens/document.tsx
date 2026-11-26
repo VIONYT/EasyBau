@@ -19,7 +19,7 @@ import {
   PRICED_POSITION_TYPES,
   TAX_MODES,
 } from '@easybau/schemas/constants'
-import { Button } from '@easybau/ui'
+import { Button, buttonClass } from '@easybau/ui'
 import { type FormEvent, useCallback, useEffect, useId, useState } from 'react'
 import { ApiError, api, apiWithEtag } from '../api'
 import {
@@ -1343,7 +1343,7 @@ function DocumentActions({
   return (
     <div className="doc-actions">
       <a
-        className="button ghost"
+        className={buttonClass({ variant: 'ghost', width: 'natural' })}
         href={`/dokumente/${doc.id}/druck`}
         onClick={(e) => {
           e.preventDefault()
@@ -1353,7 +1353,7 @@ function DocumentActions({
         {t('q.preview')}
       </a>
       <a
-        className="button ghost"
+        className={buttonClass({ variant: 'ghost', width: 'natural' })}
         href={`/api/v1/documents/${doc.id}/pdf`}
         target="_blank"
         rel="noopener"
@@ -1363,7 +1363,7 @@ function DocumentActions({
       {doc.einvoice?.files.map((file) => (
         <a
           key={file.format}
-          className="button ghost"
+          className={buttonClass({ variant: 'ghost', width: 'natural' })}
           href={`/api/v1/documents/${doc.id}/einvoice/${file.format}`}
           download
         >
@@ -1612,14 +1612,14 @@ function CancelInvoice({
       </div>
       <FormError>{error}</FormError>
       <div className="button-row">
-        <button
+        <Button
           type="button"
-          className={`button auto ${reissue ? 'primary' : 'danger'}`}
+          variant={reissue ? 'primary' : 'destructive'}
           disabled={busy || reason.trim().length < 3}
           onClick={submit}
         >
           {reissue ? t('inv.correctNow') : t('inv.cancelNow')}
-        </button>
+        </Button>
         <Button type="button" variant="ghost" width="natural" onClick={onCancel}>
           {t('common.cancel')}
         </Button>

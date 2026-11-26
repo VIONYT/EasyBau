@@ -10,7 +10,21 @@ export type ButtonVariant = 'primary' | 'secondary' | 'ghost' | 'destructive'
  * lists (`small`) or square icon buttons (`icon`, still ≥ 44 px); `danger` colours a ghost
  * button red (e.g. „Entfernen“ in a row).
  */
-export function Button({
+export interface ButtonStyle {
+  variant?: ButtonVariant | undefined
+  site?: boolean | undefined
+  full?: boolean | undefined
+  width?: 'auto' | 'full' | 'natural' | undefined
+  size?: 'small' | 'icon' | undefined
+  danger?: boolean | undefined
+  className?: string | undefined
+}
+
+/**
+ * Class names of a button, for elements that must stay links or labels but look like a button
+ * (download links, file pickers) – the same look as <Button>.
+ */
+export function buttonClass({
   variant = 'secondary',
   site = false,
   full = false,
@@ -18,18 +32,9 @@ export function Button({
   size,
   danger = false,
   className,
-  type = 'button',
-  ...props
-}: ButtonHTMLAttributes<HTMLButtonElement> & {
-  variant?: ButtonVariant
-  site?: boolean
-  full?: boolean
-  width?: 'auto' | 'full' | 'natural'
-  size?: 'small' | 'icon'
-  danger?: boolean
-}) {
+}: ButtonStyle = {}): string {
   const span = full ? 'full' : width === 'natural' ? null : width
-  const classes = [
+  return [
     'button',
     variant === 'primary' ? 'primary' : variant === 'destructive' ? 'danger' : 'ghost',
     variant === 'secondary' ? 'secondary' : null,
@@ -41,7 +46,26 @@ export function Button({
   ]
     .filter(Boolean)
     .join(' ')
-  return <button type={type} className={classes} {...props} />
+}
+
+export function Button({
+  variant,
+  site,
+  full,
+  width,
+  size,
+  danger,
+  className,
+  type = 'button',
+  ...props
+}: ButtonHTMLAttributes<HTMLButtonElement> & ButtonStyle) {
+  return (
+    <button
+      type={type}
+      className={buttonClass({ variant, site, full, width, size, danger, className })}
+      {...props}
+    />
+  )
 }
 
 export type Tone = 'info' | 'success' | 'warning' | 'error'
