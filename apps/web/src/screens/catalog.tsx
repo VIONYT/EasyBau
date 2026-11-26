@@ -25,8 +25,19 @@ import { CatalogImport } from './catalog-import'
 type Section = 'service' | 'material' | 'catalogs'
 
 /** Stammdaten: Leistungen, Materialien and supplier catalogs (DATANORM). */
-export function Catalog({ me }: { me: Me }) {
+export function Catalog({ me, itemId }: { me: Me; itemId?: string | undefined }) {
   const [section, setSection] = useState<Section>('service')
+  // Opened from the search (/stammdaten/<id>): the item's list with its editor open.
+  const [opened, setOpened] = useState<CatalogItem | null>(null)
+  useEffect(() => {
+    if (!itemId) return
+    api<CatalogItem>('GET', `/api/v1/catalog/items/${itemId}`)
+      .then((item) => {
+        setSection(item.kind)
+        setOpened(item)
+      })
+      .catch(() => undefined)
+  }, [itemId])
   const [units, setUnits] = useState<UnitSummary[]>([])
   useEffect(() => {
     api<UnitSummary[]>('GET', '/api/v1/units')
@@ -58,7 +69,13 @@ export function Catalog({ me }: { me: Me }) {
       {section === 'catalogs' ? (
         <SupplierCatalogs canWrite={canWrite} units={units} />
       ) : (
-        <ItemList key={section} kind={section} canWrite={canWrite} units={units} />
+        <ItemList
+          key={`${section}-${opened?.id ?? ''}`}
+          kind={section}
+          canWrite={canWrite}
+          units={units}
+          initial={opened?.kind === section ? opened : null}
+        />
       )}
     </section>
   )
@@ -70,16 +87,18 @@ function ItemList({
   kind,
   canWrite,
   units,
+  initial,
 }: {
   kind: 'service' | 'material'
   canWrite: boolean
   units: UnitSummary[]
+  initial?: CatalogItem | null
 }) {
   const [items, setItems] = useState<CatalogItem[] | null>(null)
   const [folders, setFolders] = useState<CatalogFolder[]>([])
   const [folderId, setFolderId] = useState('')
   const [query, setQuery] = useState('')
-  const [editing, setEditing] = useState<CatalogItem | 'new' | null>(null)
+  const [editing, setEditing] = useState<CatalogItem | 'new' | null>(initial ?? null)
   const [importing, setImporting] = useState(false)
   const [error, setError] = useState<string | null>(null)
 

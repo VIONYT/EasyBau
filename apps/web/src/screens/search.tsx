@@ -6,7 +6,7 @@ import { FormError } from '../forms'
 import { type TextKey, t, tf } from '../i18n'
 import { type Navigate, pathOf, type Route } from '../router'
 
-/** Where a search hit leads. Stammdaten have no own page yet: their list. */
+/** Where a search hit leads. Files open the project's Ablage. */
 function routeOf(hit: SearchHit): Route {
   switch (hit.kind) {
     case 'project':
@@ -18,7 +18,13 @@ function routeOf(hit: SearchHit): Route {
     case 'contact':
       return { view: 'contacts', id: hit.id }
     case 'catalog':
-      return { view: 'catalog' }
+      return { view: 'catalog', id: hit.id }
+    case 'sheet':
+      return { view: 'measurement', id: hit.id }
+    case 'report':
+      return { view: 'report', id: hit.id }
+    case 'file':
+      return { view: 'project', id: hit.projectId as string, section: 'files' }
   }
 }
 

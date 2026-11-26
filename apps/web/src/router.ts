@@ -12,7 +12,7 @@ export type Route =
   | { view: 'incomingInvoice'; id: string }
   | { view: 'users' }
   | { view: 'security' }
-  | { view: 'catalog' }
+  | { view: 'catalog'; id?: string }
   | { view: 'settings'; section?: string }
   | { view: 'audit' }
   | { view: 'project'; id: string; section: ProjectSection }
@@ -61,6 +61,8 @@ export function parseRoute(path: string, search = ''): Route {
   if (path.startsWith('/eingangsrechnungen')) return { view: 'incoming' }
   const report = new RegExp(`^/berichte/(${UUID})/?$`).exec(path)
   if (report) return { view: 'report', id: report[1] as string }
+  const catalogItem = new RegExp(`^/stammdaten/(${UUID})/?$`).exec(path)
+  if (catalogItem) return { view: 'catalog', id: catalogItem[1] as string }
   if (path.startsWith('/stammdaten')) return { view: 'catalog' }
   if (path.startsWith('/projekte')) return { view: 'projects' }
   if (path.startsWith('/benachrichtigungen')) return { view: 'notifications' }
@@ -94,7 +96,7 @@ export function pathOf(route: Route): string {
     case 'contacts':
       return route.id ? `/kontakte/${route.id}` : '/kontakte'
     case 'catalog':
-      return '/stammdaten'
+      return route.id ? `/stammdaten/${route.id}` : '/stammdaten'
     case 'settings':
       return route.section
         ? `/einstellungen?bereich=${encodeURIComponent(route.section)}`

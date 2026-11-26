@@ -214,7 +214,7 @@ export function Workspace({
         {current.view === 'report' ? (
           <ReportScreen me={me} id={current.id} navigate={navigate} />
         ) : null}
-        {current.view === 'catalog' ? <Catalog me={me} /> : null}
+        {current.view === 'catalog' ? <Catalog me={me} itemId={current.id} /> : null}
         {current.view === 'settings' ? <Settings me={me} initial={current.section} /> : null}
         {current.view === 'contacts' ? (
           <Contacts me={me} navigate={navigate} selected={current.id ?? null} />

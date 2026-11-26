@@ -46,7 +46,7 @@ Waren Sie das nicht, ändern Sie sofort Ihr Passwort (oder nutzen **Passwort ver
 
 ## Aufbau der Oberfläche
 
-- **Kopfzeile:** Firmenname, Ihr Name, die **Suche** über alles (Projekte, Kontakte, Dokumente, Stammdaten, Eingangsrechnungen), **Benachrichtigungen** und **Abmelden**.
+- **Kopfzeile:** Firmenname, Ihr Name, die **Suche** über alles (Projekte, Kontakte, Dokumente, Stammdaten, Eingangsrechnungen, Aufmaßblätter, Berichte samt Inhalt und Dateien der Ablage; genaue Treffer zuerst), **Benachrichtigungen** und **Abmelden**.
 - **Hauptbereiche:** Übersicht · Projekte · Rechnungen · Eingangsrechnungen · Kontakte · Stammdaten · Prüfung · Benutzer · Einstellungen · Sicherheit. Sie sehen nur die Bereiche, für die Ihre Rolle Rechte hat.
 - **Hinweisleiste** (gelb): fehlende Firmendaten, eine abgelaufene Postfach-Anmeldung o. Ä. – mit **Beheben** springen Sie direkt an die richtige Stelle.
 
