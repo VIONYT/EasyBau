@@ -141,8 +141,8 @@ describe.skipIf(!process.env.DATABASE_URL)('E-Rechnung (integration)', () => {
 
     const xml = await admin.get(`/api/v1/documents/${id}/einvoice/zugferd`)
     expect(xml.statusCode).toBe(200)
-    expect(xml.headers['content-disposition']).toBe(
-      `attachment; filename="${invoice.number}_zugferd.xml"`,
+    expect(xml.headers['content-disposition']).toContain(
+      `attachment; filename="Rechnung_${invoice.number}_ZUGFeRD.xml"`,
     )
     expect(xml.body).toContain('<ram:ID>urn:cen.eu:en16931:2017</ram:ID>')
     expect(xml.body).toContain(`<ram:ID>${invoice.number}</ram:ID>`)
@@ -182,7 +182,7 @@ describe.skipIf(!process.env.DATABASE_URL)('E-Rechnung (integration)', () => {
     expect(doc.einvoice?.files.map((f) => f.format)).toEqual(['zugferd', 'xrechnung_ubl'])
     const xml = await admin.get(`/api/v1/documents/${id}/einvoice/xrechnung_ubl`)
     expect(xml.body).toContain('<cbc:BuyerReference>03241000-12345-67</cbc:BuyerReference>')
-    expect(xml.headers['content-disposition']).toContain('_xrechnung.xml')
+    expect(xml.headers['content-disposition']).toContain('_XRechnung.xml')
   })
 
   it('a Stornorechnung is an e-invoice with reference to the cancelled invoice', async () => {

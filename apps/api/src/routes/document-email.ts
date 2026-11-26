@@ -23,10 +23,16 @@ import type { FastifyInstance } from 'fastify'
 import { z } from 'zod'
 import { type AuthContext, inTenant, requirePermission, type Services } from '../context.js'
 import { HttpError, notFound, parse } from '../http.js'
-import { attachmentFiles, documentFileName, documentSettings } from './document-settings.js'
+import {
+  attachmentFiles,
+  automaticAttachments,
+  documentFileName,
+  documentXmlFileName,
+} from './document-settings.js'
 import { loadDocument } from './documents.js'
 import { queueEmail } from './email.js'
-import { archiveDocumentPdf } from './pdf.js'
+import { storeGeneratedFile } from './files.js'
+import { archiveDocumentPdf, reportPdf, sheetPdf } from './pdf.js'
 
 /**
  * Dokumente per E-Mail (P2.1): the archived original goes out as attachment – for invoices and
@@ -84,12 +90,12 @@ async function originalsOf(tx: Tx, doc: DocumentDetail) {
   // The invoice PDF is the ZUGFeRD PDF; documents finalized before e-invoicing have a plain PDF.
   const pdf = rows.find((r) => r.kind === 'zugferd_pdf') ?? rows.find((r) => r.kind === 'pdf')
   const xmls = rows.filter((r) => r.kind === 'xrechnung_xml')
-  const xmlName = (row: ArtifactRow) =>
-    `${doc.number}_${row.format === 'xrechnung_cii' && xmls.length > 1 ? 'xrechnung_cii' : 'xrechnung'}.xml`
-  return {
-    pdf: pdf ? { artifactId: pdf.id, filename: pdfName } : null,
-    xrechnung: xmls.map((row) => ({ artifactId: row.id, filename: xmlName(row) })),
+  const xrechnung = []
+  for (const row of xmls) {
+    const suffix = row.format === 'xrechnung_cii' && xmls.length > 1 ? 'XRechnung_CII' : 'XRechnung'
+    xrechnung.push({ artifactId: row.id, filename: await documentXmlFileName(tx, doc, suffix) })
   }
+  return { pdf: pdf ? { artifactId: pdf.id, filename: pdfName } : null, xrechnung }
 }
 
 /** E-mail address of the recipient: e-invoice address for invoices, else the contact's e-mail. */
@@ -171,19 +177,46 @@ async function draftOf(
       filenames: originals.xrechnung.map((x) => x.filename),
     },
     files: await filesOf(tx, doc),
+    ...(await projectOptions(tx, doc.project.id)),
+    maxAttachmentBytes: MAX_ATTACHMENT_BYTES,
     history: await historyOf(tx, doc.id),
   }
 }
 
-/** Company files (AGB …); the automatic attachments of the document type are preselected. */
+/** Mail servers commonly accept 25 MB; attachments grow by a third in the e-mail (Base64). */
+const MAX_ATTACHMENT_BYTES = 18 * 1024 * 1024
+const SENT_FOLDER = 'Versendet'
+
+/** What of the project can go along: Ablage files, Aufmaßblätter, Berichte. */
+async function projectOptions(tx: Tx, projectId: string) {
+  const projectFiles = await tx<DocumentEmailDraft['projectFiles']>`
+    select f.id, f.filename, f.size_bytes::float8 as "sizeBytes", d.name as folder
+    from file f left join project_folder d on d.id = f.folder_id
+    where f.project_id = ${projectId}
+    order by f.created_at desc limit 200`
+  const sheets = await tx<DocumentEmailDraft['sheets']>`
+    select id, title, to_char(measured_on, 'YYYY-MM-DD') as "measuredOn", status
+    from measurement_sheet where project_id = ${projectId} and not is_inline
+    order by measured_on desc, title limit 100`
+  const reports = await tx<DocumentEmailDraft['reports']>`
+    select r.id, t.name, to_char(r.report_date, 'YYYY-MM-DD') as "reportDate", r.status
+    from report r join report_template t on t.id = r.template_id
+    where r.project_id = ${projectId}
+    order by r.report_date desc, r.created_at desc limit 100`
+  return { projectFiles, sheets, reports }
+}
+
+/** Company files (AGB …) still offered; the automatic attachments of the type are preselected. */
 async function filesOf(tx: Tx, doc: DocumentDetail) {
-  const selected = new Set((await documentSettings(tx)).attachments[doc.type] ?? [])
-  return (await attachmentFiles(tx)).map((f) => ({
-    id: f.id,
-    filename: f.name,
-    sizeBytes: f.sizeBytes,
-    selected: selected.has(f.id),
-  }))
+  const selected = new Set(await automaticAttachments(tx, doc.type))
+  return (await attachmentFiles(tx))
+    .filter((f) => !f.retired)
+    .map((f) => ({
+      id: f.id,
+      filename: f.name,
+      sizeBytes: f.sizeBytes,
+      selected: selected.has(f.id),
+    }))
 }
 
 async function requireDocument(tx: Tx, auth: AuthContext, id: string) {
@@ -219,6 +252,24 @@ export function registerDocumentEmailRoutes(app: FastifyInstance, services: Serv
       return !(await originalsOf(tx, doc)).pdf
     })
     if (missing) await archiveDocumentPdf(services, auth, id)
+    // Aufmaßblätter and Berichte as PDF/A (rendered outside the transaction, like any download).
+    const rendered: { kind: 'sheet' | 'report'; id: string; data: Buffer; filename: string }[] = []
+    for (const sheetId of new Set(input.sheetIds)) {
+      const pdf = await sheetPdf(services, auth, sheetId)
+      if (!pdf)
+        throw new HttpError(400, 'Ein Aufmaßblatt wurde nicht gefunden.', {
+          sheetIds: 'Unbekanntes Aufmaßblatt.',
+        })
+      rendered.push({ kind: 'sheet', id: sheetId, data: pdf.data, filename: pdf.filename })
+    }
+    for (const reportId of new Set(input.reportIds)) {
+      const pdf = await reportPdf(services, auth, reportId)
+      if (!pdf)
+        throw new HttpError(400, 'Ein Bericht wurde nicht gefunden.', {
+          reportIds: 'Unbekannter Bericht.',
+        })
+      rendered.push({ kind: 'report', id: reportId, data: pdf.data, filename: pdf.filename })
+    }
     const draft = await inTenant(services, auth, async (tx) => {
       const doc = await requireDocument(tx, auth, id)
       const originals = await originalsOf(tx, doc)
@@ -229,7 +280,7 @@ export function registerDocumentEmailRoutes(app: FastifyInstance, services: Serv
           attachXrechnung: 'Keine XRechnung vorhanden.',
         })
       }
-      const automatic = (await documentSettings(tx)).attachments[doc.type] ?? []
+      const automatic = await automaticAttachments(tx, doc.type)
       const fileIds = [...new Set(input.fileIds ?? automatic)]
       const files = fileIds.length
         ? await tx<{ id: string; name: string }[]>`
@@ -239,6 +290,54 @@ export function registerDocumentEmailRoutes(app: FastifyInstance, services: Serv
         throw new HttpError(400, 'Ein Anhang wurde nicht gefunden.', {
           fileIds: 'Unbekannter Anhang.',
         })
+      }
+      // Ablage files, Aufmaßblätter and Berichte only of the document's project.
+      const projectFileIds = [...new Set(input.projectFileIds)]
+      const projectFiles = projectFileIds.length
+        ? await tx<{ id: string; filename: string; sizeBytes: number }[]>`
+            select id, filename, size_bytes::float8 as "sizeBytes" from file
+            where project_id = ${doc.project.id} and id in ${tx(projectFileIds)}`
+        : []
+      if (projectFiles.length !== projectFileIds.length) {
+        throw new HttpError(400, 'Eine Datei gehört nicht zu diesem Projekt.', {
+          projectFileIds: 'Unbekannte Datei.',
+        })
+      }
+      for (const item of rendered) {
+        const [row] =
+          item.kind === 'sheet'
+            ? await tx`select 1 from measurement_sheet where id = ${item.id} and project_id = ${doc.project.id}`
+            : await tx`select 1 from report where id = ${item.id} and project_id = ${doc.project.id}`
+        if (!row) {
+          throw new HttpError(400, 'Aufmaßblatt oder Bericht gehört nicht zu diesem Projekt.', {
+            [item.kind === 'sheet' ? 'sheetIds' : 'reportIds']: 'Anderes Projekt.',
+          })
+        }
+      }
+      const assetSizes = fileIds.length
+        ? await tx<{ n: number }[]>`
+            select coalesce(sum(size_bytes), 0)::float8 as n from tenant_asset where id in ${tx(fileIds)}`
+        : [{ n: 0 }]
+      const total =
+        (assetSizes[0]?.n ?? 0) +
+        projectFiles.reduce((n, f) => n + f.sizeBytes, 0) +
+        rendered.reduce((n, r) => n + r.data.length, 0)
+      if (total > MAX_ATTACHMENT_BYTES) {
+        throw new HttpError(
+          413,
+          `Die Anhänge sind zusammen zu groß (höchstens ${MAX_ATTACHMENT_BYTES / 1024 / 1024} MB). Bitte weniger Dateien auswählen.`,
+        )
+      }
+      // The sent PDFs are kept in the Ablage (folder „Versendet“): proof of what went out.
+      const stored = []
+      for (const item of rendered) {
+        stored.push(
+          await storeGeneratedFile(tx, services, auth, doc.project.id, {
+            folderName: SENT_FOLDER,
+            filename: item.filename,
+            data: item.data,
+          }),
+        )
       }
       await queueEmail(tx, auth, {
         kind: 'document',
@@ -255,6 +354,11 @@ export function registerDocumentEmailRoutes(app: FastifyInstance, services: Serv
             const file = files.find((f) => f.id === fid) as { id: string; name: string }
             return { assetId: file.id, filename: file.name }
           }),
+          ...projectFileIds.map((fid) => {
+            const file = projectFiles.find((f) => f.id === fid) as { id: string; filename: string }
+            return { fileId: file.id, filename: file.filename }
+          }),
+          ...stored.map((f) => ({ fileId: f.id, filename: f.filename })),
         ],
       })
       return draftOf(tx, services, doc)

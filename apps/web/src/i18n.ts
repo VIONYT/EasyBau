@@ -1621,10 +1621,12 @@ const de = {
   'sd.patternReset': 'Standard',
   'sd.attachments': 'Automatische Anhänge',
   'sd.attachmentsHint':
-    'PDF-Dateien wie AGB oder Datenschutzhinweise, die beim E-Mail-Versand eines Dokuments vorausgewählt sind. Hochgeladene Dateien bleiben unverändert erhalten, damit nachvollziehbar ist, was versendet wurde – eine neue Fassung bitte als neue Datei hochladen.',
+    'PDF-Dateien wie AGB oder Datenschutzhinweise, die beim E-Mail-Versand eines Dokuments vorausgewählt und an Mahnungen angehängt werden. Hochgeladene Dateien bleiben unverändert erhalten, damit nachvollziehbar ist, was versendet wurde – eine neue Fassung bitte als neue Datei hochladen und die alte auf „Nicht mehr anbieten“ setzen.',
   'sd.upload': 'PDF hochladen',
   'sd.uploadName': 'Bezeichnung (wird Dateiname)',
   'sd.noFiles': 'Noch keine Dateien hochgeladen.',
+  'sd.retired': 'Nicht mehr anbieten (z. B. alte AGB-Fassung; bleibt gespeichert)',
+  'sd.dunningNotices': 'Mahnungen',
   'sd.attachTo': 'Anhängen an',
   'sd.view': 'Ansehen',
   'hol.year': 'Jahr',
@@ -1655,6 +1657,13 @@ const de = {
   'doc.laborShare': 'Lohnkostenanteil ausweisen (§ 35a EStG)',
   'doc.laborShareAmount': 'Lohnkostenanteil (§ 35a)',
   'doc.laborShareNone': 'Kein Lohnanteil – nur Positionen mit Kalkulation (Lohn) zählen.',
+  'mail.fromProject': 'Aus dem Projekt anhängen',
+  'mail.fromProjectHint':
+    'Pläne und Fotos aus der Ablage, Aufmaßblätter und Berichte als PDF. Die erzeugten PDFs werden in der Ablage im Ordner „Versendet“ abgelegt. Alle Anhänge zusammen höchstens {max} MB.',
+  'mail.projectFiles': 'Ablage',
+  'mail.sheets': 'Aufmaßblätter (als PDF)',
+  'mail.reports': 'Berichte (als PDF)',
+  'mail.sheet': 'Aufmaßblatt',
   'mail.files': 'Weitere Anhänge',
   // ---- Angebot (P2.12) ----
   'tp.title': 'Preis anpassen (Zielpreis)',

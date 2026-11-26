@@ -38,6 +38,7 @@ import { z } from 'zod'
 import { openArtifact, storeArtifact } from '../artifacts.js'
 import { type AuthContext, inTenant, requirePermission, type Services } from '../context.js'
 import { HttpError, notFound, parse } from '../http.js'
+import { automaticAttachments, patternFileName } from './document-settings.js'
 import { liveIssuer, loadDocument } from './documents.js'
 import { queueEmail } from './email.js'
 import { contentDisposition, logoFor } from './pdf.js'
@@ -279,8 +280,31 @@ async function loadInvoice(tx: Tx, auth: AuthContext, id: string): Promise<Docum
   return doc
 }
 
-const pdfName = (level: DunningLevel, number: string) =>
-  `${DUNNING_TITLE[level].replace(/\s+/g, '_').replace(/\./g, '')}_${number}.pdf`
+/** PDF name of a notice after the company's Dateinamen-Muster ({Nummer} = number of the invoice). */
+async function noticeFileName(tx: Tx, noticeId: string): Promise<string> {
+  const [row] = await tx<
+    {
+      level: DunningLevel
+      number: string
+      date: string
+      customer: string | null
+      project: string
+    }[]
+  >`
+    select n.level, d.number, to_char(n.notice_date, 'YYYY-MM-DD') as date,
+           d.recipient_snapshot ->> 'name' as customer, p.name as project
+    from dunning_notice n join document d on d.id = n.invoice_id join project p on p.id = d.project_id
+    where n.id = ${noticeId}`
+  if (!row) throw notFound('Die Mahnung')
+  return patternFileName(tx, {
+    Typ: DUNNING_TITLE[row.level].replace(/\./g, ''),
+    Nummer: row.number,
+    Kunde: row.customer,
+    Projekt: row.project,
+    Datum: row.date,
+    Jahr: row.date.slice(0, 4),
+  })
+}
 
 function mailText(
   level: DunningLevel,
@@ -319,12 +343,21 @@ async function queueNoticeEmail(
   const [company] = await tx<
     { name: string }[]
   >`select name from tenant where id = current_tenant_id()`
+  // Automatische Anhänge der Mahnungen (Einstellungen › Dokumente), e.g. AGB or a bank form.
+  const fileIds = await automaticAttachments(tx, 'dunning_notice')
+  const files = fileIds.length
+    ? await tx<{ id: string; name: string }[]>`
+        select id, name from tenant_asset where kind = 'attachment' and id in ${tx(fileIds)}`
+    : []
   await queueEmail(tx, auth, {
     kind: 'dunning',
     to: mail.to,
     subject: `${DUNNING_TITLE[notice.level]} zur Rechnung ${number}${company?.name ? ` – ${company.name}` : ''}`,
     text: mailText(notice.level, number, notice, company?.name ?? '', mail.message),
-    attachments: [{ artifactId: artifact.id, filename: pdfName(notice.level, number) }],
+    attachments: [
+      { artifactId: artifact.id, filename: await noticeFileName(tx, notice.id) },
+      ...files.map((f) => ({ assetId: f.id, filename: f.name })),
+    ],
     dunningNoticeId: notice.id,
   })
 }
@@ -548,7 +581,7 @@ export function registerDunningRoutes(app: FastifyInstance, services: Services) 
       // Project visibility via the invoice.
       if (!row || !(await loadDocument(tx, auth, row.invoiceId))) return null
       const data = await openArtifact(services, row.key)
-      return data ? { data, filename: pdfName(row.level, row.number) } : null
+      return data ? { data, filename: await noticeFileName(tx, id) } : null
     })
     if (!file) throw notFound('Das PDF der Mahnung')
     return reply

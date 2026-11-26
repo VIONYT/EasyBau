@@ -426,11 +426,13 @@ export const documentSettingsRequest = z.object({
   /** Default Abschlagsart of new progress invoices. */
   progressBillingMode: z.enum(['cumulative', 'individual']),
   fileNamePattern: text(200),
-  /** Automatische Anhänge: company files (asset ids) attached per document type. */
+  /** Automatische Anhänge: company files (asset ids) attached per document type and to Mahnungen. */
   attachments: z.partialRecord(
-    z.enum(DOCUMENT_TYPES),
+    z.enum([...DOCUMENT_TYPES, 'dunning_notice']),
     z.array(id).max(10, 'Höchstens 10 Anhänge.'),
   ),
+  /** Company files no longer offered (old AGB versions); they stay stored (never deleted). */
+  retiredAttachments: z.array(id).max(500).default([]),
 })
 export type DocumentSettingsRequest = z.infer<typeof documentSettingsRequest>
 
@@ -439,6 +441,8 @@ export interface AttachmentFile {
   name: string
   sizeBytes: number
   createdAt: string
+  /** „Nicht mehr anbieten“: not offered when sending and not attached automatically. */
+  retired: boolean
 }
 
 export interface DocumentSettings extends DocumentSettingsRequest {

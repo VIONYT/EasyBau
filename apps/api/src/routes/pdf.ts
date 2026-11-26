@@ -23,7 +23,7 @@ import {
   type Services,
 } from '../context.js'
 import { notFound, parse } from '../http.js'
-import { documentFileName } from './document-settings.js'
+import { documentFileName, patternFileName } from './document-settings.js'
 import { liveIssuer, liveRecipient, loadDocument } from './documents.js'
 import { loadSheet } from './measurements.js'
 import { loadReport } from './reports.js'
@@ -147,15 +147,26 @@ export async function sheetPdf(services: Services, auth: AuthContext, id: string
       sheet.contractorSignatureAssetId,
       sheet.clientSignatureAssetId,
     ])
+    const site = await siteContext(tx, sheet.projectId)
     const { logoPosition, ...letter } = sheetLetter(sheet, {
-      ...(await siteContext(tx, sheet.projectId)),
+      ...site,
       signatureImages: signatures.images,
     })
     const pdf = renderLetterPdf(
       { ...letter, logo: await logoFor(tx, services, logoPosition) },
       { assets: signatures.assets },
     )
-    return { data: pdf, filename: `Aufmass_${sheet.title}.pdf` }
+    return {
+      data: pdf,
+      filename: await patternFileName(tx, {
+        Typ: 'Aufmass',
+        Nummer: sheet.title,
+        Kunde: site.recipient[0] ?? null,
+        Projekt: sheet.project.name,
+        Datum: sheet.measuredOn,
+        Jahr: sheet.measuredOn.slice(0, 4),
+      }),
+    }
   })
 }
 
@@ -211,7 +222,17 @@ export async function reportPdf(services: Services, auth: AuthContext, id: strin
       { ...letter, logo: await logoFor(tx, services, logoPosition) },
       { assets },
     )
-    return { data: pdf, filename: `${report.template.name}_${report.reportDate}.pdf` }
+    return {
+      data: pdf,
+      filename: await patternFileName(tx, {
+        Typ: report.template.name,
+        Nummer: report.reportDate,
+        Kunde: report.header.client,
+        Projekt: report.project.name,
+        Datum: report.reportDate,
+        Jahr: report.reportDate.slice(0, 4),
+      }),
+    }
   })
 }
 

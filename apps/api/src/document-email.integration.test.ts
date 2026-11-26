@@ -134,7 +134,7 @@ describe.skipIf(!process.env.DATABASE_URL)('Dokumente per E-Mail (integration)',
       xrechnung: {
         available: true,
         recommended: true,
-        filenames: [`${invoice.number}_xrechnung.xml`],
+        filenames: [`Rechnung_${invoice.number}_XRechnung.xml`],
       },
       history: [],
     })
@@ -212,7 +212,7 @@ describe.skipIf(!process.env.DATABASE_URL)('Dokumente per E-Mail (integration)',
         cc: ['bauamt@hannover.example'],
         bcc: ['ablage@versand-bau.example'],
         status: 'queued',
-        attachments: [`Rechnung_${invoice.number}.pdf`, `${invoice.number}_xrechnung.xml`],
+        attachments: [`Rechnung_${invoice.number}.pdf`, `Rechnung_${invoice.number}_XRechnung.xml`],
         createdBy: 'Chef',
       },
     ])
@@ -281,6 +281,72 @@ describe.skipIf(!process.env.DATABASE_URL)('Dokumente per E-Mail (integration)',
     ])
     await deliver(true)
     expect((await admin.get(`/api/v1/documents/${quote.id}`)).json().status).toBe('sent')
+  })
+
+  it('attaches files of the Ablage and Aufmaßblatt/Bericht PDFs of the project', async () => {
+    const quote = await document('quote')
+    expect((await admin.post(`/api/v1/documents/${quote.id}/finalize`, {})).statusCode).toBe(200)
+    const plan = (
+      await admin.upload(
+        `/api/v1/projects/${projectId}/files?filename=Grundriss.pdf`,
+        Buffer.from('%PDF-1.4\n%%EOF\n'),
+      )
+    ).json()
+    const sheet = (
+      await admin.post(`/api/v1/projects/${projectId}/measurement-sheets`, {
+        kind: 'survey',
+        title: 'Bestand',
+      })
+    ).json()
+    const otherProject = (
+      await admin.post('/api/v1/projects', { name: 'Anderes Projekt', customerId })
+    ).json()
+    const foreign = (
+      await admin.upload(
+        `/api/v1/projects/${otherProject.id}/files?filename=Fremd.pdf`,
+        Buffer.from('%PDF-1.4\n%%EOF\n'),
+      )
+    ).json()
+    const dialog = (
+      await admin.get(`/api/v1/documents/${quote.id}/email`)
+    ).json() as DocumentEmailDraft
+    expect(dialog.projectFiles.map((f) => f.filename)).toContain('Grundriss.pdf')
+    expect(dialog.projectFiles.map((f) => f.id)).not.toContain(foreign.id)
+    expect(dialog.sheets.map((s) => s.title)).toContain('Bestand')
+    const base = { to: 'bauamt@hannover.example', subject: dialog.subject, text: dialog.text }
+    const wrong = await admin.post(`/api/v1/documents/${quote.id}/email`, {
+      ...base,
+      projectFileIds: [foreign.id],
+    })
+    expect(wrong.statusCode).toBe(400)
+    const res = await admin.post(`/api/v1/documents/${quote.id}/email`, {
+      ...base,
+      projectFileIds: [plan.id],
+      sheetIds: [sheet.id],
+    })
+    expect(res.statusCode, res.body).toBe(202)
+    expect(res.json().history[0].attachments).toEqual([
+      expect.stringMatching(/^Angebot_A-\d+\.pdf$/),
+      'Grundriss.pdf',
+      'Aufmass_Bestand.pdf',
+    ])
+    // The sent PDF stays in the Ablage (folder „Versendet“); sent files cannot be deleted.
+    const files = (await admin.get(`/api/v1/projects/${projectId}/files`)).json() as {
+      id: string
+      filename: string
+    }[]
+    expect(files.map((f) => f.filename)).toContain('Aufmass_Bestand.pdf')
+    expect((await admin.delete(`/api/v1/files/${plan.id}`)).statusCode).toBe(409)
+    const [claimed] = await h.sql<{ id: string }[]>`select id from claim_email_messages(10)`
+    const attachments = await h.adminSql<{ filename: string; storage_key: string }[]>`
+      select filename, storage_key from email_message_attachments(${claimed?.id as string})`
+    expect(attachments.map((a) => a.filename)).toEqual([
+      expect.stringMatching(/^Angebot_/),
+      'Grundriss.pdf',
+      'Aufmass_Bestand.pdf',
+    ])
+    expect(attachments.every((a) => a.storage_key)).toBe(true)
+    await h.sql`select finish_email_message(${claimed?.id as string}, true, null)`
   })
 
   it('refuses sending without SMTP', async () => {

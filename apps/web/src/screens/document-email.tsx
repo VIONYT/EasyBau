@@ -38,6 +38,9 @@ export function DocumentEmailPanel({
     text: '',
     xrechnung: false,
     fileIds: [] as string[],
+    projectFileIds: [] as string[],
+    sheetIds: [] as string[],
+    reportIds: [] as string[],
   })
 
   const load = useCallback(() => {
@@ -52,6 +55,9 @@ export function DocumentEmailPanel({
           text: d.text,
           xrechnung: d.xrechnung.recommended,
           fileIds: d.files.filter((f) => f.selected).map((f) => f.id),
+          projectFileIds: [],
+          sheetIds: [],
+          reportIds: [],
         })
       })
       .catch((err: ApiError) => setError(err.message))
@@ -72,6 +78,9 @@ export function DocumentEmailPanel({
         text: form.text,
         attachXrechnung: form.xrechnung,
         fileIds: form.fileIds,
+        projectFileIds: form.projectFileIds,
+        sheetIds: form.sheetIds,
+        reportIds: form.reportIds,
       })
       setDraft(result)
       setOpen(false)
@@ -161,6 +170,15 @@ export function DocumentEmailPanel({
                 ...draft.attachments.map((a) => a.filename),
                 ...(form.xrechnung ? draft.xrechnung.filenames : []),
                 ...draft.files.filter((f) => form.fileIds.includes(f.id)).map((f) => f.filename),
+                ...draft.projectFiles
+                  .filter((f) => form.projectFileIds.includes(f.id))
+                  .map((f) => f.filename),
+                ...draft.sheets
+                  .filter((s) => form.sheetIds.includes(s.id))
+                  .map((s) => `${t('mail.sheet')} ${s.title}`),
+                ...draft.reports
+                  .filter((r) => form.reportIds.includes(r.id))
+                  .map((r) => `${r.name} ${formatDateTime(r.reportDate, 'date')}`),
               ].join(', ')}
             </span>
           </p>
@@ -197,6 +215,66 @@ export function DocumentEmailPanel({
                 </label>
               ))}
             </fieldset>
+          ) : null}
+          {draft.projectFiles.length || draft.sheets.length || draft.reports.length ? (
+            <details className="mail-project">
+              <summary>{t('mail.fromProject')}</summary>
+              <p className="hint">
+                {tf('mail.fromProjectHint', {
+                  max: String(Math.floor(draft.maxAttachmentBytes / 1024 / 1024)),
+                })}
+              </p>
+              {(
+                [
+                  [
+                    'projectFileIds',
+                    t('mail.projectFiles'),
+                    draft.projectFiles.map((f) => ({
+                      id: f.id,
+                      label: f.folder ? `${f.folder} › ${f.filename}` : f.filename,
+                    })),
+                  ],
+                  [
+                    'sheetIds',
+                    t('mail.sheets'),
+                    draft.sheets.map((s) => ({
+                      id: s.id,
+                      label: `${s.title} · ${formatDateTime(s.measuredOn, 'date')}`,
+                    })),
+                  ],
+                  [
+                    'reportIds',
+                    t('mail.reports'),
+                    draft.reports.map((r) => ({
+                      id: r.id,
+                      label: `${r.name} · ${formatDateTime(r.reportDate, 'date')}`,
+                    })),
+                  ],
+                ] as const
+              )
+                .filter(([, , options]) => options.length)
+                .map(([key, legend, options]) => (
+                  <fieldset key={key} className="plain">
+                    <legend>{legend}</legend>
+                    {options.map((option) => (
+                      <label key={option.id} className="check">
+                        <input
+                          type="checkbox"
+                          checked={form[key].includes(option.id)}
+                          onChange={(e) =>
+                            set({
+                              [key]: e.target.checked
+                                ? [...form[key], option.id]
+                                : form[key].filter((v) => v !== option.id),
+                            })
+                          }
+                        />
+                        <span>{option.label}</span>
+                      </label>
+                    ))}
+                  </fieldset>
+                ))}
+            </details>
           ) : null}
           <FormError>{error}</FormError>
           <div className="button-row">

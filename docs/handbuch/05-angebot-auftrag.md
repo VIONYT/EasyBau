@@ -34,7 +34,7 @@ Der Kunde nennt ein Budget? **Preis anpassen (Zielpreis)** – gewünschten Nett
 
 - **Vorschau / Drucken** zeigt die Seite auf dem Briefpapier.
 - **Fertigstellen** vergibt die Nummer (z. B. `A-00101`) und friert Empfänger und Firmendaten ein. Danach ist das Dokument unveränderlich.
-- **PDF** lädt das Original (PDF/A) herunter, **Per E-Mail senden** verschickt es mit Vorlage, CC/BCC und automatischen Anhängen.
+- **PDF** lädt das Original (PDF/A) herunter, **Per E-Mail senden** verschickt es mit Vorlage, CC/BCC und automatischen Anhängen. Unter **Aus dem Projekt anhängen** kommen Pläne und Fotos aus der Ablage sowie Aufmaßblätter und Berichte als PDF dazu (zusammen höchstens 18 MB); die erzeugten PDFs liegen danach in der Ablage im Ordner **Versendet**, und per E-Mail versendete Dateien lassen sich nicht mehr löschen.
 - **Als versendet markieren**, später **Beauftragt** oder **Abgelehnt**.
 
 ![Druckansicht nach DIN 5008](../screenshots/macbook-angebot-druck.png)

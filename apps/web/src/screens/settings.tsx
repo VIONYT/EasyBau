@@ -1660,6 +1660,7 @@ function DocumentDefaultsForm() {
           progressBillingMode: data.progressBillingMode,
           fileNamePattern: data.fileNamePattern,
           attachments: data.attachments,
+          retiredAttachments: data.retiredAttachments,
         }),
       ),
     )
@@ -1698,6 +1699,7 @@ function DocumentDefaultsForm() {
         progressBillingMode: data.progressBillingMode,
         fileNamePattern: data.fileNamePattern,
         attachments: data.attachments,
+        retiredAttachments: data.retiredAttachments,
       })
     })
   const saveButton = (
@@ -1762,27 +1764,44 @@ function DocumentDefaultsForm() {
         <p className="hint">{t('sd.attachmentsHint')}</p>
         {data.files.length === 0 ? <p className="muted">{t('sd.noFiles')}</p> : null}
         <ul className="list">
-          {data.files.map((file) => (
-            <li key={file.id} className="list-row attachment-row">
-              <span>
-                <strong>{file.name}</strong>{' '}
-                <a href={`/api/v1/assets/${file.id}`} target="_blank" rel="noreferrer">
-                  {t('sd.view')}
-                </a>
-              </span>
-              <fieldset className="plain attachment-types">
-                <legend>{t('sd.attachTo')}</legend>
-                {DOCUMENT_TYPES.map((type) => (
-                  <Check
-                    key={type}
-                    label={typeLabel(type)}
-                    checked={(data.attachments[type] ?? []).includes(file.id)}
-                    onChange={(v) => toggleAttachment(type, file.id, v)}
-                  />
-                ))}
-              </fieldset>
-            </li>
-          ))}
+          {data.files.map((file) => {
+            const retired = data.retiredAttachments.includes(file.id)
+            return (
+              <li key={file.id} className={`list-row attachment-row${retired ? ' muted' : ''}`}>
+                <span>
+                  <strong>{file.name}</strong>{' '}
+                  <a href={`/api/v1/assets/${file.id}`} target="_blank" rel="noreferrer">
+                    {t('sd.view')}
+                  </a>
+                </span>
+                <Check
+                  label={t('sd.retired')}
+                  checked={retired}
+                  onChange={(v) =>
+                    setData({
+                      ...data,
+                      retiredAttachments: v
+                        ? [...data.retiredAttachments, file.id]
+                        : data.retiredAttachments.filter((id) => id !== file.id),
+                    })
+                  }
+                />
+                {retired ? null : (
+                  <fieldset className="plain attachment-types">
+                    <legend>{t('sd.attachTo')}</legend>
+                    {[...DOCUMENT_TYPES, 'dunning_notice' as const].map((type) => (
+                      <Check
+                        key={type}
+                        label={type === 'dunning_notice' ? t('sd.dunningNotices') : typeLabel(type)}
+                        checked={(data.attachments[type] ?? []).includes(file.id)}
+                        onChange={(v) => toggleAttachment(type, file.id, v)}
+                      />
+                    ))}
+                  </fieldset>
+                )}
+              </li>
+            )
+          })}
         </ul>
         <div className="row">
           <Input label={t('sd.uploadName')} value={name} onChange={setName} />

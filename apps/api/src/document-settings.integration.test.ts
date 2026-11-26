@@ -282,6 +282,7 @@ describe.skipIf(!process.env.DATABASE_URL)(
       expect(dialog.files).toEqual([
         { id: file.id, filename: 'AGB 2026.pdf', sizeBytes: PDF.length, selected: true },
       ])
+      expect((saved.json() as DocumentSettings).files[0]).toMatchObject({ retired: false })
       expect(dialog.attachments[0]?.filename).toBe(`Angebot_${finalized.json().number}.pdf`)
 
       const sent = await admin.post(`/api/v1/documents/${quote.id}/email`, {
@@ -322,6 +323,29 @@ describe.skipIf(!process.env.DATABASE_URL)(
           })
         ).statusCode,
       ).toBe(400)
+
+      // „Nicht mehr anbieten“: no longer offered nor attached automatically, but kept.
+      const retired = await admin.put('/api/v1/settings/documents', {
+        laborShare: current.laborShare,
+        progressBillingMode: current.progressBillingMode,
+        fileNamePattern: '{Typ}_{Nummer}',
+        attachments: { quote: [file.id], dunning_notice: [file.id] },
+        retiredAttachments: [file.id],
+      })
+      expect(retired.statusCode, retired.body).toBe(200)
+      const settings = retired.json() as DocumentSettings
+      expect(settings.files[0]).toMatchObject({ id: file.id, retired: true })
+      expect(settings.attachments).toEqual({ quote: [file.id], dunning_notice: [file.id] })
+      const after = (
+        await admin.get(`/api/v1/documents/${quote.id}/email`)
+      ).json() as DocumentEmailDraft
+      expect(after.files).toEqual([])
+      const plain = await admin.post(`/api/v1/documents/${quote.id}/email`, {
+        to: 'kunde@example.test',
+        subject: 'Angebot',
+        text: 'Anbei',
+      })
+      expect((plain.json() as DocumentEmailDraft).history[0]?.attachments).toHaveLength(1)
     })
   },
 )

@@ -45,6 +45,7 @@ export const DEFAULT_DOCUMENT_SETTINGS: DocumentSettingsRequest = {
   progressBillingMode: 'cumulative',
   fileNamePattern: DEFAULT_FILE_NAME_PATTERN,
   attachments: {},
+  retiredAttachments: [],
 }
 
 const ATTACHMENT_MAX_BYTES = 10 * 1024 * 1024
@@ -101,6 +102,30 @@ export async function documentFileName(
   return fileNameFrom(fileNamePattern, fileNameValues(doc), extension)
 }
 
+/**
+ * File name after the company's pattern for other files (Mahnung, Aufmaßblatt, Bericht, XRechnung):
+ * the same placeholders, filled from the file's own values; `suffix` is appended to the name.
+ */
+export async function patternFileName(
+  tx: Tx,
+  values: Partial<Record<FileNamePlaceholder, string | null>>,
+  extension = 'pdf',
+  suffix?: string,
+): Promise<string> {
+  const { fileNamePattern } = await documentSettings(tx)
+  const name = fileNameFrom(fileNamePattern, values, extension)
+  return suffix ? `${name.slice(0, -(extension.length + 1))}_${suffix}.${extension}` : name
+}
+
+/** File name of a document's XRechnung/ZUGFeRD XML: PDF name plus the format. */
+export async function documentXmlFileName(
+  tx: Tx,
+  doc: NamedDocument,
+  suffix: string,
+): Promise<string> {
+  return patternFileName(tx, fileNameValues(doc), 'xml', suffix)
+}
+
 /** Holidays of the company (statutory of its Bundesland + own) for the given years, as ISO dates. */
 export async function holidayDates(tx: Tx, years: number[]): Promise<Set<string>> {
   const [tenant] = await tx<{ state: string | null }[]>`
@@ -119,10 +144,22 @@ export async function holidayDates(tx: Tx, years: number[]): Promise<Set<string>
 }
 
 export async function attachmentFiles(tx: Tx): Promise<AttachmentFile[]> {
-  return tx<AttachmentFile[]>`
+  const retired = new Set((await documentSettings(tx)).retiredAttachments)
+  const rows = await tx<Omit<AttachmentFile, 'retired'>[]>`
     select id, name, size_bytes::float8 as "sizeBytes",
            to_char(created_at at time zone 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS.MS"Z"') as "createdAt"
     from tenant_asset where kind = 'attachment' order by created_at desc`
+  return rows.map((row) => ({ ...row, retired: retired.has(row.id) }))
+}
+
+/** Automatic attachments of a document type (or of Mahnungen) that are still offered. */
+export async function automaticAttachments(
+  tx: Tx,
+  type: keyof DocumentSettingsRequest['attachments'],
+): Promise<string[]> {
+  const settings = await documentSettings(tx)
+  const retired = new Set(settings.retiredAttachments)
+  return (settings.attachments[type] ?? []).filter((id) => !retired.has(id))
 }
 
 async function loadSettings(tx: Tx): Promise<DocumentSettings> {
@@ -164,7 +201,9 @@ export function registerDocumentSettingsRoutes(app: FastifyInstance, services: S
     const patternError = checkFileNamePattern(input.fileNamePattern)
     if (patternError) throw invalid({ fileNamePattern: patternError })
     return inTenant(services, auth, async (tx) => {
-      const ids = [...new Set(Object.values(input.attachments).flat())] as string[]
+      const ids = [
+        ...new Set([...Object.values(input.attachments).flat(), ...input.retiredAttachments]),
+      ] as string[]
       if (ids.length) {
         const found = await tx<{ id: string }[]>`
           select id from tenant_asset where kind = 'attachment' and id in ${tx(ids)}`
@@ -175,7 +214,11 @@ export function registerDocumentSettingsRoutes(app: FastifyInstance, services: S
       const attachments = Object.fromEntries(
         Object.entries(input.attachments).filter(([, list]) => list?.length),
       )
-      const stored = { ...input, attachments }
+      const stored = {
+        ...input,
+        attachments,
+        retiredAttachments: [...new Set(input.retiredAttachments)],
+      }
       await tx`update tenant set settings = jsonb_set(settings, '{documents}', ${tx.json(stored as never)})
                where id = current_tenant_id()`
       return loadSettings(tx)

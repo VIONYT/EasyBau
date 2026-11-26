@@ -17,7 +17,7 @@ Nach der Installation fragt EasyBau einmalig nach dem **Einrichtungscode** (vom 
 | **Zuschläge**, **Lohngruppen** | Grundlage der Kalkulation: Kosten je Stunde und Zuschlag ergeben den Stundenverrechnungssatz. |
 | **Arbeitszeiten**, **Feiertage** | Gesetzliche Feiertage Ihres Bundeslands werden berechnet; örtliche Feiertage tragen Sie selbst ein. |
 | **Textbausteine** | Anfangs- und Schlusstexte für Dokumente. |
-| **Dokumente** | Lohnkostenanteil nach § 35a ausweisen (Standard: Rechnungen an Privatpersonen), kumulierte oder einzelne Abschläge, Dateinamen der PDFs, automatische Anhänge (z. B. AGB) je Dokumentart. |
+| **Dokumente** | Lohnkostenanteil nach § 35a ausweisen (Standard: Rechnungen an Privatpersonen), kumulierte oder einzelne Abschläge, Dateinamen (gilt für Dokumente, Mahnungen, Aufmaßblätter, Berichte und XRechnung-Dateien), automatische Anhänge (z. B. AGB) je Dokumentart und für Mahnungen; alte Fassungen mit **Nicht mehr anbieten** ausblenden (sie bleiben gespeichert). |
 | **Briefpapier** | Briefkopf nach DIN 5008 Form B mit Logo, Absenderzeile und Fußzeile – direkt auf der Seite bearbeiten (unten). |
 | **Ablage** | Ordnervorlage für neue Projekte (z. B. Pläne, Fotos, Verträge). |
 | **DATEV** | Kontenrahmen SKR03/SKR04, Berater- und Mandantennummer, Erlös- und Aufwandskonten. |
