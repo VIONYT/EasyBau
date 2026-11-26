@@ -1,8 +1,8 @@
-import type { ContactDetail, ContactSummary, Me, Page } from '@easybau/schemas'
+import type { ContactColor, ContactDetail, ContactSummary, Me, Page } from '@easybau/schemas'
 import { useCallback, useEffect, useId, useState } from 'react'
 import { api } from '../api'
 import { Field, FormError, optional, useForm } from '../forms'
-import { t } from '../i18n'
+import { t, tf } from '../i18n'
 import { hasWaitingChanges } from '../offline/client'
 import { OfflineBar } from '../offline/OfflineBar'
 import { type Navigate, parseRoute, type Route, useRoute } from '../router'
@@ -244,12 +244,13 @@ function useList<T>(path: string) {
   return { items, error, reload }
 }
 
-const NO_CONTACT_FILTER = { kind: '', customer: '', archived: false }
+const NO_CONTACT_FILTER = { kind: '', customer: '', color: '', archived: false }
 
 function contactQuery(query: string, filter: typeof NO_CONTACT_FILTER) {
   const params = new URLSearchParams({ q: query })
   if (filter.kind) params.set('kind', filter.kind)
   if (filter.customer) params.set('customer', filter.customer)
+  if (filter.color) params.set('color', filter.color)
   if (filter.archived) params.set('archived', 'true')
   return params.toString()
 }
@@ -269,6 +270,12 @@ function Contacts({
   const [importing, setImporting] = useState(false)
   const filterId = useId()
   const list = useList<ContactSummary>(`/api/v1/contacts?${contactQuery(query, filter)}`)
+  const [colors, setColors] = useState<ContactColor[]>([])
+  useEffect(() => {
+    api<ContactColor[]>('GET', '/api/v1/contacts/colors')
+      .then(setColors)
+      .catch(() => undefined)
+  }, [])
   const canWrite = me.permissions.includes('contacts.write')
   const [kind, setKind] = useState<'organization' | 'person'>('organization')
   const setSelected = (id: string | null) =>
@@ -343,6 +350,35 @@ function Contacts({
           </select>
         </div>
       </div>
+      {colors.length ? (
+        <fieldset className="plain color-filter">
+          <legend>{t('contacts.filter.color')}</legend>
+          <label className="color-swatch-option">
+            <input
+              type="radio"
+              name={`${filterId}-color`}
+              checked={!filter.color}
+              onChange={() => setFilter({ ...filter, color: '' })}
+            />
+            <span>{t('contacts.filter.all')}</span>
+          </label>
+          {colors.map((c) => (
+            <label key={c.color} className="color-swatch-option">
+              <input
+                type="radio"
+                name={`${filterId}-color`}
+                checked={filter.color === c.color}
+                onChange={() => setFilter({ ...filter, color: c.color })}
+              />
+              <span className="color-swatch" style={{ background: c.color }} aria-hidden="true" />
+              <span className="visually-hidden">
+                {tf('contacts.filter.colorOption', { color: c.color })}
+              </span>
+              <span className="muted">{c.count}</span>
+            </label>
+          ))}
+        </fieldset>
+      ) : null}
       <label className="check">
         <input
           type="checkbox"

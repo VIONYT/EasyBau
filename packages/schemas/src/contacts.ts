@@ -19,6 +19,8 @@ export const contactChannel = z.object({
 })
 
 export const contactAddress = z.object({
+  /** Existing address (kept with its id, e.g. chosen in documents); missing = new address. */
+  id: id.optional(),
   kind: z.enum(['main', 'billing', 'delivery', 'other']),
   recipientBlock: optionalText(500),
   street: optionalText(200),
@@ -93,6 +95,11 @@ export type CreateContactRequest = z.infer<typeof createContactRequest>
 export const updateContactRequest = z.object(contactFields).partial()
 export type UpdateContactRequest = z.infer<typeof updateContactRequest>
 
+export interface ContactColor {
+  color: string
+  count: number
+}
+
 export const contactListQuery = listQuery.extend({
   kind: contactKind.optional(),
   color: color.optional(),
@@ -124,6 +131,14 @@ export const CONTACT_CSV_COLUMNS = [
   'Leitweg-ID',
   'E-Mail für E-Rechnungen',
   'Beschreibung',
+  'Zahlungsbedingung',
+  'Farbe',
+  'Rechnung Empfänger',
+  'Rechnung Straße',
+  'Rechnung PLZ',
+  'Rechnung Ort',
+  'Rechnung Land',
+  'Funktion',
 ] as const
 
 /** CSV-Import (POST /contacts/import): preview first (dryRun), then import. */

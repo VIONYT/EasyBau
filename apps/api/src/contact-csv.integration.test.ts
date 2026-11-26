@@ -223,4 +223,57 @@ describe.skipIf(!process.env.DATABASE_URL)('Kontakte CSV und Filter (integration
     const wohnbau = (await admin.get(`/api/v1/contacts/${customer.id}`)).json() as ContactDetail
     expect(wohnbau.links.map((l) => l.displayName)).toEqual(['Kaiser, Tom'])
   })
+
+  it('imports and exports Rechnungsempfänger, Zahlungsbedingung, Farbe and Funktion', async () => {
+    const terms = (await admin.get('/api/v1/settings/payment-terms')).json() as { name: string }[]
+    const term = terms[0]?.name as string
+    const file = [
+      'Firma;Vorname;Nachname;Straße;PLZ;Ort;Zahlungsbedingung;Farbe;Rechnung Empfänger;Rechnung Straße;Rechnung PLZ;Rechnung Ort;Funktion',
+      `Farbe & Co KG;;;Ring 1;30171;Hannover;${term};2E7D32;Farbe & Co KG | Buchhaltung;Postfach 4;30001;Hannover;`,
+      `Farbe & Co KG;Lena;Lack;;;;;;;;;;Bauleitung`,
+      'Falsch GmbH;;;;;;Nie;;;;;;',
+      'Bunt GmbH;;;;;;;grün;;;;;',
+    ].join('\r\n')
+    const res = await admin.post('/api/v1/contacts/import', {
+      csv: file,
+      dryRun: false,
+      createOrganizations: true,
+    })
+    expect(res.statusCode, res.body).toBe(200)
+    const result = res.json()
+    expect(result.rows.map((r: { action: string }) => r.action)).toEqual([
+      'create',
+      'create',
+      'error',
+      'error',
+    ])
+    expect(result.rows[2].message).toMatch(/Unbekannte Zahlungsbedingung „Nie“/)
+    const list = (await admin.get('/api/v1/contacts?q=Farbe')).json()
+    const org = (
+      await admin.get(
+        `/api/v1/contacts/${list.items.find((c: { kind: string }) => c.kind === 'organization').id}`,
+      )
+    ).json()
+    expect(org.color).toBe('#2e7d32')
+    expect(org.paymentTermId).toBeTruthy()
+    expect(org.addresses.find((a: { kind: string }) => a.kind === 'billing')).toMatchObject({
+      recipientBlock: 'Farbe & Co KG\nBuchhaltung',
+      street: 'Postfach 4',
+    })
+    expect(org.links).toEqual([
+      expect.objectContaining({ displayName: 'Lack, Lena', role: 'Bauleitung' }),
+    ])
+
+    const csvFile = (await admin.get('/api/v1/contacts/export.csv')).body
+    const [header, ...rows] = parseCsv(csvFile)
+    const records = rows.map((r) => Object.fromEntries((header ?? []).map((h, i) => [h, r[i]])))
+    expect(records.find((r) => r.Firma === 'Farbe & Co KG')).toMatchObject({
+      Zahlungsbedingung: term,
+      Farbe: '#2e7d32',
+      'Rechnung Empfänger': 'Farbe & Co KG | Buchhaltung',
+      'Rechnung PLZ': '30001',
+      'Rechnung Land': 'DE',
+    })
+    expect(records.find((r) => r.Nachname === 'Lack')).toMatchObject({ Funktion: 'Bauleitung' })
+  })
 })

@@ -502,6 +502,7 @@ export async function liveRecipient(
   tx: Tx,
   contactId: string | null,
   contactPersonId: string | null = null,
+  addressId: string | null = null,
 ): Promise<DocumentDetail['recipient']> {
   if (!contactId) return null
   const [c] = await tx<
@@ -550,8 +551,9 @@ export async function liveRecipient(
   >`
     select recipient_block as "recipientBlock", street, street_extra as "streetExtra",
            postal_code as "postalCode", city, country_code as "countryCode"
-    from contact_address where contact_id = ${contactId} and kind in ('billing', 'main')
-    order by (kind = 'billing') desc limit 1`
+    from contact_address
+    where contact_id = ${contactId} and (kind in ('billing', 'main') or id = ${addressId}::uuid)
+    order by (id = ${addressId}::uuid) is true desc, (kind = 'billing') desc limit 1`
   if (!a) return { name: c.name, lines: attention, ...extra }
   const block =
     a.recipientBlock
@@ -610,7 +612,7 @@ export async function loadDocument(
            json_build_object('id', p.id, 'number', p.number, 'name', p.name) as project,
            case when c.id is null then null else json_build_object('id', c.id, 'displayName', c.display_name) end as contact,
            case when cp.id is null then null else json_build_object('id', cp.id, 'displayName', cp.display_name) end as "contactPerson",
-           d.contact_id as "contactId",
+           d.contact_id as "contactId", d.recipient_address_id as "recipientAddressId",
            d.place_of_performance as "placeOfPerformance",
            ${DATE(tx, 'd.service_from')} as "serviceFrom", ${DATE(tx, 'd.service_to')} as "serviceTo",
            ${DATE(tx, 'd.valid_until')} as "validUntil",
@@ -713,7 +715,9 @@ export async function loadDocument(
   const detail: DocumentDetail = {
     ...doc,
     issuer: issuerSnapshot ?? (await liveIssuer(tx)),
-    recipient: recipientSnapshot ?? (await liveRecipient(tx, contactId, doc.contactPerson?.id)),
+    recipient:
+      recipientSnapshot ??
+      (await liveRecipient(tx, contactId, doc.contactPerson?.id, doc.recipientAddressId)),
     changeOrderInfo: info
       ? {
           ...info,
@@ -1184,6 +1188,7 @@ export function registerDocumentRoutes(app: FastifyInstance, services: Services)
         placeOfPerformance: 'place_of_performance',
         contactId: 'contact_id',
         contactPersonId: 'contact_person_id',
+        recipientAddressId: 'recipient_address_id',
         introText: 'intro_text',
         closingText: 'closing_text',
         paymentDueDays: 'payment_due_days',
@@ -1220,6 +1225,20 @@ export function registerDocumentRoutes(app: FastifyInstance, services: Services)
           }
           input.contactPersonId = null
         }
+      }
+      // Anschrift: one of the recipient's addresses; another recipient resets it.
+      if (input.recipientAddressId) {
+        const [address] = recipientId
+          ? await tx`select 1 from contact_address where id = ${input.recipientAddressId}
+                     and contact_id = ${recipientId}`
+          : []
+        if (!address) {
+          throw new HttpError(400, 'Die Eingaben sind unvollständig oder ungültig.', {
+            recipientAddressId: 'Die Anschrift gehört nicht zu diesem Empfänger.',
+          })
+        }
+      } else if (input.contactId !== undefined && input.contactId !== links?.contactId) {
+        input.recipientAddressId = null
       }
       const columns: Record<string, unknown> = {}
       for (const [key, column] of Object.entries(map)) {

@@ -34,6 +34,7 @@ function sampleDocument(items = 3): DocumentDetail {
     project: { id: 'p', number: 'P-00101', name: 'Sanierung Lindenweg' },
     contact: { id: 'c', displayName: 'Wohnbau Nord eG' },
     contactPerson: null,
+    recipientAddressId: null,
     placeOfPerformance: 'Lindenweg 4, 30159 Hannover',
     serviceFrom: '2026-10-01',
     serviceTo: '2026-11-20',

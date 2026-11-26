@@ -114,6 +114,63 @@ describe.skipIf(!process.env.DATABASE_URL)('Kontakte zusammenführen, z. Hd. (in
     )
   })
 
+  it('uses a chosen address of the recipient (Lieferanschrift) in the document', async () => {
+    const client = await contact({
+      kind: 'organization',
+      organizationName: 'Bauträger Süd GmbH',
+      addresses: [
+        { kind: 'main', street: 'Marktplatz 1', postalCode: '80331', city: 'München' },
+        { kind: 'delivery', street: 'Baustelle Isarweg 5', postalCode: '80469', city: 'München' },
+      ],
+    })
+    const delivery = client.addresses.find((a) => a.kind === 'delivery')
+    const project = (
+      await admin.post('/api/v1/projects', { name: 'Isarweg', customerId: client.id })
+    ).json()
+    const doc = (
+      await admin.post(`/api/v1/projects/${project.id}/documents`, { type: 'quote' })
+    ).json() as DocumentDetail
+    expect(doc.recipient?.lines).toContain('Marktplatz 1')
+    const foreign = await admin.patch(
+      `/api/v1/documents/${doc.id}`,
+      { recipientAddressId: target.addresses[0]?.id },
+      { 'if-match': await etagOf(doc.id) },
+    )
+    expect(foreign.statusCode).toBe(400)
+    const chosen = await admin.patch(
+      `/api/v1/documents/${doc.id}`,
+      { recipientAddressId: delivery?.id },
+      { 'if-match': await etagOf(doc.id) },
+    )
+    expect(chosen.statusCode, chosen.body).toBe(200)
+    expect((chosen.json() as DocumentDetail).recipient?.lines).toContain('Baustelle Isarweg 5')
+    // Saving the contact keeps the address (and its id) – the document still uses it.
+    const current = await admin.get(`/api/v1/contacts/${client.id}`)
+    const saved = await admin.patch(
+      `/api/v1/contacts/${client.id}`,
+      {
+        addresses: (current.json() as ContactDetail).addresses.map((a) =>
+          a.kind === 'delivery' ? { ...a, street: 'Baustelle Isarweg 7' } : a,
+        ),
+      },
+      { 'if-match': current.headers.etag as string },
+    )
+    expect(saved.statusCode, saved.body).toBe(200)
+    expect((saved.json() as ContactDetail).addresses.find((a) => a.kind === 'delivery')?.id).toBe(
+      delivery?.id,
+    )
+    const reloaded = (await admin.get(`/api/v1/documents/${doc.id}`)).json() as DocumentDetail
+    expect(reloaded.recipientAddressId).toBe(delivery?.id)
+    expect(reloaded.recipient?.lines).toContain('Baustelle Isarweg 7')
+    // Another recipient resets the choice.
+    const other = await admin.patch(
+      `/api/v1/documents/${doc.id}`,
+      { contactId: person.id },
+      { 'if-match': await etagOf(doc.id) },
+    )
+    expect((other.json() as DocumentDetail).recipientAddressId).toBeNull()
+  })
+
   it('merges a duplicate: moves what may change, keeps finalised documents', async () => {
     const invoice = (
       await admin.post(`/api/v1/projects/${projectId}/documents`, {

@@ -1,5 +1,6 @@
 import type { Tx } from '@easybau/db'
 import {
+  type ContactColor,
   type ContactDetail,
   type ContactSummary,
   type CreateContactRequest,
@@ -68,8 +69,19 @@ async function replaceChildren(
     }
   }
   if (input.addresses) {
-    await tx`delete from contact_address where contact_id = ${contactId}`
+    // Addresses keep their id (documents may refer to one); missing ones are removed.
+    const keep = input.addresses.map((a) => a.id).filter((v): v is string => Boolean(v))
+    await tx`delete from contact_address where contact_id = ${contactId}
+             and (${keep.length === 0} or id <> all(${keep}::uuid[]))`
     for (const a of input.addresses) {
+      const [updated] = a.id
+        ? await tx`
+            update contact_address set kind = ${a.kind}, recipient_block = ${a.recipientBlock ?? null},
+              street = ${a.street ?? null}, street_extra = ${a.streetExtra ?? null},
+              postal_code = ${a.postalCode ?? null}, city = ${a.city ?? null}, country_code = ${a.countryCode}
+            where id = ${a.id} and contact_id = ${contactId} returning id`
+        : []
+      if (updated) continue
       await tx`insert into contact_address (tenant_id, contact_id, kind, recipient_block, street, street_extra,
                                             postal_code, city, country_code)
                values (${tenantId}, ${contactId}, ${a.kind}, ${a.recipientBlock ?? null}, ${a.street ?? null},
@@ -174,6 +186,19 @@ export async function insertContact(
 
 export function registerContactRoutes(app: FastifyInstance, services: Services) {
   registerContactMergeRoutes(app, services, loadContact)
+  // Farben in Gebrauch (Farbfilter der Kontaktliste).
+  app.get('/api/v1/contacts/colors', async (request): Promise<ContactColor[]> => {
+    const auth = requirePermission(request, 'contacts.read')
+    return inTenant(
+      services,
+      auth,
+      (tx) => tx<ContactColor[]>`
+        select lower(color) as color, count(*)::int as count from contact
+        where color is not null and archived_at is null
+        group by lower(color) order by count(*) desc, lower(color) limit 50`,
+    )
+  })
+
   app.get('/api/v1/contacts', async (request): Promise<Page<ContactSummary>> => {
     const auth = requirePermission(request, 'contacts.read')
     const query = parse(contactListQuery, request.query)
@@ -194,7 +219,7 @@ export function registerContactRoutes(app: FastifyInstance, services: Services) 
       from contact c
       where (c.archived_at is not null) = ${query.archived === 'true'}
         and (${query.kind ?? null}::text is null or c.kind = ${query.kind ?? null})
-        and (${query.color ?? null}::text is null or c.color = ${query.color ?? null})
+        and (${query.color ?? null}::text is null or lower(c.color) = lower(${query.color ?? null}))
         and (${query.customer ?? null}::text is null or (c.number is not null) = ${query.customer === 'true'})
         and (${search}::text is null
              or lower(c.display_name) like ${search}

@@ -254,20 +254,27 @@ function HeaderForm({
   // Ansprechpartner („z. Hd.“): persons linked to the chosen recipient organization.
   const [recipientId, setRecipientId] = useState(doc.contact?.id ?? '')
   const [persons, setPersons] = useState<{ id: string; displayName: string }[]>([])
+  // Anschriften of the recipient (main, billing, delivery, other) for „Anschrift“.
+  const [addresses, setAddresses] = useState<ContactDetail['addresses']>([])
   useEffect(() => {
     if (!editable || !recipientId) {
       setPersons([])
+      setAddresses([])
       return
     }
     api<ContactDetail>('GET', `/api/v1/contacts/${recipientId}`)
-      .then((c) =>
+      .then((c) => {
         setPersons(
           c.links
             .filter((l) => l.kind === 'person')
             .map((l) => ({ id: l.contactId, displayName: l.displayName })),
-        ),
-      )
-      .catch(() => setPersons([]))
+        )
+        setAddresses(c.addresses)
+      })
+      .catch(() => {
+        setPersons([])
+        setAddresses([])
+      })
   }, [editable, recipientId])
   const form = useForm(
     async (data) => {
@@ -286,6 +293,9 @@ function HeaderForm({
           taxMode: value(data, 'taxMode'),
           contactId: value(data, 'contactId') || null,
           contactPersonId: value(data, 'contactPersonId') || null,
+          ...(data.has('recipientAddressId')
+            ? { recipientAddressId: value(data, 'recipientAddressId') || null }
+            : {}),
           // Another recipient: the server applies the default of the settings (§ 35a matrix).
           ...(doc.type !== 'delivery_note' &&
           (value(data, 'contactId') || null) === (doc.contact?.id ?? null)
@@ -381,6 +391,30 @@ function HeaderForm({
                 ...persons.map((p) => ({ value: p.id, label: p.displayName })),
               ]}
               error={form.fieldErrors.contactPersonId}
+            />
+          ) : null}
+          {addresses.length > 1 ? (
+            <SelectField
+              key={`address-${recipientId}`}
+              label={t('doc.recipientAddress')}
+              name="recipientAddressId"
+              defaultValue={
+                recipientId === (doc.contact?.id ?? '') ? (doc.recipientAddressId ?? '') : ''
+              }
+              options={[
+                { value: '', label: t('doc.recipientAddress.auto') },
+                ...addresses.map((a) => ({
+                  value: a.id,
+                  label: `${t(`doc.addressKind.${a.kind}` as TextKey)}: ${[
+                    a.recipientBlock?.split('\n')[0],
+                    a.street,
+                    [a.postalCode, a.city].filter(Boolean).join(' '),
+                  ]
+                    .filter(Boolean)
+                    .join(', ')}`,
+                })),
+              ]}
+              error={form.fieldErrors.recipientAddressId}
             />
           ) : null}
           <Field

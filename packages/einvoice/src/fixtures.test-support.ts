@@ -126,6 +126,7 @@ export function invoice(items: DocumentItem[], options: InvoiceOptions = {}): Do
     project: { id: 'p', number: 'P-00101', name: 'Sanierung Lindenweg 4' },
     contact: { id: 'c', displayName: 'Wohnbau Nord eG' },
     contactPerson: null,
+    recipientAddressId: null,
     placeOfPerformance: 'Lindenweg 4, 30159 Hannover',
     serviceFrom: options.serviceFrom === undefined ? '2026-10-01' : options.serviceFrom,
     serviceTo: options.serviceTo === undefined ? '2026-11-20' : options.serviceTo,

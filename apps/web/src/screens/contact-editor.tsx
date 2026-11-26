@@ -23,9 +23,9 @@ const LEITWEG_ID = /^\d{2,12}(-[A-Za-z0-9]{1,30})?-\d{2}$/
 const nullable = (data: FormData, name: string) => value(data, name) || null
 
 type Channel = Omit<ContactDetail['channels'][number], 'id'>
-type Address = Omit<ContactDetail['addresses'][number], 'id'>
-const emptyBilling = (): Address => ({
-  kind: 'billing',
+type Address = Omit<ContactDetail['addresses'][number], 'id'> & { id?: string }
+const emptyAddress = (kind: Address['kind'] = 'billing'): Address => ({
+  kind,
   recipientBlock: null,
   street: null,
   streetExtra: null,
@@ -59,6 +59,8 @@ export function ContactEditor({
   const [contact, setContact] = useState<{ data: ContactDetail; etag: string | null } | null>(null)
   const [channels, setChannels] = useState<Channel[]>([])
   const [billing, setBilling] = useState<Address | null>(null)
+  // Liefer- und sonstige Anschriften (Baustellenlieferung, Lager …).
+  const [others, setOthers] = useState<Address[]>([])
   const [terms, setTerms] = useState<PaymentTerm[]>([])
   const [loadError, setLoadError] = useState<string | null>(null)
   const [actionError, setActionError] = useState<string | null>(null)
@@ -69,7 +71,8 @@ export function ContactEditor({
     setContact(result)
     setChannels(result.data.channels.map(({ id: _, ...c }) => c))
     const b = result.data.addresses.find((a) => a.kind === 'billing')
-    setBilling(b ? (({ id: _, ...rest }) => rest)(b) : null)
+    setBilling(b ?? null)
+    setOthers(result.data.addresses.filter((a) => a.kind === 'delivery' || a.kind === 'other'))
   }, [])
   const reload = useCallback(
     () =>
@@ -94,9 +97,6 @@ export function ContactEditor({
     async (data) => {
       const current = contact as { data: ContactDetail; etag: string | null }
       const main = current.data.addresses.find((a) => a.kind === 'main')
-      const others = current.data.addresses
-        .filter((a) => a.kind !== 'main' && a.kind !== 'billing')
-        .map(({ id: _, ...rest }) => rest)
       const person = current.data.kind === 'person'
       return apiWithEtag<ContactDetail>(
         'PATCH',
@@ -123,6 +123,7 @@ export function ContactEditor({
           channels: channels.filter((c) => c.value.trim()),
           addresses: [
             {
+              ...(main ? { id: main.id } : {}),
               kind: 'main',
               recipientBlock: main?.recipientBlock ?? null,
               street: nullable(data, 'street'),
@@ -132,7 +133,9 @@ export function ContactEditor({
               countryCode: (value(data, 'countryCode') || 'DE').toUpperCase(),
             },
             ...(billing ? [{ ...billing, countryCode: billing.countryCode.toUpperCase() }] : []),
-            ...others,
+            ...others
+              .filter((a) => a.street || a.city || a.recipientBlock)
+              .map((a) => ({ ...a, countryCode: (a.countryCode || 'DE').toUpperCase() })),
           ],
         },
         current.etag,
@@ -368,49 +371,63 @@ export function ContactEditor({
             <input
               type="checkbox"
               checked={billing !== null}
-              onChange={(e) => setBilling(e.target.checked ? emptyBilling() : null)}
+              onChange={(e) => setBilling(e.target.checked ? emptyAddress() : null)}
             />
             <span>{t('contacts.billing')}</span>
           </label>
           {billing ? (
             <div className="stack billing-address">
               <p className="hint">{t('contacts.billingHint')}</p>
-              <div className="field">
-                <label htmlFor={`${headingId}-rb`}>{t('contacts.recipientBlock')}</label>
-                <textarea
-                  id={`${headingId}-rb`}
-                  rows={3}
-                  value={billing.recipientBlock ?? ''}
-                  onChange={(e) =>
-                    setBilling({ ...billing, recipientBlock: e.target.value || null })
-                  }
-                />
-              </div>
-              {(
-                [
-                  ['street', 'contacts.street'],
-                  ['streetExtra', 'contacts.streetExtra'],
-                  ['postalCode', 'contacts.postalCode'],
-                  ['city', 'contacts.city'],
-                  ['countryCode', 'contacts.country'],
-                ] as const
-              ).map(([key, label]) => (
-                <div key={key} className="field">
-                  <label htmlFor={`${headingId}-b-${key}`}>{t(label)}</label>
-                  <input
-                    id={`${headingId}-b-${key}`}
-                    value={billing[key] ?? ''}
-                    onChange={(e) =>
-                      setBilling({
-                        ...billing,
-                        [key]: key === 'countryCode' ? e.target.value : e.target.value || null,
-                      })
-                    }
-                  />
-                </div>
-              ))}
+              <AddressFields id={`${headingId}-b`} address={billing} onChange={setBilling} />
             </div>
           ) : null}
+
+          <h3>{t('contacts.otherAddresses')}</h3>
+          {others.map((address, index) => (
+            // biome-ignore lint/suspicious/noArrayIndexKey: addresses have no id here; order is the identity
+            <div key={index} className="stack billing-address">
+              <div className="row-with-action">
+                <div className="field">
+                  <label htmlFor={`${headingId}-o${index}-kind`}>{t('contacts.addressKind')}</label>
+                  <select
+                    id={`${headingId}-o${index}-kind`}
+                    className="select"
+                    value={address.kind}
+                    onChange={(e) =>
+                      setOthers(
+                        others.map((a, i) =>
+                          i === index ? { ...a, kind: e.target.value as Address['kind'] } : a,
+                        ),
+                      )
+                    }
+                  >
+                    <option value="delivery">{t('contacts.addressKind.delivery')}</option>
+                    <option value="other">{t('contacts.addressKind.other')}</option>
+                  </select>
+                </div>
+                <button
+                  type="button"
+                  className="button ghost icon danger"
+                  aria-label={t('contacts.removeAddress')}
+                  onClick={() => setOthers(others.filter((_, i) => i !== index))}
+                >
+                  ✕
+                </button>
+              </div>
+              <AddressFields
+                id={`${headingId}-o${index}`}
+                address={address}
+                onChange={(next) => setOthers(others.map((a, i) => (i === index ? next : a)))}
+              />
+            </div>
+          ))}
+          <button
+            type="button"
+            className="button ghost small"
+            onClick={() => setOthers([...others, emptyAddress('delivery')])}
+          >
+            {t('contacts.addAddress')}
+          </button>
 
           <h3>{t('contacts.more')}</h3>
           <Field
@@ -727,5 +744,53 @@ function ContactLinks({
       ) : null}
       <FormError>{error}</FormError>
     </div>
+  )
+}
+
+/** Empfängerzeilen and structured address (billing, delivery and other addresses). */
+function AddressFields({
+  id,
+  address,
+  onChange,
+}: {
+  id: string
+  address: Address
+  onChange: (address: Address) => void
+}) {
+  return (
+    <>
+      <div className="field">
+        <label htmlFor={`${id}-rb`}>{t('contacts.recipientBlock')}</label>
+        <textarea
+          id={`${id}-rb`}
+          rows={3}
+          value={address.recipientBlock ?? ''}
+          onChange={(e) => onChange({ ...address, recipientBlock: e.target.value || null })}
+        />
+      </div>
+      {(
+        [
+          ['street', 'contacts.street'],
+          ['streetExtra', 'contacts.streetExtra'],
+          ['postalCode', 'contacts.postalCode'],
+          ['city', 'contacts.city'],
+          ['countryCode', 'contacts.country'],
+        ] as const
+      ).map(([key, label]) => (
+        <div key={key} className="field">
+          <label htmlFor={`${id}-${key}`}>{t(label)}</label>
+          <input
+            id={`${id}-${key}`}
+            value={address[key] ?? ''}
+            onChange={(e) =>
+              onChange({
+                ...address,
+                [key]: key === 'countryCode' ? e.target.value : e.target.value || null,
+              })
+            }
+          />
+        </div>
+      ))}
+    </>
   )
 }

@@ -110,6 +110,8 @@ export const updateDocumentRequest = z
     contactId: id.nullable(),
     /** Ansprechpartner („z. Hd.“): a person linked to the organization of the document. */
     contactPersonId: id.nullable(),
+    /** Address of the recipient for this document (delivery/other); null = automatic. */
+    recipientAddressId: id.nullable(),
     introText: optionalText(10_000),
     closingText: optionalText(10_000),
     paymentDueDays: z.number().int().min(0).max(365).nullable(),
@@ -469,6 +471,8 @@ export interface DocumentDetail extends DocumentSummary {
   contact: { id: string; displayName: string } | null
   /** Ansprechpartner („z. Hd.“ in the address block). */
   contactPerson: { id: string; displayName: string } | null
+  /** Chosen address of the recipient (drafts); null = Rechnungsempfänger, else Hauptanschrift. */
+  recipientAddressId: string | null
   placeOfPerformance: string | null
   serviceFrom: string | null
   serviceTo: string | null
