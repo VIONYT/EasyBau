@@ -28,6 +28,20 @@ const envSchema = z.object({
   APP_SECRET: z
     .string()
     .min(32, 'APP_SECRET muss mindestens 32 Zeichen lang sein (z. B. openssl rand -hex 32).'),
+  /**
+   * Optional pepper for password hashes (secret key K of argon2id). Only in the .env, never in
+   * the database: a stolen database or backup alone does not allow guessing passwords. Losing it
+   * locks out every login whose hash uses it (reset via „Passwort vergessen“ needed). Changing it:
+   * old value into PASSWORD_PEPPER_PREVIOUS until everybody has logged in once.
+   */
+  PASSWORD_PEPPER: z
+    .string()
+    .min(32, 'PASSWORD_PEPPER muss mindestens 32 Zeichen lang sein (z. B. openssl rand -hex 32).')
+    .optional(),
+  PASSWORD_PEPPER_PREVIOUS: z
+    .string()
+    .min(32, 'PASSWORD_PEPPER_PREVIOUS muss mindestens 32 Zeichen lang sein.')
+    .optional(),
   /** Optional fixed setup code; otherwise a random code is printed to the log on first start. */
   SETUP_TOKEN: z.string().min(8).optional(),
   /** Session lifetime in days (absolute) and idle timeout in hours. */
@@ -183,6 +197,14 @@ export function loadConfig(env: Record<string, string | undefined> = process.env
   ) {
     throw new ConfigError(
       'Invalid configuration:\n  - ARCHIVE_PREVIOUS_S3_ACCESS_KEY/ARCHIVE_PREVIOUS_S3_SECRET_KEY: Zugangsdaten für das bisherige Belegarchiv fehlen',
+    )
+  }
+  if (
+    parsed.data.PASSWORD_PEPPER_PREVIOUS &&
+    parsed.data.PASSWORD_PEPPER_PREVIOUS === parsed.data.PASSWORD_PEPPER
+  ) {
+    throw new ConfigError(
+      'Invalid configuration:\n  - PASSWORD_PEPPER_PREVIOUS: muss sich von PASSWORD_PEPPER unterscheiden',
     )
   }
   if (parsed.data.SMTP_HOST && !parsed.data.SMTP_FROM) {

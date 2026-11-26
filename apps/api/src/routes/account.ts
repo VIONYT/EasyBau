@@ -23,7 +23,6 @@ import {
 } from '../context.js'
 import { HttpError, notFound, parse } from '../http.js'
 import { randomToken, sha256 } from '../security/crypto.js'
-import { hashPassword, verifyPassword } from '../security/passwords.js'
 import { deleteSessionsOfUser } from '../security/sessions.js'
 import { audit, rateLimit } from './auth-common.js'
 import { queueEmail } from './email.js'
@@ -173,7 +172,7 @@ export function registerAccountRoutes(app: FastifyInstance, services: Services) 
     await rateLimit(services, `reset-token:ip:${request.ip}`, 30)
     const row = await findToken(sql, token, 'password_reset')
     if (!row) throw new HttpError(410, GENERIC_INVALID)
-    const passwordHash = await hashPassword(password)
+    const passwordHash = await services.passwords.hash(password)
     const used =
       await sql`update account_token set used_at = now() where id = ${row.id} and used_at is null`
     if (!used.count) throw new HttpError(410, GENERIC_INVALID)
@@ -314,7 +313,10 @@ export function registerAccountRoutes(app: FastifyInstance, services: Services) 
       select email, password_hash as "passwordHash", display_name as "displayName"
       from app_user where id = ${auth.userId}`
     if (!user) throw notFound('Die Person')
-    if (!user.passwordHash || !(await verifyPassword(user.passwordHash, currentPassword))) {
+    if (
+      !user.passwordHash ||
+      !(await services.passwords.verify(user.passwordHash, currentPassword))
+    ) {
       throw new HttpError(403, 'Das aktuelle Passwort ist falsch.', {
         currentPassword: 'Passwort ist falsch.',
       })

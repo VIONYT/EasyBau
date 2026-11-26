@@ -2,7 +2,7 @@ import { createSql, migrate, type Sql, withTenant } from '@easybau/db'
 import { ensureAppRole } from '@easybau/db/test-support'
 import type { FastifyInstance, LightMyRequestResponse } from 'fastify'
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
-import { buildApi, hashPassword } from './index.js'
+import { buildApi, PasswordHasher } from './index.js'
 import { base32Decode, hotp, totpStep } from './security/crypto.js'
 
 const baseUrl = process.env.DATABASE_URL
@@ -528,7 +528,7 @@ describe.skipIf(!baseUrl)('API: setup, login, contacts, projects (integration)',
     beforeAll(async () => {
       const [tenant] = await adminSql<{ id: string }[]>`select id from tenant limit 1`
       tenantId = tenant?.id as string
-      const passwordHash = await hashPassword('monteur-passwort-123')
+      const passwordHash = await new PasswordHasher().hash('monteur-passwort-123')
       const [user] = await adminSql<{ id: string }[]>`
         insert into app_user (email, display_name, password_hash)
         values ('monteur@example.test', 'Max Monteur', ${passwordHash}) returning id`
@@ -568,7 +568,7 @@ describe.skipIf(!baseUrl)('API: setup, login, contacts, projects (integration)',
     it('never shows data of another company', async () => {
       const [ids] = await adminSql<{ tenant: string }[]>`select uuid_v7() as tenant`
       const otherTenant = ids?.tenant as string
-      const passwordHash = await hashPassword('fremd-passwort-1234')
+      const passwordHash = await new PasswordHasher().hash('fremd-passwort-1234')
       const [user] = await adminSql<{ id: string }[]>`
         insert into app_user (email, display_name, password_hash)
         values ('fremd@example.test', 'Fremd', ${passwordHash}) returning id`

@@ -20,6 +20,13 @@ In `.env` mindestens setzen:
 
 Statt Werten in `.env` können Docker-Secrets genutzt werden: `APP_SECRET_FILE=/run/secrets/app_secret`.
 
+**Optional – Pepper für Passwörter (`PASSWORD_PEPPER`):** Passwörter werden immer mit argon2id und einem eigenen Zufalls-Salt je Person gespeichert; gleiche Passwörter ergeben nie den gleichen Hash. Ein Pepper ist zusätzlich ein geheimer Schlüssel (mind. 32 Zeichen, `openssl rand -hex 32`), der nur in der `.env` steht. Wer nur die Datenbank oder eine Sicherung erbeutet, kann die Passwörter damit nicht durchprobieren. Er hilft nur, wenn `.env` und Sicherungen getrennt aufbewahrt werden.
+
+- **Einschalten:** Wert setzen, Stack neu starten. Bestehende Passwörter bleiben gültig und werden bei der nächsten Anmeldung der Person umgestellt.
+- **Wechseln:** bisherigen Wert nach `PASSWORD_PEPPER_PREVIOUS`, neuen nach `PASSWORD_PEPPER`. Erst entfernen, wenn sich alle einmal angemeldet haben.
+- **Ausschalten:** Wert nach `PASSWORD_PEPPER_PREVIOUS` verschieben, `PASSWORD_PEPPER` leeren; jede Anmeldung stellt zurück um.
+- **Verlust:** Ohne den Wert kann sich niemand mit umgestelltem Passwort anmelden; nur „Passwort vergessen“ (bzw. ein Passwort-Link der Administration) hilft. Passkeys funktionieren weiter. Beim Start schreibt die App eine Warnung ins Log, wenn Passwörter einen nicht eingetragenen Pepper brauchen. Den Wert daher wie `APP_SECRET` getrennt sichern.
+
 **Variante A – vorgebaute Images (empfohlen, auch für kleine Server):** Die Images `app`, `web` und `kosit` liegen für amd64 und arm64 in der GitHub Container Registry; das Belegarchiv (RustFS) kommt als fest gepinntes Image des Herstellers. Es muss nichts gebaut werden.
 
 ```bash

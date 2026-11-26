@@ -2,6 +2,12 @@ import type { EmailChangeInfo, EmailChangeRequested, Me } from '@easybau/schemas
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
 import { deviceLabel } from './routes/security-notices.js'
 import { base32Decode, hotp, totpStep } from './security/crypto.js'
+import {
+  PasswordHasher,
+  parseStoredHash,
+  pepperKeyId,
+  unusablePasswordHashes,
+} from './security/passwords.js'
 import { Client, createHarness, type Harness } from './testing/harness.js'
 import { SoftAuthenticator } from './testing/soft-authenticator.js'
 
@@ -244,3 +250,59 @@ describe.skipIf(!process.env.DATABASE_URL)(
     })
   },
 )
+
+describe.skipIf(!process.env.DATABASE_URL)('Passwort-Pepper (integration)', () => {
+  const PEPPER = 'p'.repeat(40)
+  let h: Harness
+
+  beforeAll(async () => {
+    h = await createHarness({ requireAdminMfa: false, passwordPepper: PEPPER })
+  })
+
+  afterAll(async () => {
+    await h?.close()
+  })
+
+  const storedHash = async (email: string) =>
+    (
+      await h.adminSql<{ hash: string }[]>`
+      select password_hash as hash from app_user where email = ${email}`
+    )[0]?.hash
+
+  it('stores new passwords with the pepper and upgrades old hashes at the next login', async () => {
+    const admin = new Client(h.app)
+    await admin.post('/api/v1/setup', {
+      setupToken: h.setupToken,
+      company: { name: 'Pfeffer Bau GmbH' },
+      admin: {
+        email: 'chef@pfeffer.test',
+        password: 'ein-sehr-langes-passwort',
+        displayName: 'Chef',
+      },
+    })
+    expect(await storedHash('chef@pfeffer.test')).toMatch(
+      new RegExp(`^pepper:${pepperKeyId(PEPPER)}:\\$argon2id\\$`),
+    )
+
+    // A hash from before the pepper was switched on still works and is upgraded.
+    await h.adminSql`update app_user set password_hash = ${await new PasswordHasher().hash('ein-sehr-langes-passwort')}
+                     where email = 'chef@pfeffer.test'`
+    const login = await new Client(h.app).post('/api/v1/auth/login', {
+      email: 'chef@pfeffer.test',
+      password: 'ein-sehr-langes-passwort',
+    })
+    expect(login.statusCode, login.body).toBe(200)
+    expect(parseStoredHash((await storedHash('chef@pfeffer.test')) as string).keyId).toBe(
+      pepperKeyId(PEPPER),
+    )
+    expect(
+      await unusablePasswordHashes({
+        sql: h.adminSql,
+        passwords: new PasswordHasher({ pepper: PEPPER }),
+      }),
+    ).toBe(0)
+    expect(await unusablePasswordHashes({ sql: h.adminSql, passwords: new PasswordHasher() })).toBe(
+      1,
+    )
+  })
+})

@@ -16,7 +16,6 @@ import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify'
 import { mfaSetupRequired, requireAuth, type Services, sessionCookieName } from '../context.js'
 import { HttpError, parse } from '../http.js'
 import { generateTotpSecret, safeEqual, totpUri, verifyTotp } from '../security/crypto.js'
-import { hashPassword, needsRehash, verifyDummy, verifyPassword } from '../security/passwords.js'
 import {
   createSession,
   deleteSession,
@@ -62,7 +61,7 @@ export function registerAuthRoutes(app: FastifyInstance, services: Services) {
         setupToken: 'Einrichtungscode ist falsch.',
       })
     }
-    const passwordHash = await hashPassword(input.admin.password)
+    const passwordHash = await services.passwords.hash(input.admin.password)
 
     const created = await sql.begin(async (tx) => {
       // Serialise concurrent setup attempts; only the very first one may succeed.
@@ -121,17 +120,17 @@ export function registerAuthRoutes(app: FastifyInstance, services: Services) {
       select id, password_hash as "passwordHash", totp_secret_enc as "totpSecret", totp_last_step as "totpLastStep"
       from app_user where lower(email) = ${input.email} and is_active`
     if (!user?.passwordHash) {
-      await verifyDummy(input.password)
+      await services.passwords.verifyDummy(input.password)
       throw new HttpError(401, LOGIN_FAILED)
     }
-    if (!(await verifyPassword(user.passwordHash, input.password))) {
+    if (!(await services.passwords.verify(user.passwordHash, input.password))) {
       throw new HttpError(401, LOGIN_FAILED)
     }
 
     await resetRateLimit(sql, `login:email:${input.email}`)
     // Stronger argon2id parameters since the hash was stored: upgrade it now (the password is known).
-    if (needsRehash(user.passwordHash)) {
-      await sql`update app_user set password_hash = ${await hashPassword(input.password)} where id = ${user.id}`
+    if (services.passwords.needsRehash(user.passwordHash)) {
+      await sql`update app_user set password_hash = ${await services.passwords.hash(input.password)} where id = ${user.id}`
     }
     const methods = await mfaMethodsOf(services, user.id)
     if (methods.length === 0) {
@@ -235,12 +234,15 @@ export function registerAuthRoutes(app: FastifyInstance, services: Services) {
     await rateLimit(services, `password:${auth.userId}`, 10)
     const [user] = await sql<{ passwordHash: string | null }[]>`
       select password_hash as "passwordHash" from app_user where id = ${auth.userId}`
-    if (!user?.passwordHash || !(await verifyPassword(user.passwordHash, input.currentPassword))) {
+    if (
+      !user?.passwordHash ||
+      !(await services.passwords.verify(user.passwordHash, input.currentPassword))
+    ) {
       throw new HttpError(403, 'Das aktuelle Passwort ist falsch.', {
         currentPassword: 'Passwort ist falsch.',
       })
     }
-    await sql`update app_user set password_hash = ${await hashPassword(input.newPassword)} where id = ${auth.userId}`
+    await sql`update app_user set password_hash = ${await services.passwords.hash(input.newPassword)} where id = ${auth.userId}`
     await deleteSessionsOfUser(sql, auth.userId, auth.sessionId)
     await audit(services, auth.tenantId, auth.userId, 'password_changed')
     await passwordChangedNotice(services, auth.userId)
@@ -293,7 +295,7 @@ export function registerAuthRoutes(app: FastifyInstance, services: Services) {
       from app_user where id = ${auth.userId}`
     if (!user?.secret) throw new HttpError(409, 'Die Zwei-Faktor-Anmeldung ist nicht aktiv.')
     const passwordOk =
-      !!user.passwordHash && (await verifyPassword(user.passwordHash, input.password))
+      !!user.passwordHash && (await services.passwords.verify(user.passwordHash, input.password))
     const step = verifyTotp(
       services.cipher.decrypt(user.secret),
       input.code,

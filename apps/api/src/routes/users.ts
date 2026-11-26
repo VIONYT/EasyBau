@@ -16,7 +16,6 @@ import { z } from 'zod'
 import { inTenant, publicOrigin, requirePermission, type Services } from '../context.js'
 import { HttpError, notFound, parse } from '../http.js'
 import { randomToken, sha256 } from '../security/crypto.js'
-import { hashPassword, verifyPassword } from '../security/passwords.js'
 import { audit, finishLogin, rateLimit } from './auth-common.js'
 import { queueEmail } from './email.js'
 import { todayOf } from './receivables.js'
@@ -337,7 +336,7 @@ export function registerUserRoutes(app: FastifyInstance, services: Services) {
       // Existing login: joining another company requires its password (no account takeover).
       if (
         !existing.passwordHash ||
-        !(await verifyPassword(existing.passwordHash, input.password))
+        !(await services.passwords.verify(existing.passwordHash, input.password))
       ) {
         throw new HttpError(403, 'Das Passwort Ihres bestehenden Zugangs ist falsch.', {
           password: 'Passwort ist falsch.',
@@ -350,7 +349,7 @@ export function registerUserRoutes(app: FastifyInstance, services: Services) {
         throw new HttpError(400, 'Bitte Ihren Namen angeben.', { displayName: 'Pflichtfeld.' })
       const [created] = await sql<{ id: string }[]>`
         insert into app_user (email, display_name, password_hash, email_verified_at)
-        values (${invitation.email}, ${displayName}, ${await hashPassword(input.password)}, now())
+        values (${invitation.email}, ${displayName}, ${await services.passwords.hash(input.password)}, now())
         returning id`
       userId = (created as { id: string }).id
     }

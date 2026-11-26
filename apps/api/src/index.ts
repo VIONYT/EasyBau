@@ -53,9 +53,10 @@ import { registerSignatureRoutes } from './routes/signatures.js'
 import { registerUserRoutes } from './routes/users.js'
 import { registerWebauthnRoutes } from './routes/webauthn.js'
 import { FieldCipher } from './security/crypto.js'
+import { PasswordHasher, unusablePasswordHashes } from './security/passwords.js'
 
 export { HttpError } from './http.js'
-export { hashPassword } from './security/passwords.js'
+export { PasswordHasher } from './security/passwords.js'
 
 export interface ApiDeps {
   config: Pick<Config, 'APP_NAME' | 'APP_VERSION' | 'APP_ROLE' | 'PROFILE'> &
@@ -63,6 +64,8 @@ export interface ApiDeps {
       Pick<
         Config,
         | 'APP_SECRET'
+        | 'PASSWORD_PEPPER'
+        | 'PASSWORD_PEPPER_PREVIOUS'
         | 'SESSION_TTL_DAYS'
         | 'SESSION_IDLE_HOURS'
         | 'COOKIE_SECURE'
@@ -176,6 +179,10 @@ export function buildApi({
   const services: Services = {
     sql,
     cipher: new FieldCipher(config.APP_SECRET),
+    passwords: new PasswordHasher({
+      pepper: config.PASSWORD_PEPPER,
+      previousPepper: config.PASSWORD_PEPPER_PREVIOUS,
+    }),
     config: {
       APP_NAME: config.APP_NAME,
       SESSION_TTL_DAYS: config.SESSION_TTL_DAYS ?? 30,
@@ -237,6 +244,14 @@ export function buildApi({
     }
   })
 
+  app.addHook('onReady', async () => {
+    const stale = await unusablePasswordHashes(services)
+    if (stale > 0)
+      app.log.warn(
+        { logins: stale },
+        'Password hashes use a pepper that is not configured (PASSWORD_PEPPER/PASSWORD_PEPPER_PREVIOUS): these logins cannot sign in until their password is reset',
+      )
+  })
   app.addHook('preHandler', authHook(services))
   app.addHook('preHandler', mfaEnforcementHook(services))
   const idempotency = idempotencyHooks(services)

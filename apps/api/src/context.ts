@@ -6,6 +6,7 @@ import type { FastifyReply, FastifyRequest } from 'fastify'
 import { forbidden, HttpError } from './http.js'
 import type { EinvoiceValidator } from './kosit.js'
 import type { FieldCipher } from './security/crypto.js'
+import type { PasswordHasher } from './security/passwords.js'
 
 export interface AuthContext {
   sessionId: string
@@ -33,6 +34,8 @@ declare module 'fastify' {
 export interface Services {
   sql: Sql
   cipher: FieldCipher
+  /** Password hashes (argon2id, optional pepper). */
+  passwords: PasswordHasher
   config: Pick<
     Config,
     | 'APP_NAME'
