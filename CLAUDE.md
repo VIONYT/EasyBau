@@ -184,6 +184,16 @@ Vor jedem Commit: `pnpm lint && pnpm typecheck && pnpm test`. Vor einem Pull Req
 
 Wenn eine Anforderung einer dieser Regeln widerspricht: nicht umsetzen, sondern nachfragen.
 
+## Arbeitsweise (Verhaltensregeln gegen typische KI-Fehler)
+Übernommen aus den „Karpathy-Inspired Claude Code Guidelines“ (github.com/multica-ai/andrej-karpathy-skills, `CLAUDE.md`, MIT-Lizenz), übersetzt. Sie gelten zusätzlich zu den Projektregeln; bei Widerspruch gehen die Regeln dieser Datei vor (z. B. „Bildschirme bei Änderungen auf `packages/ui` umstellen“, Pflege der offenen Punkte). Bei trivialen Aufgaben mit Augenmaß anwenden – die Regeln bevorzugen Sorgfalt vor Tempo.
+
+1. **Erst denken, dann coden.** Nichts annehmen, Unklarheit nicht verstecken, Zielkonflikte offenlegen. Vor der Umsetzung Annahmen ausdrücklich nennen; bei Unsicherheit fragen. Gibt es mehrere Deutungen, sie vorstellen statt still eine zu wählen. Gibt es einen einfacheren Weg, ihn nennen und wenn nötig widersprechen. Ist etwas unklar: anhalten, benennen, fragen.
+2. **Einfachheit zuerst.** Der kleinste Code, der das Problem löst – nichts auf Vorrat. Keine Funktionen über die Anfrage hinaus, keine Abstraktionen für einmal genutzten Code, keine nicht verlangte „Flexibilität“ oder Konfigurierbarkeit, keine Fehlerbehandlung für unmögliche Fälle. Werden es 200 Zeilen, wo 50 reichen, neu schreiben. Prüffrage: Würde eine erfahrene Entwicklerin das überkompliziert nennen? Dann vereinfachen.
+3. **Gezielte Änderungen.** Nur anfassen, was nötig ist; nur die eigenen Spuren aufräumen. Benachbarten Code, Kommentare oder Formatierung nicht „verbessern“, nichts umbauen, was nicht kaputt ist, den vorhandenen Stil beibehalten. Unbeteiligten toten Code erwähnen, nicht löschen. Was durch die eigene Änderung ungenutzt wird (Importe, Variablen, Funktionen), entfernen; älteren toten Code nur auf Wunsch. Test: Jede geänderte Zeile lässt sich direkt auf die Anfrage zurückführen.
+4. **Zielgerichtet arbeiten.** Erfolgskriterien festlegen und so lange prüfen, bis sie erfüllt sind. Aufgaben in prüfbare Ziele übersetzen: „Validierung ergänzen“ → Tests für ungültige Eingaben schreiben und grün machen; „Fehler beheben“ → Test schreiben, der ihn zeigt, dann grün machen; „X umbauen“ → Tests vorher und nachher grün. Bei mehreren Schritten einen kurzen Plan nennen (`1. Schritt → prüfen: …`).
+
+Die Regeln wirken, wenn Diffs weniger unnötige Änderungen enthalten, seltener wegen Überkomplizierung neu geschrieben werden muss und Rückfragen vor der Umsetzung kommen statt nach Fehlern.
+
 ## Konventionen
 - **Code, Bezeichner, Commits auf Englisch; UI-Texte und Fachdokumentation auf Deutsch.** UI-Strings über i18n-Keys (`de-DE` als Basis), nie hart im Code.
 - Fachbegriffe im Code laut Glossar unten konsistent verwenden.
