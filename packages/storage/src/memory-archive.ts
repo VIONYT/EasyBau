@@ -53,4 +53,8 @@ export class MemoryArchiveStore implements ArchiveStore {
         }
       : null
   }
+
+  async list(prefix: string): Promise<string[]> {
+    return [...this.objects.keys()].filter((key) => key.startsWith(prefix)).sort()
+  }
 }

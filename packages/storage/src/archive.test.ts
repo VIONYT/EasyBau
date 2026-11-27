@@ -119,6 +119,34 @@ describe('Belegarchiv (S3 Object Lock)', () => {
   })
 })
 
+describe('listing archived keys', () => {
+  it('follows continuation tokens of ListObjectsV2', async () => {
+    const queries: string[] = []
+    const pages = [
+      '<ListBucketResult><Key>m/a&amp;b.json</Key><IsTruncated>true</IsTruncated><NextContinuationToken>t&amp;2</NextContinuationToken></ListBucketResult>',
+      '<ListBucketResult><Key>m/c.json</Key><IsTruncated>false</IsTruncated></ListBucketResult>',
+    ]
+    const store = new S3ArchiveStore(
+      {
+        endpoint: 'http://s3.example.test',
+        region: 'us-east-1',
+        bucket: 'archive',
+        accessKeyId: 'k',
+        secretAccessKey: 's',
+        forcePathStyle: true,
+      },
+      'COMPLIANCE',
+      async (url) => {
+        queries.push(new URL(String(url)).search)
+        return new Response(pages[queries.length - 1], { status: 200 })
+      },
+    )
+    expect(await store.list('m/')).toEqual(['m/a&b.json', 'm/c.json'])
+    expect(queries[0]).toContain('list-type=2')
+    expect(queries[1]).toContain('continuation-token=t%262')
+  })
+})
+
 /** Against a real S3 with Object Lock (Docker test pipeline, CI): set ARCHIVE_S3_ENDPOINT and credentials. */
 describe.skipIf(!process.env.ARCHIVE_S3_ENDPOINT)('Belegarchiv mit echtem S3 (integration)', () => {
   const store = new S3ArchiveStore({
@@ -154,6 +182,8 @@ describe.skipIf(!process.env.ARCHIVE_S3_ENDPOINT)('Belegarchiv mit echtem S3 (in
     })
     expect(await store.get('tenant/missing')).toBeNull()
     expect(await store.head('tenant/missing')).toBeNull()
+    expect(await store.list('tenant/')).toEqual([key])
+    expect(await store.list('other/')).toEqual([])
 
     // WORM: the locked version cannot be deleted, not even with the owner's credentials.
     const client = (store as unknown as { client: import('./s3.js').S3Client }).client

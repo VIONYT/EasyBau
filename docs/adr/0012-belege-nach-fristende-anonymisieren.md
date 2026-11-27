@@ -23,3 +23,7 @@ Geprüfte Alternativen:
 - Ein anonymisierter Beleg ist nur noch eine Zahlenzeile: Download, Druckansicht, E-Mail-Versand und Belege in Exporten entfallen (HTTP 410).
 - Nicht abgedeckt (offen): Eingangsrechnungen und ihre Originale, Zahlungsnotizen, Bild-Positionen (Datei der Ablage), Ablage-Dateien und Berichte; Einträge im Änderungsprotokoll vor Migration 0042 (nicht schwärzbar); Sicherungen bis zu ihrem Ablauf.
 - Bei externem S3 ohne `storage-setup` löscht der Betreiber mit den Werkzeugen des Anbieters und vermerkt es mit `archive_purge_done()`.
+
+## Nachtrag 2026-11-27: Wiederherstellung (Migration 0052)
+
+Eine ältere Sicherung enthält anonymisierte Belege und gelöschte Kontakte noch im alten Stand. Damit eine Wiederherstellung die Löschung nicht rückgängig macht, hinterlegt jede Anonymisierung und jede Kontaktlöschung eine Löschmarke (`erasure_marker`), die der Worker als kleines JSON (nur IDs, Freigabe, Datum) mit 10 Jahren Object Lock ins Belegarchiv schreibt. Das Archiv liegt außerhalb der Datenbank und wird nicht zurückgespielt. Beim Start des Workers und jede Nacht vor dem Archiv-Abgleich vergleicht er die Marken mit der Datenbank und wiederholt fehlende Anonymisierungen (mit der ursprünglichen Freigabe; die Frist prüft die Datenbank erneut) und Kontaktlöschungen. Ohne Belegarchiv gibt es keinen Ort außerhalb der Sicherung; dann bleibt es beim Wiederholen von Hand.

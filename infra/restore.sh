@@ -36,7 +36,7 @@ $DC up -d
 echo "Fertig. Bitte anmelden und Stichproben prüfen (Projekte, Dokumente, Dateien)."
 echo "Das Belegarchiv wird jetzt im Hintergrund vollständig abgeglichen (Betriebs-Check zeigt den Fortschritt)."
 echo
-echo "ACHTUNG Datenschutz: Belege, die NACH dem Stand dieser Sicherung anonymisiert wurden, und"
-echo "Kontakte, die danach gelöscht wurden, sind wieder da. Bitte unter Prüfung › Aufbewahrung die"
-echo "fälligen Belege erneut freigeben und gelöschte Kontakte erneut löschen (Löschprotokoll prüfen),"
-echo "danach 'sh infra/archive-purge.sh' ausführen."
+echo "Datenschutz: Belege, die NACH dem Stand dieser Sicherung anonymisiert, und Kontakte, die danach"
+echo "gelöscht wurden, anonymisiert bzw. löscht der Worker beim Start erneut (Löschmarken im Belegarchiv)."
+echo "Fehler dabei stehen im Worker-Log. Danach 'sh infra/archive-purge.sh' ausführen."
+echo "Ohne Belegarchiv: unter Prüfung › Aufbewahrung erneut freigeben und Kontakte erneut löschen."
