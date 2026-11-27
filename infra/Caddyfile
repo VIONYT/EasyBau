@@ -1,6 +1,11 @@
 # Reverse proxy and static file server. Only container exposed to the outside.
 {
 	admin off
+	# Behind another reverse proxy (compose.traefik.yaml) set TRUSTED_PROXIES, so the client IP
+	# from X-Forwarded-For reaches the app (rate limits). Default trusts nobody but loopback.
+	servers {
+		trusted_proxies static {$TRUSTED_PROXIES:127.0.0.1/32}
+	}
 }
 
 {$APP_DOMAIN:localhost} {

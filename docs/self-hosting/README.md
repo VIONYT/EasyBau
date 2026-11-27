@@ -42,6 +42,39 @@ docker compose up -d --no-build
 docker compose up -d --build
 ```
 
+### 1a. Hinter Traefik (oder einem anderen vorhandenen Reverse Proxy)
+
+Läuft auf dem Server schon Traefik für andere Dienste, belegt der mitgelieferte Caddy nicht selbst Port 80/443. Mit `compose.traefik.yaml` übernimmt Traefik HTTPS und Zertifikat; Caddy bleibt dahinter im Docker-Netz und liefert weiter die Weboberfläche aus und setzt Sicherheitsheader, die Frame-Ausnahme der PDF-Vorschau und die Cache-Regeln der App. Daran muss in Traefik nichts nachgebaut werden.
+
+Voraussetzungen: Docker Compose ab 2.24.4 (wegen `!reset` in der Overlay-Datei), Traefik v2/v3 mit Docker-Provider, ein externes Docker-Netz, in dem Traefik hängt (z. B. `docker network create traefik`), ein HTTPS-Entrypoint und ein Zertifikats-Resolver.
+
+In der `.env`:
+
+```bash
+COMPOSE_FILE=compose.yaml:compose.traefik.yaml
+APP_DOMAIN=erp.meine-firma.de       # Domain, unter der Traefik EasyBau ausliefert
+TRAEFIK_NETWORK=traefik             # Name des Docker-Netzes von Traefik
+TRAEFIK_ENTRYPOINT=websecure        # HTTPS-Entrypoint in Ihrer Traefik-Konfiguration
+TRAEFIK_CERTRESOLVER=letsencrypt    # Zertifikats-Resolver in Ihrer Traefik-Konfiguration
+```
+
+Dann wie gewohnt `docker compose up -d`. Prüfen: `https://<APP_DOMAIN>/healthz` antwortet mit `{"status":"ok"}`.
+
+- `PUBLIC_URL` bleibt `https://<APP_DOMAIN>` (Standard). Läuft Traefik auf einem anderen Port als 443, `PUBLIC_URL` mit Port setzen.
+- Die Weiterleitung von HTTP auf HTTPS ist Sache von Traefik (Entrypoint `web` mit Redirect).
+- Die Overlay-Datei lässt Caddy die Adresse aus `X-Forwarded-For` übernehmen (`TRUSTED_PROXIES=private_ranges`), damit die Anmeldesperren je Client-IP greifen. Das ist nur sicher, weil Caddy dabei keine Ports am Host hat; sonst könnte jeder im lokalen Netz eine falsche Adresse vortäuschen.
+- Benötigt das Web-Image ab der ersten Version nach 0.1.0 (`APP_VERSION=edge` oder selbst bauen); 0.1.0 kennt `TRUSTED_PROXIES` noch nicht.
+- **Anderer Reverse Proxy** (nginx, HAProxy, Caddy auf dem Host …): statt `compose.traefik.yaml` eine eigene kleine Override-Datei, die Caddy nur lokal veröffentlicht, z. B. `compose.override.yaml`:
+  ```yaml
+  services:
+    proxy:
+      ports: !override ["127.0.0.1:8080:80"]
+      environment:
+        APP_DOMAIN: ":80"
+        TRUSTED_PROXIES: private_ranges
+  ```
+  Der Proxy leitet dann auf `http://127.0.0.1:8080` weiter und reicht `Host` und `X-Forwarded-For` durch. Die Sicherheitsheader setzt weiterhin Caddy.
+
 ## 2. Ersteinrichtung
 
 Beim ersten Start ist das System noch ohne Firma. Damit niemand anderes eine frisch gestartete Instanz übernehmen kann, ist die Einrichtung durch einen **Einrichtungscode** geschützt:
