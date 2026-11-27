@@ -11,9 +11,11 @@ import { t, tf } from '../i18n'
  */
 export function ContactPrivacyPanel({
   contact,
+  canReport,
   onChanged,
 }: {
   contact: ContactDetail
+  canReport: boolean
   onChanged: () => void
 }) {
   const [plan, setPlan] = useState<ContactPrivacy | null>(null)
@@ -46,10 +48,12 @@ export function ContactPrivacyPanel({
         confirm: true,
       })
       setPlan(null)
+      const duplicates = result.duplicates.erased + result.duplicates.blocked
       setDone(
-        result.result === 'erased'
+        (result.result === 'erased'
           ? t('privacy.erasedNow')
-          : tf('privacy.blockedNow', { date: formatDateTime(result.blockedUntil, 'date') }),
+          : tf('privacy.blockedNow', { date: formatDateTime(result.blockedUntil, 'date') })) +
+          (duplicates ? ` ${tf('privacy.duplicatesDone', { n: String(duplicates) })}` : ''),
       )
       onChanged()
     } catch (err) {
@@ -85,6 +89,9 @@ export function ContactPrivacyPanel({
           {contact.kind === 'person' && plan.usage.projects ? (
             <p className="hint">{t('privacy.projects')}</p>
           ) : null}
+          {plan.usage.duplicates ? (
+            <p className="hint">{tf('privacy.duplicates', { n: String(plan.usage.duplicates) })}</p>
+          ) : null}
           {plan.usage.files + plan.usage.reports ? (
             <p className="hint">
               {tf('privacy.files', {
@@ -103,7 +110,7 @@ export function ContactPrivacyPanel({
       ) : null}
       <FormError>{error}</FormError>
       <div className="button-row">
-        <Button onClick={report}>{t('privacy.report')}</Button>
+        {canReport ? <Button onClick={report}>{t('privacy.report')}</Button> : null}
         {!contact.erasedAt && !contact.blockedUntil && !plan ? (
           <Button onClick={prepare}>{t('privacy.erase')}</Button>
         ) : null}

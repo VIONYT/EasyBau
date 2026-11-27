@@ -39,6 +39,7 @@ const kindParam = z.object({
     'delivery_note',
     'invoice',
     'credit_note',
+    'creditor',
   ]),
 })
 
@@ -100,6 +101,7 @@ export const DEFAULT_DATEV: DatevSettings = {
   bankAccount: null,
   expenseAccounts: {},
   creditorAccount: null,
+  autoCreditorNumbers: false,
 }
 
 export async function datevSettings(tx: Tx): Promise<DatevSettings> {
@@ -158,7 +160,7 @@ export function registerSettingsRoutes(app: FastifyInstance, services: Services)
       from tenant where id = current_tenant_id()`
     if (!row) throw notFound('Die Firma')
     const { ibanEnc, ...company } = row
-    return { ...company, iban: ibanEnc ? services.cipher.decrypt(ibanEnc) : null }
+    return { ...company, iban: ibanEnc ? services.cipher.decrypt(ibanEnc, 'tenant.iban') : null }
   }
 
   app.get('/api/v1/settings/company', async (request) => {
@@ -177,7 +179,7 @@ export function registerSettingsRoutes(app: FastifyInstance, services: Services)
       }
       if (input.iban !== undefined) {
         // Bank details are encrypted at rest (AES-256-GCM, APP_SECRET).
-        columns.iban_enc = input.iban ? services.cipher.encrypt(input.iban) : null
+        columns.iban_enc = input.iban ? services.cipher.encrypt(input.iban, 'tenant.iban') : null
       }
       if (Object.keys(columns).length) {
         await tx`update tenant set ${tx(columns)} where id = current_tenant_id()`
@@ -196,7 +198,7 @@ export function registerSettingsRoutes(app: FastifyInstance, services: Services)
                reset_yearly as "resetYearly"
         from number_sequence s
         order by array_position(array['contact','project','quote','cost_estimate','order_confirmation',
-                                      'delivery_note','invoice','credit_note'], kind)`
+                                      'delivery_note','invoice','credit_note','creditor'], kind)`
       return rows.map((r) => ({ ...r, preview: preview(r) }))
     })
   })
@@ -254,6 +256,12 @@ export function registerSettingsRoutes(app: FastifyInstance, services: Services)
                reset_yearly as "resetYearly"
         from number_sequence s where kind = ${kind}`
       if (!row) throw notFound('Der Nummernkreis')
+      // Kreditorennummern are DATEV personal accounts: digits only, 5–9 places.
+      if (kind === 'creditor' && !/^[0-9]{5,9}$/.test(preview(row))) {
+        throw invalid({
+          pattern: 'Kreditorennummern bestehen aus 5 bis 9 Ziffern (z. B. {Nummer} ab 70001).',
+        })
+      }
       return { ...row, preview: preview(row) }
     })
   })

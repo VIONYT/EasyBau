@@ -2,12 +2,15 @@ import type { Me } from '@easybau/schemas'
 import { useEffect, useState } from 'react'
 import { OfflineDb, type OutboxEntry } from './db'
 import {
+  BACKGROUND_SYNC_TAG,
   discardEntry,
+  exclusive,
   flushOutbox,
   isCacheable,
   pendingFor,
   readCache,
   retryEntry,
+  sendEntry,
   waiting,
   writeCache,
 } from './outbox'
@@ -184,26 +187,8 @@ export async function queueChange<T>(change: QueuedChange<T>): Promise<T> {
     attempts: 0,
   })
   await refreshEntries()
+  void requestBackgroundSync()
   return next
-}
-
-async function sendEntry(entry: OutboxEntry): Promise<Response> {
-  const headers: Record<string, string> = { accept: 'application/json' }
-  if (entry.method === 'POST') headers['idempotency-key'] = entry.idempotencyKey
-  let body: BodyInit | undefined
-  if (entry.blob) {
-    headers['content-type'] = 'application/octet-stream'
-    body = entry.blob
-  } else if (entry.json !== undefined) {
-    headers['content-type'] = 'application/json'
-    body = JSON.stringify(entry.json)
-  }
-  return fetch(entry.path, {
-    method: entry.method,
-    headers,
-    credentials: 'same-origin',
-    ...(body === undefined ? {} : { body }),
-  })
 }
 
 let running: Promise<void> | null = null
@@ -214,7 +199,7 @@ export function syncNow(): Promise<void> {
   running ??= (async () => {
     publish({ syncing: true })
     try {
-      const result = await flushOutbox(db(), owner as string, sendEntry)
+      const result = await exclusive(() => flushOutbox(db(), owner as string, sendEntry))
       publish({
         needsLogin: result.needsLogin,
         online: !result.interrupted || status.online,
@@ -258,4 +243,24 @@ export function startOfflineSync() {
     if (document.visibilityState === 'visible') void syncNow()
   })
   setInterval(() => void syncNow(), 30_000)
+  // The service worker sent waiting changes in the background (Background Sync).
+  navigator.serviceWorker?.addEventListener('message', (event: MessageEvent) => {
+    if ((event.data as { type?: string } | null)?.type === 'outbox-synced') void refreshEntries()
+  })
+}
+
+/**
+ * Asks the browser to send the outbox once the device is online again, even if the app is closed
+ * by then (Background Sync; Chrome/Edge, mostly on Android). Elsewhere nothing happens and the app
+ * sends on its next start, as before.
+ */
+async function requestBackgroundSync() {
+  try {
+    const registration = await navigator.serviceWorker?.getRegistration()
+    const sync = (registration as { sync?: { register(tag: string): Promise<void> } } | undefined)
+      ?.sync
+    await sync?.register(BACKGROUND_SYNC_TAG)
+  } catch {
+    // Not allowed or not supported: the app syncs itself while it is open.
+  }
 }

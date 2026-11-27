@@ -36,6 +36,11 @@ export const sendDocumentEmailRequest = z.object({
   attachXrechnung: z.boolean().default(false),
   /** Company files to attach (AGB …); omitted = the automatic attachments of the document type. */
   fileIds: z.array(id).max(10, 'Höchstens 10 Anhänge.').optional(),
+  /** Files of the project's Ablage (Pläne, Fotos …). */
+  projectFileIds: z.array(id).max(10, 'Höchstens 10 Dateien aus der Ablage.').default([]),
+  /** Aufmaßblätter and Berichte of the project: rendered as PDF/A and stored in the Ablage. */
+  sheetIds: z.array(id).max(5, 'Höchstens 5 Aufmaßblätter.').default([]),
+  reportIds: z.array(id).max(5, 'Höchstens 5 Berichte.').default([]),
 })
 export type SendDocumentEmailRequest = z.infer<typeof sendDocumentEmailRequest>
 
@@ -70,6 +75,13 @@ export interface DocumentEmailDraft {
   xrechnung: { available: boolean; recommended: boolean; filenames: string[] }
   /** Company files (AGB …): all uploaded ones, `selected` = automatic attachment of this type. */
   files: { id: string; filename: string; sizeBytes: number; selected: boolean }[]
+  /** Files of the project's Ablage that can be attached (newest first). */
+  projectFiles: { id: string; filename: string; sizeBytes: number; folder: string | null }[]
+  /** Aufmaßblätter and Berichte of the project that can be attached as PDF. */
+  sheets: { id: string; title: string; measuredOn: string; status: string }[]
+  reports: { id: string; name: string; reportDate: string; status: string }[]
+  /** Largest total size of all attachments (bytes). */
+  maxAttachmentBytes: number
   history: DocumentEmailEntry[]
 }
 

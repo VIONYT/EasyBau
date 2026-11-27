@@ -6,6 +6,7 @@ import type {
   ProjectDetail,
 } from '@easybau/schemas'
 import { CHANGE_ORDER_BASES } from '@easybau/schemas/constants'
+import { Button } from '@easybau/ui'
 import { useEffect, useState } from 'react'
 import { type ApiError, api } from '../api'
 import { formatCents, formatDateTime } from '../format'
@@ -68,9 +69,9 @@ export function ProjectDocuments({
       <div className="section-head">
         <h2>{t('documents.title')}</h2>
         {canWrite && !creating ? (
-          <button type="button" className="button primary auto" onClick={() => setCreating(true)}>
+          <Button type="button" variant="primary" onClick={() => setCreating(true)}>
             {t('documents.new')}
-          </button>
+          </Button>
         ) : null}
       </div>
       {creating && documents ? (
@@ -243,16 +244,12 @@ function NewDocument({
         />
       ) : null}
       <div className="button-row">
-        <button
-          type="submit"
-          className="button primary auto"
-          disabled={form.busy || !choice?.available}
-        >
+        <Button type="submit" variant="primary" disabled={form.busy || !choice?.available}>
           {t('documents.create')}
-        </button>
-        <button type="button" className="button ghost" onClick={onCancel}>
+        </Button>
+        <Button type="button" variant="ghost" width="natural" onClick={onCancel}>
           {t('common.cancel')}
-        </button>
+        </Button>
       </div>
     </form>
   )

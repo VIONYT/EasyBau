@@ -30,6 +30,8 @@ const componentInput = z.object({
   /** Cost per unit; labor in min/Std: hourly rate (Stundensatz). */
   unitCostCents: cents,
   markupPercent: percent.nullish(),
+  /** Lohn: Lohngruppe. */
+  wageGroupId: id.nullish(),
 })
 
 const itemFields = {
@@ -73,6 +75,7 @@ export interface CatalogComponent {
   unit: UnitRef | null
   unitCostCents: number
   markupPercent: string | null
+  wageGroupId: string | null
 }
 
 export interface CatalogItem {
@@ -85,8 +88,9 @@ export interface CatalogItem {
   shortText: string
   longText: string | null
   unit: UnitRef
-  costCents: number
-  markupPercent: string
+  /** Purchase cost and markup; null for roles without price.view. */
+  costCents: number | null
+  markupPercent: string | null
   priceCents: number
   packSize: string | null
   calcMode: 'unit_price' | 'total_price'

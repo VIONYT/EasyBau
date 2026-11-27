@@ -242,6 +242,7 @@ export function registerCatalogCsvRoutes(app: FastifyInstance, services: Service
   app.get('/api/v1/catalog/export.csv', async (request, reply) => {
     const auth = requirePermission(request, 'catalog.read')
     const { kind } = parse(catalogExportQuery, request.query)
+    const prices = auth.permissions.has('price.view')
     const rows = await inTenant(
       services,
       auth,
@@ -266,11 +267,13 @@ export function registerCatalogCsvRoutes(app: FastifyInstance, services: Service
         r.short,
         r.long,
         r.unit,
-        germanAmount(r.cost ?? '0'),
-        (r.markup ?? '0').replace('.', ','),
+        // EK and markup only for roles with price.view (security audit run-1).
+        prices ? germanAmount(r.cost ?? '0') : null,
+        prices ? (r.markup ?? '0').replace('.', ',') : null,
         germanAmount(r.price ?? '0'),
         r.pack?.replace('.', ',') ?? null,
       ]),
+      { spreadsheet: true },
     )
     return reply
       .header('content-type', 'text/csv; charset=utf-8')

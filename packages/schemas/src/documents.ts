@@ -110,6 +110,8 @@ export const updateDocumentRequest = z
     contactId: id.nullable(),
     /** Ansprechpartner („z. Hd.“): a person linked to the organization of the document. */
     contactPersonId: id.nullable(),
+    /** Address of the recipient for this document (delivery/other); null = automatic. */
+    recipientAddressId: id.nullable(),
     introText: optionalText(10_000),
     closingText: optionalText(10_000),
     paymentDueDays: z.number().int().min(0).max(365).nullable(),
@@ -217,6 +219,8 @@ export const calculationRequest = z.object({
         unitCostCents: cents.refine((v) => v >= 0, 'Kosten dürfen nicht negativ sein.'),
         /** Zuschlag in percent; omitted: company default for the cost kind. */
         markupPercent: decimalText('Zuschlag', 4, 4).nullish(),
+        /** Lohn: Lohngruppe the hourly rate comes from (kept when the line is saved again). */
+        wageGroupId: id.nullish(),
       }),
     )
     .max(50),
@@ -349,6 +353,7 @@ export interface CostLine {
   unit: UnitRef | null
   unitCostCents: number
   markupPercent: string
+  wageGroupId: string | null
 }
 
 export interface DocumentTaxLine {
@@ -393,8 +398,9 @@ export interface DocumentTotals {
   /** Title id → subtotal of the positions below it. */
   titleSubtotals: Record<string, number>
   /** Kalkulation of the counted positions: cost, margin and planned labor hours (Soll-Stunden). */
-  costCents: number
-  marginCents: number
+  /** Soll-Kosten and margin; null for roles without price.view. */
+  costCents: number | null
+  marginCents: number | null
   laborHours: string
   /** Counted positions without calculation (price entered directly). */
   uncalculatedCount: number
@@ -428,6 +434,8 @@ export interface PartyAddress {
   buyerReference?: string | null
   einvoiceEmail?: string | null
   einvoiceFormat?: EinvoiceFormat | null
+  /** Ansprechpartner des Käufers (BT-56), frozen with the document. */
+  contactPerson?: string | null
 }
 
 /** E-Rechnung of a finalized invoice: the archived XML files, each validated by KoSIT. */
@@ -467,6 +475,8 @@ export interface DocumentDetail extends DocumentSummary {
   contact: { id: string; displayName: string } | null
   /** Ansprechpartner („z. Hd.“ in the address block). */
   contactPerson: { id: string; displayName: string } | null
+  /** Chosen address of the recipient (drafts); null = Rechnungsempfänger, else Hauptanschrift. */
+  recipientAddressId: string | null
   placeOfPerformance: string | null
   serviceFrom: string | null
   serviceTo: string | null
@@ -506,6 +516,8 @@ export interface DocumentDetail extends DocumentSummary {
   }
   recipient: PartyAddress | null
   finalizedAt: string | null
+  /** Anonymised after the retention period (C.12): texts replaced, originals deleted. */
+  purgedAt: string | null
   /** Change orders: main contract, reason. */
   changeOrderInfo: {
     contractId: string
@@ -514,6 +526,11 @@ export interface DocumentDetail extends DocumentSummary {
     evidence: EvidenceItem[]
     /** Teilbeauftragung: ids of the ordered positions; null unless partially accepted. */
     acceptedItemIds: string[] | null
+    /**
+     * Mehrmengen über 110 % der LV-Menge (VOB/B § 2 Abs. 3 Nr. 2): for the part above 110 % a new
+     * Einheitspreis may be agreed – the price stays as it is unless changed by hand.
+     */
+    priceReview: { itemId: string; oz: string | null; shortText: string | null; percent: string }[]
   } | null
   /** Schalter „Nachtragsangebot“ possible (draft quote/change order with a main contract). */
   canConvertToChangeOrder: boolean
@@ -644,4 +661,6 @@ export interface TargetPriceResult {
 /** „In Stammdaten speichern“: the position (with its Kalkulation) as a new Leistung. */
 export const saveToCatalogRequest = z.object({
   folderId: z.uuid('Ungültige ID.').nullish(),
+  /** Save although a Leistung with the same Kurztext and Einheit exists. */
+  allowDuplicate: z.boolean().default(false),
 })

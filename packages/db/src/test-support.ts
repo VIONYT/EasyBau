@@ -20,6 +20,8 @@ export async function ensureAppRole(sql: Sql): Promise<void> {
 }
 
 export interface TestDb {
+  /** Connection URL of the (possibly isolated) test database, administrator login. */
+  url: string
   admin: Sql
   app: Sql
   close: () => Promise<void>
@@ -51,6 +53,7 @@ export async function openTestDb(options: { isolated?: boolean } = {}): Promise<
   await migrate(admin)
   const app = createSql({ DATABASE_URL: url, DATABASE_POOL_MAX: 10 })
   return {
+    url,
     admin,
     app,
     close: async () => {

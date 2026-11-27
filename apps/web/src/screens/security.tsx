@@ -1,4 +1,5 @@
 import type { Me, SecurityOverview, TotpSetupResponse } from '@easybau/schemas'
+import { Button } from '@easybau/ui'
 import { useCallback, useEffect, useState } from 'react'
 import { type ApiError, api, downloadFile } from '../api'
 import { type ContrastMode, readContrast, saveContrast } from '../contrast'
@@ -95,14 +96,15 @@ function SecurityKeys({
                     : t('security.keyNeverUsed')}
                 </span>
               </span>
-              <button
+              <Button
                 type="button"
-                className="button ghost"
+                variant="ghost"
+                width="natural"
                 disabled={busyId === c.id}
                 onClick={() => remove(c.id)}
               >
                 {t('security.keyRemove')}
-              </button>
+              </Button>
             </li>
           ))}
         </ul>
@@ -117,9 +119,9 @@ function SecurityKeys({
             name="keyName"
             hint={t('security.keyNamePlaceholder')}
           />
-          <button type="submit" className="button primary" disabled={form.busy}>
+          <Button type="submit" variant="primary" width="natural" disabled={form.busy}>
             {t('security.keyAdd')}
-          </button>
+          </Button>
           {form.busy ? <p className="hint">{t('auth.keyHint')}</p> : null}
         </form>
       ) : (
@@ -166,9 +168,9 @@ function TotpCard({ enabled, onChanged }: { enabled: boolean; onChanged: () => v
       {!enabled && !setup ? (
         <>
           <FormError>{startError}</FormError>
-          <button type="button" className="button ghost" onClick={start}>
+          <Button type="button" variant="ghost" width="natural" onClick={start}>
             {t('security.totpStart')}
-          </button>
+          </Button>
         </>
       ) : null}
       {setup ? (
@@ -185,9 +187,9 @@ function TotpCard({ enabled, onChanged }: { enabled: boolean; onChanged: () => v
             required
             error={enable.fieldErrors.code}
           />
-          <button type="submit" className="button primary" disabled={enable.busy}>
+          <Button type="submit" variant="primary" width="natural" disabled={enable.busy}>
             {t('security.totpEnable')}
-          </button>
+          </Button>
         </form>
       ) : null}
       {enabled ? (
@@ -207,9 +209,9 @@ function TotpCard({ enabled, onChanged }: { enabled: boolean; onChanged: () => v
             autoComplete="one-time-code"
             required
           />
-          <button type="submit" className="button ghost" disabled={disable.busy}>
+          <Button type="submit" variant="ghost" width="natural" disabled={disable.busy}>
             {t('security.totpDisable')}
-          </button>
+          </Button>
         </form>
       ) : null}
     </div>
@@ -253,9 +255,9 @@ function PasswordCard() {
           required
           error={form.fieldErrors.newPassword}
         />
-        <button type="submit" className="button ghost" disabled={form.busy}>
+        <Button type="submit" variant="ghost" width="natural" disabled={form.busy}>
           {t('common.save')}
-        </button>
+        </Button>
       </form>
     </div>
   )
@@ -269,9 +271,10 @@ function MyDataCard() {
       <h2>{t('security.myData')}</h2>
       <p className="hint">{t('security.myDataHint')}</p>
       <FormError>{error}</FormError>
-      <button
+      <Button
         type="button"
-        className="button ghost"
+        variant="ghost"
+        width="natural"
         onClick={() =>
           downloadFile('/api/v1/auth/privacy-report').catch((err: ApiError) =>
             setError(err.message),
@@ -279,7 +282,7 @@ function MyDataCard() {
         }
       >
         {t('security.myDataDownload')}
-      </button>
+      </Button>
     </div>
   )
 }

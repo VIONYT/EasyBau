@@ -236,6 +236,67 @@ describe.skipIf(!process.env.DATABASE_URL)(
       ).toBe(400)
     })
 
+    it('keeps the Lohngruppe, asks before duplicates and saves into a chosen folder', async () => {
+      const created = await admin.post('/api/v1/settings/wage-groups', {
+        name: 'Fliesenleger',
+        costPerHourCents: 3800,
+        markupPercent: '20',
+      })
+      expect(created.statusCode, created.body).toBe(201)
+      const group = created.json().id as string
+      const draft = (await admin.get(`/api/v1/documents/${quote.id}`)).json() as DocumentDetail
+      const tiles = draft.items.find((i) => i.shortText === 'Fliesen')
+      const lines = tiles?.costLines.map((l, index) => ({
+        kind: l.kind,
+        description: l.description,
+        quantity: l.quantity,
+        unitId: l.unit?.id ?? null,
+        unitCostCents: l.unitCostCents,
+        markupPercent: l.markupPercent,
+        wageGroupId: index === 0 ? group : null,
+      }))
+      const calc = await admin.post(
+        `/api/v1/documents/${quote.id}/items/${tiles?.id}/calculation`,
+        { lines },
+      )
+      expect(calc.statusCode, calc.body).toBe(200)
+      const saved = (calc.json() as DocumentDetail).items.find((i) => i.id === tiles?.id)
+      expect(saved?.costLines.map((l) => l.wageGroupId)).toEqual([group, null])
+      const foreign = await admin.post(
+        `/api/v1/documents/${quote.id}/items/${tiles?.id}/calculation`,
+        { lines: [{ ...lines?.[0], wageGroupId: quote.id }] },
+      )
+      expect(foreign.statusCode).toBe(400)
+
+      // Same Kurztext and Einheit already in the Leistungen: asked first.
+      const again = await admin.post(
+        `/api/v1/documents/${quote.id}/items/${tiles?.id}/to-catalog`,
+        {},
+      )
+      expect(again.statusCode).toBe(409)
+      expect(again.json().detail).toMatch(/gibt es schon/)
+      const folders = (await admin.get('/api/v1/catalog/folders')).json() as {
+        id: string
+        kind: string
+      }[]
+      const folder = folders.filter((f) => f.kind === 'service').at(-1)?.id as string
+      const copy = await admin.post(`/api/v1/documents/${quote.id}/items/${tiles?.id}/to-catalog`, {
+        allowDuplicate: true,
+        folderId: folder,
+      })
+      expect(copy.statusCode, copy.body).toBe(201)
+      const item = copy.json() as CatalogItem
+      expect(item.folderId).toBe(folder)
+      expect(item.components.map((c) => c.wageGroupId)).toEqual([group, null])
+      // Back into a document: the cost line keeps the Lohngruppe.
+      const inserted = await admin.post(`/api/v1/documents/${quote.id}/items/from-catalog`, {
+        catalogItemId: item.id,
+      })
+      expect(inserted.statusCode, inserted.body).toBe(201)
+      const last = (inserted.json() as DocumentDetail).items.at(-1)
+      expect(last?.costLines[0]?.wageGroupId).toBe(group)
+    })
+
     it('creates versions of a finished quote with their own number suffix', async () => {
       expect((await admin.post(`/api/v1/documents/${quote.id}/versions`, {})).statusCode).toBe(409)
       const finished = (

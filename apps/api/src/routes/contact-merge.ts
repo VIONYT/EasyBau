@@ -2,7 +2,7 @@ import type { Tx } from '@easybau/db'
 import { type MergeContactResult, mergeContactRequest } from '@easybau/schemas'
 import type { FastifyInstance } from 'fastify'
 import { z } from 'zod'
-import { inTenant, requirePermission, type Services } from '../context.js'
+import { type AuthContext, inTenant, requirePermission, type Services } from '../context.js'
 import { HttpError, notFound, parse } from '../http.js'
 
 const idParam = z.object({ id: z.uuid('Ungültige ID.') })
@@ -131,7 +131,11 @@ async function mergeContacts(
 export function registerContactMergeRoutes(
   app: FastifyInstance,
   services: Services,
-  loadContact: (tx: Tx, id: string) => Promise<MergeContactResult['into'] | null>,
+  loadContact: (
+    tx: Tx,
+    auth: AuthContext,
+    id: string,
+  ) => Promise<MergeContactResult['into'] | null>,
 ) {
   app.post('/api/v1/contacts/:id/merge', async (request): Promise<MergeContactResult> => {
     const auth = requirePermission(request, 'contacts.write')
@@ -141,7 +145,7 @@ export function registerContactMergeRoutes(
       const result = await mergeContacts(tx, id, intoId)
       await tx`insert into audit_event (tenant_id, actor_user_id, action, entity, entity_id, hash)
                values (${auth.tenantId}, ${auth.userId}, 'contact_merged', 'contact', ${id}, ''::bytea)`
-      const into = await loadContact(tx, intoId)
+      const into = await loadContact(tx, auth, intoId)
       if (!into) throw notFound('Der Kontakt')
       const { etag: _etag, ...body } = into as MergeContactResult['into'] & { etag?: string }
       return { ...result, into: body }

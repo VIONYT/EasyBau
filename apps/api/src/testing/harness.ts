@@ -32,6 +32,9 @@ export async function createHarness(
     archive?: ArchiveStore | null
     /** Rechnungseingang per E-Mail: allowed, with a fake mailbox instead of IMAP. */
     mailboxConnector?: MailboxConnector
+    /** PASSWORD_PEPPER / PASSWORD_PEPPER_PREVIOUS. */
+    passwordPepper?: string
+    previousPasswordPepper?: string
   } = {},
 ): Promise<Harness> {
   const baseUrl = process.env.DATABASE_URL as string
@@ -60,6 +63,8 @@ export async function createHarness(
       COOKIE_SECURE: false,
       REQUIRE_ADMIN_MFA: options.requireAdminMfa ?? true,
       UPLOAD_MAX_MB: options.uploadMaxMb ?? 50,
+      PASSWORD_PEPPER: options.passwordPepper,
+      PASSWORD_PEPPER_PREVIOUS: options.previousPasswordPepper,
       ...(options.smtp
         ? { SMTP_HOST: 'smtp.test', SMTP_FROM: 'Test-ERP <noreply@example.test>' }
         : {}),

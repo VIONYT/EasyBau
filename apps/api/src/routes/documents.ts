@@ -11,6 +11,7 @@ import {
   isConvertible,
   type PositionType,
   priceItem,
+  quantityDeviation,
   rateForTimeUnit,
   roundTo,
   type TaxCategory,
@@ -41,7 +42,13 @@ import {
 import type { FastifyInstance, FastifyReply } from 'fastify'
 import { z } from 'zod'
 import { archiveSummary } from '../artifacts.js'
-import { billingDoc, legalNotesOf, loadDeductions, refreshDeductions } from '../billing.js'
+import {
+  billingDoc,
+  legalNotesOf,
+  loadDeductions,
+  lockProjectBilling,
+  refreshDeductions,
+} from '../billing.js'
 import {
   type AuthContext,
   inTenant,
@@ -141,6 +148,7 @@ interface CostRow {
   unitDecimals: number | null
   unitCostCents: string
   markupPercent: string
+  wageGroupId: string | null
 }
 
 async function loadItems(tx: Tx, documentId: string): Promise<ItemRow[]> {
@@ -164,7 +172,7 @@ async function loadCostLines(tx: Tx, documentId: string): Promise<Map<string, Co
     select c.id, c.document_item_id as "itemId", c.cost_kind as kind, c.description,
            trim_scale(c.quantity)::text as quantity, c.unit_id as "unitId", u.symbol as "unitSymbol",
            u.decimals as "unitDecimals", c.unit_cost_cents::text as "unitCostCents",
-           trim_scale(c.markup_percent)::text as "markupPercent"
+           trim_scale(c.markup_percent)::text as "markupPercent", c.wage_group_id as "wageGroupId"
     from item_calc_component c left join unit u on u.id = c.unit_id
     where c.document_id = ${documentId}
     order by c.sort, c.id`
@@ -460,7 +468,9 @@ export async function liveIssuer(tx: Tx): Promise<Issuer> {
   if (!t) return { name: '', lines: [], contact: [], legal: [] }
   const cipher = servicesOf(tx)?.cipher
   const iban =
-    t.ibanEnc && cipher ? cipher.decrypt(t.ibanEnc).replace(/\s+/g, '').toUpperCase() : null
+    t.ibanEnc && cipher
+      ? cipher.decrypt(t.ibanEnc, 'tenant.iban').replace(/\s+/g, '').toUpperCase()
+      : null
   const place = [t.postalCode, t.city].filter(Boolean).join(' ')
   return {
     // Briefpapier and its placeholder values; frozen with the document (rule 4).
@@ -502,6 +512,7 @@ export async function liveRecipient(
   tx: Tx,
   contactId: string | null,
   contactPersonId: string | null = null,
+  addressId: string | null = null,
 ): Promise<DocumentDetail['recipient']> {
   if (!contactId) return null
   const [c] = await tx<
@@ -522,12 +533,14 @@ export async function liveRecipient(
   if (!c) return null
   // Ansprechpartner: „z. Hd. …“ as the first line under the name (DIN 5008).
   const [person] = contactPersonId
-    ? await tx<{ name: string }[]>`
-        select concat_ws(' ', nullif(salutation, ''), nullif(title, ''), first_name, last_name) as name
+    ? await tx<{ name: string; plain: string }[]>`
+        select concat_ws(' ', nullif(salutation, ''), nullif(title, ''), first_name, last_name) as name,
+               concat_ws(' ', nullif(title, ''), first_name, last_name) as plain
         from contact where id = ${contactPersonId} and kind = 'person'`
     : []
   const attention = person?.name ? [`z. Hd. ${person.name}`] : []
   const extra = {
+    contactPerson: person?.plain || null,
     private: c.private,
     vatId: c.vatId,
     // E-Rechnung: Kundennummer, Leitweg-ID, address and format (frozen with the document).
@@ -548,8 +561,9 @@ export async function liveRecipient(
   >`
     select recipient_block as "recipientBlock", street, street_extra as "streetExtra",
            postal_code as "postalCode", city, country_code as "countryCode"
-    from contact_address where contact_id = ${contactId} and kind in ('billing', 'main')
-    order by (kind = 'billing') desc limit 1`
+    from contact_address
+    where contact_id = ${contactId} and (kind in ('billing', 'main') or id = ${addressId}::uuid)
+    order by (id = ${addressId}::uuid) is true desc, (kind = 'billing') desc limit 1`
   if (!a) return { name: c.name, lines: attention, ...extra }
   const block =
     a.recipientBlock
@@ -605,10 +619,11 @@ export async function loadDocument(
 ): Promise<(DocumentDetail & { etag: string }) | null> {
   const [row] = await tx<DocumentRow[]>`
     select ${summaryColumns(tx)}, d.updated_at as "updatedRaw", ${ISO(tx, 'd.finalized_at')} as "finalizedAt",
+           ${ISO(tx, 'd.purged_at')} as "purgedAt",
            json_build_object('id', p.id, 'number', p.number, 'name', p.name) as project,
            case when c.id is null then null else json_build_object('id', c.id, 'displayName', c.display_name) end as contact,
            case when cp.id is null then null else json_build_object('id', cp.id, 'displayName', cp.display_name) end as "contactPerson",
-           d.contact_id as "contactId",
+           d.contact_id as "contactId", d.recipient_address_id as "recipientAddressId",
            d.place_of_performance as "placeOfPerformance",
            ${DATE(tx, 'd.service_from')} as "serviceFrom", ${DATE(tx, 'd.service_to')} as "serviceTo",
            ${DATE(tx, 'd.valid_until')} as "validUntil",
@@ -673,6 +688,7 @@ export async function loadDocument(
           : null,
         unitCostCents: Number(l.unitCostCents),
         markupPercent: l.markupPercent,
+        wageGroupId: l.wageGroupId,
       })),
       calculation: calc
         ? {
@@ -711,7 +727,9 @@ export async function loadDocument(
   const detail: DocumentDetail = {
     ...doc,
     issuer: issuerSnapshot ?? (await liveIssuer(tx)),
-    recipient: recipientSnapshot ?? (await liveRecipient(tx, contactId, doc.contactPerson?.id)),
+    recipient:
+      recipientSnapshot ??
+      (await liveRecipient(tx, contactId, doc.contactPerson?.id, doc.recipientAddressId)),
     changeOrderInfo: info
       ? {
           ...info,
@@ -725,6 +743,26 @@ export async function loadDocument(
                     where i.document_id = ${id} and dec.accepted order by i.sort, i.id`
                 ).map((r) => r.id)
               : null,
+          priceReview: (
+            await tx<
+              {
+                itemId: string
+                oz: string | null
+                shortText: string | null
+                ordered: string
+                total: string
+              }[]
+            >`
+              select i.id as "itemId", i.oz, i.short_text as "shortText", o.quantity::text as ordered,
+                     (o.quantity + i.quantity)::text as total
+              from document_item i join document_item o on o.id = i.variance_of_item_id
+              where i.document_id = ${id} order by i.sort, i.id`
+          ).flatMap(({ ordered, total, ...item }) => {
+            const deviation = quantityDeviation(ordered, total)
+            return deviation.rule === 'over_110' && deviation.percent
+              ? [{ ...item, percent: deviation.percent }]
+              : []
+          }),
         }
       : null,
     canConvertToChangeOrder: canConvert,
@@ -781,7 +819,16 @@ export function sendDocument(
 ) {
   if (!doc) throw notFound('Das Dokument')
   const { etag, ...body } = doc
-  return reply.status(status).header('etag', etag).send(body)
+  // Kalkulation (costs, markups, margin) only for roles with price.view (security audit run-1).
+  const priceView = reply.request.auth?.permissions.has('price.view') ?? false
+  const out: DocumentDetail = priceView
+    ? body
+    : {
+        ...body,
+        items: body.items.map((item) => ({ ...item, costLines: [], calculation: null })),
+        totals: { ...body.totals, costCents: null, marginCents: null },
+      }
+  return reply.status(status).header('etag', etag).send(out)
 }
 
 // ---- Creating documents -------------------------------------------------------------------------
@@ -1182,6 +1229,7 @@ export function registerDocumentRoutes(app: FastifyInstance, services: Services)
         placeOfPerformance: 'place_of_performance',
         contactId: 'contact_id',
         contactPersonId: 'contact_person_id',
+        recipientAddressId: 'recipient_address_id',
         introText: 'intro_text',
         closingText: 'closing_text',
         paymentDueDays: 'payment_due_days',
@@ -1218,6 +1266,20 @@ export function registerDocumentRoutes(app: FastifyInstance, services: Services)
           }
           input.contactPersonId = null
         }
+      }
+      // Anschrift: one of the recipient's addresses; another recipient resets it.
+      if (input.recipientAddressId) {
+        const [address] = recipientId
+          ? await tx`select 1 from contact_address where id = ${input.recipientAddressId}
+                     and contact_id = ${recipientId}`
+          : []
+        if (!address) {
+          throw new HttpError(400, 'Die Eingaben sind unvollständig oder ungültig.', {
+            recipientAddressId: 'Die Anschrift gehört nicht zu diesem Empfänger.',
+          })
+        }
+      } else if (input.contactId !== undefined && input.contactId !== links?.contactId) {
+        input.recipientAddressId = null
       }
       const columns: Record<string, unknown> = {}
       for (const [key, column] of Object.entries(map)) {
@@ -1494,6 +1556,16 @@ export function registerDocumentRoutes(app: FastifyInstance, services: Services)
             select cost_kind as kind, percent::text as percent from surcharge`
         ).map((r) => [r.kind, r.percent]),
       )
+      // Lohngruppen only of this company (the foreign key alone does not see RLS).
+      const groups = [...new Set(input.lines.map((l) => l.wageGroupId).filter(Boolean))] as string[]
+      if (groups.length) {
+        const found = await tx`select id from wage_group where id in ${tx(groups)}`
+        if (found.length !== groups.length) {
+          throw new HttpError(400, 'Die Eingaben sind unvollständig oder ungültig.', {
+            lines: 'Unbekannte Lohngruppe.',
+          })
+        }
+      }
       await tx`delete from item_calc_component where document_item_id = ${itemId}`
       for (const [index, line] of input.lines.entries()) {
         await tx`
@@ -1508,6 +1580,7 @@ export function registerDocumentRoutes(app: FastifyInstance, services: Services)
             unit_id: line.unitId ?? null,
             unit_cost_cents: line.unitCostCents,
             markup_percent: line.markupPercent ?? defaults.get(line.kind) ?? '0',
+            wage_group_id: line.kind === 'labor' ? (line.wageGroupId ?? null) : null,
           })}`
       }
       await tx`update document_item set calc_mode = ${input.calcMode} where id = ${itemId}`
@@ -1560,13 +1633,26 @@ export function registerDocumentRoutes(app: FastifyInstance, services: Services)
     const auth = requirePermission(request, 'document.write')
     const { id } = parse(documentParam, request.params)
     const doc = await inTenant(services, auth, async (tx) => {
+      await lockProjectBilling(tx, id)
       const current = await lockDraft(tx, auth, id)
       const [d] = await tx<
-        { type: string; contactId: string | null; documentDate: string; version: number }[]
+        {
+          type: string
+          contactId: string | null
+          contactPersonId: string | null
+          documentDate: string
+          version: number
+        }[]
       >`
-        select type, contact_id as "contactId", to_char(document_date, 'YYYY-MM-DD') as "documentDate", version
+        select type, contact_id as "contactId", contact_person_id as "contactPersonId",
+               to_char(document_date, 'YYYY-MM-DD') as "documentDate", version
         from document where id = ${id}`
       if (!d) throw notFound('Das Dokument')
+      // DSGVO: a contact blocked or erased after the draft was created must not be frozen into a
+      // new finalized document (security audit run-1).
+      for (const contactId of [d.contactId, d.contactPersonId]) {
+        if (contactId && !(await usableContact(tx, contactId))) throw restrictedContact()
+      }
       if (d.type === 'invoice' || d.type === 'credit_note') {
         await finalizeInvoice(tx, auth, id, parse(finalizeRequest, request.body ?? {}))
         return loadDocument(tx, auth, id)

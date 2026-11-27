@@ -135,6 +135,19 @@ describe('csv', () => {
     expect(germanDate('2026-11-09')).toBe('09.11.2026')
   })
 
+  it('neutralises spreadsheet formulas only where asked, and imports them back unchanged', () => {
+    const rows = [
+      ['=HYPERLINK("http://example.invalid","x")', '+1+1', '@SUM(A1)', '-2+3', '-12,50', 'Bad'],
+    ]
+    const safe = csv(['a', 'b', 'c', 'd', 'e', 'f'], rows, { spreadsheet: true })
+    expect(safe.split('\r\n')[1]).toBe(
+      `"'=HYPERLINK(""http://example.invalid"",""x"")";'+1+1;'@SUM(A1);'-2+3;-12,50;Bad`,
+    )
+    // DATEV/GoBD: data unchanged.
+    expect(csv(['a'], [['=1+1']]).split('\r\n')[1]).toBe('=1+1')
+    expect(parseCsv(safe)[1]).toEqual(rows[0])
+  })
+
   it('encodes Windows-1252 for DATEV', () => {
     expect([...encodeWindows1252('Größe 5 € „x“ – ok 😀')]).toEqual([
       0x47, 0x72, 0xf6, 0xdf, 0x65, 0x20, 0x35, 0x20, 0x80, 0x20, 0x84, 0x78, 0x93, 0x20, 0x96,

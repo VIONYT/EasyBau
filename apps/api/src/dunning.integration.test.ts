@@ -238,11 +238,34 @@ describe.skipIf(!process.env.DATABASE_URL)('Mahnwesen (integration)', () => {
     expect(view.notices.map((n) => n.level)).toEqual(['reminder', 'first', 'final'])
     expect(view).toMatchObject({ next: null, blocked: 'Die letzte Mahnung ist bereits erstellt.' })
 
+    // Automatische Anhänge der Mahnungen (Einstellungen › Dokumente).
+    const form = await admin.upload(
+      '/api/v1/settings/attachments?name=Zahlungsformular',
+      Buffer.from('%PDF-1.4\n%%EOF\n'),
+    )
+    expect(form.statusCode, form.body).toBe(201)
+    const docSettings = (await admin.get('/api/v1/settings/documents')).json()
+    expect(
+      (
+        await admin.put('/api/v1/settings/documents', {
+          laborShare: docSettings.laborShare,
+          progressBillingMode: docSettings.progressBillingMode,
+          fileNamePattern: docSettings.fileNamePattern,
+          attachments: { dunning_notice: [form.json().id] },
+        })
+      ).statusCode,
+    ).toBe(200)
     const resend = await admin.post(`/api/v1/dunning-notices/${view.notices[2]?.id}/email`, {
       to: 'chef@wohnbau.example',
     })
     expect(resend.statusCode, resend.body).toBe(202)
     expect((await overview()).notices[2]?.email?.to).toBe('chef@wohnbau.example')
+    const [mail] = await h.adminSql<{ files: string[] }[]>`
+      select array(select filename from email_attachment where email_message_id = m.id
+                   order by position) as files
+      from email_message m where m.dunning_notice_id = ${view.notices[2]?.id as string}
+      order by m.created_at desc limit 1`
+    expect(mail?.files).toEqual([`Letzte_Mahnung_${invoice.number}.pdf`, 'Zahlungsformular.pdf'])
   })
 
   it('keeps a table of Basiszinssätze; own rates are visible only to the company', async () => {

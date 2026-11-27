@@ -1,5 +1,13 @@
 import { expect, test } from '@playwright/test'
 import {
+  createCustomer,
+  createDiaryReport,
+  createMeasurementSheet,
+  createOrderConfirmation,
+  createProject,
+  setCompanyAddress,
+} from './fixtures'
+import {
   type AdminSession,
   expectNoHorizontalScroll,
   LOGO_PNG,
@@ -104,6 +112,10 @@ test('Angebot: Bild-Position, Zielpreis, in Stammdaten speichern, Versionen, Sta
 
   // In Stammdaten speichern
   await page.getByRole('button', { name: 'In Stammdaten speichern: Fliesen verlegen' }).click()
+  await page
+    .locator('.save-to-catalog')
+    .getByRole('button', { name: 'In Stammdaten speichern' })
+    .click()
   await expect(page.getByText('In Stammdaten', { exact: true })).toBeVisible()
 
   // Fertigstellen, then a new version
@@ -163,16 +175,19 @@ test('Briefpapier: WYSIWYG-Editor nach DIN 5008 B und Druckansicht', async () =>
   await expect(page.getByText('Briefpapier gespeichert.')).toBeVisible()
 
   // Druckansicht eines Dokuments: Briefkopf, Anschriftfeld und Fußzeile nach DIN 5008 B
-  await page.getByRole('button', { name: 'Projekte' }).click()
-  await page.getByRole('link', { name: /Sanierung Lindenweg/ }).click()
-  await page.getByRole('button', { name: 'Dokumente' }).click()
-  await page
-    .getByRole('link', { name: /^Rechnung/ })
-    .last()
-    .click()
+  // (own project with Auftragsbestätigung, Aufmaßblatt and Bautagesbericht, C.11)
+  await setCompanyAddress(page)
+  const customerId = await createCustomer(page, 'Praxis Dr. Ulmenhof')
+  const project = await createProject(page, 'Praxisumbau Ulmenhof', customerId)
+  const ab = await createOrderConfirmation(page, project.id, customerId, [
+    { shortText: 'Trockenbauwand erstellen', quantity: '24', unitPriceCents: 5600 },
+  ])
+  const sheetId = await createMeasurementSheet(page, project.id)
+  const reportId = await createDiaryReport(page, project.id, '2026-11-12', 'Keine.')
+  await page.goto(`/dokumente/${ab.id}`)
   await page.getByRole('link', { name: 'Vorschau / Drucken' }).click()
   await expect(page.locator('.letter-sheet .letter-logo')).toBeVisible()
-  await expect(page.locator('.letter-recipient')).toContainText('Lindenweg 4')
+  await expect(page.locator('.letter-recipient')).toContainText('Am Prüfstand 7')
   await expect(page.locator('.letter-footer')).toContainText('Werkstraße 2')
   // PDF/A from Typst on the server (DIN 5008 Form B, A4)
   const pdfLink = page.getByRole('link', { name: 'PDF/A herunterladen' })
@@ -184,15 +199,9 @@ test('Briefpapier: WYSIWYG-Editor nach DIN 5008 B und Druckansicht', async () =>
   expect(bytes.toString('latin1')).toMatch(/pdfaid:part(>|=")3/)
 
   // Aufmaßblatt und Bautagesbericht des Projekts ebenfalls als PDF/A
-  const projects = await (await page.request.get('/api/v1/projects?q=Lindenweg')).json()
-  const projectId = (projects.items ?? projects)[0].id as string
-  const sheets = await (
-    await page.request.get(`/api/v1/projects/${projectId}/measurement-sheets`)
-  ).json()
-  const reports = await (await page.request.get(`/api/v1/projects/${projectId}/reports`)).json()
   for (const url of [
-    `/api/v1/measurement-sheets/${sheets[0].id}/pdf`,
-    `/api/v1/reports/${reports[0].id}/pdf`,
+    `/api/v1/measurement-sheets/${sheetId}/pdf`,
+    `/api/v1/reports/${reportId}/pdf`,
   ]) {
     const res = await page.request.get(url)
     expect(res.status(), url).toBe(200)

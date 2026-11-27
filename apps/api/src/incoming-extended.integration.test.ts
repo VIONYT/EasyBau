@@ -2,6 +2,8 @@ import { generateKeyPairSync } from 'node:crypto'
 import type {
   IncomingInvoiceDetail,
   IncomingInvoiceList,
+  IncomingMailLogEntry,
+  IncomingMailLogPage,
   IncomingMailRun,
   IncomingMailSettings,
   ProjectFiguresDto,
@@ -68,6 +70,7 @@ const inbox: {
   done: number[]
   access: MailboxAccess | null
   fail: boolean
+  maxBytes?: number | undefined
 } = {
   messages: [],
   done: [],
@@ -88,8 +91,10 @@ describe.skipIf(!process.env.DATABASE_URL)('Eingangsrechnungen ausbauen (integra
         if (inbox.fail) throw Object.assign(new Error('auth'), { authenticationFailed: true })
         inbox.access = access
         return {
-          unread: async (limit) =>
-            inbox.messages.filter((m) => !inbox.done.includes(m.uid)).slice(0, limit),
+          unread: async (limit, maxBytes) => {
+            inbox.maxBytes = maxBytes
+            return inbox.messages.filter((m) => !inbox.done.includes(m.uid)).slice(0, limit)
+          },
           done: async (uid) => {
             inbox.done.push(uid)
           },
@@ -157,6 +162,28 @@ describe.skipIf(!process.env.DATABASE_URL)('Eingangsrechnungen ausbauen (integra
       processedMailbox: 'Verarbeitet',
     })
     expect(kept.json().hasPassword).toBe(true)
+    // Another server, port, TLS mode or account: the stored password is not sent there.
+    for (const change of [
+      { host: 'imap.fremd.example' },
+      { port: 143, secure: false },
+      { user: 'chef@eingang.example' },
+    ]) {
+      const moved = await admin.put('/api/v1/settings/incoming-mail', {
+        enabled: false,
+        host: 'imap.example.test',
+        user: 'rechnungen@eingang.example',
+        processedMailbox: 'Verarbeitet',
+        ...change,
+      })
+      expect(moved.json().hasPassword, JSON.stringify(change)).toBe(false)
+      await admin.put('/api/v1/settings/incoming-mail', {
+        enabled: true,
+        host: 'imap.example.test',
+        user: 'rechnungen@eingang.example',
+        password: 'geheim-123',
+        processedMailbox: 'Verarbeitet',
+      })
+    }
   })
 
   it('takes invoice attachments of unread e-mails into the review', async () => {
@@ -205,16 +232,84 @@ describe.skipIf(!process.env.DATABASE_URL)('Eingangsrechnungen ausbauen (integra
       emailSubject: 'Rechnung TS-200',
       supplierName: 'Trockenbau Süd GmbH',
     })
+    // Protokoll je E-Mail: newest first, the result of every attachment.
+    const log = (
+      await admin.get('/api/v1/settings/incoming-mail/log')
+    ).json() as IncomingMailLogPage
+    expect(log.items.map((e) => [e.subject, e.outcome])).toEqual([
+      ['Angebote', 'done'],
+      ['Foto', 'done'],
+      ['Rechnung TS-200', 'done'],
+    ])
+    const first = log.items[2] as IncomingMailLogEntry
+    expect(first.from).toBe('Trockenbau Süd <rechnung@trockenbau.example>')
+    expect(first.attachments).toEqual([
+      { filename: 'TS-200.xml', result: 'imported', incomingInvoiceId: fromMail?.id },
+      { filename: 'AGB.txt', result: 'ignored', reason: 'kein Rechnungsformat' },
+      { filename: 'logo.png', result: 'ignored', reason: 'Bild im E-Mail-Text' },
+    ])
+    expect(log.items[0]?.attachments).toEqual([])
+    const paged = (
+      await admin.get('/api/v1/settings/incoming-mail/log?limit=2')
+    ).json() as IncomingMailLogPage
+    expect(paged.items).toHaveLength(2)
+    const rest = (
+      await admin.get(
+        `/api/v1/settings/incoming-mail/log?limit=2&cursor=${encodeURIComponent(paged.nextCursor as string)}`,
+      )
+    ).json() as IncomingMailLogPage
+    expect(rest.items.map((e) => e.subject)).toEqual(['Rechnung TS-200'])
+    expect(rest.nextCursor).toBeNull()
     // Again: already received, nothing twice
     inbox.done = []
     const again = (
       await admin.post('/api/v1/settings/incoming-mail/run', {})
     ).json() as IncomingMailRun
     expect(again).toMatchObject({ imported: 0, duplicates: 2 })
+    const latest = (
+      await admin.get('/api/v1/settings/incoming-mail/log?limit=3')
+    ).json() as IncomingMailLogPage
+    expect(latest.items.find((e) => e.subject === 'Rechnung TS-200')?.attachments[0]).toEqual({
+      filename: 'TS-200.xml',
+      result: 'duplicate',
+      incomingInvoiceId: fromMail?.id,
+    })
     const settings = (
       await admin.get('/api/v1/settings/incoming-mail')
     ).json() as IncomingMailSettings
     expect(settings.lastRun?.duplicates).toBe(2)
+    // An XML file that is not an e-invoice is unusable for good: ignored and marked as read,
+    // so such e-mails cannot block the mailbox (security audit run-1).
+    inbox.done = [11, 12, 13]
+    inbox.messages.push({
+      uid: 14,
+      from: 'unbekannt@example.test',
+      subject: 'Keine Rechnung',
+      attachments: [
+        { filename: 'daten.xml', content: Buffer.from('<?xml version="1.0"?><notaninvoice/>') },
+      ],
+    })
+    const unusable = (
+      await admin.post('/api/v1/settings/incoming-mail/run', {})
+    ).json() as IncomingMailRun
+    expect(unusable).toMatchObject({ messages: 1, ignored: 1, failed: 0 })
+    expect(inbox.done).toContain(14)
+    // Too large: the e-mail is not downloaded at all, a single file above UPLOAD_MAX_MB is skipped.
+    inbox.messages.push(
+      { uid: 15, from: null, subject: null, attachments: [], tooLarge: true },
+      {
+        uid: 16,
+        from: 'gross@example.test',
+        subject: 'Riesig',
+        attachments: [{ filename: 'scan.pdf', content: Buffer.alloc(50 * 1024 * 1024 + 1) }],
+      },
+    )
+    const large = (
+      await admin.post('/api/v1/settings/incoming-mail/run', {})
+    ).json() as IncomingMailRun
+    expect(large).toMatchObject({ messages: 2, ignored: 2, failed: 0, imported: 0 })
+    expect(inbox.maxBytes).toBe(100 * 1024 * 1024)
+    expect(inbox.done).toEqual(expect.arrayContaining([15, 16]))
     // A broken login is reported, nothing is marked as read
     inbox.fail = true
     const failed = (
@@ -255,7 +350,8 @@ describe.skipIf(!process.env.DATABASE_URL)('Eingangsrechnungen ausbauen (integra
       auth: 'microsoft365',
       clientId: '6a7b8c9d-0e1f-4a2b-8c3d-abcdef012345',
       hasClientSecret: true,
-      hasPassword: true,
+      // Switching the sign-in method drops the stored password (it belongs to the old server).
+      hasPassword: false,
     } satisfies Partial<IncomingMailSettings>)
     expect(JSON.stringify(saved.json())).not.toContain('client-geheim')
     const [row] = await h.adminSql<{ settings: string }[]>`select settings::text from tenant`
@@ -300,14 +396,19 @@ describe.skipIf(!process.env.DATABASE_URL)('Eingangsrechnungen ausbauen (integra
         .failedRuns,
     ).toBe(0)
     expect((await notices()).map((n) => n.key)).toEqual(['incoming_mail_secret_expiring'])
-    // Back to the password login of the first test (kept encrypted meanwhile).
+    // Back to the password login: the password must be entered again.
     const back = await admin.put('/api/v1/settings/incoming-mail', {
       enabled: true,
       host: 'imap.example.test',
       user: 'rechnungen@eingang.example',
+      password: 'geheim-123',
       processedMailbox: 'Verarbeitet',
     })
-    expect(back.json()).toMatchObject({ auth: 'password', hasPassword: true })
+    expect(back.json()).toMatchObject({
+      auth: 'password',
+      hasPassword: true,
+      hasClientSecret: false,
+    })
   })
 
   it('logs in to Google Workspace with a service account (domain-wide delegation)', async () => {
@@ -361,10 +462,18 @@ describe.skipIf(!process.env.DATABASE_URL)('Eingangsrechnungen ausbauen (integra
       user: 'rechnungen@eingang.example',
     })
     expect(kept.json().googleClientEmail).toBe('eingang@rechnungen.iam.gserviceaccount.com')
+    // Another mailbox of the domain needs the key file again (it would mint a token for it).
+    const other = await admin.put('/api/v1/settings/incoming-mail', {
+      enabled: true,
+      auth: 'google',
+      user: 'chefin@eingang.example',
+    })
+    expect(other.statusCode).toBe(400)
     await admin.put('/api/v1/settings/incoming-mail', {
       enabled: true,
       host: 'imap.example.test',
       user: 'rechnungen@eingang.example',
+      password: 'geheim-123',
       processedMailbox: 'Verarbeitet',
     })
   })
@@ -414,7 +523,23 @@ describe.skipIf(!process.env.DATABASE_URL)('Eingangsrechnungen ausbauen (integra
       '1',
       '2',
     ])
+    // Kreditorennummer aus dem Nummernkreis beim Bestätigen (Einstellungen › DATEV)
+    expect(
+      (
+        await admin.put('/api/v1/settings/datev', {
+          consultantNumber: null,
+          clientNumber: null,
+          chart: 'SKR03',
+          fiscalYearStartMonth: 1,
+          accountLength: 4,
+          revenueAccounts: {},
+          bankAccount: null,
+          autoCreditorNumbers: true,
+        })
+      ).statusCode,
+    ).toBe(200)
     expect((await admin.post(`/api/v1/incoming-invoices/${id}/confirm`, {})).statusCode).toBe(200)
+    expect((await admin.get(`/api/v1/contacts/${supplierId}`)).json().creditorNumber).toBe('70001')
     detail = await admin.get(`/api/v1/incoming-invoices/${id}`)
     const paid = await admin.post(`/api/v1/incoming-invoices/${id}/payment`, {
       paidOn: '2026-11-07',
@@ -471,6 +596,28 @@ describe.skipIf(!process.env.DATABASE_URL)('Eingangsrechnungen ausbauen (integra
           creditorNumber: 'K-1',
         })
       ).statusCode,
+    ).toBe(400)
+    // Vergabe von Hand (Knopf im Kontakt): next free number, only once.
+    const nord = (
+      await admin.post('/api/v1/contacts', {
+        kind: 'organization',
+        organizationName: 'Baustoff Ost',
+      })
+    ).json() as { id: string }
+    const assigned = await admin.post(`/api/v1/contacts/${nord.id}/creditor-number`, {})
+    expect(assigned.statusCode, assigned.body).toBe(200)
+    expect(assigned.json()).toEqual({ creditorNumber: '70002' })
+    expect((await admin.post(`/api/v1/contacts/${nord.id}/creditor-number`, {})).statusCode).toBe(
+      409,
+    )
+    const sequences = (await admin.get('/api/v1/settings/number-sequences')).json() as {
+      kind: string
+      preview: string
+    }[]
+    expect(sequences.at(-1)).toMatchObject({ kind: 'creditor', preview: '70003' })
+    expect(
+      (await admin.patch('/api/v1/settings/number-sequences/creditor', { pattern: 'K-{Nummer}' }))
+        .statusCode,
     ).toBe(400)
     await admin.put('/api/v1/settings/datev', {
       consultantNumber: '1234567',

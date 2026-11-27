@@ -26,6 +26,18 @@ export function safeEqual(a: string, b: string): boolean {
  * Field encryption (AES-256-GCM) for secrets stored in the database: TOTP secrets, IBAN.
  * Key derived from APP_SECRET with HKDF. Format: 0x01 | iv(12) | tag(16) | ciphertext.
  */
+/**
+ * Where an encrypted value belongs. Version 2 binds the ciphertext to it (AES-GCM additional
+ * data), so someone who can write the database cannot move e.g. the encrypted TOTP secret into
+ * the IBAN column and have the app decrypt and show it (security audit run-1).
+ */
+export type CipherField =
+  | 'tenant.iban'
+  | 'app_user.totp'
+  | 'incoming_mail.password'
+  | 'incoming_mail.client_secret'
+  | 'incoming_mail.google_key'
+
 export class FieldCipher {
   private readonly key: Buffer
 
@@ -35,18 +47,30 @@ export class FieldCipher {
     )
   }
 
-  encrypt(plaintext: string): Buffer {
+  /** Format v2: [2][IV 12][tag 16][ciphertext], additional data = field name. */
+  encrypt(plaintext: string, field: CipherField): Buffer {
     const iv = randomBytes(12)
     const cipher = createCipheriv('aes-256-gcm', this.key, iv)
+    cipher.setAAD(Buffer.from(field, 'utf8'))
     const ciphertext = Buffer.concat([cipher.update(plaintext, 'utf8'), cipher.final()])
-    return Buffer.concat([Buffer.from([1]), iv, cipher.getAuthTag(), ciphertext])
+    return Buffer.concat([Buffer.from([2]), iv, cipher.getAuthTag(), ciphertext])
   }
 
-  decrypt(payload: Buffer): string {
-    if (payload.length < 29 || payload[0] !== 1) throw new Error('Unsupported ciphertext format')
+  /** Reads v2 for this field and the older v1 (no field binding; see `isLegacy`). */
+  decrypt(payload: Buffer, field: CipherField): string {
+    const version = payload[0]
+    if (payload.length < 29 || (version !== 1 && version !== 2)) {
+      throw new Error('Unsupported ciphertext format')
+    }
     const decipher = createDecipheriv('aes-256-gcm', this.key, payload.subarray(1, 13))
+    if (version === 2) decipher.setAAD(Buffer.from(field, 'utf8'))
     decipher.setAuthTag(payload.subarray(13, 29))
     return Buffer.concat([decipher.update(payload.subarray(29)), decipher.final()]).toString('utf8')
+  }
+
+  /** Written before the field binding (v1): re-encrypted at start (`reencryptLegacyFields`). */
+  isLegacy(payload: Buffer): boolean {
+    return payload[0] === 1
   }
 }
 

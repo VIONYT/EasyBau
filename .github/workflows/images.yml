@@ -24,7 +24,15 @@ env:
 
 jobs:
   images:
-    if: github.event_name != 'workflow_run' || github.event.workflow_run.conclusion == 'success'
+    # workflow_run also fires for pull requests (from forks too) whose head branch is called
+    # "main": only build after a push to main of this repository (security audit run-1).
+    if: >-
+      github.event_name != 'workflow_run' || (
+        github.event.workflow_run.conclusion == 'success' &&
+        github.event.workflow_run.event == 'push' &&
+        github.event.workflow_run.head_branch == 'main' &&
+        github.event.workflow_run.head_repository.full_name == github.repository
+      )
     name: ${{ matrix.image }}
     runs-on: ubuntu-latest
     # A normal run takes 10–20 minutes (arm64 is emulated with QEMU). pnpm install under QEMU

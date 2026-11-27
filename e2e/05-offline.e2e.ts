@@ -1,4 +1,5 @@
 import { expect, test } from '@playwright/test'
+import { createProject } from './fixtures'
 import {
   type AdminSession,
   expectNoHorizontalScroll,
@@ -12,8 +13,11 @@ test.describe.configure({ mode: 'serial' })
 // Logged-in admin with the virtual security key (from 01-einrichtung, or restored from disk).
 let page: AdminSession['page']
 let context: AdminSession['context']
+// Own project (C.11): independent of the other files.
+const PROJECT = 'Dachausbau Ahornstraße'
 test.beforeAll(async ({ browser }) => {
   ;({ page, context } = await session(browser))
+  if (SETUP_TOKEN) await createProject(page, PROJECT, null)
 })
 
 test('Offline auf der Baustelle: Aufmaß und Bautagebuch ohne Netz, danach übertragen', async () => {
@@ -22,14 +26,14 @@ test('Offline auf der Baustelle: Aufmaß und Bautagebuch ohne Netz, danach über
 
   // In the office: a Leistungsaufmaß, then everything for the site onto the device
   await page.getByRole('button', { name: 'Projekte' }).click()
-  await page.getByRole('link', { name: /Sanierung Lindenweg/ }).click()
+  await page.getByRole('link', { name: PROJECT }).click()
   await page.getByRole('button', { name: 'Aufmaß', exact: true }).click()
   await page.getByRole('button', { name: 'Neues Aufmaßblatt' }).click()
   await page.getByRole('radio', { name: /Leistungsaufmaß/ }).check()
   await page.getByRole('button', { name: 'Aufmaßblatt anlegen' }).click()
   await expect(page.getByRole('heading', { name: 'Leistungsaufmaß 1' })).toBeVisible()
   const sheetUrl = page.url()
-  await page.getByRole('link', { name: /Sanierung Lindenweg/ }).click()
+  await page.getByRole('link', { name: PROJECT }).click()
   await page.getByRole('button', { name: 'Offline verfügbar machen' }).click()
   await expect(page.getByText(/sind auf dem Gerät gespeichert/)).toBeVisible()
 
@@ -48,7 +52,7 @@ test('Offline auf der Baustelle: Aufmaß und Bautagebuch ohne Netz, danach über
   await expect(page.getByText('1 Änderung(en) warten auf Übertragung.')).toBeVisible()
 
   // … and a new Bautagesbericht
-  await page.getByRole('link', { name: /Sanierung Lindenweg/ }).click()
+  await page.getByRole('link', { name: PROJECT }).click()
   await page.getByRole('button', { name: 'Bautagebuch', exact: true }).click()
   await page.getByRole('button', { name: 'Neuer Tagesbericht' }).click()
   await page.getByLabel('Datum').fill('2026-11-10')
@@ -68,7 +72,7 @@ test('Offline auf der Baustelle: Aufmaß und Bautagebuch ohne Netz, danach über
   await expect(page.getByText('Decke Flur')).toBeVisible()
   await expect(page.locator('.m-line .result').first()).toContainText('7')
   await expect(page.getByText('noch nicht übertragen')).toHaveCount(0)
-  await page.getByRole('link', { name: /Sanierung Lindenweg/ }).click()
+  await page.getByRole('link', { name: PROJECT }).click()
   await page.getByRole('button', { name: 'Bautagebuch', exact: true }).click()
   await expect(page.getByText(/Di\.?, 10\.11\.2026/)).toBeVisible()
   await expect(page.getByText(/^Sonnig/)).toBeVisible()

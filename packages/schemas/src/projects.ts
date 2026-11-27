@@ -117,6 +117,23 @@ export interface ProjectFiguresDto {
   } | null
 }
 
+/** Kennzahlen as columns of the project list (GET /projects/figures?ids=…), up to 30 projects. */
+export const projectFiguresListQuery = z.object({
+  ids: z
+    .string()
+    .transform((v) => [...new Set(v.split(',').filter(Boolean))])
+    .pipe(z.array(z.uuid('Ungültige ID.')).min(1).max(30, 'Höchstens 30 Projekte.')),
+})
+
+export type ProjectFigureColumns = Pick<
+  ProjectFiguresDto,
+  | 'contractNetCents'
+  | 'billedNetCents'
+  | 'billedPercent'
+  | 'openReceivableCents'
+  | 'unbilledNetCents'
+>
+
 /** Person of the company for project teams and filters (GET /team: names only). */
 export interface TeamMember {
   id: string

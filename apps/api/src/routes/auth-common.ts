@@ -55,6 +55,25 @@ export function clearChallengeCookie(reply: FastifyReply, services: Services) {
   reply.clearCookie(challengeCookieName(services.config.COOKIE_SECURE), cookieBase(services))
 }
 
+/** How long after signing in a session may change the second factor (step-up, "sudo mode"). */
+export const RECENT_LOGIN_MINUTES = 30
+
+/**
+ * Adding or removing a second factor needs a fresh sign-in: a stolen or forgotten session alone
+ * must not register the attacker's own passkey or remove the owner's (security audit run-1).
+ */
+export async function requireRecentLogin(services: Services, sessionId: string): Promise<void> {
+  const [row] = await services.sql<{ recent: boolean }[]>`
+    select created_at > now() - make_interval(mins => ${RECENT_LOGIN_MINUTES}) as recent
+    from user_session where id = ${sessionId}`
+  if (!row?.recent) {
+    throw new HttpError(
+      403,
+      'Bitte melden Sie sich zur Sicherheit neu an, bevor Sie den zweiten Faktor ändern.',
+    )
+  }
+}
+
 export async function audit(
   services: Services,
   tenantId: string,

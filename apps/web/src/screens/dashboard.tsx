@@ -1,11 +1,12 @@
 import type { DashboardDto, DashboardSiteDto, DashboardSum, Me } from '@easybau/schemas'
+import { Button } from '@easybau/ui'
 import { useEffect, useId, useState } from 'react'
 import { type ApiError, api } from '../api'
 import { formatCents, formatDateTime } from '../format'
 import { FormError } from '../forms'
-import { type TextKey, t, tf } from '../i18n'
+import { type TextKey, t, tf, tn } from '../i18n'
 import type { Navigate } from '../router'
-import { StatusBadge } from './projects'
+import { ProjectStatusSelect, StatusBadge, useStatuses } from './projects'
 
 const HIDE_KEY = 'easybau.dashboard.hideAmounts'
 
@@ -36,6 +37,9 @@ export function Dashboard({ me, navigate }: { me: Me; navigate: Navigate }) {
   const [error, setError] = useState<string | null>(null)
   const [siteOnly, setSiteOnly] = useState(false)
   const [hide, setHide] = useHideAmounts()
+  // Status direkt ändern (online; the offline overview only shows it).
+  const canChangeStatus = me.permissions.includes('project.write') && !siteOnly
+  const statuses = useStatuses()
   useEffect(() => {
     const site = () => api<DashboardSiteDto>('GET', '/api/v1/dashboard/site')
     api<DashboardDto>('GET', '/api/v1/dashboard')
@@ -66,11 +70,12 @@ export function Dashboard({ me, navigate }: { me: Me; navigate: Navigate }) {
       {label}
     </a>
   )
+  // Signal colour only when there is something to act on (0,00 € overdue is not a warning).
   const sum = (key: 'open' | 'overdue' | 'dunned', s: DashboardSum) => (
-    <div className={`receivable-sum receivable-sum--${key}`}>
+    <div className={`receivable-sum${s.cents ? ` receivable-sum--${key}` : ''}`}>
       <span className="muted">{t(`dash.receivables.${key}` as TextKey)}</span>
       <strong className="amount">{money(s.cents)}</strong>
-      <span className="muted">{tf('dash.count', { count: String(s.count) })}</span>
+      <span className="muted">{tn('dash.count', s.count)}</span>
     </div>
   )
 
@@ -85,26 +90,22 @@ export function Dashboard({ me, navigate }: { me: Me; navigate: Navigate }) {
           </label>
         ) : null}
       </div>
-      <div className="button-row">
+      <div className="button-row dashboard-actions">
         {me.permissions.includes('project.write') ? (
-          <button
-            type="button"
-            className="button primary auto"
-            onClick={() => navigate({ view: 'projects' })}
-          >
+          <Button type="button" variant="primary" onClick={() => navigate({ view: 'projects' })}>
             {t('dash.action.project')}
-          </button>
+          </Button>
         ) : null}
         {data?.todaysSites[0] && me.permissions.includes('report.write') ? (
-          <button
+          <Button
             type="button"
-            className="button ghost auto"
+            variant="ghost"
             onClick={() =>
               navigate({ view: 'project', id: data.todaysSites[0]?.id as string, section: 'diary' })
             }
           >
             {t('dash.action.report')}
-          </button>
+          </Button>
         ) : null}
       </div>
       <FormError>{error}</FormError>
@@ -115,7 +116,7 @@ export function Dashboard({ me, navigate }: { me: Me; navigate: Navigate }) {
           {data.receivables ? (
             <section className="panel" aria-labelledby={`${id}-rec`}>
               <h2 id={`${id}-rec`}>{t('dash.receivables')}</h2>
-              <p className="amount-big">{money(data.receivables.total.cents)}</p>
+              <p className="amount-hero">{money(data.receivables.total.cents)}</p>
               <div className="dashboard-sums">
                 {sum('open', data.receivables.open)}
                 {sum('overdue', data.receivables.overdue)}
@@ -169,6 +170,7 @@ export function Dashboard({ me, navigate }: { me: Me; navigate: Navigate }) {
                           .filter(Boolean)
                           .join(' · ')}
                       </span>
+                      <SiteSpan start={p.startDate} end={p.endDate} today={data.today} />
                     </a>
                   </li>
                 ))}
@@ -242,8 +244,26 @@ export function Dashboard({ me, navigate }: { me: Me; navigate: Navigate }) {
                       <span className="muted">
                         {[p.customer?.displayName, p.siteCity].filter(Boolean).join(' · ')}
                       </span>
-                      {p.status ? <StatusBadge status={p.status} /> : null}
+                      {p.status && !canChangeStatus ? <StatusBadge status={p.status} /> : null}
                     </a>
+                    {canChangeStatus ? (
+                      <ProjectStatusSelect
+                        project={p}
+                        statuses={statuses}
+                        onChanged={(status) =>
+                          setData((d) =>
+                            d
+                              ? {
+                                  ...d,
+                                  recentProjects: d.recentProjects.map((x) =>
+                                    x.id === p.id ? { ...x, status } : x,
+                                  ),
+                                }
+                              : d,
+                          )
+                        }
+                      />
+                    ) : null}
                   </li>
                 ))}
               </ul>
@@ -254,5 +274,38 @@ export function Dashboard({ me, navigate }: { me: Me; navigate: Navigate }) {
         </div>
       ) : null}
     </section>
+  )
+}
+
+const DAY = 86_400_000
+const dayOf = (iso: string) => Date.parse(`${iso}T00:00:00Z`)
+
+/**
+ * Bauzeit as a measured line: „Tag 25 von 117“ with a thin bar for how much of the planned
+ * period has passed (not progress of the work). Without an end date only the day is shown.
+ */
+function SiteSpan({
+  start,
+  end,
+  today,
+}: {
+  start: string | null
+  end: string | null
+  today: string
+}) {
+  if (!start) return null
+  const day = Math.floor((dayOf(today) - dayOf(start)) / DAY) + 1
+  if (day < 1) return null
+  if (!end)
+    return <span className="site-span muted">{tf('dash.siteDay', { day: String(day) })}</span>
+  const days = Math.floor((dayOf(end) - dayOf(start)) / DAY) + 1
+  const share = Math.min(100, Math.round((day / days) * 100))
+  return (
+    <span className="site-span muted">
+      {tf('dash.siteDayOf', { day: String(day), days: String(days) })}
+      <span className="site-span__track" aria-hidden="true">
+        <span className="site-span__fill" style={{ width: `${share}%` }} />
+      </span>
+    </span>
   )
 }

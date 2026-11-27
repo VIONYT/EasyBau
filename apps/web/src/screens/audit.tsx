@@ -1,9 +1,11 @@
 import type { AuditChainStatus, AuditEventItem, AuditEventList, Me } from '@easybau/schemas'
+import { Button, DataTable } from '@easybau/ui'
 import { useCallback, useEffect, useId, useState } from 'react'
 import { type ApiError, api } from '../api'
 import { formatDateTime } from '../format'
 import { FormError } from '../forms'
 import { type TextKey, t, tf } from '../i18n'
+import { RetentionPanel } from './retention'
 import { auditText, ExportPanel } from './system'
 
 /** Areas of the Änderungsprotokoll that can be filtered (entity names of the database). */
@@ -41,7 +43,7 @@ const entityLabel = (entity: string) => maybe(`audit.entity.${entity}`) ?? entit
 function actionLabel(action: string): string {
   const [kind, detail] = action.split(':', 2)
   const base = maybe(`audit.action.${kind}`) ?? (kind as string)
-  return detail ? `${base}: ${detail}` : base
+  return detail ? `${base}: ${maybe(`audit.detail.${detail}`) ?? detail}` : base
 }
 
 const show = (value: unknown) =>
@@ -63,6 +65,7 @@ export function AuditScreen({ me }: { me: Me }) {
       <ChainPanel />
       <EventsPanel />
       {me.permissions.includes('export.run') ? <ExportPanel /> : null}
+      <RetentionPanel canManage={me.permissions.includes('tenant.manage')} />
     </section>
   )
 }
@@ -108,9 +111,9 @@ function ChainPanel() {
         </p>
       ) : null}
       <FormError>{error}</FormError>
-      <button type="button" className="button ghost auto" disabled={busy} onClick={check}>
+      <Button type="button" variant="ghost" disabled={busy} onClick={check}>
         {busy ? t('audit.checking') : t('audit.checkNow')}
-      </button>
+      </Button>
     </div>
   )
 }
@@ -209,9 +212,9 @@ function EventsPanel() {
         <p className="muted">{t('common.loading')}</p>
       )}
       {list?.nextCursor ? (
-        <button type="button" className="button ghost" onClick={more}>
+        <Button type="button" variant="ghost" width="natural" onClick={more}>
           {t('inv.list.more')}
-        </button>
+        </Button>
       ) : null}
     </div>
   )
@@ -236,34 +239,16 @@ function EventRow({ event: e }: { event: AuditEventItem }) {
           </span>
         </summary>
         {e.changes.length ? (
-          <div className="table-scroll">
-            <table className="audit-changes">
-              <thead>
-                <tr>
-                  <th scope="col" className="audit-cell">
-                    {t('audit.field')}
-                  </th>
-                  <th scope="col" className="audit-cell">
-                    {t('audit.before')}
-                  </th>
-                  <th scope="col" className="audit-cell">
-                    {t('audit.after')}
-                  </th>
-                </tr>
-              </thead>
-              <tbody>
-                {e.changes.map((c) => (
-                  <tr key={c.field}>
-                    <th scope="row" className="audit-cell">
-                      {c.field}
-                    </th>
-                    <td className="audit-cell">{show(c.before)}</td>
-                    <td className="audit-cell">{show(c.after)}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
+          <DataTable
+            caption={t('audit.changes')}
+            rows={e.changes}
+            rowKey={(c) => c.field}
+            columns={[
+              { key: 'field', header: t('audit.field'), rowHeader: true, cell: (c) => c.field },
+              { key: 'before', header: t('audit.before'), cell: (c) => show(c.before) },
+              { key: 'after', header: t('audit.after'), cell: (c) => show(c.after) },
+            ]}
+          />
         ) : e.redactedAt ? (
           <p className="muted">
             {tf('audit.redacted', { when: formatDateTime(e.redactedAt, 'date') })}

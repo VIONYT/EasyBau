@@ -1,5 +1,6 @@
 import type { Me, MeasurementSheetDetail, MeasurementSheetSummary } from '@easybau/schemas'
 import { MEASUREMENT_KINDS } from '@easybau/schemas/constants'
+import { Button } from '@easybau/ui'
 import { useEffect, useState } from 'react'
 import { type ApiError, api, mutate } from '../api'
 import { formatDateTime } from '../format'
@@ -10,15 +11,16 @@ import type { Navigate } from '../router'
 /** Aufmaßblätter of a project (a sheet always belongs to exactly one project). */
 export function ProjectMeasurements({
   me,
-  projectId,
-  archived,
+  project,
   navigate,
 }: {
   me: Me
-  projectId: string
-  archived: boolean
+  /** The open project; its number and name go into sheets created offline (back link). */
+  project: { id: string; number: string | null; name: string; archived: boolean }
   navigate: Navigate
 }) {
+  const projectId = project.id
+  const archived = project.archived
   const [sheets, setSheets] = useState<MeasurementSheetSummary[] | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [creating, setCreating] = useState(false)
@@ -59,7 +61,7 @@ export function ProjectMeasurements({
         label: `${t('m.new')}: ${summary.title}`,
         optimistic: () => ({
           ...summary,
-          project: { id: projectId, number: null, name: '' },
+          project: { id: projectId, number: project.number, name: project.name },
           signedAt: null,
           signedByContractor: null,
           signedByClient: null,
@@ -87,9 +89,9 @@ export function ProjectMeasurements({
       <div className="section-head">
         <h2>{t('m.title')}</h2>
         {canWrite && !creating ? (
-          <button type="button" className="button primary auto" onClick={() => setCreating(true)}>
+          <Button type="button" variant="primary" onClick={() => setCreating(true)}>
             {t('m.new')}
-          </button>
+          </Button>
         ) : null}
       </div>
       {creating ? (
@@ -117,12 +119,17 @@ export function ProjectMeasurements({
             error={form.fieldErrors.measuredOn}
           />
           <div className="button-row">
-            <button type="submit" className="button primary auto" disabled={form.busy}>
+            <Button type="submit" variant="primary" disabled={form.busy}>
               {t('m.create')}
-            </button>
-            <button type="button" className="button ghost" onClick={() => setCreating(false)}>
+            </Button>
+            <Button
+              type="button"
+              variant="ghost"
+              width="natural"
+              onClick={() => setCreating(false)}
+            >
               {t('common.cancel')}
-            </button>
+            </Button>
           </div>
         </form>
       ) : null}

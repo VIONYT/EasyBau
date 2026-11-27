@@ -388,6 +388,13 @@ export function parseDatanormLine(text: string, line: number): DatanormRecord | 
   }
 }
 
+/**
+ * Longest accepted line. DATANORM records are a few hundred characters; without a limit a file
+ * without line breaks would be copied again with every chunk (quadratic) and one huge record
+ * could exhaust the memory of the API process (security audit run-1).
+ */
+export const MAX_DATANORM_LINE = 64 * 1024
+
 /** Splits a stream of text chunks into lines, keeping an incomplete last line for the next chunk. */
 export class LineSplitter {
   private rest = ''
@@ -396,7 +403,14 @@ export class LineSplitter {
   push(chunk: string): { text: string; line: number }[] {
     const parts = (this.rest + chunk).split('\n')
     this.rest = parts.pop() as string
-    return parts.map((text) => ({ text, line: ++this.count }))
+    const lines = parts.map((text) => ({ text, line: ++this.count }))
+    const tooLong = [...lines.map((l) => l.text), this.rest].some(
+      (t) => t.length > MAX_DATANORM_LINE,
+    )
+    if (tooLong) {
+      throw new DatanormError('Die Zeile ist zu lang – keine DATANORM-Datei?', this.count + 1)
+    }
+    return lines
   }
 
   end(): { text: string; line: number }[] {

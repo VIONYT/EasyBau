@@ -169,13 +169,17 @@ legend {
   flex-direction: column;
 }
 
+.dashboard-sums .muted {
+  font-size: var(--font-size-sm);
+}
+
 .receivable-sum--overdue strong,
 .receivable-sum--dunned strong {
   color: var(--color-warning);
 }
 
 .list-link.unread strong {
-  font-weight: 700;
+  font-weight: 600;
 }
 
 .list-link.unread {
@@ -193,6 +197,48 @@ legend {
   flex: none;
 }
 
+/* Hidden areas on narrow screens: a soft edge on the side that scrolls (no colour, only fade). */
+.tabs[data-more-end="true"] {
+  mask-image: linear-gradient(to right, #000 calc(100% - 40px), transparent);
+}
+.tabs[data-more-start="true"] {
+  mask-image: linear-gradient(to left, #000 calc(100% - 40px), transparent);
+}
+.tabs[data-more-start="true"][data-more-end="true"] {
+  mask-image: linear-gradient(
+    to right,
+    transparent,
+    #000 40px,
+    #000 calc(100% - 40px),
+    transparent
+  );
+}
+
+/* Phones: search on its own line, notifications and sign-out side by side (not two rows). */
+@media (max-width: 600px) {
+  .topbar-search {
+    flex: 1 1 100%;
+    order: 1;
+  }
+  .topbar .bell,
+  .topbar .logout {
+    flex: 1 1 0;
+    order: 2;
+    margin-left: 0;
+    padding-inline: var(--space-4);
+    justify-content: center;
+  }
+  /* Two actions next to each other share one size (HIG buttons.md › Style). */
+  .dashboard-actions > .button {
+    flex: 1 1 0;
+    padding-inline: var(--space-4);
+  }
+}
+
+.dashboard-actions {
+  margin-bottom: var(--space-4);
+}
+
 .tabs button,
 .segmented label {
   min-height: var(--touch-min);
@@ -201,7 +247,7 @@ legend {
   color: var(--color-text);
   background: transparent;
   border: 1px solid var(--color-border);
-  border-radius: 999px;
+  border-radius: 10px;
   cursor: pointer;
 }
 
@@ -524,7 +570,7 @@ a.button {
 }
 
 .amount--strong {
-  font-weight: 700;
+  font-weight: 600;
 }
 
 .amount {
@@ -707,7 +753,7 @@ details.panel > summary {
 .totals .grand {
   padding-top: var(--space-2);
   border-top: 2px solid var(--color-text);
-  font-weight: 700;
+  font-weight: 600;
   font-size: 1.125rem;
 }
 
@@ -827,7 +873,7 @@ details.panel > summary {
 
 .file-kind {
   font-size: 1.25rem;
-  font-weight: 700;
+  font-weight: 600;
 }
 
 .file-info {
@@ -1021,7 +1067,7 @@ details.panel > summary {
   display: block;
   margin: 0 0 var(--space-2);
   font-size: 1.125rem;
-  font-weight: 700;
+  font-weight: 600;
 }
 
 legend.h2 {
@@ -1149,6 +1195,13 @@ legend.h2 + * {
   border-radius: 50%;
   box-shadow: var(--shadow-raised);
   transition: transform 0.15s;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .switch-track,
+  .switch-thumb {
+    transition: none;
+  }
 }
 
 .switch input:checked + .switch-track {
@@ -1645,7 +1698,7 @@ fieldset.plain {
   white-space: nowrap;
 }
 .deduction-table .rest-row > * {
-  font-weight: 700;
+  font-weight: 600;
   border-bottom: 0;
 }
 @media (max-width: 34rem) {
@@ -1969,7 +2022,7 @@ fieldset.plain {
 
 .receivable-sums .is-strong,
 .invoice-sums .is-strong {
-  font-weight: 700;
+  font-weight: 600;
   border-top: 1px solid var(--color-border);
   padding-top: var(--space-1);
 }
@@ -2062,22 +2115,6 @@ fieldset.plain {
   display: grid;
   gap: var(--space-1);
 }
-.table-scroll {
-  overflow-x: auto;
-  max-width: 100%;
-}
-.audit-changes {
-  width: 100%;
-  border-collapse: collapse;
-  font-size: 0.875rem;
-}
-.audit-cell {
-  text-align: left;
-  vertical-align: top;
-  padding: var(--space-1) var(--space-2);
-  border-bottom: 1px solid var(--color-border);
-  overflow-wrap: anywhere;
-}
 
 /* ---- Eingangsrechnungen ------------------------------------------------------------------- */
 .incoming.dragging {
@@ -2150,23 +2187,6 @@ fieldset.plain {
 .einvoice-parties h3 {
   font-size: 0.875rem;
   margin: var(--space-2) 0 var(--space-1);
-}
-.einvoice-lines {
-  width: 100%;
-  border-collapse: collapse;
-  font-size: 0.875rem;
-}
-.einvoice-cell {
-  text-align: left;
-  vertical-align: top;
-  padding: var(--space-1) var(--space-2);
-  border-bottom: 1px solid var(--color-border);
-  overflow-wrap: anywhere;
-}
-.einvoice-cell.num {
-  text-align: right;
-  font-variant-numeric: tabular-nums;
-  white-space: nowrap;
 }
 .incoming-payment {
   margin-top: var(--space-4);
@@ -2323,6 +2343,21 @@ fieldset.plain {
 .notice-required {
   color: var(--color-warning);
 }
+.notice-summary {
+  /* list-item keeps the disclosure triangle (a flex summary loses it). */
+  display: list-item;
+  padding-block: var(--space-3);
+  min-height: var(--touch-min);
+  font-weight: 600;
+  cursor: pointer;
+}
+.notice-fix {
+  display: inline-flex;
+  align-items: center;
+  min-height: var(--touch-min);
+  padding: 0 var(--space-2);
+  font-weight: 600;
+}
 .attachment-row {
   flex-wrap: wrap;
 }
@@ -2364,4 +2399,148 @@ fieldset.plain {
   border: 1px solid var(--color-border);
   border-radius: 4px;
   background: var(--paper);
+}
+
+/* Farbfilter der Kontaktliste */
+.color-filter {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+  align-items: center;
+}
+.color-filter legend {
+  width: 100%;
+}
+.color-swatch-option {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
+  min-height: 44px;
+  padding: 0 var(--space-2);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius);
+  cursor: pointer;
+}
+.color-swatch-option:has(input:checked) {
+  border-color: var(--color-primary);
+  box-shadow: 0 0 0 1px var(--color-primary);
+}
+.color-swatch-option:has(input:focus-visible) {
+  outline: 3px solid var(--color-accent);
+  outline-offset: 2px;
+}
+.color-filter .color-swatch-option input {
+  position: absolute;
+  opacity: 0;
+  width: 1px;
+  height: 1px;
+}
+.color-swatch {
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  border: 1px solid var(--color-border);
+}
+
+/* Projektstatus direkt in Liste und Übersicht ändern */
+.list-link .status-select {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  padding: 0 var(--space-3) var(--space-2);
+}
+.project-figures-line {
+  display: block;
+}
+
+/* Einstellungen › Rechnungseingang: Protokoll je E-Mail */
+.mail-log-list,
+.mail-log-files {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.mail-log-entry {
+  padding: var(--space-2) 0;
+  border-top: 1px solid var(--color-border);
+  overflow-wrap: anywhere;
+}
+.mail-log-files {
+  padding-left: var(--space-4);
+}
+
+/* --- unslop (2026-11-26): Richtung „sachlich, robust, ruhig“ – Bauplan und Baustelle ---------- */
+
+/* Strong text at 600: hierarchy comes from size and colour, not from heavy weights. */
+strong,
+b {
+  font-weight: 600;
+}
+
+/* Signature: a dimension line (Maßkette) under section headings – a hairline with end ticks,
+   as on a construction drawing. Only on panel headings, nowhere else. */
+.panel > h2::after {
+  content: "";
+  display: block;
+  height: 7px;
+  margin-top: var(--space-2);
+  background:
+    linear-gradient(var(--color-border), var(--color-border)) center / 100% 1px no-repeat,
+    linear-gradient(var(--color-muted), var(--color-muted)) left center / 1px 7px no-repeat,
+    linear-gradient(var(--color-muted), var(--color-muted)) right center / 1px 7px no-repeat;
+  opacity: 0.6;
+}
+
+/* Moment 1: open receivables – the one figure of the overview that carries the brand colour. */
+.amount-hero {
+  margin: 0;
+  font-size: var(--font-size-3xl);
+  font-weight: 600;
+  line-height: 1.15;
+  font-variant-numeric: tabular-nums;
+  color: var(--color-primary);
+}
+
+/* Moment 2: Bauzeit of today's sites as a measured line. */
+.site-span {
+  display: grid;
+  gap: var(--space-1);
+  font-size: var(--font-size-sm);
+  font-variant-numeric: tabular-nums;
+}
+.site-span__track {
+  position: relative;
+  display: block;
+  height: 4px;
+  background: var(--color-border);
+  border-radius: 2px;
+  overflow: hidden;
+}
+.site-span__fill {
+  position: absolute;
+  inset: 0 auto 0 0;
+  background: var(--color-primary);
+  border-radius: 2px;
+}
+
+/* Recent projects: the status sits quietly next to the project on wider screens. */
+@media (min-width: 601px) {
+  .list li.list-link:has(> .status-select) {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    align-items: center;
+  }
+  .list-link > .status-select {
+    padding: 0 var(--space-4) 0 0;
+  }
+}
+.list-link > .status-select .select {
+  max-width: 11rem;
+  font-size: var(--font-size-sm);
+  padding-block: var(--space-1);
+}
+
+/* Cards in the overview grid: the grid gap is the only spacing between them. */
+.dashboard > .panel {
+  margin-bottom: 0;
 }

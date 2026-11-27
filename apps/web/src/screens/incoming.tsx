@@ -1,3 +1,4 @@
+import { distributeAllowanceCharges } from '@easybau/domain'
 import type {
   BusinessArea,
   CostType,
@@ -10,6 +11,7 @@ import type {
   ProjectSummary,
 } from '@easybau/schemas'
 import { COST_TYPES, INCOMING_UPLOAD_EXTENSIONS } from '@easybau/schemas/constants'
+import { Button, buttonClass, DataTable } from '@easybau/ui'
 import { type DragEvent, useCallback, useEffect, useId, useRef, useState } from 'react'
 import { type ApiError, api, apiWithEtag, uploadFile } from '../api'
 import { centsToInput, formatBytes, formatCents, formatDateTime, parseEuro } from '../format'
@@ -199,13 +201,9 @@ export function IncomingInvoices({ me, navigate }: { me: Me; navigate: Navigate 
               e.target.value = ''
             }}
           />
-          <button
-            type="button"
-            className="button primary auto"
-            onClick={() => input.current?.click()}
-          >
+          <Button type="button" variant="primary" onClick={() => input.current?.click()}>
             {t('in.upload')}
-          </button>
+          </Button>
           {uploads.length ? (
             <ul className="list upload-status" aria-live="polite">
               {uploads.map((u) => (
@@ -221,13 +219,15 @@ export function IncomingInvoices({ me, navigate }: { me: Me; navigate: Navigate 
                     </span>
                   </span>
                   {u.id ? (
-                    <button
+                    <Button
                       type="button"
-                      className="button ghost small"
+                      variant="ghost"
+                      width="natural"
+                      size="small"
                       onClick={() => navigate({ view: 'incomingInvoice', id: u.id as string })}
                     >
                       {t('in.open')}
-                    </button>
+                    </Button>
                   ) : null}
                 </li>
               ))}
@@ -319,9 +319,9 @@ export function IncomingInvoices({ me, navigate }: { me: Me; navigate: Navigate 
         <p className="muted">{t('common.loading')}</p>
       )}
       {list?.nextCursor ? (
-        <button type="button" className="button ghost" onClick={more}>
+        <Button type="button" variant="ghost" width="natural" onClick={more}>
           {t('inv.list.more')}
-        </button>
+        </Button>
       ) : null}
     </section>
   )
@@ -624,11 +624,16 @@ export function IncomingInvoiceScreen({ id, navigate }: { id: string; navigate: 
           </p>
           <div className="button-row">
             {detail.inline ? (
-              <a className="button ghost auto" href={original} target="_blank" rel="noopener">
+              <a
+                className={buttonClass({ variant: 'ghost' })}
+                href={original}
+                target="_blank"
+                rel="noopener"
+              >
                 {t('in.openOriginal')}
               </a>
             ) : null}
-            <a className="button ghost auto" href={`${original}?download=true`}>
+            <a className={buttonClass({ variant: 'ghost' })} href={`${original}?download=true`}>
               {t('in.download')}
             </a>
           </div>
@@ -669,6 +674,7 @@ export function IncomingInvoiceScreen({ id, navigate }: { id: string; navigate: 
               areas={areas}
               errors={fieldErrors}
               lines={detail.einvoice?.lines ?? []}
+              allowanceCharges={detail.einvoice?.allowanceCharges ?? []}
             />
           ) : (
             <ReadOnlyData detail={detail} />
@@ -676,17 +682,12 @@ export function IncomingInvoiceScreen({ id, navigate }: { id: string; navigate: 
           <FormError>{error}</FormError>
           {editable ? (
             <div className="button-row">
-              <button
-                type="button"
-                className="button ghost auto"
-                disabled={busy}
-                onClick={() => run(save)}
-              >
+              <Button type="button" variant="ghost" disabled={busy} onClick={() => run(save)}>
                 {t('common.save')}
-              </button>
-              <button
+              </Button>
+              <Button
                 type="button"
-                className="button primary auto"
+                variant="primary"
                 disabled={busy}
                 onClick={() =>
                   run(async () => {
@@ -699,10 +700,11 @@ export function IncomingInvoiceScreen({ id, navigate }: { id: string; navigate: 
                 }
               >
                 {t('in.confirm')}
-              </button>
-              <button
+              </Button>
+              <Button
                 type="button"
-                className="button ghost auto danger"
+                variant="ghost"
+                danger
                 disabled={busy}
                 onClick={() => {
                   const reason = window.prompt(t('in.discardReason'))
@@ -710,7 +712,7 @@ export function IncomingInvoiceScreen({ id, navigate }: { id: string; navigate: 
                 }}
               >
                 {t('in.discard')}
-              </button>
+              </Button>
             </div>
           ) : null}
           {detail.status === 'confirmed' && detail.canEdit ? (
@@ -820,46 +822,61 @@ function EinvoiceView({
           ))}
       </dl>
       {einvoice.lines.length ? (
-        <div className="table-scroll">
-          <table className="einvoice-lines">
-            <thead>
-              <tr>
-                <th scope="col" className="einvoice-cell">
-                  {t('in.line')}
-                </th>
-                <th scope="col" className="einvoice-cell num">
-                  {t('in.quantity')}
-                </th>
-                <th scope="col" className="einvoice-cell num">
-                  {t('in.price')}
-                </th>
-                <th scope="col" className="einvoice-cell num">
-                  {t('in.net')}
-                </th>
-              </tr>
-            </thead>
-            <tbody>
-              {einvoice.lines.map((line, index) => (
-                // biome-ignore lint/suspicious/noArrayIndexKey: lines are fixed for this invoice
-                <tr key={index}>
-                  <td className="einvoice-cell">
-                    {line.name}
-                    {line.description ? (
-                      <span className="muted block">{line.description}</span>
-                    ) : null}
-                  </td>
-                  <td className="einvoice-cell num">
-                    {line.quantity?.replace('.', ',')} {line.unitCode}
-                  </td>
-                  <td className="einvoice-cell num">{line.netPrice?.replace('.', ',')}</td>
-                  <td className="einvoice-cell num amount">{formatCents(line.netCents)}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
+        <DataTable
+          caption={t('in.lines')}
+          rows={einvoice.lines.map((line, index) => ({ ...line, index }))}
+          rowKey={(line) => String(line.index)}
+          columns={[
+            {
+              key: 'line',
+              header: t('in.line'),
+              cell: (line) => (
+                <>
+                  {line.name}
+                  {line.description ? (
+                    <span className="muted block">{line.description}</span>
+                  ) : null}
+                </>
+              ),
+            },
+            {
+              key: 'quantity',
+              header: t('in.quantity'),
+              numeric: true,
+              cell: (line) => `${line.quantity?.replace('.', ',') ?? ''} ${line.unitCode ?? ''}`,
+            },
+            {
+              key: 'price',
+              header: t('in.price'),
+              numeric: true,
+              cell: (line) => line.netPrice?.replace('.', ','),
+            },
+            {
+              key: 'net',
+              header: t('in.net'),
+              numeric: true,
+              cell: (line) => formatCents(line.netCents),
+            },
+          ]}
+        />
       ) : null}
       <dl className="receivable-sums">
+        {(einvoice.allowanceCharges ?? []).map((a, index) => (
+          // biome-ignore lint/suspicious/noArrayIndexKey: allowances are fixed for this invoice
+          <div key={`ac-${index}`}>
+            <dt>
+              {tf(a.charge ? 'in.charge' : 'in.allowance', {
+                reason: a.reason ?? '',
+                rate: (a.vatRate ?? '').replace('.', ','),
+              })}
+            </dt>
+            <dd className="amount">
+              {formatCents(
+                a.amountCents === null ? null : a.charge ? a.amountCents : -a.amountCents,
+              )}
+            </dd>
+          </div>
+        ))}
         {einvoice.vatBreakdown.map((v) => (
           <div key={`${v.category}-${v.rate}`}>
             <dt>
@@ -940,6 +957,7 @@ function ReviewForm({
   areas,
   errors,
   lines,
+  allowanceCharges,
 }: {
   form: Form
   update: (patch: Partial<Form>) => void
@@ -948,6 +966,8 @@ function ReviewForm({
   errors: Record<string, string>
   /** Positions of the e-invoice: „Je Rechnungsposition zuweisen“. */
   lines: NonNullable<IncomingInvoiceDetail['einvoice']>['lines']
+  /** Document-level allowances/charges (BG-20/21), spread over the lines of their rate. */
+  allowanceCharges: NonNullable<NonNullable<IncomingInvoiceDetail['einvoice']>['allowanceCharges']>
 }) {
   const id = useId()
   const rates = form.taxLines.map((l) => rateOf(l.rate)).filter(Boolean)
@@ -990,16 +1010,38 @@ function ReviewForm({
   const byLine = () => {
     const target = form.allocations[0]?.target ?? ''
     const costType = form.allocations[0]?.costType ?? 'material'
+    const spread = distributeAllowanceCharges(
+      usableLines.map((l) => ({ netCents: BigInt(l.netCents as number), ratePercent: l.vatRate })),
+      allowanceCharges
+        .filter((a) => a.amountCents !== null)
+        .map((a) => ({
+          charge: a.charge,
+          amountCents: BigInt(a.amountCents as number),
+          ratePercent: a.vatRate,
+        })),
+    )
     update({
-      allocations: usableLines.map((l, index) => ({
-        key: ++rowKey,
-        target,
-        costType,
-        rate: (l.vatRate ?? rates[0] ?? '0').replace('.', ','),
-        net: centsToInput(l.netCents as number),
-        description: [l.id ?? String(index + 1), l.name].filter(Boolean).join(' '),
-        lineId: l.id ?? String(index + 1),
-      })),
+      allocations: [
+        ...usableLines.map((l, index) => ({
+          key: ++rowKey,
+          target,
+          costType,
+          rate: (l.vatRate ?? rates[0] ?? '0').replace('.', ','),
+          net: centsToInput(Number(spread.netCents[index])),
+          description: [l.id ?? String(index + 1), l.name].filter(Boolean).join(' '),
+          lineId: l.id ?? String(index + 1),
+        })),
+        // Allowances/charges that fit no line stay a row of their own, to be assigned by hand.
+        ...spread.rest.map((r) => ({
+          key: ++rowKey,
+          target,
+          costType,
+          rate: (r.ratePercent ?? rates[0] ?? '0').replace('.', ','),
+          net: centsToInput(Number(r.netCents)),
+          description: t(r.netCents < 0n ? 'in.restAllowance' : 'in.restCharge'),
+          lineId: null,
+        })),
+      ],
     })
   }
 
@@ -1096,29 +1138,33 @@ function ReviewForm({
               value={line.tax}
               onChange={(v) => setTax(index, { tax: v })}
             />
-            <button
+            <Button
               type="button"
-              className="button ghost small"
+              variant="ghost"
+              width="natural"
+              size="small"
               aria-label={tf('in.removeRate', { rate: line.rate })}
               onClick={() => update({ taxLines: form.taxLines.filter((_, i) => i !== index) })}
             >
               ✕
-            </button>
+            </Button>
           </div>
         ))}
         <div className="button-row">
-          <button
+          <Button
             type="button"
-            className="button ghost small"
+            variant="ghost"
+            width="natural"
+            size="small"
             onClick={() =>
               update({ taxLines: [...form.taxLines, { rate: '19', net: '', tax: '' }] })
             }
           >
             {t('in.addRate')}
-          </button>
-          <button type="button" className="button ghost small" onClick={sumUp}>
+          </Button>
+          <Button type="button" variant="ghost" width="natural" size="small" onClick={sumUp}>
             {t('in.sumUp')}
-          </button>
+          </Button>
         </div>
         <div className="row">
           <Text
@@ -1227,15 +1273,17 @@ function ReviewForm({
                 value={a.description}
                 onChange={(v) => setAllocation(a.key, { description: v })}
               />
-              <button
+              <Button
                 type="button"
-                className="button ghost small"
+                variant="ghost"
+                width="natural"
+                size="small"
                 onClick={() =>
                   update({ allocations: form.allocations.filter((x) => x.key !== a.key) })
                 }
               >
                 {t('in.removeAllocation')}
-              </button>
+              </Button>
             </div>
           </div>
         ))}
@@ -1252,22 +1300,27 @@ function ReviewForm({
             ))}
         </ul>
         <div className="button-row">
-          <button type="button" className="button ghost small" onClick={addRest}>
+          <Button type="button" variant="ghost" width="natural" size="small" onClick={addRest}>
             {t('in.addAllocation')}
-          </button>
+          </Button>
           {usableLines.length > 1 ? (
-            <button
+            <Button
               type="button"
-              className="button ghost small"
+              variant="ghost"
+              width="natural"
+              size="small"
               onClick={() => {
                 if (form.allocations.length && !window.confirm(t('in.byLineConfirm'))) return
                 byLine()
               }}
             >
               {tf('in.byLine', { n: String(usableLines.length) })}
-            </button>
+            </Button>
           ) : null}
         </div>
+        {usableLines.length > 1 && allowanceCharges.length ? (
+          <p className="muted">{t('in.byLineHint')}</p>
+        ) : null}
       </fieldset>
       <div className="field">
         <label htmlFor={`${id}-note`}>{t('in.note')}</label>
@@ -1377,14 +1430,9 @@ function PaymentPanel({
             {tf('in.paidOn', { date: formatDateTime(detail.paidOn, 'date') })}
             {detail.paymentNote ? ` · ${detail.paymentNote}` : ''}
           </p>
-          <button
-            type="button"
-            className="button ghost auto"
-            disabled={busy}
-            onClick={() => onPay(null, null)}
-          >
+          <Button type="button" variant="ghost" disabled={busy} onClick={() => onPay(null, null)}>
             {t('in.markOpen')}
-          </button>
+          </Button>
         </>
       ) : (
         <>
@@ -1403,20 +1451,21 @@ function PaymentPanel({
               <input id={`${id}-note`} value={note} onChange={(e) => setNote(e.target.value)} />
             </div>
           </div>
-          <button
+          <Button
             type="button"
-            className="button primary auto"
+            variant="primary"
             disabled={busy || !paidOn}
             onClick={() => onPay(paidOn, note.trim() || null)}
           >
             {t('in.markPaid')}
-          </button>
+          </Button>
         </>
       )}
       <div className="button-row">
-        <button
+        <Button
           type="button"
-          className="button ghost auto danger"
+          variant="ghost"
+          danger
           disabled={busy}
           onClick={() => {
             const reason = window.prompt(t('in.cancelReason'))
@@ -1424,7 +1473,7 @@ function PaymentPanel({
           }}
         >
           {t('in.cancel')}
-        </button>
+        </Button>
       </div>
     </div>
   )

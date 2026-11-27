@@ -187,6 +187,53 @@ export async function storeUploadedFile(
   }
 }
 
+/**
+ * Stores a file the system created (e.g. the PDF of an Aufmaßblatt sent by e-mail) in the project's
+ * Ablage, folder `folderName` (created if missing), in the caller's transaction.
+ */
+export async function storeGeneratedFile(
+  tx: Tx,
+  services: Services,
+  auth: AuthContext,
+  projectId: string,
+  input: { folderName: string; filename: string; data: Buffer },
+): Promise<{ id: string; filename: string; sizeBytes: number }> {
+  const [folder] = await tx<{ id: string }[]>`
+    select id from project_folder where project_id = ${projectId} and name = ${input.folderName}
+    order by sort limit 1`
+  const folderId =
+    folder?.id ??
+    (
+      await tx<{ id: string }[]>`
+        insert into project_folder (tenant_id, project_id, name, sort, created_by)
+        values (${auth.tenantId}, ${projectId}, ${input.folderName},
+                (select coalesce(max(sort), 0) + 1 from project_folder where project_id = ${projectId}),
+                ${auth.userId})
+        returning id`
+    )[0]?.id
+  const pending = await services.storage.receive(Readable.from([input.data]), {
+    maxBytes: input.data.length + 1,
+  })
+  try {
+    const filename = sanitizeFilename(input.filename)
+    const type = detectFileType(filename, pending.head)
+    if (!type) throw new Error(`generated file ${filename} has an unknown type`)
+    const [ids] = await tx<{ id: string }[]>`select uuid_v7() as id`
+    const fileId = (ids as { id: string }).id
+    const key = `${auth.tenantId}/files/${fileId}`
+    await tx`
+      insert into file (id, tenant_id, project_id, folder_id, filename, mime_type, size_bytes,
+                        sha256, storage_key, caption, uploaded_by)
+      values (${fileId}, ${auth.tenantId}, ${projectId}, ${folderId ?? null}, ${filename}, ${type.mime},
+              ${pending.sizeBytes}, ${pending.sha256}, ${key}, null, ${auth.userId})`
+    await pending.commit(key)
+    return { id: fileId, filename, sizeBytes: pending.sizeBytes }
+  } catch (error) {
+    await pending.discard()
+    throw error
+  }
+}
+
 export function registerFileRoutes(app: FastifyInstance, services: Services) {
   // Uploads arrive as raw bytes and are streamed straight into the object store (no buffering).
   app.addContentTypeParser('application/octet-stream', (_request, payload, done) =>
@@ -388,7 +435,7 @@ export function registerFileRoutes(app: FastifyInstance, services: Services) {
         if (error.code === '23503') {
           throw new HttpError(
             409,
-            'Diese Datei wird als Bild in einem Dokument verwendet und kann nicht gelöscht werden.',
+            'Diese Datei wird als Bild in einem Dokument verwendet oder wurde per E-Mail versendet und kann nicht gelöscht werden.',
           )
         }
         throw error

@@ -81,7 +81,10 @@ describe.skipIf(!process.env.DATABASE_URL)('Bautagebuch / reports (integration)'
     expect(keys).toEqual(
       expect.arrayContaining(['daily_site_report', 'daywork_report', 'acceptance_protocol']),
     )
-    expect(keys).not.toContain('measurement_report')
+    // Seit 2026-11-26 auch Checkliste und Aufmaß (Baustellenbegehung, Aufmaß-Bericht).
+    expect(keys).toEqual(
+      expect.arrayContaining(['measurement_report', 'site_inspection', 'checklist']),
+    )
     const daily = templates.find((t) => t.key === 'daily_site_report')
     expect(daily?.sections.map((s) => s.type)).toEqual([
       'header',
@@ -355,9 +358,128 @@ describe.skipIf(!process.env.DATABASE_URL)('Bautagebuch / reports (integration)'
     })
     expect(res.json().errors.signatures).toBe('Es fehlt die Unterschrift für: Auftraggeber.')
     const unknown = await admin.post(`/api/v1/projects/${projectId}/reports`, {
-      templateKey: 'measurement_report',
+      templateKey: 'gibt_es_nicht',
     })
     expect(unknown.statusCode).toBe(400)
+  })
+
+  it('tracks handing over and returning a Regiebericht (VOB/B § 15 Abs. 3)', async () => {
+    h.clock.now = Date.parse('2026-11-12T10:00:00Z') // Thursday
+    const created = await admin.post(`/api/v1/projects/${projectId}/reports`, {
+      templateKey: 'daywork_report',
+      reportDate: '2026-11-11',
+    })
+    expect(created.statusCode, created.body).toBe(201)
+    const daywork: ReportDetail = created.json()
+    expect(daywork.daywork).toEqual({ state: 'to_submit', submitBy: '2026-11-16', returnBy: null })
+    const path = `/api/v1/reports/${daywork.id}`
+    const etag = async () => (await admin.get(path)).headers.etag as string
+    const future = await admin.patch(
+      path,
+      { submittedOn: '2026-11-13' },
+      { 'if-match': await etag() },
+    )
+    expect(future.statusCode).toBe(400)
+    const handed = await admin.patch(
+      path,
+      { submittedOn: '2026-11-12' },
+      { 'if-match': await etag() },
+    )
+    expect(handed.statusCode, handed.body).toBe(200)
+    expect(handed.json().daywork).toEqual({
+      state: 'waiting',
+      submitBy: null,
+      returnBy: '2026-11-19',
+    })
+    h.clock.now = Date.parse('2026-11-20T10:00:00Z')
+    const list: ReportSummary[] = (
+      await admin.get(`/api/v1/projects/${projectId}/reports?template=daywork_report`)
+    ).json()
+    expect(list.find((r) => r.id === daywork.id)?.daywork?.state).toBe('deemed_accepted')
+    // Only Stundenlohnzettel are handed over.
+    const other = await admin.patch(
+      `/api/v1/reports/${report.id}`,
+      { submittedOn: '2026-11-12' },
+      { 'if-match': (await admin.get(`/api/v1/reports/${report.id}`)).headers.etag as string },
+    )
+    expect([400, 409]).toContain(other.statusCode)
+    h.clock.now = Date.parse('2026-11-08T10:00:00Z')
+  })
+
+  it('fills checklists and links an Aufmaßblatt of the same project', async () => {
+    const created = await admin.post(`/api/v1/projects/${projectId}/reports`, {
+      templateKey: 'site_inspection',
+      reportDate: '2026-11-12',
+    })
+    expect(created.statusCode, created.body).toBe(201)
+    const inspection: ReportDetail = created.json()
+    expect(inspection.data.checklist).toEqual({ rows: [] })
+    expect(inspection.data.measurement).toEqual({ sheetId: null, rows: [] })
+    const sheet = (
+      await admin.post(`/api/v1/projects/${projectId}/measurement-sheets`, {
+        kind: 'survey',
+        title: 'Bestand EG',
+      })
+    ).json()
+    const otherProject = (
+      await admin.post('/api/v1/projects', { name: 'Anderes Projekt', customerId })
+    ).json()
+    const foreign = (
+      await admin.post(`/api/v1/projects/${otherProject.id}/measurement-sheets`, {
+        kind: 'survey',
+        title: 'Fremd',
+      })
+    ).json()
+    const path = `/api/v1/reports/${inspection.id}`
+    const etag = async () => (await admin.get(path)).headers.etag as string
+    const wrong = await admin.patch(
+      path,
+      { data: { measurement: { sheetId: foreign.id, rows: [] } } },
+      { 'if-match': await etag() },
+    )
+    expect(wrong.statusCode).toBe(400)
+    expect(wrong.json().errors['data.measurement.sheetId']).toMatch(/Unbekanntes Aufmaßblatt/)
+    const badState = await admin.patch(
+      path,
+      { data: { checklist: { rows: [{ label: 'Zufahrt', state: 'perfekt' }] } } },
+      { 'if-match': await etag() },
+    )
+    expect(badState.statusCode).toBe(400)
+
+    const saved = await admin.patch(
+      path,
+      {
+        data: {
+          checklist: {
+            rows: [
+              { label: 'Zufahrt frei', state: 'ok', note: null },
+              { label: 'Baustrom', state: 'issue', note: 'fehlt noch' },
+            ],
+          },
+          measurement: {
+            sheetId: sheet.id,
+            rows: [{ description: 'Raumhöhe', quantity: '2.75', unitId: units[0]?.id }],
+          },
+        },
+      },
+      { 'if-match': await etag() },
+    )
+    expect(saved.statusCode, saved.body).toBe(200)
+    const detail: ReportDetail = saved.json()
+    expect(detail.linkedSheets).toEqual([
+      expect.objectContaining({ id: sheet.id, title: 'Bestand EG', status: 'draft' }),
+    ])
+    expect((detail.data.checklist as { rows: unknown[] }).rows).toHaveLength(2)
+
+    // The linked sheet stays as evidence of the report.
+    const del = await admin.delete(`/api/v1/measurement-sheets/${sheet.id}`)
+    expect(del.statusCode).toBe(409)
+    expect(del.json().detail).toMatch(/Baustellenbegehung/)
+    expect((await admin.delete(`/api/v1/measurement-sheets/${foreign.id}`)).statusCode).toBe(204)
+
+    const pdf = await admin.get(`${path}/pdf`)
+    expect(pdf.statusCode, pdf.body).toBe(200)
+    expect(pdf.rawPayload.toString('latin1')).toMatch(/pdfaid:part(>|=")3/)
   })
 
   it('prints the report with its photos as PDF/A', async () => {

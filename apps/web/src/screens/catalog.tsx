@@ -8,6 +8,7 @@ import type {
   UnitSummary,
 } from '@easybau/schemas'
 import { COST_KINDS } from '@easybau/schemas/constants'
+import { Button, buttonClass } from '@easybau/ui'
 import { useCallback, useEffect, useState } from 'react'
 import { ApiError, api, uploadFile } from '../api'
 import {
@@ -25,8 +26,19 @@ import { CatalogImport } from './catalog-import'
 type Section = 'service' | 'material' | 'catalogs'
 
 /** Stammdaten: Leistungen, Materialien and supplier catalogs (DATANORM). */
-export function Catalog({ me }: { me: Me }) {
+export function Catalog({ me, itemId }: { me: Me; itemId?: string | undefined }) {
   const [section, setSection] = useState<Section>('service')
+  // Opened from the search (/stammdaten/<id>): the item's list with its editor open.
+  const [opened, setOpened] = useState<CatalogItem | null>(null)
+  useEffect(() => {
+    if (!itemId) return
+    api<CatalogItem>('GET', `/api/v1/catalog/items/${itemId}`)
+      .then((item) => {
+        setSection(item.kind)
+        setOpened(item)
+      })
+      .catch(() => undefined)
+  }, [itemId])
   const [units, setUnits] = useState<UnitSummary[]>([])
   useEffect(() => {
     api<UnitSummary[]>('GET', '/api/v1/units')
@@ -58,7 +70,13 @@ export function Catalog({ me }: { me: Me }) {
       {section === 'catalogs' ? (
         <SupplierCatalogs canWrite={canWrite} units={units} />
       ) : (
-        <ItemList key={section} kind={section} canWrite={canWrite} units={units} />
+        <ItemList
+          key={`${section}-${opened?.id ?? ''}`}
+          kind={section}
+          canWrite={canWrite}
+          units={units}
+          initial={opened?.kind === section ? opened : null}
+        />
       )}
     </section>
   )
@@ -70,16 +88,18 @@ function ItemList({
   kind,
   canWrite,
   units,
+  initial,
 }: {
   kind: 'service' | 'material'
   canWrite: boolean
   units: UnitSummary[]
+  initial?: CatalogItem | null
 }) {
   const [items, setItems] = useState<CatalogItem[] | null>(null)
   const [folders, setFolders] = useState<CatalogFolder[]>([])
   const [folderId, setFolderId] = useState('')
   const [query, setQuery] = useState('')
-  const [editing, setEditing] = useState<CatalogItem | 'new' | null>(null)
+  const [editing, setEditing] = useState<CatalogItem | 'new' | null>(initial ?? null)
   const [importing, setImporting] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
@@ -118,21 +138,21 @@ function ItemList({
         <h2>{kind === 'service' ? t('c.services') : t('c.materials')}</h2>
         <span className="button-row">
           <a
-            className="button ghost auto"
+            className={buttonClass({ variant: 'ghost' })}
             href={`/api/v1/catalog/export.csv?kind=${kind}`}
             download
           >
             {t('cc.export')}
           </a>
           {canWrite && !importing ? (
-            <button type="button" className="button ghost auto" onClick={() => setImporting(true)}>
+            <Button type="button" variant="ghost" onClick={() => setImporting(true)}>
               {t('cc.import')}
-            </button>
+            </Button>
           ) : null}
           {canWrite && !editing ? (
-            <button type="button" className="button primary auto" onClick={() => setEditing('new')}>
+            <Button type="button" variant="primary" onClick={() => setEditing('new')}>
               {kind === 'service' ? t('c.newService') : t('c.newMaterial')}
-            </button>
+            </Button>
           ) : null}
         </span>
       </div>
@@ -205,21 +225,26 @@ function ItemList({
               </span>
               {canWrite ? (
                 <span className="actions">
-                  <button
+                  <Button
                     type="button"
-                    className="button ghost small"
+                    variant="ghost"
+                    width="natural"
+                    size="small"
                     onClick={() => setEditing(item)}
                   >
                     {t('common.edit')}
-                  </button>
-                  <button
+                  </Button>
+                  <Button
                     type="button"
-                    className="button ghost icon danger"
+                    variant="ghost"
+                    width="natural"
+                    size="icon"
+                    danger
                     aria-label={`${t('common.delete')}: ${item.shortText}`}
                     onClick={() => remove(item)}
                   >
                     ✕
-                  </button>
+                  </Button>
                 </span>
               ) : null}
             </li>
@@ -237,6 +262,7 @@ interface ComponentInput {
   unitId: string
   cost: string
   markup: string
+  wageGroupId?: string | null
 }
 
 function ItemForm({
@@ -276,6 +302,7 @@ function ItemForm({
       unitId: c.unit?.id ?? '',
       cost: centsToInput(c.unitCostCents),
       markup: formatInputNumber(c.markupPercent),
+      wageGroupId: c.wageGroupId,
     })) ?? [],
   )
   const [error, setError] = useState<string | null>(null)
@@ -316,6 +343,7 @@ function ItemForm({
           unitId: c.unitId || null,
           unitCostCents: money(c.cost, `${t('q.calcCost')} (${i + 1})`) ?? 0,
           markupPercent: c.markup || null,
+          wageGroupId: c.kind === 'labor' ? (c.wageGroupId ?? null) : null,
         })),
       }
     } catch (err) {
@@ -471,22 +499,27 @@ function ItemForm({
                         />
                       </div>
                     </div>
-                    <button
+                    <Button
                       type="button"
-                      className="button ghost icon danger"
+                      variant="ghost"
+                      width="natural"
+                      size="icon"
+                      danger
                       aria-label={t('d.row.remove')}
                       onClick={() => setComponents((all) => all.filter((_, j) => j !== i))}
                     >
                       ✕
-                    </button>
+                    </Button>
                   </div>
                 </li>
               )
             })}
           </ul>
-          <button
+          <Button
             type="button"
-            className="button ghost small"
+            variant="ghost"
+            width="natural"
+            size="small"
             onClick={() =>
               setComponents((all) => [
                 ...all,
@@ -502,7 +535,7 @@ function ItemForm({
             }
           >
             {t('q.calcAddLine')}
-          </button>
+          </Button>
         </fieldset>
       ) : null}
       {kind === 'material' || !components.length ? (
@@ -526,12 +559,12 @@ function ItemForm({
       ) : null}
       <FormError>{error}</FormError>
       <div className="button-row">
-        <button type="button" className="button primary auto" disabled={busy} onClick={save}>
+        <Button type="button" variant="primary" disabled={busy} onClick={save}>
           {t('common.save')}
-        </button>
-        <button type="button" className="button ghost" onClick={onCancel}>
+        </Button>
+        <Button type="button" variant="ghost" width="natural" onClick={onCancel}>
           {t('common.cancel')}
-        </button>
+        </Button>
       </div>
     </div>
   )
@@ -609,7 +642,7 @@ function SupplierCatalogs({ canWrite, units }: { canWrite: boolean; units: UnitS
               </div>
             ) : null}
           </div>
-          <label className="button primary auto file-button">
+          <label className={buttonClass({ variant: 'primary', className: 'file-button' })}>
             {busy ? t('c.importing') : t('c.importFile')}
             <input
               type="file"
@@ -689,21 +722,26 @@ function SupplierCatalogs({ canWrite, units }: { canWrite: boolean; units: UnitS
                   </span>
                   {canWrite ? (
                     <span className="actions">
-                      <button
+                      <Button
                         type="button"
-                        className="button ghost small"
+                        variant="ghost"
+                        width="natural"
+                        size="small"
                         onClick={() => setEditing(c.id)}
                       >
                         {t('common.edit')}
-                      </button>
-                      <button
+                      </Button>
+                      <Button
                         type="button"
-                        className="button ghost icon danger"
+                        variant="ghost"
+                        width="natural"
+                        size="icon"
+                        danger
                         aria-label={`${t('c.deleteCatalog')}: ${c.name}`}
                         onClick={() => remove(c)}
                       >
                         ✕
-                      </button>
+                      </Button>
                     </span>
                   ) : null}
                 </>
@@ -774,12 +812,12 @@ function CatalogSettings({ catalog, onDone }: { catalog: SupplierCatalog; onDone
       </div>
       <FormError>{error}</FormError>
       <div className="button-row">
-        <button type="button" className="button primary auto" onClick={save}>
+        <Button type="button" variant="primary" onClick={save}>
           {t('common.save')}
-        </button>
-        <button type="button" className="button ghost" onClick={onDone}>
+        </Button>
+        <Button type="button" variant="ghost" width="natural" onClick={onDone}>
           {t('common.cancel')}
-        </button>
+        </Button>
       </div>
     </div>
   )
@@ -891,9 +929,15 @@ function ArticleSearch({ canWrite, units }: { canWrite: boolean; units: UnitSumm
                       ))}
                     </select>
                   ) : null}
-                  <button type="button" className="button ghost small" onClick={() => takeOver(a)}>
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    width="natural"
+                    size="small"
+                    onClick={() => takeOver(a)}
+                  >
                     {t('c.takeOver')}
-                  </button>
+                  </Button>
                 </span>
               ) : null}
             </li>

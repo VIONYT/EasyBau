@@ -288,6 +288,30 @@ describe.skipIf(!process.env.DATABASE_URL || !out)('Upgrade fixture (generator)'
     )
     await ok(admin.post(`/api/v1/incoming-invoices/${incoming.id}/confirm`, {}))
 
+    // Seit 0041/0042: Dublette zusammenführen, Privatkunden ohne Belege löschen (geschwärztes
+    // Protokoll, anonymisiertes Projekt)
+    const duplicate = await ok(
+      admin.post('/api/v1/contacts', {
+        kind: 'organization',
+        organizationName: 'Wohnbau Nord',
+        addresses: [{ kind: 'main', street: 'Lindenweg 4', postalCode: '30159', city: 'Hannover' }],
+        channels: [{ kind: 'phone', value: '0511 4711' }],
+      }),
+    )
+    await ok(
+      admin.post(`/api/v1/contacts/${duplicate.id}/merge`, { intoId: customer.id, confirm: true }),
+    )
+    const privateCustomer = await ok(
+      admin.post('/api/v1/contacts', {
+        kind: 'person',
+        firstName: 'Paula',
+        lastName: 'Privat',
+        addresses: [{ kind: 'main', street: 'Gartenweg 9', postalCode: '30161', city: 'Hannover' }],
+      }),
+    )
+    await ok(admin.post('/api/v1/projects', { name: 'Bad Privat', customerId: privateCustomer.id }))
+    await ok(admin.post(`/api/v1/contacts/${privateCustomer.id}/erase`, { confirm: true }))
+
     // Zweite Firma (Mandantentrennung), wie createTenant() in @easybau/db/test-support
     const [ids] = (await h.sql`select uuid_v7() as tenant, uuid_v7() as "user"`) as unknown as [
       { tenant: string; user: string },

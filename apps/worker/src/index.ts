@@ -11,6 +11,7 @@ import { archivePending } from './archive.js'
 import { verifyArchive, verifyRequested } from './archive-verify.js'
 import { checkAuditChains } from './audit.js'
 import { dispatchEmails, smtpTransport } from './email.js'
+import { reapplyErasures, writeErasureMarkers } from './erasures.js'
 import { purgeReadNotifications } from './notifications.js'
 import { alertOperations } from './operations-alert.js'
 
@@ -33,6 +34,7 @@ export {
   type OutgoingMail,
   smtpTransport,
 } from './email.js'
+export { markerKey, type ReapplyRun, reapplyErasures, writeErasureMarkers } from './erasures.js'
 export { NOTIFICATION_RETENTION_DAYS, purgeReadNotifications } from './notifications.js'
 export {
   alertOperations,
@@ -63,6 +65,8 @@ export async function startWorker(
     Config,
     | 'APP_NAME'
     | 'DATABASE_URL'
+    | 'DATABASE_RUNTIME_URL'
+    | 'DATABASE_JOBS_URL'
     | 'DATABASE_POOL_MAX'
     | 'PROFILE'
     | 'SMTP_HOST'
@@ -90,8 +94,11 @@ export async function startWorker(
   logger: Logger,
 ): Promise<Worker> {
   const boss = new PgBoss({
-    connectionString: config.DATABASE_URL,
+    // Own login that owns only the schema `jobs` (ADR 0013); the administrator as fallback.
+    connectionString: config.DATABASE_JOBS_URL ?? config.DATABASE_URL,
     schema: 'jobs',
+    // The own login may not create schemas; ensureJobsLogin (or the operator) created `jobs`.
+    createSchema: !config.DATABASE_JOBS_URL,
     // Keep the footprint small in the compact profile.
     max: config.PROFILE === 'compact' ? 2 : 5,
   })
@@ -174,6 +181,8 @@ export async function startWorker(
     if (previous) logger.info({ bucket: previous.bucket }, 'previous archive configured (move)')
     let bucketReady = !config.ARCHIVE_S3_CREATE_BUCKET
     let running = false
+    // After a restore the worker starts anew: repeat erasures before anything is archived again.
+    let reapplyDue = true
     const tick = async () => {
       if (running) return
       running = true
@@ -182,6 +191,11 @@ export async function startWorker(
           await archive.ensureBucket()
           bucketReady = true
           logger.info({ bucket: archive.bucket }, 'archive bucket with Object Lock ready')
+        }
+        await writeErasureMarkers(archiveSql, archive, logger)
+        if (reapplyDue) {
+          await reapplyErasures(archiveSql, files, archive, logger)
+          reapplyDue = false
         }
         await archivePending(archiveSql, files, archive, logger)
         // Complete reconciliation after a restore or on request, in steps.
@@ -195,6 +209,7 @@ export async function startWorker(
     // Archiv-Abgleich every night: the 500 least recently checked objects, every 10th by content.
     await boss.createQueue(queues.archiveVerify)
     await boss.work(queues.archiveVerify, async () => {
+      await reapplyErasures(archiveSql, files, archive, logger)
       await verifyArchive(archiveSql, files, archive, previous, logger, {
         limit: 500,
         deepEvery: 10,

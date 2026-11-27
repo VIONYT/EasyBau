@@ -16,7 +16,6 @@ import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify'
 import { mfaSetupRequired, requireAuth, type Services, sessionCookieName } from '../context.js'
 import { HttpError, parse } from '../http.js'
 import { generateTotpSecret, safeEqual, totpUri, verifyTotp } from '../security/crypto.js'
-import { hashPassword, needsRehash, verifyDummy, verifyPassword } from '../security/passwords.js'
 import {
   createSession,
   deleteSession,
@@ -34,15 +33,20 @@ import {
   finishLogin,
   mfaMethodsOf,
   rateLimit,
+  requireRecentLogin,
   setSessionCookie,
   useChallenge,
 } from './auth-common.js'
-import { passwordChangedNotice } from './security-notices.js'
+import { passwordChangedNotice, secondFactorNotice } from './security-notices.js'
 
 export { buildMe } from './auth-common.js'
 
 const LOGIN_FAILED = 'E-Mail-Adresse oder Passwort ist falsch.'
 const TOTP_INVALID = 'Der Bestätigungscode ist ungültig oder abgelaufen.'
+// TOTP guesses are counted per person across all logins and challenges: a correct password
+// yields a fresh challenge, so the per-challenge limit alone would allow unlimited guessing.
+const MAX_TOTP_FAILURES = 10
+const totpKey = (userId: string) => `totp:${userId}`
 
 export function registerAuthRoutes(app: FastifyInstance, services: Services) {
   const { sql } = services
@@ -62,7 +66,7 @@ export function registerAuthRoutes(app: FastifyInstance, services: Services) {
         setupToken: 'Einrichtungscode ist falsch.',
       })
     }
-    const passwordHash = await hashPassword(input.admin.password)
+    const passwordHash = await services.passwords.hash(input.admin.password)
 
     const created = await sql.begin(async (tx) => {
       // Serialise concurrent setup attempts; only the very first one may succeed.
@@ -121,17 +125,17 @@ export function registerAuthRoutes(app: FastifyInstance, services: Services) {
       select id, password_hash as "passwordHash", totp_secret_enc as "totpSecret", totp_last_step as "totpLastStep"
       from app_user where lower(email) = ${input.email} and is_active`
     if (!user?.passwordHash) {
-      await verifyDummy(input.password)
+      await services.passwords.verifyDummy(input.password)
       throw new HttpError(401, LOGIN_FAILED)
     }
-    if (!(await verifyPassword(user.passwordHash, input.password))) {
+    if (!(await services.passwords.verify(user.passwordHash, input.password))) {
       throw new HttpError(401, LOGIN_FAILED)
     }
 
     await resetRateLimit(sql, `login:email:${input.email}`)
     // Stronger argon2id parameters since the hash was stored: upgrade it now (the password is known).
-    if (needsRehash(user.passwordHash)) {
-      await sql`update app_user set password_hash = ${await hashPassword(input.password)} where id = ${user.id}`
+    if (services.passwords.needsRehash(user.passwordHash)) {
+      await sql`update app_user set password_hash = ${await services.passwords.hash(input.password)} where id = ${user.id}`
     }
     const methods = await mfaMethodsOf(services, user.id)
     if (methods.length === 0) {
@@ -144,14 +148,16 @@ export function registerAuthRoutes(app: FastifyInstance, services: Services) {
     }
     // One-shot variant for API clients: password and TOTP code in the same request.
     if (input.totp && user.totpSecret) {
+      await rateLimit(services, totpKey(user.id), MAX_TOTP_FAILURES)
       const step = verifyTotp(
-        services.cipher.decrypt(user.totpSecret),
+        services.cipher.decrypt(user.totpSecret, 'app_user.totp'),
         input.totp,
         services.now(),
         user.totpLastStep === null ? null : Number(user.totpLastStep),
       )
       if (step === null) throw new HttpError(401, TOTP_INVALID, { totp: 'Code ungültig.' })
       await sql`update app_user set totp_last_step = ${step} where id = ${user.id}`
+      await resetRateLimit(sql, totpKey(user.id))
       return finishLogin(services, request, reply, {
         userId: user.id,
         requestedTenantId: input.tenantId,
@@ -176,14 +182,16 @@ export function registerAuthRoutes(app: FastifyInstance, services: Services) {
       from app_user where id = ${challenge.userId as string} and is_active`
     if (!user?.secret)
       throw new HttpError(400, 'Für diesen Zugang ist keine App-Bestätigung eingerichtet.')
+    await rateLimit(services, totpKey(challenge.userId as string), MAX_TOTP_FAILURES)
     const step = verifyTotp(
-      services.cipher.decrypt(user.secret),
+      services.cipher.decrypt(user.secret, 'app_user.totp'),
       code,
       services.now(),
       user.lastStep === null ? null : Number(user.lastStep),
     )
     if (step === null) throw new HttpError(401, TOTP_INVALID, { code: 'Code ungültig.' })
     await sql`update app_user set totp_last_step = ${step} where id = ${challenge.userId as string}`
+    await resetRateLimit(sql, totpKey(challenge.userId as string))
     await deleteChallenge(services, challenge.id)
     return finishLogin(services, request, reply, {
       userId: challenge.userId as string,
@@ -235,12 +243,15 @@ export function registerAuthRoutes(app: FastifyInstance, services: Services) {
     await rateLimit(services, `password:${auth.userId}`, 10)
     const [user] = await sql<{ passwordHash: string | null }[]>`
       select password_hash as "passwordHash" from app_user where id = ${auth.userId}`
-    if (!user?.passwordHash || !(await verifyPassword(user.passwordHash, input.currentPassword))) {
+    if (
+      !user?.passwordHash ||
+      !(await services.passwords.verify(user.passwordHash, input.currentPassword))
+    ) {
       throw new HttpError(403, 'Das aktuelle Passwort ist falsch.', {
         currentPassword: 'Passwort ist falsch.',
       })
     }
-    await sql`update app_user set password_hash = ${await hashPassword(input.newPassword)} where id = ${auth.userId}`
+    await sql`update app_user set password_hash = ${await services.passwords.hash(input.newPassword)} where id = ${auth.userId}`
     await deleteSessionsOfUser(sql, auth.userId, auth.sessionId)
     await audit(services, auth.tenantId, auth.userId, 'password_changed')
     await passwordChangedNotice(services, auth.userId)
@@ -252,8 +263,9 @@ export function registerAuthRoutes(app: FastifyInstance, services: Services) {
   app.post('/api/v1/auth/totp/setup', async (request): Promise<TotpSetupResponse> => {
     const auth = requireAuth(request)
     if (auth.totpEnabled) throw new HttpError(409, 'Die Zwei-Faktor-Anmeldung ist bereits aktiv.')
+    await requireRecentLogin(services, auth.sessionId)
     const secret = generateTotpSecret()
-    await sql`update app_user set totp_pending_secret_enc = ${services.cipher.encrypt(secret)} where id = ${auth.userId}`
+    await sql`update app_user set totp_pending_secret_enc = ${services.cipher.encrypt(secret, 'app_user.totp')} where id = ${auth.userId}`
     return { secret, uri: totpUri(secret, auth.email, services.config.APP_NAME) }
   })
 
@@ -263,7 +275,7 @@ export function registerAuthRoutes(app: FastifyInstance, services: Services) {
     const [user] = await sql<{ pending: Buffer | null }[]>`
       select totp_pending_secret_enc as pending from app_user where id = ${auth.userId}`
     if (!user?.pending) throw new HttpError(409, 'Bitte zuerst die Einrichtung starten.')
-    const secret = services.cipher.decrypt(user.pending)
+    const secret = services.cipher.decrypt(user.pending, 'app_user.totp')
     const step = verifyTotp(secret, code, services.now())
     if (step === null)
       throw new HttpError(400, 'Der Code passt nicht. Bitte Uhrzeit des Telefons prüfen.', {
@@ -274,6 +286,12 @@ export function registerAuthRoutes(app: FastifyInstance, services: Services) {
     await sql`update user_session set mfa_verified = true where id = ${auth.sessionId}`
     await deleteSessionsOfUser(sql, auth.userId, auth.sessionId)
     await audit(services, auth.tenantId, auth.userId, 'totp_enabled')
+    await secondFactorNotice(
+      services,
+      auth.userId,
+      'Authenticator-App eingerichtet',
+      'für Ihre Anmeldung wurde eine Authenticator-App als zweiter Faktor eingerichtet. Alle anderen Sitzungen wurden beendet',
+    )
     return reply.status(204).send()
   })
 
@@ -287,9 +305,9 @@ export function registerAuthRoutes(app: FastifyInstance, services: Services) {
       from app_user where id = ${auth.userId}`
     if (!user?.secret) throw new HttpError(409, 'Die Zwei-Faktor-Anmeldung ist nicht aktiv.')
     const passwordOk =
-      !!user.passwordHash && (await verifyPassword(user.passwordHash, input.password))
+      !!user.passwordHash && (await services.passwords.verify(user.passwordHash, input.password))
     const step = verifyTotp(
-      services.cipher.decrypt(user.secret),
+      services.cipher.decrypt(user.secret, 'app_user.totp'),
       input.code,
       services.now(),
       user.lastStep === null ? null : Number(user.lastStep),
@@ -304,6 +322,12 @@ export function registerAuthRoutes(app: FastifyInstance, services: Services) {
     await sql`update app_user set totp_secret_enc = null, totp_enabled_at = null, totp_last_step = null
               where id = ${auth.userId}`
     await audit(services, auth.tenantId, auth.userId, 'totp_disabled')
+    await secondFactorNotice(
+      services,
+      auth.userId,
+      'Authenticator-App entfernt',
+      'die Authenticator-App wurde als zweiter Faktor Ihrer Anmeldung entfernt',
+    )
     return reply.status(204).send()
   })
 }

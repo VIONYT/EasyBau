@@ -11,10 +11,10 @@ import {
   type SiteLetterContext,
   sheetLetter,
 } from '@easybau/pdf-templates'
-import type { DocumentDetail } from '@easybau/schemas'
+import type { DocumentDetail, MeasurementSheetDetail } from '@easybau/schemas'
 import type { FastifyInstance, FastifyReply } from 'fastify'
 import { z } from 'zod'
-import { openArtifact, readArtifact, storeArtifact } from '../artifacts.js'
+import { assertNotPurged, openArtifact, readArtifact, storeArtifact } from '../artifacts.js'
 import {
   type AuthContext,
   inTenant,
@@ -23,7 +23,7 @@ import {
   type Services,
 } from '../context.js'
 import { notFound, parse } from '../http.js'
-import { documentFileName } from './document-settings.js'
+import { documentFileName, patternFileName } from './document-settings.js'
 import { liveIssuer, liveRecipient, loadDocument } from './documents.js'
 import { loadSheet } from './measurements.js'
 import { loadReport } from './reports.js'
@@ -147,15 +147,26 @@ export async function sheetPdf(services: Services, auth: AuthContext, id: string
       sheet.contractorSignatureAssetId,
       sheet.clientSignatureAssetId,
     ])
+    const site = await siteContext(tx, sheet.projectId)
     const { logoPosition, ...letter } = sheetLetter(sheet, {
-      ...(await siteContext(tx, sheet.projectId)),
+      ...site,
       signatureImages: signatures.images,
     })
     const pdf = renderLetterPdf(
       { ...letter, logo: await logoFor(tx, services, logoPosition) },
       { assets: signatures.assets },
     )
-    return { data: pdf, filename: `Aufmass_${sheet.title}.pdf` }
+    return {
+      data: pdf,
+      filename: await patternFileName(tx, {
+        Typ: 'Aufmass',
+        Nummer: sheet.title,
+        Kunde: site.recipient[0] ?? null,
+        Projekt: sheet.project.name,
+        Datum: sheet.measuredOn,
+        Jahr: sheet.measuredOn.slice(0, 4),
+      }),
+    }
   })
 }
 
@@ -194,18 +205,34 @@ export async function reportPdf(services: Services, auth: AuthContext, id: strin
       report.signatures.map((s) => s.imageAssetId),
     )
     assets.push(...signatures.assets)
+    const sheets = new Map<string, MeasurementSheetDetail>()
+    for (const linked of report.linkedSheets) {
+      const sheet = await loadSheet(tx, auth, linked.id)
+      if (sheet) sheets.set(sheet.id, sheet)
+    }
     const { logoPosition, ...letter } = reportLetter(report, {
       ...(await siteContext(tx, report.projectId)),
       signatureImages: signatures.images,
       units,
       photos,
       skippedPhotos: Math.min(report.photos.length, MAX_PHOTOS) - photos.length,
+      sheets,
     })
     const pdf = renderLetterPdf(
       { ...letter, logo: await logoFor(tx, services, logoPosition) },
       { assets },
     )
-    return { data: pdf, filename: `${report.template.name}_${report.reportDate}.pdf` }
+    return {
+      data: pdf,
+      filename: await patternFileName(tx, {
+        Typ: report.template.name,
+        Nummer: report.reportDate,
+        Kunde: report.header.client,
+        Projekt: report.project.name,
+        Datum: report.reportDate,
+        Jahr: report.reportDate.slice(0, 4),
+      }),
+    }
   })
 }
 
@@ -226,6 +253,7 @@ export async function documentPdf(
     if (!doc.finalizedAt) {
       return { data: await render(tx, services, doc, 'ENTWURF'), filename }
     }
+    await assertNotPurged(tx, id)
     // Serialise the first rendering of the archived original.
     await tx`select id from document where id = ${id} for update`
     const [archived] = await tx<{ key: string }[]>`

@@ -20,6 +20,13 @@ In `.env` mindestens setzen:
 
 Statt Werten in `.env` können Docker-Secrets genutzt werden: `APP_SECRET_FILE=/run/secrets/app_secret`.
 
+**Optional – Pepper für Passwörter (`PASSWORD_PEPPER`):** Passwörter werden immer mit argon2id und einem eigenen Zufalls-Salt je Person gespeichert; gleiche Passwörter ergeben nie den gleichen Hash. Ein Pepper ist zusätzlich ein geheimer Schlüssel (mind. 32 Zeichen, `openssl rand -hex 32`), der nur in der `.env` steht. Wer nur die Datenbank oder eine Sicherung erbeutet, kann die Passwörter damit nicht durchprobieren. Er hilft nur, wenn `.env` und Sicherungen getrennt aufbewahrt werden.
+
+- **Einschalten:** Wert setzen, Stack neu starten. Bestehende Passwörter bleiben gültig und werden bei der nächsten Anmeldung der Person umgestellt.
+- **Wechseln:** bisherigen Wert nach `PASSWORD_PEPPER_PREVIOUS`, neuen nach `PASSWORD_PEPPER`. Erst entfernen, wenn sich alle einmal angemeldet haben.
+- **Ausschalten:** Wert nach `PASSWORD_PEPPER_PREVIOUS` verschieben, `PASSWORD_PEPPER` leeren; jede Anmeldung stellt zurück um.
+- **Verlust:** Ohne den Wert kann sich niemand mit umgestelltem Passwort anmelden; nur „Passwort vergessen“ (bzw. ein Passwort-Link der Administration) hilft. Passkeys funktionieren weiter. Beim Start schreibt die App eine Warnung ins Log, wenn Passwörter einen nicht eingetragenen Pepper brauchen. Den Wert daher wie `APP_SECRET` getrennt sichern.
+
 **Variante A – vorgebaute Images (empfohlen, auch für kleine Server):** Die Images `app`, `web` und `kosit` liegen für amd64 und arm64 in der GitHub Container Registry; das Belegarchiv (RustFS) kommt als fest gepinntes Image des Herstellers. Es muss nichts gebaut werden.
 
 ```bash
@@ -55,13 +62,14 @@ Danach `https://<APP_DOMAIN>` öffnen, den Code eingeben, die Firma und das erst
 - Schutz vor Durchprobieren: höchstens 10 Anmeldeversuche je E-Mail-Adresse und 50 je IP-Adresse in 15 Minuten.
 - Zwei-Faktor-Anmeldung: Authenticator-App (TOTP) oder Sicherheitsschlüssel/Passkey (WebAuthn/FIDO2, z. B. YubiKey). Einrichtung unter „Sicherheit“. Mit einem Schlüssel ist auch die Anmeldung ohne Passwort möglich (PIN oder Biometrie am Schlüssel).
 - Admins müssen einen zweiten Faktor einrichten, bevor sie weiterarbeiten können (`REQUIRE_ADMIN_MFA=true`, Standard). Abschalten nur in begründeten Ausnahmen.
-- **`PUBLIC_URL` muss exakt der Adresse entsprechen, unter der die Software im Browser aufgerufen wird** (inkl. Port, z. B. `https://bau.example.de` oder `https://localhost:8443`). Standard ist `https://<APP_DOMAIN>`. Sicherheitsschlüssel werden an diese Domain gebunden: Wechselt die Domain, müssen alle Schlüssel neu registriert werden. Einladungslinks werden ebenfalls mit dieser Adresse erzeugt.
+- **`PUBLIC_URL` muss exakt der Adresse entsprechen, unter der die Software im Browser aufgerufen wird** (inkl. Port, z. B. `https://bau.example.de` oder `https://localhost:8443`). Standard ist `https://<APP_DOMAIN>`; ohne `PUBLIC_URL` startet die API nicht (Passwort-, Einladungs- und Bestätigungslinks dürfen nie aus dem Host-Header der Anfrage entstehen). Sicherheitsschlüssel werden an diese Domain gebunden: Wechselt die Domain, müssen alle Schlüssel neu registriert werden. Einladungslinks werden ebenfalls mit dieser Adresse erzeugt.
 - Benutzerverwaltung (Admins): Personen werden per Einladungslink eingeladen. Der Link wird nicht per E-Mail verschickt, sondern in der Oberfläche angezeigt und muss selbst weitergegeben werden; er ist 7 Tage gültig und nur einmal verwendbar.
 - Hat eine Person ihren Schlüssel und ihr Handy verloren, kann ein Admin unter „Benutzer“ den zweiten Faktor zurücksetzen. Der letzte Admin einer Firma kann nicht entfernt werden.
 - Nur für lokale Tests ohne HTTPS: `COOKIE_SECURE=false`.
 
 ## 4. Dateien (Projektablage)
 
+- Anwendungsabfragen laufen über einen eigenen Datenbank-Login ohne Superuser-Rechte (`opc_runtime_<datenbank>`), den der Server beim Start anlegt; das Passwort wird aus `APP_SECRET` abgeleitet. Bei einer externen Datenbank, deren Administrator keine Rollen anlegen darf, den Login selbst anlegen (Mitglied von `opc_app`) und als `DATABASE_RUNTIME_URL` angeben ([ADR 0013](../adr/0013-datenbank-login-ohne-superuser.md)). Ebenso für die Job-Warteschlange: Login `opc_jobs_<datenbank>` mit eigenem Schema (`CREATE SCHEMA jobs AUTHORIZATION …`) als `DATABASE_JOBS_URL`.
 - Hochgeladene Dateien liegen im Docker-Volume `files` (im Container `/data/files`), die Datenbank kennt Name, Größe und Prüfsumme (SHA-256). Siehe [ADR 0004](../adr/0004-dateiablage.md).
 - **Das Volume `files` gehört zur Sicherung**, zusammen mit der Datenbank. Der Dienst `backup` sichert beides gemeinsam (Abschnitt 6).
 - Größte erlaubte Datei: `UPLOAD_MAX_MB` (Standard 50). Erlaubt sind PDF, Bilder (JPG, PNG, GIF, WebP, HEIC), Videos (MP4, MOV), Office-Dateien, ZIP, Pläne (DWG, DXF), Text/CSV/XML und GAEB (X31, X81–X86). Der Inhalt muss zur Dateiendung passen.
@@ -153,6 +161,7 @@ Der Schlüssel wird wie das Passwort verschlüsselt gespeichert und nie angezeig
   4. `sh infra/archive-reconcile.sh` starten. Der Worker schreibt jedes archivierte Original mit seiner ursprünglichen Sperrfrist in den neuen Bucket, aus der Arbeitskopie oder, falls diese fehlt, aus dem bisherigen Archiv (nur wenn die SHA-256 stimmt). Den Fortschritt zeigt der Betriebs-Check jeder Firma.
   5. Wenn der Abgleich fertig ist und **kein Original als fehlend** gemeldet wird: `ARCHIVE_PREVIOUS_S3_*` entfernen, `COMPOSE_FILE=compose.yaml:compose.external-s3.yaml` setzen und `docker compose up -d`. Das Volume `archive` aufheben (am besten bis zum Ende der letzten Frist).
   Andersherum (externer S3 → anderer Anbieter) geht es genauso: den bisherigen Bucket als `ARCHIVE_PREVIOUS_S3_*` eintragen.
+- **Löschen nach Fristende (ADR 0012):** Belege, die eine Firma unter „Prüfung › Aufbewahrung“ nach Ablauf der Frist anonymisiert hat, verlieren ihre Arbeitskopien sofort. Die WORM-Kopien löscht der Betreiber, sobald deren Sperrfrist abgelaufen ist: `sh infra/archive-purge.sh --dry-run` zeigt sie, `sh infra/archive-purge.sh` löscht sie (alle Versionen, mit dem Root-Schlüssel aus dem Volume `archive-keys` im Dienst `storage-setup`) und vermerkt das im Löschprotokoll. Gesperrte Objekte lehnt RustFS auch mit dem Root-Schlüssel ab. Bei externem S3: die angezeigten Objekte beim Anbieter löschen (alle Versionen) und je Original `SELECT archive_purge_done('<artifact_id>');` in der Datenbank ausführen. Empfehlung: einmal im Jahr (z. B. im Januar) laufen lassen.
 - **Exporte:** Der GoBD-Export (Z3) enthält die Originale im Ordner `belege/` mit Prüfsummen. Der DATEV-Export liefert auf Wunsch ein ZIP mit PDF je Rechnung.
 
 ## 5c. App und Offline-Betrieb auf der Baustelle ([ADR 0010](../adr/0010-offline-baustelle.md))
@@ -216,6 +225,8 @@ docker compose exec backup backup.sh offsite-fetch <Name>  # Stand zurückholen 
 ```
 
 Auf einem neuen Server: Repository klonen, `.env` (mit `APP_SECRET` und `RESTIC_*`) einrichten, `docker compose up -d db backup`, `offsite-list`, `offsite-fetch <Name>`, dann `sh infra/restore.sh <Name>`.
+
+**Datenschutz nach einer Wiederherstellung (Migration 0052):** Eine ältere Sicherung bringt Belege zurück, die danach anonymisiert wurden, und Kontakte, die danach gelöscht wurden (die Sicherung enthält ja deren Stand). Jede Anonymisierung und jede Kontaktlöschung hinterlegt deshalb eine kleine Löschmarke im Belegarchiv (`erasures/<Firma>/<document|contact>/<ID>.json`, nur IDs, Freigabe und Datum, 10 Jahre gesperrt, für die Anwendung nicht löschbar). Beim Start nach `restore.sh` und jede Nacht vor dem Archiv-Abgleich wiederholt der Worker alle Löschungen, die der wiederhergestellten Datenbank fehlen – mit der ursprünglichen Freigabe – und löscht die Arbeitskopien der Originale; der Archiv-Abgleich schreibt anonymisierte Originale nicht zurück. Danach nur noch `sh infra/archive-purge.sh` ausführen (WORM-Kopien). Was nicht automatisch wiederholt werden konnte (z. B. Freigabe durch eine Person, die es in der Sicherung noch nicht gab), steht als Fehler im Worker-Log und ist unter *Prüfung › Aufbewahrung* von Hand freizugeben. **Ohne Belegarchiv** (`ARCHIVE_S3_ENDPOINT` leer) gibt es keine Löschmarken: dann wie bisher von Hand wiederholen.
 
 **Wiederherstellen** (z. B. nach einem Fehler oder auf einem neuen Server mit derselben `.env`):
 

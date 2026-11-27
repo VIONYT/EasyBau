@@ -3,7 +3,7 @@ import { useEffect, useId, useState } from 'react'
 import { type ApiError, api } from '../api'
 import { formatCents, formatInputNumber } from '../format'
 import { FormError } from '../forms'
-import { type TextKey, t, tf } from '../i18n'
+import { type TextKey, t, tf, tn } from '../i18n'
 
 /**
  * Projektkennzahlen (P2.7): Soll-Stunden, Auftragssumme, abgerechnet, noch abzurechnen,
@@ -56,7 +56,7 @@ export function ProjectFiguresPanel({ projectId }: { projectId: string }) {
               figures.billedPercent
                 ? tf('fig.percent', { percent: formatInputNumber(figures.billedPercent) })
                 : '',
-              tf('fig.invoices', { count: String(figures.invoiceCount) }),
+              tn('fig.invoices', figures.invoiceCount),
             ]
               .filter(Boolean)
               .join(' · ')}
@@ -90,7 +90,7 @@ export function ProjectFiguresPanel({ projectId }: { projectId: string }) {
               <p className="amount-big">{formatCents(figures.costs.totalCents)}</p>
               <p className="hint">
                 {[
-                  tf('fig.costInvoices', { n: String(figures.costs.invoiceCount) }),
+                  tn('fig.costInvoices', figures.costs.invoiceCount),
                   ...(['material', 'labor', 'equipment', 'subcontract', 'other'] as const)
                     .filter((k) => figures.costs?.byType[k])
                     .map(

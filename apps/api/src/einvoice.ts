@@ -8,7 +8,7 @@ import {
 import type { DocumentDetail, EinvoiceFormat, EinvoiceSummary } from '@easybau/schemas'
 import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify'
 import { z } from 'zod'
-import { openArtifact, storeArtifact } from './artifacts.js'
+import { assertNotPurged, openArtifact, storeArtifact } from './artifacts.js'
 import {
   type AuthContext,
   inTenant,
@@ -18,7 +18,9 @@ import {
 } from './context.js'
 import { HttpError, notFound, parse } from './http.js'
 import { ValidatorUnavailableError } from './kosit.js'
+import { documentXmlFileName } from './routes/document-settings.js'
 import { loadDocument } from './routes/documents.js'
+import { contentDisposition } from './routes/pdf.js'
 
 const FORMAT_LABEL: Record<EinvoiceFormat, string> = {
   zugferd: 'ZUGFeRD',
@@ -136,12 +138,9 @@ const downloadParams = z.object({
   format: z.enum(['zugferd', 'xrechnung_ubl', 'xrechnung_cii'], 'Unbekanntes E-Rechnungsformat.'),
 })
 
-/** Download name: R2026-00101_zugferd.xml, R2026-00101_xrechnung.xml, …_pruefbericht.xml */
-function downloadName(number: string, format: EinvoiceFormat, report: boolean): string {
-  const safe = number.replace(/[^A-Za-z0-9._-]+/g, '_')
-  const kind = format === 'zugferd' ? 'zugferd' : 'xrechnung'
-  return `${safe}_${kind}${report ? '_pruefbericht' : ''}.xml`
-}
+/** Download name after the Dateinamen-Muster: Rechnung_R2026-00101_XRechnung.xml, …_Pruefbericht.xml */
+const downloadSuffix = (format: EinvoiceFormat, report: boolean) =>
+  `${format === 'zugferd' ? 'ZUGFeRD' : 'XRechnung'}${report ? '_Pruefbericht' : ''}`
 
 export function registerEinvoiceRoutes(app: FastifyInstance, services: Services) {
   const serve = (report: boolean) => async (request: FastifyRequest, reply: FastifyReply) => {
@@ -150,6 +149,7 @@ export function registerEinvoiceRoutes(app: FastifyInstance, services: Services)
     const file = await inTenant(services, auth, async (tx) => {
       const doc = await loadDocument(tx, auth, id)
       if (!doc?.number) return null
+      await assertNotPurged(tx, id)
       const key = report
         ? (
             await tx<{ key: string }[]>`
@@ -165,14 +165,16 @@ export function registerEinvoiceRoutes(app: FastifyInstance, services: Services)
               where document_id = ${id} and format = ${format} and kind in ('zugferd_xml', 'xrechnung_xml')
               order by created_at limit 1`
           )[0]?.key
-      return key ? { key, name: downloadName(doc.number, format, report) } : null
+      return key
+        ? { key, name: await documentXmlFileName(tx, doc, downloadSuffix(format, report)) }
+        : null
     })
     if (!file) throw notFound(report ? 'Der Prüfbericht' : 'Die E-Rechnung')
     const original = await openArtifact(services, file.key)
     if (!original) throw notFound(report ? 'Der Prüfbericht' : 'Die E-Rechnung')
     return reply
       .header('content-type', 'application/xml; charset=utf-8')
-      .header('content-disposition', `attachment; filename="${file.name}"`)
+      .header('content-disposition', contentDisposition(file.name).replace(/^inline/, 'attachment'))
       .header('cache-control', 'private, no-store')
       .header('x-content-type-options', 'nosniff')
       .send(original)

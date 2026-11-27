@@ -2,15 +2,20 @@ import { createPrivateKey, createSign } from 'node:crypto'
 import type { Tx } from '@easybau/db'
 import {
   type IncomingMailAuth,
+  type IncomingMailLogAttachment,
+  type IncomingMailLogEntry,
+  type IncomingMailLogPage,
   type IncomingMailRun,
   type IncomingMailSettings,
+  incomingMailLogQuery,
   incomingMailSettingsRequest,
 } from '@easybau/schemas'
 import type { FastifyBaseLogger, FastifyInstance } from 'fastify'
 import { ImapFlow } from 'imapflow'
 import { simpleParser } from 'mailparser'
 import { inTenant, requirePermission, type Services } from '../context.js'
-import { HttpError, parse } from '../http.js'
+import { decodeCursor, encodeCursor, HttpError, parse } from '../http.js'
+import type { CipherField } from '../security/crypto.js'
 import { ingestIncomingInvoice } from './incoming-invoices.js'
 
 /**
@@ -38,11 +43,16 @@ export interface MailMessage {
   from: string | null
   subject: string | null
   attachments: MailAttachment[]
+  /** Larger than allowed: not downloaded (no attachments), only logged and marked as done. */
+  tooLarge?: boolean
 }
 
 export interface MailboxConnection {
-  /** Unread messages, oldest first, at most `limit`. */
-  unread(limit: number): Promise<MailMessage[]>
+  /**
+   * Unread messages, oldest first, at most `limit`. Messages above `maxBytes` are not downloaded
+   * (`tooLarge`); the batch stops early once twice that size has been read, the rest comes next run.
+   */
+  unread(limit: number, maxBytes?: number): Promise<MailMessage[]>
   /** Processed: mark as read or move to the processed folder. */
   done(uid: number): Promise<void>
   close(): Promise<void>
@@ -213,12 +223,22 @@ export const imapConnector: MailboxConnector = async (access) => {
   await client.connect()
   const lock = await client.getMailboxLock(access.mailbox)
   return {
-    async unread(limit) {
+    async unread(limit, maxBytes = Number.POSITIVE_INFINITY) {
       const uids = ((await client.search({ seen: false }, { uid: true })) || []).slice(0, limit)
       const messages: MailMessage[] = []
+      let read = 0
       for (const uid of uids) {
+        // Size first: a sender must not make the server download and parse any amount of data.
+        const head = await client.fetchOne(String(uid), { size: true }, { uid: true })
+        if (head === false) continue
+        if ((head.size ?? 0) > maxBytes) {
+          messages.push({ uid, from: null, subject: null, attachments: [], tooLarge: true })
+          continue
+        }
+        if (messages.length > 0 && read + (head.size ?? 0) > 2 * maxBytes) break
         const message = await client.fetchOne(String(uid), { source: true }, { uid: true })
         if (message === false || !message.source) continue
+        read += message.source.length
         const parsed = await simpleParser(message.source)
         messages.push({
           uid,
@@ -293,8 +313,8 @@ function view(services: Services, stored: StoredMailbox): IncomingMailSettings {
   }
 }
 
-const decrypt = (services: Services, value: string) =>
-  services.cipher.decrypt(Buffer.from(value, 'base64'))
+const decrypt = (services: Services, value: string, field: CipherField) =>
+  services.cipher.decrypt(Buffer.from(value, 'base64'), field)
 
 function accessOf(services: Services, stored: StoredMailbox): MailboxAccess | null {
   if (!stored.user) return null
@@ -315,13 +335,15 @@ function accessOf(services: Services, stored: StoredMailbox): MailboxAccess | nu
       oauth: {
         tenantId: stored.tenantId,
         clientId: stored.clientId,
-        clientSecret: decrypt(services, stored.clientSecretEnc),
+        clientSecret: decrypt(services, stored.clientSecretEnc, 'incoming_mail.client_secret'),
       },
     }
   }
   if (stored.auth === 'google') {
     if (!stored.googleKeyEnc) return null
-    const key = JSON.parse(decrypt(services, stored.googleKeyEnc)) as GoogleServiceAccount
+    const key = JSON.parse(
+      decrypt(services, stored.googleKeyEnc, 'incoming_mail.google_key'),
+    ) as GoogleServiceAccount
     return {
       ...common,
       host: stored.host ?? GOOGLE_IMAP_HOST,
@@ -334,7 +356,7 @@ function accessOf(services: Services, stored: StoredMailbox): MailboxAccess | nu
   return {
     ...common,
     host: stored.host,
-    password: decrypt(services, stored.passwordEnc),
+    password: decrypt(services, stored.passwordEnc, 'incoming_mail.password'),
     oauth: null,
     google: null,
   }
@@ -366,6 +388,22 @@ function reasonOf(error: unknown, access: MailboxAccess): string {
   return 'Das Postfach konnte nicht abgerufen werden.'
 }
 
+/** Protokoll je E-Mail: one row per fetched message (deleted after 90 days by the worker). */
+async function logMail(
+  services: Services,
+  system: { tenantId: string; userId: null },
+  message: MailMessage,
+  outcome: 'done' | 'retry',
+  attachments: IncomingMailLogAttachment[],
+) {
+  await inTenant(services, system, async (tx) => {
+    await tx`
+      insert into incoming_mail_log (tenant_id, fetched_at, mail_from, subject, outcome, attachments)
+      values (current_tenant_id(), ${new Date(services.now())}, ${message.from?.slice(0, 500) ?? null},
+              ${message.subject?.slice(0, 500) ?? null}, ${outcome}, ${tx.json(attachments as never)})`
+  })
+}
+
 /** Fetches one company's mailbox once. The result is stored as `lastRun`. */
 export async function pollMailbox(
   services: Services,
@@ -391,36 +429,69 @@ export async function pollMailbox(
     let connection: MailboxConnection | null = null
     try {
       connection = await connector(access)
-      for (const message of await connection.unread(MESSAGES_PER_RUN)) {
+      // The same limit as for uploads; a whole e-mail may be larger (base64, text, signature).
+      const maxFileBytes = services.config.UPLOAD_MAX_MB * 1024 * 1024
+      for (const message of await connection.unread(MESSAGES_PER_RUN, 2 * maxFileBytes)) {
         run.messages += 1
         let retry = false
+        const results: IncomingMailLogAttachment[] = []
+        if (message.tooLarge) {
+          run.ignored += 1
+          results.push({ filename: '(E-Mail)', result: 'ignored', reason: 'E-Mail zu groß' })
+        }
         for (const attachment of message.attachments) {
+          const filename = attachment.filename.slice(0, 255)
+          if (attachment.content.length > maxFileBytes) {
+            run.ignored += 1
+            results.push({ filename, result: 'ignored', reason: 'Datei zu groß' })
+            continue
+          }
           // Pictures embedded in the text (signature logos) are no invoices; PDFs/XML always count.
           const embeddedPicture = attachment.inline && !/\.(pdf|xml)$/i.test(attachment.filename)
           if (!INVOICE_EXTENSIONS.test(attachment.filename) || embeddedPicture) {
             run.ignored += 1
+            results.push({
+              filename,
+              result: 'ignored',
+              reason: embeddedPicture ? 'Bild im E-Mail-Text' : 'kein Rechnungsformat',
+            })
             continue
           }
           try {
-            await ingestIncomingInvoice(
+            const incomingInvoiceId = await ingestIncomingInvoice(
               services,
               system,
               { filename: attachment.filename, data: attachment.content },
               { via: 'email', from: message.from, subject: message.subject },
             )
             run.imported += 1
+            results.push({ filename, result: 'imported', incomingInvoiceId })
           } catch (error) {
             const status = error instanceof HttpError ? error.statusCode : 500
-            if (status === 409) run.duplicates += 1
-            else if (status === 415 || status === 400 || status === 413) run.ignored += 1
-            else {
+            const reason = error instanceof HttpError ? error.message : null
+            if (status === 409) {
+              run.duplicates += 1
+              const existing = error instanceof HttpError ? error.errors?.existingId : undefined
+              results.push({
+                filename,
+                result: 'duplicate',
+                ...(existing ? { incomingInvoiceId: existing } : {}),
+              })
+            } else if (status >= 400 && status < 500) {
+              // The file itself is unusable (wrong type, too large, unreadable e-invoice): retrying
+              // cannot help, and 25 such e-mails would otherwise block the mailbox for good.
+              run.ignored += 1
+              results.push({ filename, result: 'ignored', reason })
+            } else {
               // Temporary (database, storage): the message stays unread and is tried again.
               run.failed += 1
               retry = true
+              results.push({ filename, result: 'failed', reason: 'vorübergehender Fehler' })
             }
           }
         }
         if (!retry) await connection.done(message.uid)
+        await logMail(services, system, message, retry ? 'retry' : 'done', results)
       }
     } catch (error) {
       run.error = reasonOf(error, access)
@@ -481,20 +552,64 @@ export function registerIncomingMailboxRoutes(
     return inTenant(services, auth, async (tx) => view(services, await storedMailbox(tx)))
   })
 
+  app.get('/api/v1/settings/incoming-mail/log', async (request): Promise<IncomingMailLogPage> => {
+    const auth = requirePermission(request, 'settings.read')
+    const { cursor, limit } = parse(incomingMailLogQuery, request.query)
+    const after = decodeCursor(cursor, 2) as [string, string] | null
+    return inTenant(services, auth, async (tx) => {
+      const rows = await tx<(IncomingMailLogEntry & { sortAt: string })[]>`
+        select id, to_char(fetched_at at time zone 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS.US"Z"') as "fetchedAt",
+               fetched_at::text as "sortAt", mail_from as "from", subject, outcome, attachments
+        from incoming_mail_log
+        ${after ? tx`where (fetched_at, id) < (${after[0]}::timestamptz, ${after[1]}::uuid)` : tx``}
+        order by fetched_at desc, id desc
+        limit ${limit + 1}`
+      const page = rows.slice(0, limit)
+      const last = page.at(-1)
+      return {
+        items: page.map(({ sortAt: _sortAt, ...entry }) => entry),
+        nextCursor: rows.length > limit && last ? encodeCursor([last.sortAt, last.id]) : null,
+      }
+    })
+  })
+
   app.put('/api/v1/settings/incoming-mail', async (request): Promise<IncomingMailSettings> => {
     const auth = requirePermission(request, 'settings.write')
     const input = parse(incomingMailSettingsRequest, request.body)
     return inTenant(services, auth, async (tx) => {
       const current = await storedMailbox(tx)
+      // A stored secret is only ever sent to the destination and identity it was entered for:
+      // changing server, port, TLS, sign-in method or account drops it, so it must be entered
+      // again (security audit run-1: otherwise settings.write could redirect it to any host).
+      const same = (a: string | undefined | null, b: string | undefined | null) =>
+        (a ?? '').trim().toLowerCase() === (b ?? '').trim().toLowerCase()
+      const destinationChanged =
+        (current.auth ?? 'password') !== input.auth ||
+        !same(current.host, input.host) ||
+        (current.port ?? 993) !== input.port ||
+        (current.secure ?? true) !== input.secure ||
+        !same(current.user, input.user) ||
+        !same(current.tenantId, input.tenantId) ||
+        !same(current.clientId, input.clientId)
       // undefined keeps the stored secret, '' or null removes it.
-      const secret = (value: string | null | undefined, stored: string | undefined) =>
+      const secret = (
+        value: string | null | undefined,
+        stored: string | undefined,
+        field: CipherField,
+      ) =>
         value === undefined
-          ? stored
+          ? destinationChanged
+            ? undefined
+            : stored
           : value
-            ? services.cipher.encrypt(value).toString('base64')
+            ? services.cipher.encrypt(value, field).toString('base64')
             : undefined
-      const passwordEnc = secret(input.password, current.passwordEnc)
-      const clientSecretEnc = secret(input.clientSecret, current.clientSecretEnc)
+      const passwordEnc = secret(input.password, current.passwordEnc, 'incoming_mail.password')
+      const clientSecretEnc = secret(
+        input.clientSecret,
+        current.clientSecretEnc,
+        'incoming_mail.client_secret',
+      )
       const m365 = input.auth === 'microsoft365'
       const google = input.auth === 'google'
       // The JSON key of the service account: checked, then stored encrypted as a whole.
@@ -502,8 +617,10 @@ export function registerIncomingMailboxRoutes(
         ? parseGoogleServiceAccountKey(input.googleServiceAccountKey)
         : null
       const googleKeyEnc = googleKey
-        ? services.cipher.encrypt(JSON.stringify(googleKey)).toString('base64')
-        : input.googleServiceAccountKey === undefined
+        ? services.cipher
+            .encrypt(JSON.stringify(googleKey), 'incoming_mail.google_key')
+            .toString('base64')
+        : input.googleServiceAccountKey === undefined && !destinationChanged
           ? current.googleKeyEnc
           : undefined
       const googleClientEmail =

@@ -19,6 +19,7 @@ import {
   PRICED_POSITION_TYPES,
   TAX_MODES,
 } from '@easybau/schemas/constants'
+import { Button, buttonClass } from '@easybau/ui'
 import { type FormEvent, useCallback, useEffect, useId, useState } from 'react'
 import { ApiError, api, apiWithEtag } from '../api'
 import {
@@ -39,6 +40,7 @@ import { documentLabel, StatusChip } from './documents'
 import { DunningPanel } from './dunning'
 import { EvidencePanel } from './evidence'
 import {
+  ImageCaptionForm,
   ImagePositionForm,
   ImagePositionView,
   SaveToCatalogButton,
@@ -142,7 +144,11 @@ export function DocumentScreen({ me, id, navigate }: { me: Me; id: string; navig
           {t('doc.cancels').replace('{number}', doc.cancels.number)}
         </p>
       ) : null}
-      {doc.status !== 'draft' && !doc.cancelledBy ? (
+      {doc.purgedAt ? (
+        <p className="notice inline" role="status">
+          {t('doc.purged')}
+        </p>
+      ) : doc.status !== 'draft' && !doc.cancelledBy ? (
         <p className="notice inline" role="status">
           {t('doc.locked')}
         </p>
@@ -151,6 +157,15 @@ export function DocumentScreen({ me, id, navigate }: { me: Me; id: string; navig
 
       {doc.type === 'quote' || doc.type === 'change_order' ? (
         <ChangeOrderSwitch doc={doc} editable={editable} apply={apply} />
+      ) : null}
+      {doc.changeOrderInfo?.priceReview.length ? (
+        <p className="notice inline warning" role="note">
+          {tf('co.priceReview', {
+            list: doc.changeOrderInfo.priceReview
+              .map((p) => `${[p.oz, p.shortText].filter(Boolean).join(' ')} (${p.percent} %)`)
+              .join(', '),
+          })}
+        </p>
       ) : null}
       {doc.type === 'change_order' && doc.changeOrderInfo ? (
         <EvidencePanel
@@ -173,7 +188,7 @@ export function DocumentScreen({ me, id, navigate }: { me: Me; id: string; navig
         apply={apply}
         navigate={navigate}
       />
-      {doc.finalizedAt ? (
+      {doc.finalizedAt && !doc.purgedAt ? (
         <DocumentEmailPanel
           doc={doc}
           canWrite={me.permissions.includes('document.write')}
@@ -222,9 +237,9 @@ export function DocumentScreen({ me, id, navigate }: { me: Me; id: string; navig
       {me.permissions.includes('price.view') ? <InternalCalculation doc={doc} /> : null}
 
       {editable ? (
-        <button type="button" className="button ghost danger" onClick={remove}>
+        <Button type="button" variant="ghost" width="natural" danger onClick={remove}>
           {t('doc.deleteDraft')}
-        </button>
+        </Button>
       ) : null}
     </section>
   )
@@ -254,20 +269,27 @@ function HeaderForm({
   // Ansprechpartner („z. Hd.“): persons linked to the chosen recipient organization.
   const [recipientId, setRecipientId] = useState(doc.contact?.id ?? '')
   const [persons, setPersons] = useState<{ id: string; displayName: string }[]>([])
+  // Anschriften of the recipient (main, billing, delivery, other) for „Anschrift“.
+  const [addresses, setAddresses] = useState<ContactDetail['addresses']>([])
   useEffect(() => {
     if (!editable || !recipientId) {
       setPersons([])
+      setAddresses([])
       return
     }
     api<ContactDetail>('GET', `/api/v1/contacts/${recipientId}`)
-      .then((c) =>
+      .then((c) => {
         setPersons(
           c.links
             .filter((l) => l.kind === 'person')
             .map((l) => ({ id: l.contactId, displayName: l.displayName })),
-        ),
-      )
-      .catch(() => setPersons([]))
+        )
+        setAddresses(c.addresses)
+      })
+      .catch(() => {
+        setPersons([])
+        setAddresses([])
+      })
   }, [editable, recipientId])
   const form = useForm(
     async (data) => {
@@ -286,6 +308,9 @@ function HeaderForm({
           taxMode: value(data, 'taxMode'),
           contactId: value(data, 'contactId') || null,
           contactPersonId: value(data, 'contactPersonId') || null,
+          ...(data.has('recipientAddressId')
+            ? { recipientAddressId: value(data, 'recipientAddressId') || null }
+            : {}),
           // Another recipient: the server applies the default of the settings (§ 35a matrix).
           ...(doc.type !== 'delivery_note' &&
           (value(data, 'contactId') || null) === (doc.contact?.id ?? null)
@@ -381,6 +406,30 @@ function HeaderForm({
                 ...persons.map((p) => ({ value: p.id, label: p.displayName })),
               ]}
               error={form.fieldErrors.contactPersonId}
+            />
+          ) : null}
+          {addresses.length > 1 ? (
+            <SelectField
+              key={`address-${recipientId}`}
+              label={t('doc.recipientAddress')}
+              name="recipientAddressId"
+              defaultValue={
+                recipientId === (doc.contact?.id ?? '') ? (doc.recipientAddressId ?? '') : ''
+              }
+              options={[
+                { value: '', label: t('doc.recipientAddress.auto') },
+                ...addresses.map((a) => ({
+                  value: a.id,
+                  label: `${t(`doc.addressKind.${a.kind}` as TextKey)}: ${[
+                    a.recipientBlock?.split('\n')[0],
+                    a.street,
+                    [a.postalCode, a.city].filter(Boolean).join(' '),
+                  ]
+                    .filter(Boolean)
+                    .join(', ')}`,
+                })),
+              ]}
+              error={form.fieldErrors.recipientAddressId}
             />
           ) : null}
           <Field
@@ -497,9 +546,9 @@ function HeaderForm({
           ) : null}
           {editable ? (
             <div className="button-row">
-              <button type="submit" className="button primary auto" disabled={form.busy}>
+              <Button type="submit" variant="primary" disabled={form.busy}>
                 {t('common.save')}
-              </button>
+              </Button>
               {saved ? (
                 <span className="success" role="status">
                   {t('doc.saved')}
@@ -581,6 +630,16 @@ function Positions({
                   }}
                   onCancel={() => setCalcId(null)}
                 />
+              ) : editingId === item.id && item.positionType === 'image' ? (
+                <ImageCaptionForm
+                  doc={doc}
+                  item={item}
+                  onDone={(result) => {
+                    apply(result)
+                    setEditingId(null)
+                  }}
+                  onCancel={() => setEditingId(null)}
+                />
               ) : editingId === item.id ? (
                 <ItemForm
                   doc={doc}
@@ -604,49 +663,58 @@ function Positions({
                   {editable ? (
                     <span className="actions">
                       {isPriced(item.positionType) ? (
-                        <button
+                        <Button
                           type="button"
-                          className="button ghost small"
+                          variant="ghost"
+                          width="natural"
+                          size="small"
                           aria-label={`${t('q.calc')}: ${item.shortText ?? ''}`}
                           onClick={() => setCalcId(item.id)}
                         >
                           {t('q.calc')}
-                        </button>
+                        </Button>
                       ) : null}
-                      {item.positionType !== 'image' ? (
-                        <button
-                          type="button"
-                          className="button ghost icon"
-                          aria-label={`${t('common.edit')}: ${item.shortText ?? t('doc.pos.text')}`}
-                          onClick={() => setEditingId(item.id)}
-                        >
-                          ✎
-                        </button>
-                      ) : null}
-                      <button
+                      <Button
                         type="button"
-                        className="button ghost icon"
+                        variant="ghost"
+                        width="natural"
+                        size="icon"
+                        aria-label={`${t('common.edit')}: ${item.shortText ?? t('doc.pos.text')}`}
+                        onClick={() => setEditingId(item.id)}
+                      >
+                        ✎
+                      </Button>
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        width="natural"
+                        size="icon"
                         aria-label={t('common.up')}
                         onClick={() => move(item, 'up')}
                       >
                         ↑
-                      </button>
-                      <button
+                      </Button>
+                      <Button
                         type="button"
-                        className="button ghost icon"
+                        variant="ghost"
+                        width="natural"
+                        size="icon"
                         aria-label={t('common.down')}
                         onClick={() => move(item, 'down')}
                       >
                         ↓
-                      </button>
-                      <button
+                      </Button>
+                      <Button
                         type="button"
-                        className="button ghost icon danger"
+                        variant="ghost"
+                        width="natural"
+                        size="icon"
+                        danger
                         aria-label={t('common.delete')}
                         onClick={() => remove(item)}
                       >
                         ✕
-                      </button>
+                      </Button>
                     </span>
                   ) : null}
                 </>
@@ -680,15 +748,18 @@ function Positions({
         />
       ) : null}
       {editable && !adding ? (
-        <button
+        <Button
           type="button"
-          className="button ghost small apply-measurements"
+          variant="ghost"
+          width="natural"
+          size="small"
+          className="apply-measurements"
           onClick={() =>
             run(() => apiWithEtag<Doc>('POST', `/api/v1/documents/${doc.id}/apply-measurements`))
           }
         >
           {t('doc.applyMeasurements')}
-        </button>
+        </Button>
       ) : null}
       {editable && !adding && doc.type === 'invoice' && doc.invoiceKind !== 'cancellation' ? (
         <ReportApplyPanel doc={doc} apply={apply} />
@@ -697,23 +768,31 @@ function Positions({
         <CatalogPicker doc={doc} titles={titles} apply={apply} onClose={() => setPicking(false)} />
       ) : null}
       {editable && !adding && !picking && canUseCatalog ? (
-        <button type="button" className="button ghost small" onClick={() => setPicking(true)}>
+        <Button
+          type="button"
+          variant="ghost"
+          width="natural"
+          size="small"
+          onClick={() => setPicking(true)}
+        >
           {t('c.insert')}
-        </button>
+        </Button>
       ) : null}
       {editable && !adding ? (
         <fieldset className="add-bar">
           <legend className="muted">{t('doc.addPosition')}</legend>
           {(['title', 'item', 'lump_sum', 'optional', 'alternative', 'text', 'image'] as const).map(
             (type) => (
-              <button
+              <Button
                 key={type}
                 type="button"
-                className="button ghost small"
+                variant="ghost"
+                width="natural"
+                size="small"
                 onClick={() => setAdding(type)}
               >
                 + {t(`doc.pos.${type}` as TextKey)}
-              </button>
+              </Button>
             ),
           )}
         </fieldset>
@@ -947,12 +1026,12 @@ function ItemForm({
         </>
       ) : null}
       <div className="button-row">
-        <button type="submit" className="button primary auto" disabled={busy}>
+        <Button type="submit" variant="primary" disabled={busy}>
           {item ? t('common.save') : t('common.add')}
-        </button>
-        <button type="button" className="button ghost" onClick={onCancel}>
+        </Button>
+        <Button type="button" variant="ghost" width="natural" onClick={onCancel}>
           {t('common.cancel')}
-        </button>
+        </Button>
       </div>
     </form>
   )
@@ -1205,17 +1284,17 @@ function ChangeOrderSwitch({
             />
           </div>
           <div className="button-row">
-            <button
+            <Button
               type="button"
-              className="button primary auto"
+              variant="primary"
               disabled={busy}
               onClick={() => convert('change_order')}
             >
               {t('q.convert')}
-            </button>
-            <button type="button" className="button ghost" onClick={() => setAsking(false)}>
+            </Button>
+            <Button type="button" variant="ghost" width="natural" onClick={() => setAsking(false)}>
               {t('common.cancel')}
-            </button>
+            </Button>
           </div>
         </div>
       ) : null}
@@ -1267,28 +1346,32 @@ function DocumentActions({
   }
   return (
     <div className="doc-actions">
-      <a
-        className="button ghost"
-        href={`/dokumente/${doc.id}/druck`}
-        onClick={(e) => {
-          e.preventDefault()
-          navigate({ view: 'print', id: doc.id })
-        }}
-      >
-        {t('q.preview')}
-      </a>
-      <a
-        className="button ghost"
-        href={`/api/v1/documents/${doc.id}/pdf`}
-        target="_blank"
-        rel="noopener"
-      >
-        {t('doc.pdf')}
-      </a>
-      {doc.einvoice?.files.map((file) => (
+      {doc.purgedAt ? null : (
+        <>
+          <a
+            className={buttonClass({ variant: 'ghost', width: 'natural' })}
+            href={`/dokumente/${doc.id}/druck`}
+            onClick={(e) => {
+              e.preventDefault()
+              navigate({ view: 'print', id: doc.id })
+            }}
+          >
+            {t('q.preview')}
+          </a>
+          <a
+            className={buttonClass({ variant: 'ghost', width: 'natural' })}
+            href={`/api/v1/documents/${doc.id}/pdf`}
+            target="_blank"
+            rel="noopener"
+          >
+            {t('doc.pdf')}
+          </a>
+        </>
+      )}
+      {(doc.purgedAt ? [] : (doc.einvoice?.files ?? [])).map((file) => (
         <a
           key={file.format}
-          className="button ghost"
+          className={buttonClass({ variant: 'ghost', width: 'natural' })}
           href={`/api/v1/documents/${doc.id}/einvoice/${file.format}`}
           download
         >
@@ -1296,53 +1379,58 @@ function DocumentActions({
         </a>
       ))}
       {canWrite && doc.status === 'draft' && !billed ? (
-        <button
+        <Button
           type="button"
-          className="button primary auto"
+          variant="primary"
           disabled={busy}
           onClick={() => run('finalize', undefined, t('q.finalizeConfirm'))}
         >
           {t('q.finalize')}
-        </button>
+        </Button>
       ) : null}
       {canWrite && offer && doc.status === 'finalized' ? (
-        <button
+        <Button
           type="button"
-          className="button ghost"
+          variant="ghost"
+          width="natural"
           disabled={busy}
           onClick={() => run('status', { status: 'sent' })}
         >
           {t('q.markSent')}
-        </button>
+        </Button>
       ) : null}
       {canWrite && offer && (doc.status === 'finalized' || doc.status === 'sent') ? (
         <>
-          <button
+          <Button
             type="button"
-            className="button ghost"
+            variant="ghost"
+            width="natural"
             disabled={busy}
             onClick={() => run('status', { status: 'accepted' })}
           >
             {t('q.markAccepted')}
-          </button>
+          </Button>
           {doc.type === 'change_order' && partial === null ? (
-            <button
+            <Button
               type="button"
-              className="button ghost"
+              variant="ghost"
+              width="natural"
               disabled={busy}
               onClick={() => setPartial([])}
             >
               {t('q.markPartial')}
-            </button>
+            </Button>
           ) : null}
-          <button
+          <Button
             type="button"
-            className="button ghost danger"
+            variant="ghost"
+            width="natural"
+            danger
             disabled={busy}
             onClick={() => run('status', { status: 'rejected' })}
           >
             {t('q.markRejected')}
-          </button>
+          </Button>
         </>
       ) : null}
       {partial !== null ? (
@@ -1369,9 +1457,9 @@ function DocumentActions({
               </label>
             ))}
           <div className="button-row">
-            <button
+            <Button
               type="button"
-              className="button primary auto"
+              variant="primary"
               disabled={busy || partial.length === 0}
               onClick={async () => {
                 await run('status', { status: 'partially_accepted', acceptedItemIds: partial })
@@ -1379,10 +1467,10 @@ function DocumentActions({
               }}
             >
               {t('q.partialConfirm')}
-            </button>
-            <button type="button" className="button ghost auto" onClick={() => setPartial(null)}>
+            </Button>
+            <Button type="button" variant="ghost" onClick={() => setPartial(null)}>
               {t('common.cancel')}
-            </button>
+            </Button>
           </div>
         </fieldset>
       ) : null}
@@ -1397,22 +1485,29 @@ function DocumentActions({
         </p>
       ) : null}
       {canFinalize && billed && doc.status === 'draft' && !finalizing ? (
-        <button type="button" className="button primary auto" onClick={() => setFinalizing(true)}>
+        <Button type="button" variant="primary" onClick={() => setFinalizing(true)}>
           {t('inv.finalize')}
-        </button>
+        </Button>
       ) : null}
       {cancellable && !cancelling ? (
         <>
-          <button type="button" className="button ghost" onClick={() => setCancelling('correct')}>
-            {t('inv.correct')}
-          </button>
-          <button
+          <Button
             type="button"
-            className="button ghost danger"
+            variant="ghost"
+            width="natural"
+            onClick={() => setCancelling('correct')}
+          >
+            {t('inv.correct')}
+          </Button>
+          <Button
+            type="button"
+            variant="ghost"
+            width="natural"
+            danger
             onClick={() => setCancelling('cancel')}
           >
             {t('inv.cancel')}
-          </button>
+          </Button>
         </>
       ) : null}
       {doc.einvoice?.files.length ? (
@@ -1525,17 +1620,17 @@ function CancelInvoice({
       </div>
       <FormError>{error}</FormError>
       <div className="button-row">
-        <button
+        <Button
           type="button"
-          className={`button auto ${reissue ? 'primary' : 'danger'}`}
+          variant={reissue ? 'primary' : 'destructive'}
           disabled={busy || reason.trim().length < 3}
           onClick={submit}
         >
           {reissue ? t('inv.correctNow') : t('inv.cancelNow')}
-        </button>
-        <button type="button" className="button ghost" onClick={onCancel}>
+        </Button>
+        <Button type="button" variant="ghost" width="natural" onClick={onCancel}>
           {t('common.cancel')}
-        </button>
+        </Button>
       </div>
     </section>
   )
@@ -1630,17 +1725,17 @@ function FinalizeInvoice({
       ) : null}
       <FormError>{error}</FormError>
       <div className="button-row">
-        <button
+        <Button
           type="button"
-          className="button primary auto"
+          variant="primary"
           disabled={busy || blocked || (check.warnings.length > 0 && !acknowledged)}
           onClick={submit}
         >
           {t('inv.finalizeNow')}
-        </button>
-        <button type="button" className="button ghost" onClick={onCancel}>
+        </Button>
+        <Button type="button" variant="ghost" width="natural" onClick={onCancel}>
           {t('common.cancel')}
-        </button>
+        </Button>
       </div>
     </section>
   )
@@ -1650,6 +1745,8 @@ function FinalizeInvoice({
 
 function InternalCalculation({ doc }: { doc: Doc }) {
   const totals = doc.totals
+  // The server leaves costs out for roles without price.view.
+  if (totals.costCents === null || totals.marginCents === null) return null
   const percent =
     totals.netCents > 0
       ? ((totals.marginCents / totals.netCents) * 100).toFixed(1).replace('.', ',')
@@ -1695,6 +1792,8 @@ type CostLineInput = {
   unitId: string
   cost: string
   markup: string
+  /** Lohngruppe of a labor line (kept when saved again, e.g. from Regieberichte). */
+  wageGroupId?: string | null
 }
 
 function CalculationForm({
@@ -1723,6 +1822,7 @@ function CalculationForm({
           unitId: l.unit?.id ?? '',
           cost: centsToInput(l.unitCostCents),
           markup: formatInputNumber(l.markupPercent),
+          wageGroupId: l.wageGroupId,
         }))
       : [
           {
@@ -1759,6 +1859,7 @@ function CalculationForm({
               unitId: l.unitId || null,
               unitCostCents: cents,
               markupPercent: l.markup.trim() || null,
+              wageGroupId: l.kind === 'labor' ? (l.wageGroupId ?? null) : null,
             }
           }),
         }
@@ -1869,21 +1970,26 @@ function CalculationForm({
                   />
                 </div>
               </div>
-              <button
+              <Button
                 type="button"
-                className="button ghost icon danger"
+                variant="ghost"
+                width="natural"
+                size="icon"
+                danger
                 aria-label={t('d.row.remove')}
                 onClick={() => setLines((all) => all.filter((_, j) => j !== i))}
               >
                 ✕
-              </button>
+              </Button>
             </div>
           </li>
         ))}
       </ul>
-      <button
+      <Button
         type="button"
-        className="button ghost small"
+        variant="ghost"
+        width="natural"
+        size="small"
         onClick={() =>
           setLines((all) => [
             ...all,
@@ -1892,7 +1998,7 @@ function CalculationForm({
         }
       >
         {t('q.calcAddLine')}
-      </button>
+      </Button>
       {item.calculation ? (
         <p className="muted">
           {tf('q.calcSummary', {
@@ -1905,27 +2011,24 @@ function CalculationForm({
       ) : null}
       <FormError>{error}</FormError>
       <div className="button-row">
-        <button
-          type="button"
-          className="button primary auto"
-          disabled={busy}
-          onClick={() => save()}
-        >
+        <Button type="button" variant="primary" disabled={busy} onClick={() => save()}>
           {t('common.save')}
-        </button>
+        </Button>
         {item.costLines.length ? (
-          <button
+          <Button
             type="button"
-            className="button ghost danger"
+            variant="ghost"
+            width="natural"
+            danger
             disabled={busy}
             onClick={() => save(true)}
           >
             {t('q.calcRemove')}
-          </button>
+          </Button>
         ) : null}
-        <button type="button" className="button ghost" onClick={onCancel}>
+        <Button type="button" variant="ghost" width="natural" onClick={onCancel}>
           {t('common.cancel')}
-        </button>
+        </Button>
       </div>
     </div>
   )
@@ -2064,23 +2167,25 @@ function CatalogPicker({
                 <span className="muted block">{r.detail}</span>
               </span>
               <span className="actions">
-                <button
+                <Button
                   type="button"
-                  className="button ghost small"
+                  variant="ghost"
+                  width="natural"
+                  size="small"
                   aria-label={`${t('c.insertAction')}: ${r.title}`}
                   onClick={() => insert(r)}
                 >
                   {t('c.insertAction')}
-                </button>
+                </Button>
               </span>
             </li>
           ))}
         </ul>
       ) : null}
       <div className="button-row">
-        <button type="button" className="button ghost" onClick={onClose}>
+        <Button type="button" variant="ghost" width="natural" onClick={onClose}>
           {t('common.cancel')}
-        </button>
+        </Button>
       </div>
     </div>
   )

@@ -8,6 +8,9 @@ import {
   type FileNamePlaceholder,
   fileNameFrom,
   isFederalState,
+  type Letterhead,
+  type LetterheadValues,
+  letterheadGaps,
   publicHolidays,
 } from '@easybau/domain'
 import { documentTitle } from '@easybau/pdf-templates'
@@ -28,6 +31,7 @@ import { TooLargeError } from '@easybau/storage'
 import type { FastifyInstance } from 'fastify'
 import { inTenant, requireAuth, requirePermission, type Services } from '../context.js'
 import { HttpError, notFound, parse } from '../http.js'
+import { liveIssuer } from './documents.js'
 import { todayOf } from './receivables.js'
 
 /**
@@ -45,6 +49,7 @@ export const DEFAULT_DOCUMENT_SETTINGS: DocumentSettingsRequest = {
   progressBillingMode: 'cumulative',
   fileNamePattern: DEFAULT_FILE_NAME_PATTERN,
   attachments: {},
+  retiredAttachments: [],
 }
 
 const ATTACHMENT_MAX_BYTES = 10 * 1024 * 1024
@@ -101,11 +106,64 @@ export async function documentFileName(
   return fileNameFrom(fileNamePattern, fileNameValues(doc), extension)
 }
 
+/**
+ * File name after the company's pattern for other files (Mahnung, Aufmaßblatt, Bericht, XRechnung):
+ * the same placeholders, filled from the file's own values; `suffix` is appended to the name.
+ */
+export async function patternFileName(
+  tx: Tx,
+  values: Partial<Record<FileNamePlaceholder, string | null>>,
+  extension = 'pdf',
+  suffix?: string,
+): Promise<string> {
+  const { fileNamePattern } = await documentSettings(tx)
+  const name = fileNameFrom(fileNamePattern, values, extension)
+  return suffix ? `${name.slice(0, -(extension.length + 1))}_${suffix}.${extension}` : name
+}
+
+/** File name of a document's XRechnung/ZUGFeRD XML: PDF name plus the format. */
+export async function documentXmlFileName(
+  tx: Tx,
+  doc: NamedDocument,
+  suffix: string,
+): Promise<string> {
+  return patternFileName(tx, fileNameValues(doc), 'xml', suffix)
+}
+
+/** Holidays of the company (statutory of its Bundesland + own) for the given years, as ISO dates. */
+export async function holidayDates(tx: Tx, years: number[]): Promise<Set<string>> {
+  const [tenant] = await tx<{ state: string | null }[]>`
+    select federal_state as state from tenant where id = current_tenant_id()`
+  const state = isFederalState(tenant?.state) ? tenant.state : null
+  const dates = new Set<string>()
+  for (const year of years) {
+    if (state && year >= 1995 && year <= 2199)
+      for (const h of publicHolidays(year, state)) dates.add(h.date)
+  }
+  const own = await tx<{ date: string }[]>`
+    select to_char(day, 'YYYY-MM-DD') as date from holiday
+    where extract(year from day)::int in ${tx(years)}`
+  for (const h of own) dates.add(h.date)
+  return dates
+}
+
 export async function attachmentFiles(tx: Tx): Promise<AttachmentFile[]> {
-  return tx<AttachmentFile[]>`
+  const retired = new Set((await documentSettings(tx)).retiredAttachments)
+  const rows = await tx<Omit<AttachmentFile, 'retired'>[]>`
     select id, name, size_bytes::float8 as "sizeBytes",
            to_char(created_at at time zone 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS.MS"Z"') as "createdAt"
     from tenant_asset where kind = 'attachment' order by created_at desc`
+  return rows.map((row) => ({ ...row, retired: retired.has(row.id) }))
+}
+
+/** Automatic attachments of a document type (or of Mahnungen) that are still offered. */
+export async function automaticAttachments(
+  tx: Tx,
+  type: keyof DocumentSettingsRequest['attachments'],
+): Promise<string[]> {
+  const settings = await documentSettings(tx)
+  const retired = new Set(settings.retiredAttachments)
+  return (settings.attachments[type] ?? []).filter((id) => !retired.has(id))
 }
 
 async function loadSettings(tx: Tx): Promise<DocumentSettings> {
@@ -147,7 +205,9 @@ export function registerDocumentSettingsRoutes(app: FastifyInstance, services: S
     const patternError = checkFileNamePattern(input.fileNamePattern)
     if (patternError) throw invalid({ fileNamePattern: patternError })
     return inTenant(services, auth, async (tx) => {
-      const ids = [...new Set(Object.values(input.attachments).flat())] as string[]
+      const ids = [
+        ...new Set([...Object.values(input.attachments).flat(), ...input.retiredAttachments]),
+      ] as string[]
       if (ids.length) {
         const found = await tx<{ id: string }[]>`
           select id from tenant_asset where kind = 'attachment' and id in ${tx(ids)}`
@@ -158,7 +218,11 @@ export function registerDocumentSettingsRoutes(app: FastifyInstance, services: S
       const attachments = Object.fromEntries(
         Object.entries(input.attachments).filter(([, list]) => list?.length),
       )
-      const stored = { ...input, attachments }
+      const stored = {
+        ...input,
+        attachments,
+        retiredAttachments: [...new Set(input.retiredAttachments)],
+      }
       await tx`update tenant set settings = jsonb_set(settings, '{documents}', ${tx.json(stored as never)})
                where id = current_tenant_id()`
       return loadSettings(tx)
@@ -321,7 +385,22 @@ export function registerDocumentSettingsRoutes(app: FastifyInstance, services: S
             >`select settings -> 'incomingMail' as mailbox from tenant where id = current_tenant_id()`
           : []
       const mailbox = mail?.mailbox?.enabled ? mail.mailbox : null
+      // Briefpapier: Pflichtangaben that the letterhead would not print (people who may edit it).
+      const issuer = auth.permissions.has('tenant.manage') ? await liveIssuer(tx) : null
+      const gaps =
+        issuer?.letterhead && issuer.values
+          ? letterheadGaps(issuer.letterhead as Letterhead, issuer.values as LetterheadValues)
+          : []
+      const [admins] = auth.permissions.has('users.manage')
+        ? await tx<{ n: number }[]>`
+            select count(*)::int as n from membership m
+            join role r on r.id = m.role_id join app_user u on u.id = m.user_id
+            where r.key = 'admin' and u.is_active and u.totp_enabled_at is null
+              and not exists (select 1 from webauthn_credential w where w.user_id = u.id)`
+        : []
       return companyNotices({
+        letterheadGaps: gaps,
+        adminsWithoutSecondFactor: admins?.n ?? 0,
         company: { ...rest, iban: hasIban ? 'set' : null },
         canManageCompany: auth.permissions.has('tenant.manage'),
         emailVerified: services.config.SMTP_ENABLED ? (user?.verified ?? false) : null,

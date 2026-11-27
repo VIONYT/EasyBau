@@ -72,10 +72,16 @@ export function addFacturXMetadata(
   const metadataRef = /\/Metadata\s+(\d+)\s+0\s+R/.exec(text.slice(catalogAt, catalogEnd))?.[1]
   if (catalogAt < 0 || !metadataRef) throw new FacturXError('PDF catalog without metadata.')
 
-  const begin = text.indexOf('<?xpacket begin')
-  const endMarker = text.indexOf('<?xpacket end', begin)
-  const end = text.indexOf('?>', endMarker)
-  if (begin < 0 || endMarker < 0 || end < 0) throw new FacturXError('PDF without XMP packet.')
+  // Read the packet only from the catalog's own metadata stream: embedded images (JPEG with
+  // APP1/XMP) come earlier in the file and must never replace it (security audit run-1).
+  const metadataAt = text.search(new RegExp(`(^|\\n)${metadataRef} 0 obj\\b`))
+  const metadataEnd = metadataAt < 0 ? -1 : text.indexOf('endobj', metadataAt)
+  const begin = metadataAt < 0 ? -1 : text.indexOf('<?xpacket begin', metadataAt)
+  const endMarker = begin < 0 ? -1 : text.indexOf('<?xpacket end', begin)
+  const end = endMarker < 0 ? -1 : text.indexOf('?>', endMarker)
+  if (begin < 0 || endMarker < 0 || end < 0 || metadataEnd < 0 || end > metadataEnd) {
+    throw new FacturXError('PDF without XMP packet.')
+  }
   // The packet is UTF-8; decode it from the original bytes.
   const xmp = pdf.subarray(begin, end + 2).toString('utf8')
   const updated = Buffer.from(facturXmp(xmp, conformance), 'utf8')

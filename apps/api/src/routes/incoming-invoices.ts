@@ -50,8 +50,10 @@ import {
   parse,
 } from '../http.js'
 import { ValidatorUnavailableError } from '../kosit.js'
+import { assignCreditorNumber, usableContact } from './contacts.js'
 import { contentDisposition } from './files.js'
 import { todayOf } from './receivables.js'
+import { datevSettings } from './settings.js'
 
 /**
  * Eingangsrechnungen (P1.11). The received file is archived unchanged the moment it arrives
@@ -79,6 +81,7 @@ function einvoiceView(e: IncomingEinvoice): IncomingEinvoiceView {
   return {
     ...e,
     lines: e.lines.map((l) => ({ ...l, netCents: num(l.netCents) })),
+    allowanceCharges: e.allowanceCharges.map((a) => ({ ...a, amountCents: num(a.amountCents) })),
     vatBreakdown: e.vatBreakdown.map((v) => ({
       ...v,
       baseCents: num(v.baseCents),
@@ -835,6 +838,14 @@ export function registerIncomingInvoiceRoutes(app: FastifyInstance, services: Se
           'Die Prüfung kann noch nicht bestätigt werden.',
           Object.fromEntries(detail.problems.map((p) => [p.field, p.message])),
         )
+      }
+      // Kreditorennummer aus dem Nummernkreis, if the company wants it (Einstellungen › DATEV).
+      if (
+        detail.contactId &&
+        (await datevSettings(tx)).autoCreditorNumbers &&
+        (await usableContact(tx, detail.contactId))
+      ) {
+        await assignCreditorNumber(tx, detail.contactId)
       }
       await tx`
         update incoming_invoice set status = 'confirmed', confirmed_at = now(), confirmed_by = ${auth.userId}

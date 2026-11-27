@@ -146,6 +146,7 @@ describe.skipIf(!process.env.DATABASE_URL)('Einstellungen (integration)', () => 
       'delivery_note',
       'invoice',
       'credit_note',
+      'creditor',
     ])
   })
 

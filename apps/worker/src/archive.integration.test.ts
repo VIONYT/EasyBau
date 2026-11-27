@@ -46,6 +46,9 @@ class MemoryArchive implements ArchiveStore {
   async get(key: string) {
     return this.objects.get(key)?.data ?? null
   }
+  async list(prefix: string) {
+    return [...this.objects.keys()].filter((key) => key.startsWith(prefix))
+  }
   async head(key: string): Promise<ArchivedObject | null> {
     const o = this.objects.get(key)
     return o

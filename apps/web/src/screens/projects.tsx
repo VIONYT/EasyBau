@@ -4,13 +4,15 @@ import type {
   Me,
   Page,
   ProjectDetail,
+  ProjectFigureColumns,
   ProjectStatus,
   ProjectSummary,
   TeamMember,
 } from '@easybau/schemas'
+import { Button } from '@easybau/ui'
 import { useEffect, useId, useState } from 'react'
-import { type ApiError, api } from '../api'
-import { formatDateTime } from '../format'
+import { type ApiError, api, apiWithEtag } from '../api'
+import { formatCents, formatDateTime } from '../format'
 import { Field, FormError, optional, SelectField, TextArea, useForm, value } from '../forms'
 import { t } from '../i18n'
 import type { Navigate } from '../router'
@@ -38,10 +40,45 @@ export function projectListPath(query: string, filter: Filter): string {
   return `/api/v1/projects?${params.toString()}`
 }
 
+/** Filters and search from the address (/projekte?status=…), so a filtered list can be bookmarked. */
+function filterFromUrl(): { query: string; filter: Filter } {
+  const params = new URLSearchParams(window.location.search)
+  return {
+    query: params.get('q') ?? '',
+    filter: {
+      statusId: params.get('statusId') ?? '',
+      memberId: params.get('memberId') ?? '',
+      from: params.get('from') ?? '',
+      to: params.get('to') ?? '',
+      archived: params.get('archived') === 'true',
+    },
+  }
+}
+
+function filterToUrl(query: string, filter: Filter) {
+  const params = new URLSearchParams()
+  if (query) params.set('q', query)
+  for (const key of ['statusId', 'memberId', 'from', 'to'] as const) {
+    if (filter[key]) params.set(key, filter[key])
+  }
+  if (filter.archived) params.set('archived', 'true')
+  const search = params.toString()
+  const url = `${window.location.pathname}${search ? `?${search}` : ''}`
+  if (url !== `${window.location.pathname}${window.location.search}`) {
+    window.history.replaceState(window.history.state, '', url)
+  }
+}
+
 /** Project list with search, filters (Status, Mitarbeitende, Zeitraum, archiviert) and the form for a new project. */
 export function Projects({ me, navigate }: { me: Me; navigate: Navigate }) {
-  const [query, setQuery] = useState('')
-  const [filter, setFilter] = useState<Filter>(NO_FILTER)
+  const [initial] = useState(filterFromUrl)
+  const [query, setQuery] = useState(initial.query)
+  const [filter, setFilter] = useState<Filter>(initial.filter)
+  // Kennzahlen as columns (on request: they are computed per project like in the overview).
+  const canFigures = me.permissions.includes('document.read')
+  const [showFigures, setShowFigures] = useState(false)
+  const [figures, setFigures] = useState<Record<string, ProjectFigureColumns>>({})
+  const canWrite = me.permissions.includes('project.write')
   const [items, setItems] = useState<ProjectSummary[] | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [creating, setCreating] = useState(false)
@@ -61,9 +98,20 @@ export function Projects({ me, navigate }: { me: Me; navigate: Navigate }) {
       api<Page<ProjectSummary>>('GET', projectListPath(query, filter))
         .then((page) => setItems(page.items))
         .catch((err: ApiError) => setError(err.message))
+      filterToUrl(query, filter)
     }, 200)
     return () => clearTimeout(timer)
   }, [query, filter])
+  useEffect(() => {
+    if (!showFigures || !items?.length) return
+    const ids = items
+      .slice(0, 30)
+      .map((p) => p.id)
+      .join(',')
+    api<Record<string, ProjectFigureColumns>>('GET', `/api/v1/projects/figures?ids=${ids}`)
+      .then(setFigures)
+      .catch(() => setFigures({}))
+  }, [showFigures, items])
   const set = (patch: Partial<Filter>) => setFilter({ ...filter, ...patch })
   const active = Object.entries(filter).filter(([, v]) => v).length
 
@@ -72,9 +120,9 @@ export function Projects({ me, navigate }: { me: Me; navigate: Navigate }) {
       <div className="section-head">
         <h1 id="projects-title">{t('nav.projects')}</h1>
         {me.permissions.includes('project.write') && !creating ? (
-          <button type="button" className="button primary auto" onClick={() => setCreating(true)}>
+          <Button type="button" variant="primary" onClick={() => setCreating(true)}>
             {t('projects.new')}
-          </button>
+          </Button>
         ) : null}
       </div>
       {creating ? (
@@ -158,11 +206,27 @@ export function Projects({ me, navigate }: { me: Me; navigate: Navigate }) {
           <span>{t('projects.filter.archived')}</span>
         </label>
         {active ? (
-          <button type="button" className="button ghost small" onClick={() => setFilter(NO_FILTER)}>
+          <Button
+            type="button"
+            variant="ghost"
+            width="natural"
+            size="small"
+            onClick={() => setFilter(NO_FILTER)}
+          >
             {t('projects.filter.reset')}
-          </button>
+          </Button>
         ) : null}
       </details>
+      {canFigures ? (
+        <label className="check">
+          <input
+            type="checkbox"
+            checked={showFigures}
+            onChange={(e) => setShowFigures(e.target.checked)}
+          />
+          <span>{t('projects.showFigures')}</span>
+        </label>
+      ) : null}
       <FormError>{error}</FormError>
       {!items ? <p className="muted">{t('common.loading')}</p> : null}
       {items && !items.length ? <p className="muted">{t('common.empty')}</p> : null}
@@ -186,13 +250,99 @@ export function Projects({ me, navigate }: { me: Me; navigate: Navigate }) {
                     .filter(Boolean)
                     .join(' · ')}
                 </span>
-                {p.status ? <StatusBadge status={p.status} /> : null}
+                {p.status && !canWrite ? <StatusBadge status={p.status} /> : null}
+                {showFigures && figures[p.id] ? (
+                  <span className="project-figures-line">
+                    <FigureColumns figures={figures[p.id] as ProjectFigureColumns} />
+                  </span>
+                ) : null}
               </a>
+              {canWrite ? (
+                <ProjectStatusSelect
+                  project={p}
+                  statuses={statuses}
+                  onChanged={(status) =>
+                    setItems(
+                      (all) => all?.map((x) => (x.id === p.id ? { ...x, status } : x)) ?? null,
+                    )
+                  }
+                />
+              ) : null}
             </li>
           ))}
         </ul>
       ) : null}
     </section>
+  )
+}
+
+function FigureColumns({ figures }: { figures: ProjectFigureColumns }) {
+  const parts = [
+    figures.contractNetCents !== null
+      ? `${t('projects.fig.contract')} ${formatCents(figures.contractNetCents)}`
+      : null,
+    `${t('projects.fig.billed')} ${formatCents(figures.billedNetCents)}${
+      figures.billedPercent ? ` (${figures.billedPercent} %)` : ''
+    }`,
+    figures.openReceivableCents
+      ? `${t('projects.fig.open')} ${formatCents(figures.openReceivableCents)}`
+      : null,
+  ]
+  return <span className="muted tabular">{parts.filter(Boolean).join(' · ')}</span>
+}
+
+/** Projektstatus direkt ändern (Liste, Übersicht). */
+export function ProjectStatusSelect({
+  project,
+  statuses,
+  onChanged,
+}: {
+  project: Pick<ProjectSummary, 'id' | 'name' | 'status'>
+  statuses: ProjectStatus[]
+  onChanged: (status: ProjectSummary['status']) => void
+}) {
+  const [busy, setBusy] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+  if (!statuses.length) return project.status ? <StatusBadge status={project.status} /> : null
+  return (
+    <span className="status-select">
+      <select
+        className="select small"
+        aria-label={`${t('projects.status')}: ${project.name}`}
+        value={project.status?.id ?? ''}
+        disabled={busy}
+        onChange={async (e) => {
+          const statusId = e.target.value || null
+          setBusy(true)
+          setError(null)
+          try {
+            const current = await apiWithEtag<ProjectDetail>(
+              'GET',
+              `/api/v1/projects/${project.id}`,
+            )
+            const saved = await apiWithEtag<ProjectDetail>(
+              'PATCH',
+              `/api/v1/projects/${project.id}`,
+              { statusId },
+              current.etag,
+            )
+            onChanged(saved.data.status)
+          } catch (err) {
+            setError((err as ApiError).message)
+          } finally {
+            setBusy(false)
+          }
+        }}
+      >
+        <option value="">{t('common.none')}</option>
+        {statuses.map((s) => (
+          <option key={s.id} value={s.id}>
+            {s.label}
+          </option>
+        ))}
+      </select>
+      {error ? <span className="error">{error}</span> : null}
+    </span>
   )
 }
 
@@ -307,9 +457,15 @@ export function ProjectForm({
       <fieldset>
         <legend>{t('projects.site')}</legend>
         {customerId ? (
-          <button type="button" className="button ghost small" onClick={takeCustomerAddress}>
+          <Button
+            type="button"
+            variant="ghost"
+            width="natural"
+            size="small"
+            onClick={takeCustomerAddress}
+          >
             {t('projects.useCustomerAddress')}
-          </button>
+          </Button>
         ) : null}
         <FormError>{addressError}</FormError>
         <div className="field">
@@ -387,12 +543,12 @@ export function ProjectForm({
         />
       </details>
       <div className="button-row">
-        <button type="submit" className="button primary auto" disabled={form.busy}>
+        <Button type="submit" variant="primary" disabled={form.busy}>
           {project ? t('common.save') : t('projects.create')}
-        </button>
-        <button type="button" className="button ghost" onClick={onCancel}>
+        </Button>
+        <Button type="button" variant="ghost" width="natural" onClick={onCancel}>
           {t('common.cancel')}
-        </button>
+        </Button>
       </div>
     </form>
   )

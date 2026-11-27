@@ -23,7 +23,8 @@ export function idempotencyHooks(services: Services) {
     const body = isStream(request.body)
       ? `stream:${request.headers['content-length'] ?? ''}`
       : JSON.stringify(request.body ?? null)
-    const requestHash = sha256(`${request.method} ${request.url}\n${body}`)
+    // Bound to the person: a key reused by someone else never replays another user's response.
+    const requestHash = sha256(`${userId}\n${request.method} ${request.url}\n${body}`)
     const result = await withTenant(services.sql, { tenantId, userId }, async (tx) => {
       const inserted = await tx`
         insert into idempotency_key (tenant_id, key, request_hash) values (${tenantId}, ${key}, ${requestHash})

@@ -6,6 +6,7 @@ import {
   Amount,
   Badge,
   Button,
+  buttonClass,
   DataTable,
   Dialog,
   Field,
@@ -64,6 +65,23 @@ describe('components', () => {
     expect(html(createElement(Button, { type: 'submit', className: 'x' }, 'OK'))).toBe(
       '<button type="submit" class="button ghost secondary auto x">OK</button>',
     )
+    expect(html(createElement(Button, { variant: 'ghost', size: 'icon', danger: true }, '×'))).toBe(
+      '<button type="button" class="button ghost auto icon danger">×</button>',
+    )
+    expect(html(createElement(Button, { variant: 'primary', width: 'natural' }, 'Los'))).toBe(
+      '<button type="button" class="button primary">Los</button>',
+    )
+    expect(
+      html(createElement(Button, { variant: 'ghost', size: 'small', width: 'full' }, 'Mehr')),
+    ).toBe('<button type="button" class="button ghost full small">Mehr</button>')
+  })
+
+  it('gives links and labels the classes of a button', () => {
+    expect(buttonClass({ variant: 'ghost', size: 'small' })).toBe('button ghost auto small')
+    expect(buttonClass({ variant: 'primary', className: 'file-button' })).toBe(
+      'button primary auto file-button',
+    )
+    expect(buttonClass()).toBe('button ghost secondary auto')
   })
 
   it('announces errors and successes, not neutral notices', () => {

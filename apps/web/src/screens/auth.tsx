@@ -1,4 +1,5 @@
 import type { LoginResponse, Me, MfaMethod } from '@easybau/schemas'
+import { Button } from '@easybau/ui'
 import { useState } from 'react'
 import { api } from '../api'
 import { Field, FormError, optional, useForm, value } from '../forms'
@@ -99,9 +100,9 @@ export function SetupScreen({ onDone }: { onDone: (me: Me) => void }) {
             error={e['admin.password']}
           />
         </fieldset>
-        <button type="submit" className="button primary" disabled={form.busy}>
+        <Button type="submit" variant="primary" width="natural" disabled={form.busy}>
           {t('setup.submit')}
-        </button>
+        </Button>
       </form>
     </main>
   )
@@ -156,14 +157,15 @@ export function LoginScreen({ appName, onDone }: { appName: string; onDone: (me:
             <FormError>{keyError}</FormError>
             {methods.includes('webauthn') ? (
               <div className="stack">
-                <button
+                <Button
                   type="button"
-                  className="button primary"
+                  variant="primary"
+                  width="natural"
                   disabled={keyBusy}
                   onClick={() => withKey(loginWithKeyAsSecondFactor)}
                 >
                   {t('auth.useKey')}
-                </button>
+                </Button>
                 <p className="hint">{t('auth.keyHint')}</p>
               </div>
             ) : null}
@@ -179,14 +181,14 @@ export function LoginScreen({ appName, onDone }: { appName: string; onDone: (me:
                   required
                   error={totp.fieldErrors.code}
                 />
-                <button type="submit" className="button primary" disabled={totp.busy}>
+                <Button type="submit" variant="primary" width="natural" disabled={totp.busy}>
                   {t('auth.submit')}
-                </button>
+                </Button>
               </form>
             ) : null}
-            <button type="button" className="button ghost full" onClick={() => setMethods(null)}>
+            <Button type="button" variant="ghost" width="full" onClick={() => setMethods(null)}>
               {t('auth.back')}
-            </button>
+            </Button>
           </>
         ) : (
           <>
@@ -209,9 +211,9 @@ export function LoginScreen({ appName, onDone }: { appName: string; onDone: (me:
                 required
                 error={password.fieldErrors.password}
               />
-              <button type="submit" className="button primary" disabled={password.busy}>
+              <Button type="submit" variant="primary" width="natural" disabled={password.busy}>
                 {t('auth.submit')}
-              </button>
+              </Button>
             </form>
             <button type="button" className="link-button" onClick={() => setForgot(true)}>
               {t('account.forgot.link')}
@@ -220,14 +222,15 @@ export function LoginScreen({ appName, onDone }: { appName: string; onDone: (me:
               <div className="stack">
                 <p className="divider">{t('auth.or')}</p>
                 <FormError>{keyError}</FormError>
-                <button
+                <Button
                   type="button"
-                  className="button ghost full"
+                  variant="ghost"
+                  width="full"
                   disabled={keyBusy}
                   onClick={() => withKey(loginWithPasskey)}
                 >
                   {t('auth.passkey')}
-                </button>
+                </Button>
               </div>
             ) : null}
           </>

@@ -12,6 +12,10 @@ export default defineConfig({
     // worker – the app keeps the site data itself in IndexedDB (src/offline).
     VitePWA({
       registerType: 'autoUpdate',
+      // Own service worker (src/sw.ts): app shell as before plus Background Sync of the outbox.
+      strategies: 'injectManifest',
+      srcDir: 'src',
+      filename: 'sw.ts',
       injectRegister: false,
       includeAssets: ['apple-touch-icon.png'],
       manifest: {
@@ -35,11 +39,8 @@ export default defineConfig({
           },
         ],
       },
-      workbox: {
+      injectManifest: {
         globPatterns: ['**/*.{js,css,html,png,svg,woff2}'],
-        navigateFallback: '/index.html',
-        navigateFallbackDenylist: [/^\/api\//, /^\/healthz/, /^\/readyz/],
-        cleanupOutdatedCaches: true,
       },
     }),
   ],
@@ -48,8 +49,9 @@ export default defineConfig({
   server: {
     port: 5173,
     proxy: {
-      '/api': 'http://localhost:3000',
-      '/readyz': 'http://localhost:3000',
+      // Keep the Host header: the API rejects state-changing requests whose Origin is another host (CSRF).
+      '/api': { target: 'http://localhost:3000', changeOrigin: false },
+      '/readyz': { target: 'http://localhost:3000', changeOrigin: false },
     },
   },
   build: { target: 'es2022', sourcemap: true },

@@ -1,5 +1,6 @@
 import type { Tx } from '@easybau/db'
 import {
+  type ContactColor,
   type ContactDetail,
   type ContactSummary,
   type CreateContactRequest,
@@ -12,7 +13,13 @@ import {
 } from '@easybau/schemas'
 import type { FastifyInstance } from 'fastify'
 import { z } from 'zod'
-import { inTenant, requirePermission, type Services } from '../context.js'
+import {
+  type AuthContext,
+  inTenant,
+  projectVisibility,
+  requirePermission,
+  type Services,
+} from '../context.js'
 import {
   checkIfMatch,
   decodeCursor,
@@ -68,8 +75,19 @@ async function replaceChildren(
     }
   }
   if (input.addresses) {
-    await tx`delete from contact_address where contact_id = ${contactId}`
+    // Addresses keep their id (documents may refer to one); missing ones are removed.
+    const keep = input.addresses.map((a) => a.id).filter((v): v is string => Boolean(v))
+    await tx`delete from contact_address where contact_id = ${contactId}
+             and (${keep.length === 0} or id <> all(${keep}::uuid[]))`
     for (const a of input.addresses) {
+      const [updated] = a.id
+        ? await tx`
+            update contact_address set kind = ${a.kind}, recipient_block = ${a.recipientBlock ?? null},
+              street = ${a.street ?? null}, street_extra = ${a.streetExtra ?? null},
+              postal_code = ${a.postalCode ?? null}, city = ${a.city ?? null}, country_code = ${a.countryCode}
+            where id = ${a.id} and contact_id = ${contactId} returning id`
+        : []
+      if (updated) continue
       await tx`insert into contact_address (tenant_id, contact_id, kind, recipient_block, street, street_extra,
                                             postal_code, city, country_code)
                values (${tenantId}, ${contactId}, ${a.kind}, ${a.recipientBlock ?? null}, ${a.street ?? null},
@@ -78,7 +96,11 @@ async function replaceChildren(
   }
 }
 
-async function loadContact(tx: Tx, id: string): Promise<(ContactDetail & { etag: string }) | null> {
+async function loadContact(
+  tx: Tx,
+  auth: AuthContext,
+  id: string,
+): Promise<(ContactDetail & { etag: string }) | null> {
   const [c] = await tx<
     (Omit<ContactDetail, 'channels' | 'addresses' | 'links' | 'projects'> & { updatedRaw: Date })[]
   >`
@@ -110,7 +132,8 @@ async function loadContact(tx: Tx, id: string): Promise<(ContactDetail & { etag:
     order by other.display_name`
   const projects = await tx<ContactDetail['projects']>`
     select id, number, name, to_char(updated_at at time zone 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS.MS"Z"') as "updatedAt"
-    from project where customer_id = ${id} order by updated_at desc limit 50`
+    from project where customer_id = ${id} and ${projectVisibility(tx, auth, 'project')}
+    order by updated_at desc limit 50`
   const { updatedRaw, ...rest } = c
   return { ...rest, channels, addresses, links, projects, etag: etagOf(updatedRaw) }
 }
@@ -131,6 +154,30 @@ export async function usableContact(tx: Tx, id: string): Promise<boolean> {
                  and merged_into_id is null`
     ).length > 0
   )
+}
+
+const CREDITOR_NUMBER = /^[0-9]{5,9}$/
+
+/**
+ * Kreditorennummer aus dem Nummernkreis „Kreditoren“ (C.9): draws the next number for a contact
+ * without one. Returns the number, or null if the contact already has one. The schema must give
+ * 5–9 digits (DATEV personal account); otherwise nothing is drawn (the transaction rolls back).
+ */
+export async function assignCreditorNumber(tx: Tx, contactId: string): Promise<string | null> {
+  const [contact] = await tx<{ creditorNumber: string | null }[]>`
+    select creditor_number as "creditorNumber" from contact where id = ${contactId} for update`
+  if (!contact) throw notFound('Der Kontakt')
+  if (contact.creditorNumber) return null
+  const [row] = await tx<{ n: string }[]>`select next_number('creditor') as n`
+  const number = row?.n ?? ''
+  if (!CREDITOR_NUMBER.test(number)) {
+    throw new HttpError(
+      422,
+      `Der Nummernkreis „Kreditoren“ ergibt „${number}“ – eine Kreditorennummer braucht 5 bis 9 Ziffern. Bitte unter Einstellungen › Nummernkreise anpassen.`,
+    )
+  }
+  await tx`update contact set creditor_number = ${number} where id = ${contactId}`
+  return number
 }
 
 export function mergedContact(): HttpError {
@@ -174,6 +221,19 @@ export async function insertContact(
 
 export function registerContactRoutes(app: FastifyInstance, services: Services) {
   registerContactMergeRoutes(app, services, loadContact)
+  // Farben in Gebrauch (Farbfilter der Kontaktliste).
+  app.get('/api/v1/contacts/colors', async (request): Promise<ContactColor[]> => {
+    const auth = requirePermission(request, 'contacts.read')
+    return inTenant(
+      services,
+      auth,
+      (tx) => tx<ContactColor[]>`
+        select lower(color) as color, count(*)::int as count from contact
+        where color is not null and archived_at is null
+        group by lower(color) order by count(*) desc, lower(color) limit 50`,
+    )
+  })
+
   app.get('/api/v1/contacts', async (request): Promise<Page<ContactSummary>> => {
     const auth = requirePermission(request, 'contacts.read')
     const query = parse(contactListQuery, request.query)
@@ -194,7 +254,7 @@ export function registerContactRoutes(app: FastifyInstance, services: Services) 
       from contact c
       where (c.archived_at is not null) = ${query.archived === 'true'}
         and (${query.kind ?? null}::text is null or c.kind = ${query.kind ?? null})
-        and (${query.color ?? null}::text is null or c.color = ${query.color ?? null})
+        and (${query.color ?? null}::text is null or lower(c.color) = lower(${query.color ?? null}))
         and (${query.customer ?? null}::text is null or (c.number is not null) = ${query.customer === 'true'})
         and (${search}::text is null
              or lower(c.display_name) like ${search}
@@ -224,7 +284,7 @@ export function registerContactRoutes(app: FastifyInstance, services: Services) 
         ? await tx<{ n: string }[]>`select next_number('contact') as n`
         : [{ n: null }]
       const id = await insertContact(tx, auth, input, number?.n ?? null)
-      return loadContact(tx, id)
+      return loadContact(tx, auth, id)
     })
     const { etag, ...body } = contact as ContactDetail & { etag: string }
     return reply
@@ -237,7 +297,7 @@ export function registerContactRoutes(app: FastifyInstance, services: Services) 
   app.get('/api/v1/contacts/:id', async (request, reply) => {
     const auth = requirePermission(request, 'contacts.read')
     const { id } = parse(idParam, request.params)
-    const contact = await inTenant(services, auth, (tx) => loadContact(tx, id))
+    const contact = await inTenant(services, auth, (tx) => loadContact(tx, auth, id))
     if (!contact) throw notFound('Der Kontakt')
     const { etag, ...body } = contact
     return reply.header('etag', etag).send(body)
@@ -284,7 +344,7 @@ export function registerContactRoutes(app: FastifyInstance, services: Services) 
         await tx`update contact set ${tx(columns)} where id = ${id}`.catch(creditorTaken)
       else await tx`update contact set updated_at = now() where id = ${id}`
       await replaceChildren(tx, auth.tenantId, id, input)
-      return loadContact(tx, id)
+      return loadContact(tx, auth, id)
     })
     const { etag, ...body } = contact as ContactDetail & { etag: string }
     return reply.header('etag', etag).send(body)
@@ -327,6 +387,21 @@ export function registerContactRoutes(app: FastifyInstance, services: Services) 
       if (!deleted.count) throw notFound('Der Kontakt')
     })
     return reply.status(204).send()
+  })
+
+  app.post('/api/v1/contacts/:id/creditor-number', async (request) => {
+    const auth = requirePermission(request, 'contacts.write')
+    const { id } = parse(idParam, request.params)
+    return inTenant(services, auth, async (tx) => {
+      if (!(await usableContact(tx, id))) {
+        const exists = (await tx`select 1 from contact where id = ${id}`).length > 0
+        if (!exists) throw notFound('Der Kontakt')
+        throw new HttpError(409, 'Dieser Kontakt ist gesperrt oder zusammengeführt.')
+      }
+      const number = await assignCreditorNumber(tx, id)
+      if (!number) throw new HttpError(409, 'Der Kontakt hat bereits eine Kreditorennummer.')
+      return { creditorNumber: number }
+    })
   })
 
   app.post('/api/v1/contacts/:id/links', async (request, reply) => {

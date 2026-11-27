@@ -14,7 +14,7 @@ Beschreibung des Programms EasyBau; Einzelheiten stehen in der [Architektur (DES
 | Festschreiben | Festgeschriebene Rechnungen, ihre Positionen und Summen können nicht mehr geändert oder gelöscht werden – Sperre durch Datenbank-Trigger (nicht nur in der Oberfläche). |
 | Snapshots | Empfänger-, Firmen- und Steuerdaten werden beim Festschreiben in den Beleg kopiert. |
 | Originale | PDF/A-3, E-Rechnungs-XML und Prüfbericht werden einmal erzeugt und mit SHA-256 gespeichert; ausgeliefert wird immer dieses Original. |
-| Belegarchiv (WORM) | Jedes Original wird in einen Bucket mit Object Lock im Compliance-Modus kopiert; Sperrfrist = Ende der Aufbewahrungsfrist (Standard: Ende des Kalenderjahres + 10 Jahre, Mahnungen 6 Jahre). Der Zugang der Anwendung hat kein Löschrecht. Ein nächtlicher Abgleich prüft Vorhandensein, Prüfsumme und Sperrfrist und stellt fehlende Kopien aus der Arbeitskopie wieder her. |
+| Belegarchiv (WORM) | Jedes Original wird in einen Bucket mit Object Lock im Compliance-Modus kopiert; Sperrfrist = Ende der Aufbewahrungsfrist (Ende des Kalenderjahres + Frist der Firma für Rechnungen, Gutschriften und Eingangsrechnungen, Standard 10 Jahre; andere Belege und Mahnungen 6 Jahre). Nach Fristende und Freigabe werden Belege anonymisiert und die Originale gelöscht (ADR 0012). Der Zugang der Anwendung hat kein Löschrecht. Ein nächtlicher Abgleich prüft Vorhandensein, Prüfsumme und Sperrfrist und stellt fehlende Kopien aus der Arbeitskopie wieder her. |
 | Zahlungen, Abzüge, Mahnungen | nur hinzufügen, nie ändern/löschen; Korrektur per Gegenbuchung. |
 | Eingangsrechnungen | Original unveränderlich, Daten nach „Prüfung bestätigen“ eingefroren, nie löschbar. |
 

@@ -5,6 +5,12 @@ export type Sql = postgres.Sql
 export type Tx = postgres.TransactionSql
 
 export { MIGRATIONS_DIR, type MigrateOptions, type MigrationResult, migrate } from './migrate.js'
+export {
+  ensureJobsLogin,
+  ensureRuntimeLogin,
+  jobsLoginName,
+  runtimeLoginName,
+} from './runtime-login.js'
 
 /**
  * Restricted runtime role created by migration 0001. It is no superuser and has no BYPASSRLS,
@@ -22,10 +28,15 @@ export interface CreateSqlOptions {
 
 /** Creates a connection pool. Pool size is small on purpose (compact profile, ADR 0002). */
 export function createSql(
-  config: Pick<Config, 'DATABASE_URL' | 'DATABASE_POOL_MAX'>,
+  config: Pick<Config, 'DATABASE_URL' | 'DATABASE_POOL_MAX'> &
+    Partial<Pick<Config, 'DATABASE_RUNTIME_URL'>>,
   { mode = 'runtime' }: CreateSqlOptions = {},
 ): Sql {
-  return postgres(config.DATABASE_URL, {
+  // Runtime connections use their own non-superuser login when there is one (runtime-login.ts):
+  // then even injected SQL could not RESET ROLE to a superuser.
+  const url =
+    mode === 'runtime' ? (config.DATABASE_RUNTIME_URL ?? config.DATABASE_URL) : config.DATABASE_URL
+  return postgres(url, {
     max: config.DATABASE_POOL_MAX,
     idle_timeout: 30,
     connect_timeout: 5,

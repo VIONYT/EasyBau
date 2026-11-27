@@ -6,6 +6,7 @@ import type {
   PasswordResetInfo,
   PasswordResetRequested,
 } from '@easybau/schemas'
+import { Button } from '@easybau/ui'
 import { useEffect, useState } from 'react'
 import { type ApiError, api } from '../api'
 import { Field, FormError, useForm, value } from '../forms'
@@ -46,14 +47,14 @@ export function ForgotPassword({ onBack }: { onBack: () => void }) {
             required
             error={form.fieldErrors.email}
           />
-          <button type="submit" className="button primary" disabled={form.busy}>
+          <Button type="submit" variant="primary" width="natural" disabled={form.busy}>
             {t('account.forgot.submit')}
-          </button>
+          </Button>
         </form>
       )}
-      <button type="button" className="button ghost full" onClick={onBack}>
+      <Button type="button" variant="ghost" width="full" onClick={onBack}>
         {t('auth.back')}
-      </button>
+      </Button>
     </>
   )
 }
@@ -103,9 +104,9 @@ export function PasswordResetScreen({
             <p className="success" role="status">
               {t('account.reset.done')}
             </p>
-            <button type="button" className="button primary" onClick={onLogin}>
+            <Button type="button" variant="primary" width="natural" onClick={onLogin}>
               {t('auth.submit')}
-            </button>
+            </Button>
           </>
         ) : info ? (
           <form onSubmit={form.onSubmit} noValidate>
@@ -139,14 +140,14 @@ export function PasswordResetScreen({
               error={mismatch ? t('account.reset.mismatch') : undefined}
             />
             <p className="hint">{t('account.reset.secondFactor')}</p>
-            <button type="submit" className="button primary" disabled={form.busy}>
+            <Button type="submit" variant="primary" width="natural" disabled={form.busy}>
               {t('account.reset.submit')}
-            </button>
+            </Button>
           </form>
         ) : error ? (
-          <button type="button" className="button ghost full" onClick={onLogin}>
+          <Button type="button" variant="ghost" width="full" onClick={onLogin}>
             {t('auth.back')}
-          </button>
+          </Button>
         ) : (
           <p className="muted">{t('common.loading')}</p>
         )}
@@ -184,9 +185,9 @@ export function EmailVerifyScreen({
         ) : null}
         {state !== 'busy' && state !== 'done' ? <FormError>{state}</FormError> : null}
         {state !== 'busy' ? (
-          <button type="button" className="button primary" onClick={onContinue}>
+          <Button type="button" variant="primary" width="natural" onClick={onContinue}>
             {t('account.verify.continue')}
-          </button>
+          </Button>
         ) : null}
       </div>
     </main>
@@ -235,9 +236,9 @@ export function EmailChangeScreen({
                 new: info.newEmail,
               })}
             </p>
-            <button type="button" className="button primary" onClick={confirm}>
+            <Button type="button" variant="primary" width="natural" onClick={confirm}>
               {t('account.change.confirm')}
-            </button>
+            </Button>
           </>
         ) : null}
         {state === 'done' ? (
@@ -247,9 +248,9 @@ export function EmailChangeScreen({
         ) : null}
         {failed ? <FormError>{state}</FormError> : null}
         {state === 'done' || failed ? (
-          <button type="button" className="button primary" onClick={onContinue}>
+          <Button type="button" variant="primary" width="natural" onClick={onContinue}>
             {t('account.verify.continue')}
-          </button>
+          </Button>
         ) : null}
       </div>
     </main>
@@ -296,9 +297,9 @@ function EmailChangeForm({ onChanged }: { onChanged: () => void }) {
         required
         error={form.fieldErrors.currentPassword}
       />
-      <button type="submit" className="button ghost" disabled={form.busy}>
+      <Button type="submit" variant="ghost" width="natural" disabled={form.busy}>
         {t('account.change.submit')}
-      </button>
+      </Button>
     </form>
   )
 }
@@ -340,18 +341,18 @@ export function EmailVerificationCard({ me, onChanged }: { me: Me; onChanged: ()
               {t(result.emailEnabled ? 'account.email.sent' : 'account.email.noSmtp')}
             </p>
           ) : (
-            <button type="button" className="button ghost" disabled={busy} onClick={send}>
+            <Button type="button" variant="ghost" width="natural" disabled={busy} onClick={send}>
               {t('account.email.send')}
-            </button>
+            </Button>
           )}
         </>
       )}
       {changing ? (
         <EmailChangeForm onChanged={onChanged} />
       ) : (
-        <button type="button" className="button ghost" onClick={() => setChanging(true)}>
+        <Button type="button" variant="ghost" width="natural" onClick={() => setChanging(true)}>
           {t('account.change.open')}
-        </button>
+        </Button>
       )}
     </div>
   )

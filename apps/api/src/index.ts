@@ -48,14 +48,17 @@ import { registerProjectRoutes } from './routes/projects.js'
 import { registerReceivableRoutes } from './routes/receivables.js'
 import { registerReportBillingRoutes } from './routes/report-billing.js'
 import { registerReportRoutes } from './routes/reports.js'
+import { registerRetentionRoutes } from './routes/retention.js'
 import { registerSettingsRoutes } from './routes/settings.js'
 import { registerSignatureRoutes } from './routes/signatures.js'
 import { registerUserRoutes } from './routes/users.js'
 import { registerWebauthnRoutes } from './routes/webauthn.js'
 import { FieldCipher } from './security/crypto.js'
+import { PasswordHasher, unusablePasswordHashes } from './security/passwords.js'
 
 export { HttpError } from './http.js'
-export { hashPassword } from './security/passwords.js'
+export { PasswordHasher } from './security/passwords.js'
+export { reencryptLegacyFields } from './security/reencrypt.js'
 
 export interface ApiDeps {
   config: Pick<Config, 'APP_NAME' | 'APP_VERSION' | 'APP_ROLE' | 'PROFILE'> &
@@ -63,10 +66,13 @@ export interface ApiDeps {
       Pick<
         Config,
         | 'APP_SECRET'
+        | 'PASSWORD_PEPPER'
+        | 'PASSWORD_PEPPER_PREVIOUS'
         | 'SESSION_TTL_DAYS'
         | 'SESSION_IDLE_HOURS'
         | 'COOKIE_SECURE'
         | 'PUBLIC_URL'
+        | 'TRUST_PROXY'
         | 'REQUIRE_ADMIN_MFA'
         | 'STORAGE_DIR'
         | 'UPLOAD_MAX_MB'
@@ -121,7 +127,13 @@ export function buildApi({
   pollMailboxes = false,
   mailboxConnector,
 }: ApiDeps): FastifyInstance {
-  const app = Fastify({ logger, trustProxy: true, bodyLimit: 1024 * 1024 })
+  // Only the configured proxies may set X-Forwarded-* (default: loopback and private networks,
+  // i.e. the bundled Caddy); trusting every hop made IP rate limits forgeable (security audit).
+  const app = Fastify({
+    logger,
+    trustProxy: config.TRUST_PROXY ?? 'loopback,linklocal,uniquelocal',
+    bodyLimit: 1024 * 1024,
+  })
 
   app.setErrorHandler((error: FastifyError | HttpError, request, reply) => {
     if (error instanceof HttpError)
@@ -176,6 +188,10 @@ export function buildApi({
   const services: Services = {
     sql,
     cipher: new FieldCipher(config.APP_SECRET),
+    passwords: new PasswordHasher({
+      pepper: config.PASSWORD_PEPPER,
+      previousPepper: config.PASSWORD_PEPPER_PREVIOUS,
+    }),
     config: {
       APP_NAME: config.APP_NAME,
       SESSION_TTL_DAYS: config.SESSION_TTL_DAYS ?? 30,
@@ -237,6 +253,14 @@ export function buildApi({
     }
   })
 
+  app.addHook('onReady', async () => {
+    const stale = await unusablePasswordHashes(services)
+    if (stale > 0)
+      app.log.warn(
+        { logins: stale },
+        'Password hashes use a pepper that is not configured (PASSWORD_PEPPER/PASSWORD_PEPPER_PREVIOUS): these logins cannot sign in until their password is reset',
+      )
+  })
   app.addHook('preHandler', authHook(services))
   app.addHook('preHandler', mfaEnforcementHook(services))
   const idempotency = idempotencyHooks(services)
@@ -273,6 +297,7 @@ export function buildApi({
   registerAccountRoutes(app, services)
   registerContactCsvRoutes(app, services)
   registerPrivacyRoutes(app, services)
+  registerRetentionRoutes(app, services)
   registerProjectFigureRoutes(app, services)
   registerDashboardRoutes(app, services)
   registerNotificationRoutes(app, services)

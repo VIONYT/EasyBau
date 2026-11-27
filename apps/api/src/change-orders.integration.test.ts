@@ -143,6 +143,15 @@ describe.skipIf(!process.env.DATABASE_URL)('Nachträge und Vertragssumme (integr
       },
     ])
     expect(order.changeOrderInfo?.reason).toMatch(/^Mehrmengen laut Aufmaßblatt/)
+    // Above 110 % of the LV quantity: a new price may be agreed (shown, not applied).
+    expect(order.changeOrderInfo?.priceReview).toEqual([
+      {
+        itemId: order.items[0]?.id,
+        oz: order.items[0]?.oz,
+        shortText: 'Wand streichen',
+        percent: '113',
+      },
+    ])
     expect(order.changeOrderInfo?.evidence).toMatchObject([
       { kind: 'measurement_sheet', id: sheetId, locked: false },
     ])

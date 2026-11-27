@@ -1,8 +1,9 @@
-import type { ContactDetail, ContactSummary, Me, Page } from '@easybau/schemas'
-import { useCallback, useEffect, useId, useState } from 'react'
+import type { ContactColor, ContactDetail, ContactSummary, Me, Page } from '@easybau/schemas'
+import { Button, buttonClass } from '@easybau/ui'
+import { useCallback, useEffect, useId, useRef, useState } from 'react'
 import { api } from '../api'
 import { Field, FormError, optional, useForm } from '../forms'
-import { t } from '../i18n'
+import { t, tf } from '../i18n'
 import { hasWaitingChanges } from '../offline/client'
 import { OfflineBar } from '../offline/OfflineBar'
 import { type Navigate, parseRoute, type Route, useRoute } from '../router'
@@ -134,6 +135,7 @@ export function Workspace({
           ? `search-${current.q}`
           : current.view
   const unread = notifications.list?.unreadCount ?? 0
+  const tabsRef = useTabsOverflow(activeTab ?? '')
   return (
     <div className="workspace">
       <header className="topbar">
@@ -142,9 +144,11 @@ export function Workspace({
         {locked ? null : (
           <>
             <SearchBox initial={current.view === 'search' ? current.q : ''} navigate={navigate} />
-            <button
+            <Button
               type="button"
-              className="button ghost bell"
+              variant="ghost"
+              width="natural"
+              className="bell"
               aria-current={current.view === 'notifications' ? 'page' : undefined}
               onClick={() => {
                 notifications.reload()
@@ -158,20 +162,21 @@ export function Workspace({
                   <span className="sr-only"> {t('notif.unreadShort')}</span>
                 </span>
               ) : null}
-            </button>
+            </Button>
           </>
         )}
-        <button type="button" className="button ghost logout" onClick={logout}>
+        <Button type="button" variant="ghost" width="natural" className="logout" onClick={logout}>
           {t('auth.logout')}
-        </button>
+        </Button>
       </header>
-      <nav className="tabs" aria-label="Bereiche">
+      <nav className="tabs" aria-label="Bereiche" ref={tabsRef}>
         {tabs
           .filter((item) => item.visible)
           .map((item) => (
             <button
               key={item.key}
               type="button"
+              data-tab={item.key}
               aria-current={activeTab === item.key ? 'page' : undefined}
               onClick={() => {
                 navigate({ view: item.key })
@@ -214,7 +219,7 @@ export function Workspace({
         {current.view === 'report' ? (
           <ReportScreen me={me} id={current.id} navigate={navigate} />
         ) : null}
-        {current.view === 'catalog' ? <Catalog me={me} /> : null}
+        {current.view === 'catalog' ? <Catalog me={me} itemId={current.id} /> : null}
         {current.view === 'settings' ? <Settings me={me} initial={current.section} /> : null}
         {current.view === 'contacts' ? (
           <Contacts me={me} navigate={navigate} selected={current.id ?? null} />
@@ -244,12 +249,13 @@ function useList<T>(path: string) {
   return { items, error, reload }
 }
 
-const NO_CONTACT_FILTER = { kind: '', customer: '', archived: false }
+const NO_CONTACT_FILTER = { kind: '', customer: '', color: '', archived: false }
 
 function contactQuery(query: string, filter: typeof NO_CONTACT_FILTER) {
   const params = new URLSearchParams({ q: query })
   if (filter.kind) params.set('kind', filter.kind)
   if (filter.customer) params.set('customer', filter.customer)
+  if (filter.color) params.set('color', filter.color)
   if (filter.archived) params.set('archived', 'true')
   return params.toString()
 }
@@ -269,6 +275,12 @@ function Contacts({
   const [importing, setImporting] = useState(false)
   const filterId = useId()
   const list = useList<ContactSummary>(`/api/v1/contacts?${contactQuery(query, filter)}`)
+  const [colors, setColors] = useState<ContactColor[]>([])
+  useEffect(() => {
+    api<ContactColor[]>('GET', '/api/v1/contacts/colors')
+      .then(setColors)
+      .catch(() => undefined)
+  }, [])
   const canWrite = me.permissions.includes('contacts.write')
   const [kind, setKind] = useState<'organization' | 'person'>('organization')
   const setSelected = (id: string | null) =>
@@ -293,16 +305,16 @@ function Contacts({
         <h1 id="contacts-title">{t('nav.contacts')}</h1>
         <div className="button-row">
           <a
-            className="button ghost auto"
+            className={buttonClass({ variant: 'ghost' })}
             href={`/api/v1/contacts/export.csv?${contactQuery('', filter)}`}
             download
           >
             {t('contacts.export')}
           </a>
           {canWrite && !importing ? (
-            <button type="button" className="button ghost auto" onClick={() => setImporting(true)}>
+            <Button type="button" variant="ghost" onClick={() => setImporting(true)}>
               {t('contacts.import.title')}
-            </button>
+            </Button>
           ) : null}
         </div>
       </div>
@@ -322,6 +334,7 @@ function Contacts({
           <label htmlFor={`${filterId}-kind`}>{t('contacts.filter.kind')}</label>
           <select
             id={`${filterId}-kind`}
+            className="select"
             value={filter.kind}
             onChange={(e) => setFilter({ ...filter, kind: e.target.value })}
           >
@@ -334,6 +347,7 @@ function Contacts({
           <label htmlFor={`${filterId}-customer`}>{t('contacts.filter.customer')}</label>
           <select
             id={`${filterId}-customer`}
+            className="select"
             value={filter.customer}
             onChange={(e) => setFilter({ ...filter, customer: e.target.value })}
           >
@@ -343,6 +357,35 @@ function Contacts({
           </select>
         </div>
       </div>
+      {colors.length ? (
+        <fieldset className="plain color-filter">
+          <legend>{t('contacts.filter.color')}</legend>
+          <label className="color-swatch-option">
+            <input
+              type="radio"
+              name={`${filterId}-color`}
+              checked={!filter.color}
+              onChange={() => setFilter({ ...filter, color: '' })}
+            />
+            <span>{t('contacts.filter.all')}</span>
+          </label>
+          {colors.map((c) => (
+            <label key={c.color} className="color-swatch-option">
+              <input
+                type="radio"
+                name={`${filterId}-color`}
+                checked={filter.color === c.color}
+                onChange={() => setFilter({ ...filter, color: c.color })}
+              />
+              <span className="color-swatch" style={{ background: c.color }} aria-hidden="true" />
+              <span className="visually-hidden">
+                {tf('contacts.filter.colorOption', { color: c.color })}
+              </span>
+              <span className="muted">{c.count}</span>
+            </label>
+          ))}
+        </fieldset>
+      ) : null}
       <label className="check">
         <input
           type="checkbox"
@@ -391,9 +434,9 @@ function Contacts({
               />
             </div>
           )}
-          <button type="submit" className="button primary" disabled={form.busy}>
+          <Button type="submit" variant="primary" width="natural" disabled={form.busy}>
             {t('common.save')}
-          </button>
+          </Button>
         </form>
       ) : null}
       {selected ? (
@@ -401,6 +444,9 @@ function Contacts({
           id={selected}
           canWrite={canWrite}
           canReadSettings={me.permissions.includes('settings.read')}
+          canReport={
+            me.permissions.includes('project.read_all') && me.permissions.includes('document.read')
+          }
           onSaved={() => list.reload()}
           onClose={() => setSelected(null)}
           onOpenProject={(projectId) =>
@@ -449,4 +495,31 @@ function List<T extends { id: string }>({
       ))}
     </ul>
   )
+}
+
+/**
+ * Navigation on narrow screens scrolls sideways: the active area is scrolled into view, and a soft
+ * edge shows on the side where more areas are hidden (no tab is ever hidden for good).
+ */
+function useTabsOverflow(active: string) {
+  const ref = useRef<HTMLElement>(null)
+  useEffect(() => {
+    const nav = ref.current
+    if (!nav) return
+    const update = () => {
+      nav.dataset.moreStart = String(nav.scrollLeft > 4)
+      nav.dataset.moreEnd = String(nav.scrollLeft + nav.clientWidth < nav.scrollWidth - 4)
+    }
+    nav
+      .querySelector(`[data-tab="${active}"]`)
+      ?.scrollIntoView({ block: 'nearest', inline: 'nearest' })
+    update()
+    nav.addEventListener('scroll', update, { passive: true })
+    window.addEventListener('resize', update)
+    return () => {
+      nav.removeEventListener('scroll', update)
+      window.removeEventListener('resize', update)
+    }
+  }, [active])
+  return ref
 }

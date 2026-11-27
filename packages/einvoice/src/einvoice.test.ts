@@ -119,6 +119,31 @@ describe('E-Rechnung aus festgeschriebener Rechnung', () => {
     await expectValid('xrechnung-cii', file.xml)
   })
 
+  it('names the buyer contact (BT-56, „z. Hd.“) in all formats', async () => {
+    const doc = invoice(standardItems(), {
+      recipient: {
+        buyerReference: '04011000-12345-67',
+        name: 'Stadt Hannover',
+        contactPerson: 'Dr. Erika Muster',
+      },
+    })
+    const cii = buildEinvoice(doc, ctx, 'zugferd').xml
+    expect(cii).toMatch(
+      /<ram:BuyerTradeParty>[\s\S]*<ram:DefinedTradeContact>\s*<ram:PersonName>Dr\. Erika Muster<\/ram:PersonName>/,
+    )
+    await expectValid('zugferd-buyer-contact', cii)
+    const ubl = buildEinvoice(doc, ctx, 'xrechnung_ubl').xml
+    expect(ubl).toMatch(
+      /<cac:AccountingCustomerParty>[\s\S]*<cac:Contact>\s*<cbc:Name>Dr\. Erika Muster<\/cbc:Name>/,
+    )
+    await expectValid('xrechnung-ubl-buyer-contact', ubl)
+    await expectValid('xrechnung-cii-buyer-contact', buildEinvoice(doc, ctx, 'xrechnung_cii').xml)
+    // Without „z. Hd.“ no buyer contact.
+    expect(buildEinvoice(invoice(standardItems()), ctx, 'zugferd').xml).not.toMatch(
+      /<ram:BuyerTradeParty>[\s\S]*DefinedTradeContact[\s\S]*<\/ram:BuyerTradeParty>/,
+    )
+  })
+
   it('applies the document discount as allowance per VAT rate', async () => {
     const doc = invoice(
       [

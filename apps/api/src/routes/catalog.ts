@@ -71,6 +71,7 @@ interface ComponentRow {
   unitSymbol: string | null
   unitCostCents: number | string
   markupPercent: string | null
+  wageGroupId?: string | null
 }
 
 async function surcharges(tx: Tx): Promise<Map<string, string>> {
@@ -160,9 +161,24 @@ function pricesOf(
   }
 }
 
-export async function loadItem(tx: Tx, id: string): Promise<CatalogItem | null> {
+/** Catalog item as stored (with purchase cost); see `forViewer()` before sending it out. */
+export type StoredCatalogItem = Omit<CatalogItem, 'costCents' | 'markupPercent'> & {
+  costCents: number
+  markupPercent: string
+}
+
+/**
+ * Purchase cost, markup and the calculation lines are only for roles with price.view (DESIGN.md
+ * §5.2); others (Teamleitung, Prüfer) get the selling price only (security audit run-1).
+ */
+export function forViewer(item: StoredCatalogItem, auth: AuthContext): CatalogItem {
+  if (auth.permissions.has('price.view')) return item
+  return { ...item, costCents: null, markupPercent: null, components: [] }
+}
+
+export async function loadItem(tx: Tx, id: string): Promise<StoredCatalogItem | null> {
   const [row] = await tx<
-    (Omit<CatalogItem, 'components' | 'laborHours'> & { calcModeRaw: string })[]
+    (Omit<StoredCatalogItem, 'components' | 'laborHours'> & { calcModeRaw: string })[]
   >`
     select i.id, i.kind, i.folder_id as "folderId", i.article_no as "articleNo", i.manufacturer, i.ean,
            i.short_text as "shortText", i.long_text as "longText",
@@ -177,7 +193,8 @@ export async function loadItem(tx: Tx, id: string): Promise<CatalogItem | null> 
   const components = await tx<(ComponentRow & { id: string; unitDecimals: number | null })[]>`
     select c.id, c.cost_kind as kind, c.description, trim_scale(c.quantity)::text as quantity,
            c.unit_id as "unitId", u.symbol as "unitSymbol", u.decimals as "unitDecimals",
-           c.unit_cost_cents::float8 as "unitCostCents", trim_scale(c.markup_percent)::text as "markupPercent"
+           c.unit_cost_cents::float8 as "unitCostCents", trim_scale(c.markup_percent)::text as "markupPercent",
+           c.wage_group_id as "wageGroupId"
     from catalog_component c left join unit u on u.id = c.unit_id
     where c.catalog_item_id = ${id} order by c.sort, c.id`
   const { calcModeRaw: _, ...item } = row as typeof row & { calcModeRaw?: string }
@@ -196,6 +213,7 @@ export async function loadItem(tx: Tx, id: string): Promise<CatalogItem | null> 
         : null,
       unitCostCents: Number(c.unitCostCents),
       markupPercent: c.markupPercent,
+      wageGroupId: c.wageGroupId ?? null,
     })),
     laborHours: prices?.laborHours ?? null,
   }
@@ -243,6 +261,7 @@ export async function saveItem(
           unitSymbol: c.unitId ? (symbols.get(c.unitId) ?? null) : null,
           unitCostCents: c.unitCostCents,
           markupPercent: c.markupPercent ?? null,
+          wageGroupId: c.kind === 'labor' ? (c.wageGroupId ?? null) : null,
         }))
       })()
     : undefined
@@ -305,6 +324,11 @@ export async function saveItem(
     id = (row as { id: string }).id
   }
   if (components) {
+    const groups = [...new Set(components.map((c) => c.wageGroupId).filter(Boolean))] as string[]
+    if (groups.length) {
+      const found = await tx`select id from wage_group where id in ${tx(groups)}`
+      if (found.length !== groups.length) throw invalid({ components: 'Unbekannte Lohngruppe.' })
+    }
     await tx`delete from catalog_component where catalog_item_id = ${id}`
     for (const [index, c] of components.entries()) {
       await tx`
@@ -318,6 +342,7 @@ export async function saveItem(
           unit_id: c.unitId,
           unit_cost_cents: String(c.unitCostCents),
           markup_percent: c.markupPercent,
+          wage_group_id: c.wageGroupId ?? null,
         })}`
     }
   }
@@ -509,7 +534,9 @@ export function registerCatalogRoutes(app: FastifyInstance, services: Services) 
         order by lower(i.short_text), i.id
         limit ${query.limit} offset ${query.offset}`
       const items: CatalogItem[] = []
-      for (const row of rows) items.push((await loadItem(tx, row.id)) as CatalogItem)
+      for (const row of rows) {
+        items.push(forViewer((await loadItem(tx, row.id)) as StoredCatalogItem, auth))
+      }
       return items
     })
   })
@@ -519,7 +546,7 @@ export function registerCatalogRoutes(app: FastifyInstance, services: Services) 
     const { id } = parse(idParam, request.params)
     const item = await inTenant(services, auth, (tx) => loadItem(tx, id))
     if (!item) throw notFound('Der Eintrag')
-    return item
+    return forViewer(item, auth)
   })
 
   app.post('/api/v1/catalog/items', async (request, reply) => {
@@ -788,6 +815,8 @@ export function registerCatalogRoutes(app: FastifyInstance, services: Services) 
 
   app.get('/api/v1/supplier-articles', async (request): Promise<SupplierArticle[]> => {
     const auth = requirePermission(request, 'catalog.read')
+    // Supplier articles are purchase prices (Einkauf).
+    requirePermission(request, 'price.view')
     const query = parse(supplierArticleQuery, request.query)
     const rows = await inTenant(services, auth, (tx) => {
       const like = `%${query.q.toLowerCase().replace(/[%_\\]/g, '\\$&')}%`
@@ -861,6 +890,20 @@ export function registerCatalogRoutes(app: FastifyInstance, services: Services) 
         throw invalid({ itemId: 'Nur Positionen mit Menge und Preis lassen sich speichern.' })
       }
       if (!item.unit || !item.shortText) throw invalid({ itemId: 'Kurztext oder Einheit fehlt.' })
+      // Dublettenprüfung: same Kurztext and Einheit in the Leistungen (unless confirmed).
+      if (!input.allowDuplicate) {
+        const [same] = await tx<{ id: string; folder: string | null }[]>`
+          select i.id, f.name as folder from catalog_item i left join catalog_folder f on f.id = i.folder_id
+          where i.kind = 'service' and i.archived_at is null and i.unit_id = ${item.unit.id}
+            and lower(i.short_text) = lower(${item.shortText}) limit 1`
+        if (same) {
+          throw new HttpError(
+            409,
+            `Eine Leistung „${item.shortText}“ mit dieser Einheit gibt es schon${same.folder ? ` (Ordner „${same.folder}“)` : ''}.`,
+            { duplicateId: same.id },
+          )
+        }
+      }
       const calculated = item.costLines.length > 0
       const catalogId = await saveItem(tx, auth, 'service', {
         folderId: input.folderId ?? null,
@@ -877,6 +920,7 @@ export function registerCatalogRoutes(app: FastifyInstance, services: Services) 
                 unitId: l.unit?.id ?? null,
                 unitCostCents: l.unitCostCents,
                 markupPercent: l.markupPercent,
+                wageGroupId: l.wageGroupId,
               })),
             }
           : { priceCents: item.unitPriceCents ?? 0 }),
@@ -930,6 +974,7 @@ export function registerCatalogRoutes(app: FastifyInstance, services: Services) 
                 unitSymbol: c.unit?.symbol ?? null,
                 unitCostCents: c.unitCostCents,
                 markupPercent: c.markupPercent,
+                wageGroupId: c.wageGroupId,
               }))
             : item.costCents > 0
               ? [
@@ -1015,6 +1060,7 @@ export function registerCatalogRoutes(app: FastifyInstance, services: Services) 
             unit_id: line.unitId,
             unit_cost_cents: String(line.unitCostCents),
             markup_percent: line.markupPercent ?? defaults.get(line.kind) ?? '0',
+            wage_group_id: line.wageGroupId ?? null,
           })}`
       }
       await recalculate(tx, id)

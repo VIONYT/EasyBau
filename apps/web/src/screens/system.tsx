@@ -5,6 +5,7 @@ import type {
   Me,
   OperationsStatus,
 } from '@easybau/schemas'
+import { Button, buttonClass } from '@easybau/ui'
 import { useCallback, useEffect, useId, useState } from 'react'
 import { type ApiError, api, downloadFile } from '../api'
 import { formatDateTime } from '../format'
@@ -86,9 +87,9 @@ function EmailPanel({ canWrite }: { canWrite: boolean }) {
         )
       ) : null}
       {settings?.enabled && canWrite ? (
-        <button type="button" className="button ghost" onClick={test}>
+        <Button type="button" variant="ghost" width="natural" onClick={test}>
           {t('sys.emailTest')}
-        </button>
+        </Button>
       ) : null}
       {message ? (
         <p className="success" role="status">
@@ -182,28 +183,34 @@ export function ExportPanel() {
         <span>{t('sys.exportDatevBelege')}</span>
       </label>
       <div className="actions">
-        <button
+        <Button
           type="button"
-          className="button"
+          variant="ghost"
+          width="natural"
           disabled={busy !== null}
           onClick={() => run('datev')}
         >
           {busy === 'datev' ? t('sys.exportBusy') : t('sys.exportDatev')}
-        </button>
-        <button
+        </Button>
+        <Button
           type="button"
-          className="button ghost"
+          variant="ghost"
+          width="natural"
           disabled={busy !== null}
           onClick={() => run('gobd')}
         >
           {busy === 'gobd' ? t('sys.exportBusy') : t('sys.exportGobd')}
-        </button>
+        </Button>
       </div>
       <FormError>{error}</FormError>
       <h3>{t('sys.exportFull')}</h3>
       <p className="muted">{t('sys.exportFullHint')}</p>
       {/* Plain link: the archive is streamed by the browser, not held in memory. */}
-      <a className="button ghost" href="/api/v1/exports/full" download>
+      <a
+        className={buttonClass({ variant: 'ghost', width: 'natural' })}
+        href="/api/v1/exports/full"
+        download
+      >
         {t('sys.exportFullButton')}
       </a>
     </div>
@@ -417,9 +424,9 @@ function ArchiveVerifyButton({ running, onStarted }: { running: boolean; onStart
   }
   return (
     <div className="actions start">
-      <button type="button" className="button ghost auto" disabled={running} onClick={start}>
+      <Button type="button" variant="ghost" disabled={running} onClick={start}>
         {running ? t('sys.verifyBusy') : t('sys.verifyStart')}
-      </button>
+      </Button>
       <FormError>{error}</FormError>
     </div>
   )

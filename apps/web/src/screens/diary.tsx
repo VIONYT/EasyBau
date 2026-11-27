@@ -5,12 +5,14 @@ import type {
   ReportSummary,
   ReportTemplateSummary,
 } from '@easybau/schemas'
+import { Button } from '@easybau/ui'
 import { useEffect, useState } from 'react'
 import { type ApiError, api, mutate } from '../api'
 import { formatDateTime, formatInputNumber } from '../format'
 import { Field, FormError, useForm, value } from '../forms'
 import { type TextKey, t, tf } from '../i18n'
 import type { Navigate } from '../router'
+import { dayworkText } from './report'
 
 export function weatherText(weather: ReportSummary['weather']): string {
   if (!weather) return ''
@@ -109,9 +111,12 @@ export function ProjectReports({
           data: {},
           photos: [],
           signatures: [],
+          linkedSheets: [],
           completedAt: null,
           billable: template.billable,
           billedInvoice: null,
+          submittedOn: null,
+          daywork: null,
         }),
         alsoUpdate: [
           {
@@ -131,6 +136,8 @@ export function ProjectReports({
                 updatedAt: new Date().toISOString(),
                 billable: template.billable,
                 billedInvoice: null,
+                submittedOn: null,
+                daywork: null,
               } satisfies ReportSummary,
               ...(list as ReportSummary[]),
             ],
@@ -151,9 +158,9 @@ export function ProjectReports({
       <div className="section-head">
         <h2>{t(diary ? 'd.title' : 'rep.title')}</h2>
         {canWrite && !creating ? (
-          <button type="button" className="button primary auto" onClick={() => setCreating(true)}>
+          <Button type="button" variant="primary" onClick={() => setCreating(true)}>
             {t(diary ? 'd.new' : 'rep.new')}
-          </button>
+          </Button>
         ) : null}
       </div>
       {creating ? (
@@ -182,12 +189,17 @@ export function ProjectReports({
             error={form.fieldErrors.reportDate}
           />
           <div className="button-row">
-            <button type="submit" className="button primary auto" disabled={form.busy}>
+            <Button type="submit" variant="primary" disabled={form.busy}>
               {t(diary ? 'd.create' : 'rep.create')}
-            </button>
-            <button type="button" className="button ghost" onClick={() => setCreating(false)}>
+            </Button>
+            <Button
+              type="button"
+              variant="ghost"
+              width="natural"
+              onClick={() => setCreating(false)}
+            >
               {t('common.cancel')}
-            </button>
+            </Button>
           </div>
         </form>
       ) : null}
@@ -224,6 +236,13 @@ export function ProjectReports({
                     </span>
                   ) : r.billable && r.status === 'signed' && !diary ? (
                     <span className="chip chip--pay-open">{t('rep.unbilled')}</span>
+                  ) : null}
+                  {r.daywork && r.daywork.state !== 'returned' ? (
+                    <span
+                      className={`chip chip--${r.daywork.state === 'submit_overdue' || r.daywork.state === 'deemed_accepted' ? 'pay-overdue' : 'pay-open'}`}
+                    >
+                      {dayworkText(r.daywork)}
+                    </span>
                   ) : null}
                 </span>
                 <span className="muted">

@@ -13,6 +13,7 @@ import type {
   MeasurementSheetDetail,
   UnitSummary,
 } from '@easybau/schemas'
+import { Button, buttonClass } from '@easybau/ui'
 import { type FormEvent, useCallback, useEffect, useMemo, useState } from 'react'
 import { ApiError, api, apiWithEtag, mutate } from '../api'
 import { formatDateTime, formatInputNumber, formatQuantity, formatUnitAmount } from '../format'
@@ -210,7 +211,7 @@ export function MeasurementScreen({
       {online ? (
         <div className="button-row">
           <a
-            className="button ghost"
+            className={buttonClass({ variant: 'ghost', width: 'natural' })}
             href={`/api/v1/measurement-sheets/${sheet.id}/pdf`}
             target="_blank"
             rel="noopener"
@@ -253,9 +254,9 @@ export function MeasurementScreen({
       ) : null}
       {editable && online ? <SignPanel sheet={sheet} me={me} apply={apply} /> : null}
       {editable && online ? (
-        <button type="button" className="button ghost danger" onClick={remove}>
+        <Button type="button" variant="ghost" width="natural" danger onClick={remove}>
           {t('m.deleteSheet')}
-        </button>
+        </Button>
       ) : null}
     </section>
   )
@@ -313,21 +314,26 @@ function Rooms({ sheet, editable, apply }: { sheet: Sheet; editable: boolean; ap
                   </span>
                   {editable ? (
                     <span className="actions">
-                      <button
+                      <Button
                         type="button"
-                        className="button ghost small"
+                        variant="ghost"
+                        width="natural"
+                        size="small"
                         onClick={() => setEditingId(room.id)}
                       >
                         {t('common.edit')}
-                      </button>
-                      <button
+                      </Button>
+                      <Button
                         type="button"
-                        className="button ghost icon danger"
+                        variant="ghost"
+                        width="natural"
+                        size="icon"
+                        danger
                         aria-label={`${t('m.deleteRoom')}: ${room.name}`}
                         onClick={() => remove(room)}
                       >
                         ✕
-                      </button>
+                      </Button>
                     </span>
                   ) : null}
                 </div>
@@ -340,9 +346,9 @@ function Rooms({ sheet, editable, apply }: { sheet: Sheet; editable: boolean; ap
         <RoomForm sheet={sheet} apply={apply} onDone={() => setAdding(false)} />
       ) : null}
       {editable && !adding ? (
-        <button type="button" className="button ghost" onClick={() => setAdding(true)}>
+        <Button type="button" variant="ghost" width="natural" onClick={() => setAdding(true)}>
           + {t('m.addRoom')}
-        </button>
+        </Button>
       ) : null}
     </details>
   )
@@ -452,12 +458,12 @@ function RoomForm({
         ))}
       </div>
       <div className="button-row">
-        <button type="submit" className="button primary auto" disabled={form.busy}>
+        <Button type="submit" variant="primary" disabled={form.busy}>
           {room ? t('common.save') : t('common.add')}
-        </button>
-        <button type="button" className="button ghost" onClick={onDone}>
+        </Button>
+        <Button type="button" variant="ghost" width="natural" onClick={onDone}>
           {t('common.cancel')}
-        </button>
+        </Button>
       </div>
     </form>
   )
@@ -569,22 +575,27 @@ function Lines({
                   </div>
                   {editable && !line.locked ? (
                     <span className="actions">
-                      <button
+                      <Button
                         type="button"
-                        className="button ghost icon"
+                        variant="ghost"
+                        width="natural"
+                        size="icon"
                         aria-label={`${t('m.editLine')}: ${line.description ?? line.formula}`}
                         onClick={() => setEditingId(line.id)}
                       >
                         ✎
-                      </button>
-                      <button
+                      </Button>
+                      <Button
                         type="button"
-                        className="button ghost icon danger"
+                        variant="ghost"
+                        width="natural"
+                        size="icon"
+                        danger
                         aria-label={t('common.delete')}
                         onClick={() => remove(line)}
                       >
                         ✕
-                      </button>
+                      </Button>
                     </span>
                   ) : null}
                 </li>
@@ -603,9 +614,9 @@ function Lines({
         />
       ) : null}
       {editable && !adding ? (
-        <button type="button" className="button primary auto" onClick={() => setAdding(true)}>
+        <Button type="button" variant="primary" onClick={() => setAdding(true)}>
           + {t('m.addLine')}
-        </button>
+        </Button>
       ) : null}
     </div>
   )
@@ -750,17 +761,19 @@ function LineForm({
       <fieldset className="templates">
         <legend>{t('m.templates')}</legend>
         {MEASUREMENT_TEMPLATES.map((tpl) => (
-          <button
+          <Button
             key={tpl.id}
             type="button"
-            className="button ghost small"
+            variant="ghost"
+            width="natural"
+            size="small"
             onClick={() => {
               setFormula(tpl.formula)
               setIsDeduction(Boolean(tpl.isDeduction))
             }}
           >
             {tpl.label}
-          </button>
+          </Button>
         ))}
       </fieldset>
       <div className="field">
@@ -823,12 +836,12 @@ function LineForm({
         />
       )}
       <div className="button-row">
-        <button type="submit" className="button primary auto" disabled={busy}>
+        <Button type="submit" variant="primary" disabled={busy}>
           {line ? t('common.save') : t('common.add')}
-        </button>
-        <button type="button" className="button ghost" onClick={onDone}>
+        </Button>
+        <Button type="button" variant="ghost" width="natural" onClick={onDone}>
           {t('common.cancel')}
-        </button>
+        </Button>
       </div>
     </form>
   )
@@ -905,14 +918,15 @@ function Quantities({ me, sheet }: { me: Me; sheet: Sheet }) {
         <div className="stack">
           <p className="hint">{t('m.applyHint')}</p>
           {drafts.map((doc) => (
-            <button
+            <Button
               key={doc.id}
               type="button"
-              className="button ghost"
+              variant="ghost"
+              width="natural"
               onClick={() => applyTo(doc)}
             >
               {t('m.apply')} {refLabel(doc)}
-            </button>
+            </Button>
           ))}
         </div>
       ) : null}
@@ -982,13 +996,9 @@ function SignPanel({ sheet, me, apply }: { sheet: Sheet; me: Me; apply: Apply })
             onChange={setClient}
           />
         </div>
-        <button
-          type="submit"
-          className="button primary auto"
-          disabled={form.busy || !sheet.lines.length}
-        >
+        <Button type="submit" variant="primary" disabled={form.busy || !sheet.lines.length}>
           {t('m.sign')}
-        </button>
+        </Button>
       </form>
     </details>
   )

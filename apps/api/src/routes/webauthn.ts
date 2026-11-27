@@ -23,9 +23,11 @@ import {
   deleteChallenge,
   finishLogin,
   rateLimit,
+  requireRecentLogin,
   setChallengeValue,
   useChallenge,
 } from './auth-common.js'
+import { secondFactorNotice } from './security-notices.js'
 
 /**
  * WebAuthn / FIDO2: hardware security keys (e.g. YubiKey) and passkeys.
@@ -108,6 +110,7 @@ export function registerWebauthnRoutes(app: FastifyInstance, services: Services)
 
   app.post('/api/v1/auth/webauthn/register/options', async (request, reply) => {
     const auth = requireAuth(request)
+    await requireRecentLogin(services, auth.sessionId)
     const { rpID, rpName } = relyingParty(services, request)
     const existing = await credentialsOf(services, auth.userId)
     const options = await generateRegistrationOptions({
@@ -162,6 +165,12 @@ export function registerWebauthnRoutes(app: FastifyInstance, services: Services)
     await sql`update user_session set mfa_verified = true where id = ${auth.sessionId}`
     await deleteSessionsOfUser(sql, auth.userId, auth.sessionId)
     await audit(services, auth.tenantId, auth.userId, 'webauthn_registered')
+    await secondFactorNotice(
+      services,
+      auth.userId,
+      'Neuer Sicherheitsschlüssel oder Passkey',
+      `für Ihre Anmeldung wurde der Sicherheitsschlüssel bzw. Passkey „${input.name}“ hinzugefügt. Alle anderen Sitzungen wurden beendet`,
+    )
     return reply.status(201).send({ id: created.id })
   })
 
@@ -178,16 +187,23 @@ export function registerWebauthnRoutes(app: FastifyInstance, services: Services)
   app.delete('/api/v1/auth/webauthn/credentials/:id', async (request, reply) => {
     const auth = requireAuth(request)
     const { id } = parse(idParam, request.params)
+    await requireRecentLogin(services, auth.sessionId)
     if (mfaSetupRequired(services, { ...auth, webauthnCount: auth.webauthnCount - 1 })) {
       throw new HttpError(
         409,
         'Als Admin brauchen Sie mindestens einen zweiten Faktor. Richten Sie zuerst einen weiteren ein.',
       )
     }
-    const deleted =
-      await sql`delete from webauthn_credential where id = ${id} and user_id = ${auth.userId}`
-    if (!deleted.count) throw notFound('Der Sicherheitsschlüssel')
+    const [deleted] = await sql<{ name: string }[]>`
+      delete from webauthn_credential where id = ${id} and user_id = ${auth.userId} returning name`
+    if (!deleted) throw notFound('Der Sicherheitsschlüssel')
     await audit(services, auth.tenantId, auth.userId, 'webauthn_removed')
+    await secondFactorNotice(
+      services,
+      auth.userId,
+      'Sicherheitsschlüssel oder Passkey entfernt',
+      `der Sicherheitsschlüssel bzw. Passkey „${deleted.name}“ wurde von Ihrer Anmeldung entfernt`,
+    )
     return reply.status(204).send()
   })
 

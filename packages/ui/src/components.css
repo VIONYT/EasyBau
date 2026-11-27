@@ -1,3 +1,13 @@
+/* Links in the brand colour (light 9.5:1, dark 7.2:1 against the surface) instead of the browser
+   default, which is a foreign colour and too dark on the dark theme. */
+a {
+  color: var(--color-primary);
+  text-underline-offset: 0.15em;
+}
+a:hover {
+  text-decoration-thickness: 2px;
+}
+
 /* Styles of the base components (DESIGN.md §7.2): Button, Field, Select, TextArea, Notice,
    Badge, form errors and hints. Colours and sizes only from tokens.css. Loaded before the app's
    styles.css, which may refine them in context. */
@@ -340,4 +350,32 @@
 }
 .data-table tbody tr:last-child td {
   border-bottom: 0;
+}
+
+/* Press and hover states (HIG buttons.md › Best practices: always include a press state). */
+.button:not(:disabled):hover {
+  filter: brightness(0.96);
+}
+.button.ghost:not(:disabled):hover {
+  background: var(--color-bg);
+}
+.button:not(:disabled):active {
+  transform: translateY(1px);
+  filter: brightness(0.9);
+}
+.button {
+  transition:
+    filter 0.1s ease-out,
+    background-color 0.1s ease-out,
+    transform 0.1s ease-out;
+}
+
+/* Reduce motion: no movement on press, no fades (HIG accessibility.md › Cognitive). */
+@media (prefers-reduced-motion: reduce) {
+  .button {
+    transition: none;
+  }
+  .button:not(:disabled):active {
+    transform: none;
+  }
 }

@@ -88,6 +88,22 @@ describe('secrets', () => {
     ).toThrow(/APP_SECRET_FILE/)
   })
 
+  it('checks the optional password pepper', () => {
+    expect(loadConfig(base).PASSWORD_PEPPER).toBeUndefined()
+    expect(loadConfig({ ...base, PASSWORD_PEPPER: '' }).PASSWORD_PEPPER).toBeUndefined()
+    expect(loadConfig({ ...base, PASSWORD_PEPPER: 'p'.repeat(32) }).PASSWORD_PEPPER).toBe(
+      'p'.repeat(32),
+    )
+    expect(() => loadConfig({ ...base, PASSWORD_PEPPER: 'zu-kurz' })).toThrow(/PASSWORD_PEPPER/)
+    expect(() =>
+      loadConfig({
+        ...base,
+        PASSWORD_PEPPER: 'p'.repeat(32),
+        PASSWORD_PEPPER_PREVIOUS: 'p'.repeat(32),
+      }),
+    ).toThrow(/unterscheiden/)
+  })
+
   it('applies security defaults', () => {
     const config = loadConfig(base)
     expect([config.COOKIE_SECURE, config.SESSION_TTL_DAYS, config.SESSION_IDLE_HOURS]).toEqual([

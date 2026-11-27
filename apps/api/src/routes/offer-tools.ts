@@ -12,6 +12,7 @@ import type { FastifyInstance } from 'fastify'
 import { z } from 'zod'
 import { inTenant, requirePermission, type Services } from '../context.js'
 import { HttpError, notFound, parse } from '../http.js'
+import { restrictedContact, usableContact } from './contacts.js'
 import { copyItems, loadDocument, lockDraft, recalculate, sendDocument } from './documents.js'
 
 /**
@@ -32,7 +33,8 @@ const VERSIONED_TYPES = ['quote', 'cost_estimate']
 
 export function registerOfferToolRoutes(app: FastifyInstance, services: Services) {
   app.post('/api/v1/documents/:id/target-price', async (request): Promise<TargetPriceResult> => {
-    const auth = requirePermission(request, 'document.write')
+    // The preview shows costs and margins: Kalkulation is for roles with price.view.
+    const auth = requirePermission(request, 'document.write', 'price.view')
     const { id } = parse(idParam, request.params)
     const input = parse(targetPriceRequest, request.body)
     return inTenant(services, auth, async (tx) => {
@@ -147,6 +149,12 @@ export function registerOfferToolRoutes(app: FastifyInstance, services: Services
         )
       }
       await tx`select id from document where id = ${id} for update`
+      // DSGVO: no new document for a blocked, erased or merged contact (also as „z. Hd.“).
+      const [contacts] = await tx<{ contactId: string | null; personId: string | null }[]>`
+        select contact_id as "contactId", contact_person_id as "personId" from document where id = ${id}`
+      for (const contactId of [contacts?.contactId, contacts?.personId]) {
+        if (contactId && !(await usableContact(tx, contactId))) throw restrictedContact()
+      }
       const [newer] = await tx<{ id: string }[]>`
         select id from document where previous_version_id = ${id}`
       if (newer) {

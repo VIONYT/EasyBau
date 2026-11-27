@@ -71,6 +71,10 @@ export async function flushOutbox(
   send: Sender,
 ): Promise<FlushResult> {
   const result: FlushResult = { sent: 0, failed: 0, interrupted: false, needsLogin: false }
+  // Another tab may have signed out or in as someone else since this tab learned its owner: the
+  // browser's session cookie then belongs to that account, so nothing is sent on behalf of the
+  // old one (security audit run-1). The stored owner always follows the latest sign-in.
+  if ((await storedOwner(db)) !== owner) return result
   const entries = (await waiting(db, owner)).filter((e) => e.status === 'pending')
   for (const entry of entries) {
     const seq = entry.seq as number
@@ -126,4 +130,41 @@ export async function retryEntry(db: OfflineDb, seq: number) {
 /** Gives up a change that the server refused. */
 export async function discardEntry(db: OfflineDb, seq: number) {
   await db.outbox.delete(seq)
+}
+
+/** Tag of the Background Sync registration (service worker, Chromium browsers). */
+export const BACKGROUND_SYNC_TAG = 'easybau-outbox'
+
+/** Sends one waiting change with the session cookie (same origin, also from the service worker). */
+export async function sendEntry(entry: OutboxEntry): Promise<Response> {
+  const headers: Record<string, string> = { accept: 'application/json' }
+  if (entry.method === 'POST') headers['idempotency-key'] = entry.idempotencyKey
+  let body: BodyInit | undefined
+  if (entry.blob) {
+    headers['content-type'] = 'application/octet-stream'
+    body = entry.blob
+  } else if (entry.json !== undefined) {
+    headers['content-type'] = 'application/json'
+    body = JSON.stringify(entry.json)
+  }
+  return fetch(entry.path, {
+    method: entry.method,
+    headers,
+    credentials: 'same-origin',
+    ...(body === undefined ? {} : { body }),
+  })
+}
+
+/** The signed-in account as last seen by the app (set on login, removed on logout). */
+export async function storedOwner(db: OfflineDb): Promise<string | null> {
+  return (await db.meta.get('owner'))?.value ?? null
+}
+
+/**
+ * Only one sender at a time – the open app (several tabs) and the service worker (Background
+ * Sync) share the outbox. Web Locks where available; otherwise the caller runs alone anyway.
+ */
+export function exclusive<T>(work: () => Promise<T>): Promise<T> {
+  const locks = (globalThis.navigator as { locks?: LockManager } | undefined)?.locks
+  return locks ? locks.request(BACKGROUND_SYNC_TAG, work) : work()
 }

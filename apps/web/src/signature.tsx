@@ -1,5 +1,5 @@
 import type { MySignature, UploadedSignature } from '@easybau/schemas'
-import { paper } from '@easybau/ui'
+import { Button, paper } from '@easybau/ui'
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { api, uploadFile } from './api'
 import { FormError } from './forms'
@@ -173,9 +173,9 @@ export function SignaturePad({
         <span className="hint" id={`${id}-hint`}>
           {empty ? t('sig.drawHint') : t('sig.drawn')}
         </span>
-        <button type="button" className="button ghost auto" onClick={clear} disabled={empty}>
+        <Button type="button" variant="ghost" onClick={clear} disabled={empty}>
           {t('sig.clear')}
-        </button>
+        </Button>
       </div>
     </div>
   )
@@ -251,13 +251,13 @@ export function SignatureInput({
         </div>
         <div className="signature-pad__actions">
           <span className="hint">{t('sig.fromAccount')}</span>
-          <button
+          <Button
             type="button"
-            className="button ghost auto"
+            variant="ghost"
             onClick={() => onChange({ mode: 'drawn', png: null, keep: true })}
           >
             {t('sig.redraw')}
-          </button>
+          </Button>
         </div>
       </div>
     )
@@ -287,13 +287,9 @@ export function SignatureInput({
         </label>
       ) : null}
       {own && mine ? (
-        <button
-          type="button"
-          className="button ghost auto"
-          onClick={() => onChange({ mode: 'stored' })}
-        >
+        <Button type="button" variant="ghost" onClick={() => onChange({ mode: 'stored' })}>
           {t('sig.useStored')}
-        </button>
+        </Button>
       ) : null}
     </div>
   )
@@ -361,19 +357,19 @@ export function MySignatureCard() {
             <SignatureImage url={mine.url} alt={t('sig.mine')} />
           </div>
           <div className="actions">
-            <button
+            <Button
               type="button"
-              className="button ghost auto"
+              variant="ghost"
               onClick={() => {
                 setEditing(true)
                 setSaved(false)
               }}
             >
               {t('sig.redraw')}
-            </button>
-            <button type="button" className="button ghost auto" onClick={remove} disabled={busy}>
+            </Button>
+            <Button type="button" variant="ghost" onClick={remove} disabled={busy}>
               {t('sig.remove')}
-            </button>
+            </Button>
           </div>
         </>
       ) : null}
@@ -381,25 +377,20 @@ export function MySignatureCard() {
         <>
           <SignaturePad key={padKey} id="my-signature" label={t('sig.mine')} onChange={setPng} />
           <div className="actions">
-            <button
-              type="button"
-              className="button primary auto"
-              onClick={save}
-              disabled={busy || !png}
-            >
+            <Button type="button" variant="primary" onClick={save} disabled={busy || !png}>
               {t('sig.save')}
-            </button>
+            </Button>
             {editing ? (
-              <button
+              <Button
                 type="button"
-                className="button ghost auto"
+                variant="ghost"
                 onClick={() => {
                   setEditing(false)
                   setPng(null)
                 }}
               >
                 {t('common.cancel')}
-              </button>
+              </Button>
             ) : null}
           </div>
         </>

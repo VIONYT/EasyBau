@@ -147,6 +147,8 @@ const report: ReportDetail = {
   reportDate: '2026-11-06',
   billable: false,
   billedInvoice: null,
+  submittedOn: null,
+  daywork: null,
   status: 'draft',
   totalHours: '18',
   staffCount: 2,
@@ -186,6 +188,7 @@ const report: ReportDetail = {
   },
   photos: [],
   signatures: [],
+  linkedSheets: [],
   completedAt: null,
 }
 
@@ -284,6 +287,70 @@ describe('Aufmaßblatt und Berichte als PDF/A', () => {
     expect(noLocation.body.blocks[0]).toMatchObject({
       rows: [{ cells: ['Ohne Raum'] }, { cells: ['', 'Wände', '(L+B)*2*H', '41,16'] }],
     })
+  })
+
+  it('renders checklists and a linked Aufmaßblatt in a report', () => {
+    const inspection: ReportDetail = {
+      ...report,
+      template: {
+        ...report.template,
+        key: 'site_inspection',
+        name: 'Baustellenbegehung',
+        sections: [
+          { id: 'checklist', type: 'checklist' },
+          { id: 'measurement', type: 'measurement' },
+          { id: 'empty', type: 'measurement', label: 'Leer' },
+        ],
+      },
+      data: {
+        checklist: {
+          rows: [
+            { label: 'Zufahrt frei', state: 'ok', note: null },
+            { label: 'Stromanschluss', state: 'issue', note: 'Baustrom fehlt' },
+            { label: 'Gerüst', state: 'na', note: null },
+            { label: 'Entsorgung', state: null, note: null },
+          ],
+        },
+        measurement: {
+          sheetId: 'sheet',
+          rows: [{ description: 'Raumhöhe EG', quantity: '2.8', unitId: 'u-m' }],
+        },
+        empty: { sheetId: null, rows: [] },
+      },
+      linkedSheets: [
+        { id: 'sheet', title: sheet.title, measuredOn: sheet.measuredOn, status: 'signed' },
+      ],
+    }
+    const letter = reportLetter(inspection, {
+      ...context,
+      units: new Map([['u-m', { symbol: 'm', decimals: 2 }]]),
+      photos: [],
+      sheets: new Map([['sheet', sheet]]),
+    })
+    expect(letter.body.blocks.map((b) => b.kind)).toEqual([
+      'heading',
+      'table',
+      'heading',
+      'facts',
+      'table',
+      'table',
+    ])
+    expect(letter.body.blocks[1]).toMatchObject({
+      rows: [
+        { cells: ['Zufahrt frei', 'in Ordnung', ''], strong: false },
+        { cells: ['Stromanschluss', 'Mangel / offen', 'Baustrom fehlt'], strong: true },
+        { cells: ['Gerüst', 'entfällt', ''] },
+        { cells: ['Entsorgung', '–', ''] },
+      ],
+    })
+    expect(letter.body.blocks.at(-1)).toMatchObject({
+      rows: [{ cells: ['Raumhöhe EG', '2,80 m'] }],
+    })
+    // Without the sheet (e.g. not visible) only the own rows are printed.
+    const without = reportLetter(inspection, { ...context, units: new Map(), photos: [] })
+    expect(without.body.blocks.map((b) => b.kind)).toEqual(['heading', 'table', 'heading', 'table'])
+    const pdf = renderLetterPdf({ ...letter, logo: null })
+    expect(pdf.toString('latin1')).toMatch(/pdfaid:part(>|=")3/)
   })
 
   it('renders a Bautagesbericht section by section with photos and a draft watermark', () => {

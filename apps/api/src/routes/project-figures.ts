@@ -5,12 +5,18 @@ import {
   projectCosts,
   projectFigures,
 } from '@easybau/domain'
-import type { DocumentDetail, ProjectFiguresDto } from '@easybau/schemas'
+import {
+  type DocumentDetail,
+  type ProjectFigureColumns,
+  type ProjectFiguresDto,
+  projectFiguresListQuery,
+} from '@easybau/schemas'
 import type { FastifyInstance } from 'fastify'
 import { z } from 'zod'
 import {
   type AuthContext,
   inTenant,
+  projectVisibility,
   requirePermission,
   requireVisibleProject,
   type Services,
@@ -159,6 +165,31 @@ export async function loadProjectFigures(
 }
 
 export function registerProjectFigureRoutes(app: FastifyInstance, services: Services) {
+  // Spalten der Projektliste: the same figures as in the project overview, for the shown page.
+  app.get(
+    '/api/v1/projects/figures',
+    async (request): Promise<Record<string, ProjectFigureColumns>> => {
+      const auth = requirePermission(request, 'document.read')
+      const { ids } = parse(projectFiguresListQuery, request.query)
+      return inTenant(services, auth, async (tx) => {
+        const visible = await tx<{ id: string }[]>`
+          select p.id from project p where p.id in ${tx(ids)} and ${projectVisibility(tx, auth)}`
+        const result: Record<string, ProjectFigureColumns> = {}
+        for (const { id } of visible) {
+          const f = await loadProjectFigures(tx, auth, id)
+          result[id] = {
+            contractNetCents: f.contractNetCents,
+            billedNetCents: f.billedNetCents,
+            billedPercent: f.billedPercent,
+            openReceivableCents: f.openReceivableCents,
+            unbilledNetCents: f.unbilledNetCents,
+          }
+        }
+        return result
+      })
+    },
+  )
+
   // Finance figures: only for people who may read documents (Monteure see no amounts).
   app.get('/api/v1/projects/:id/figures', async (request): Promise<ProjectFiguresDto> => {
     const auth = requirePermission(request, 'document.read')

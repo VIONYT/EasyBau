@@ -3,6 +3,7 @@ import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { NodeCompiler } from '@myriaddreamin/typst-ts-node-compiler'
 import { encode } from 'uqr'
+import { withinPixelBudget } from './image-size.js'
 import type { LetterAsset, LetterPdfInput } from './types.js'
 
 /** Package root (works from src/ during development and dist/ when built). */
@@ -30,6 +31,8 @@ function getCompiler(): NodeCompiler {
  */
 export function isUsableImage(path: string, data: Buffer): boolean {
   if (!/^\/[a-z0-9-]+\.(png|jpg|webp|gif)$/.test(path)) return false
+  // Checked from the header before Typst decodes the whole raster.
+  if (!withinPixelBudget(data)) return false
   const typst = getCompiler()
   typst.mapShadow(path, data)
   try {
@@ -88,7 +91,8 @@ export function renderLetterPdf(
   for (const asset of options.assets ?? []) typst.mapShadow(asset.path, asset.data)
   const { logo, ...rest } = input
   let data: LetterPdfInput = { ...rest, logo: null }
-  if (logo) {
+  // A logo above the pixel budget is left out rather than decoded (memory).
+  if (logo && withinPixelBudget(logo.data)) {
     const extension = LOGO_EXTENSION[logo.mime]
     if (!extension) throw new PdfRenderError(`unsupported logo type ${logo.mime}`)
     const path = `/logo.${extension}`

@@ -88,4 +88,34 @@ describe('Hinweisleiste', () => {
       'Der geheime Clientschlüssel für Microsoft 365 ist am 14.11.2026 abgelaufen – neuen Schlüssel in Microsoft Entra anlegen und eintragen.',
     )
   })
+
+  it('names letterhead gaps and admins without second factor', () => {
+    const notices = companyNotices({
+      company: complete,
+      canManageCompany: true,
+      emailVerified: null,
+      letterheadGaps: ['address', 'tax_id'],
+      adminsWithoutSecondFactor: 1,
+    })
+    expect(notices.map((n) => [n.key, n.severity])).toEqual([
+      ['letterhead_gaps', 'required'],
+      ['admins_without_mfa', 'recommended'],
+    ])
+    expect(notices[0]?.message).toBe(
+      'Im Briefpapier fehlt: Anschrift, Steuernummer oder USt-IdNr. – Pflichtangaben auf Rechnungen (§ 14 UStG).',
+    )
+    expect(notices[1]?.message).toMatch(/^1 Person mit Administratorrechten meldet sich/)
+    expect(
+      companyNotices({
+        company: complete,
+        canManageCompany: false,
+        emailVerified: null,
+        letterheadGaps: ['name'],
+        adminsWithoutSecondFactor: 2,
+      }).map((n) => n.message),
+    ).toEqual([
+      'Im Briefpapier fehlt: Firmenname – Pflichtangaben auf Rechnungen (§ 14 UStG).',
+      '2 Personen mit Administratorrechten melden sich ohne zweiten Faktor an.',
+    ])
+  })
 })

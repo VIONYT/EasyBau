@@ -5,31 +5,67 @@ export type ButtonVariant = 'primary' | 'secondary' | 'ghost' | 'destructive'
 /**
  * Button (DESIGN.md §7.2): primary for the one main action of a screen, secondary/ghost for the
  * rest, destructive for deleting. `site` makes the 56 px touch target of the site screens;
- * `full` spans the width (default for primary on phones).
+ * `full` spans the width (default for primary on phones), `width="natural"` leaves the width to
+ * the context (e.g. a primary button filling a narrow form). `size` makes compact buttons in
+ * lists (`small`) or square icon buttons (`icon`, still ≥ 44 px); `danger` colours a ghost
+ * button red (e.g. „Entfernen“ in a row).
  */
-export function Button({
+export interface ButtonStyle {
+  variant?: ButtonVariant | undefined
+  site?: boolean | undefined
+  full?: boolean | undefined
+  width?: 'auto' | 'full' | 'natural' | undefined
+  size?: 'small' | 'icon' | undefined
+  danger?: boolean | undefined
+  className?: string | undefined
+}
+
+/**
+ * Class names of a button, for elements that must stay links or labels but look like a button
+ * (download links, file pickers) – the same look as <Button>.
+ */
+export function buttonClass({
   variant = 'secondary',
   site = false,
   full = false,
+  width = 'auto',
+  size,
+  danger = false,
   className,
-  type = 'button',
-  ...props
-}: ButtonHTMLAttributes<HTMLButtonElement> & {
-  variant?: ButtonVariant
-  site?: boolean
-  full?: boolean
-}) {
-  const classes = [
+}: ButtonStyle = {}): string {
+  const span = full ? 'full' : width === 'natural' ? null : width
+  return [
     'button',
     variant === 'primary' ? 'primary' : variant === 'destructive' ? 'danger' : 'ghost',
     variant === 'secondary' ? 'secondary' : null,
-    full ? 'full' : 'auto',
+    span,
+    size ?? null,
+    danger && variant !== 'destructive' ? 'danger' : null,
     site ? 'site' : null,
     className,
   ]
     .filter(Boolean)
     .join(' ')
-  return <button type={type} className={classes} {...props} />
+}
+
+export function Button({
+  variant,
+  site,
+  full,
+  width,
+  size,
+  danger,
+  className,
+  type = 'button',
+  ...props
+}: ButtonHTMLAttributes<HTMLButtonElement> & ButtonStyle) {
+  return (
+    <button
+      type={type}
+      className={buttonClass({ variant, site, full, width, size, danger, className })}
+      {...props}
+    />
+  )
 }
 
 export type Tone = 'info' | 'success' | 'warning' | 'error'

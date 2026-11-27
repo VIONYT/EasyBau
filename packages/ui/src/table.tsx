@@ -6,6 +6,8 @@ export interface Column<T> {
   cell: (row: T) => ReactNode
   /** Amounts and quantities: right-aligned with tabular figures. */
   numeric?: boolean
+  /** The cell names its row (rendered as <th scope="row">, e.g. the changed field). */
+  rowHeader?: boolean
 }
 
 /**
@@ -46,11 +48,17 @@ export function DataTable<T>({
         <tbody>
           {rows.map((row) => (
             <tr key={rowKey(row)}>
-              {columns.map((c) => (
-                <td key={c.key} className={c.numeric ? 'numeric' : undefined}>
-                  {c.cell(row)}
-                </td>
-              ))}
+              {columns.map((c) =>
+                c.rowHeader ? (
+                  <th key={c.key} scope="row" className={c.numeric ? 'numeric' : undefined}>
+                    {c.cell(row)}
+                  </th>
+                ) : (
+                  <td key={c.key} className={c.numeric ? 'numeric' : undefined}>
+                    {c.cell(row)}
+                  </td>
+                ),
+              )}
             </tr>
           ))}
         </tbody>

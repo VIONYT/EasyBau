@@ -253,7 +253,7 @@ export function toCii(model: EinvoiceModel, profile: 'en16931' | 'xrechnung'): s
         null,
         text('ram:BuyerReference', model.buyerReference),
         party('ram:SellerTradeParty', model.seller, true),
-        party('ram:BuyerTradeParty', model.buyer, false),
+        party('ram:BuyerTradeParty', model.buyer, true),
         when(model.project, () =>
           el(
             'ram:SpecifiedProcuringProject',

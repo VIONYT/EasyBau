@@ -12,6 +12,8 @@ describe.skipIf(!process.env.DATABASE_URL)('Datenschutz bei Kontakten (integrati
   let customer: ContactDetail
   let projectId: string
   let invoice: DocumentDetail
+  let quote: DocumentDetail
+  let draftQuote: DocumentDetail
 
   const privacy = async (id: string) =>
     (await admin.get(`/api/v1/contacts/${id}/privacy`)).json() as ContactPrivacy
@@ -79,6 +81,22 @@ describe.skipIf(!process.env.DATABASE_URL)('Datenschutz bei Kontakten (integrati
     })
     expect(done.statusCode, done.body).toBe(200)
     invoice = done.json()
+    const quoteWithItem = async () => {
+      const q = (
+        await admin.post(`/api/v1/projects/${projectId}/documents`, { type: 'quote' })
+      ).json() as DocumentDetail
+      await admin.post(`/api/v1/documents/${q.id}/items`, {
+        positionType: 'item',
+        shortText: 'Fliesen',
+        quantity: '10',
+        unitId: units.find((u) => u.symbol === 'm²')?.id,
+        unitPriceCents: 5000,
+      })
+      return q
+    }
+    quote = await quoteWithItem()
+    expect((await admin.post(`/api/v1/documents/${quote.id}/finalize`, {})).statusCode).toBe(200)
+    draftQuote = await quoteWithItem()
   })
 
   afterAll(async () => {
@@ -94,7 +112,11 @@ describe.skipIf(!process.env.DATABASE_URL)('Datenschutz bei Kontakten (integrati
     expect((await admin.post(`/api/v1/contacts/${lead.id}/erase`, {})).statusCode).toBe(400)
     const res = await admin.post(`/api/v1/contacts/${lead.id}/erase`, { confirm: true })
     expect(res.statusCode, res.body).toBe(200)
-    expect(res.json()).toEqual({ result: 'erased', blockedUntil: null })
+    expect(res.json()).toEqual({
+      result: 'erased',
+      blockedUntil: null,
+      duplicates: { erased: 0, blocked: 0 },
+    })
 
     const erased = (await admin.get(`/api/v1/contacts/${lead.id}`)).json() as ContactDetail
     expect(erased).toMatchObject({
@@ -167,7 +189,7 @@ describe.skipIf(!process.env.DATABASE_URL)('Datenschutz bei Kontakten (integrati
     expect(plan).toMatchObject({ action: 'erase', usage: { projects: 1, files: 0, reports: 0 } })
     expect(
       (await admin.post(`/api/v1/contacts/${person.id}/erase`, { confirm: true })).json(),
-    ).toEqual({ result: 'erased', blockedUntil: null })
+    ).toEqual({ result: 'erased', blockedUntil: null, duplicates: { erased: 0, blocked: 0 } })
     const [row] = await withTenant(
       h.sql,
       { tenantId },
@@ -192,10 +214,14 @@ describe.skipIf(!process.env.DATABASE_URL)('Datenschutz bei Kontakten (integrati
     expect(before).toMatchObject({
       retentionEnd: '2036-12-31',
       action: 'block',
-      usage: { projects: 1, documents: 1, finalizedDocuments: 1 },
+      usage: { projects: 1, documents: 3, finalizedDocuments: 2 },
     })
     const res = await admin.post(`/api/v1/contacts/${customer.id}/erase`, { confirm: true })
-    expect(res.json()).toEqual({ result: 'blocked', blockedUntil: '2036-12-31' })
+    expect(res.json()).toEqual({
+      result: 'blocked',
+      blockedUntil: '2036-12-31',
+      duplicates: { erased: 0, blocked: 0 },
+    })
     const blocked = (await admin.get(`/api/v1/contacts/${customer.id}`)).json() as ContactDetail
     expect(blocked).toMatchObject({ blockedUntil: '2036-12-31', erasedAt: null, archived: true })
     // Kept for the retention period, but not used any more (Art. 18).
@@ -210,6 +236,11 @@ describe.skipIf(!process.env.DATABASE_URL)('Datenschutz bei Kontakten (integrati
     })
     expect(doc.statusCode).toBe(409)
     expect(doc.json().detail).toMatch(/Datenschutzgründen gesperrt/)
+    // Neither an older draft nor a new version of a finalized quote may freeze the contact again.
+    expect((await admin.post(`/api/v1/documents/${draftQuote.id}/finalize`, {})).statusCode).toBe(
+      409,
+    )
+    expect((await admin.post(`/api/v1/documents/${quote.id}/versions`, {})).statusCode).toBe(409)
     // The finalized invoice keeps its snapshot.
     const kept = (await admin.get(`/api/v1/documents/${invoice.id}`)).json() as DocumentDetail
     expect(kept.number).toBe(invoice.number)
@@ -234,13 +265,15 @@ describe.skipIf(!process.env.DATABASE_URL)('Datenschutz bei Kontakten (integrati
     ])
     expect(report.Kommunikation).toEqual([expect.objectContaining({ Wert: 'karl@example.test' })])
     expect(report.Projekte).toEqual([expect.objectContaining({ Name: 'Bad Kunde' })])
-    expect(report.Dokumente).toEqual([
-      expect.objectContaining({
-        Art: 'invoice',
-        Nummer: invoice.number,
-        'Aufbewahrung bis': '2036-12-31',
-      }),
-    ])
+    expect(report.Dokumente).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          Art: 'invoice',
+          Nummer: invoice.number,
+          'Aufbewahrung bis': '2036-12-31',
+        }),
+      ]),
+    )
     expect(Object.keys(report.Hinweise)).toEqual([
       'Zwecke',
       'Rechtsgrundlagen',

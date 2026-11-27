@@ -74,7 +74,7 @@ async function siteOverview(tx: Tx, auth: AuthContext, today: string): Promise<D
   const todaysSites = await tx<DashboardDto['todaysSites']>`
     select p.id, p.number, p.name,
            nullif(concat_ws(', ', p.site_street, nullif(concat_ws(' ', p.site_postal_code, p.site_city), '')), '') as site,
-           to_char(p.end_date, 'YYYY-MM-DD') as "endDate"
+           to_char(p.start_date, 'YYYY-MM-DD') as "startDate", to_char(p.end_date, 'YYYY-MM-DD') as "endDate"
     from project p left join project_status s on s.id = p.status_id
     where p.archived_at is null and coalesce(s.is_closed, false) = false
       and exists (select 1 from project_member m where m.project_id = p.id and m.user_id = ${auth.userId})
@@ -129,6 +129,12 @@ const DOCUMENT_LABEL: Record<string, string> = {
 
 async function search(tx: Tx, auth: AuthContext, q: string): Promise<SearchResult> {
   const pattern = like(q)
+  // Rangfolge: exact match, then the term at the start of the text or of a word, then anywhere.
+  const escaped = q.replace(/[%_\\]/g, (c) => `\\${c}`)
+  const rank = (column: string) => tx`
+    case when lower(${tx.unsafe(column)}) = lower(${q}) then 0
+         when ${tx.unsafe(column)} ilike ${`${escaped}%`} or ${tx.unsafe(column)} ilike ${`% ${escaped}%`} then 1
+         else 2 end`
   const may = (permission: string) => auth.permissions.has(permission)
   const groups: SearchResult['groups'] = []
   const add = (kind: SearchKind, hits: Omit<SearchHit, 'kind'>[]) => {
@@ -143,7 +149,7 @@ async function search(tx: Tx, auth: AuthContext, q: string): Promise<SearchResul
       where ${projectVisibility(tx, auth)}
         and (p.name ilike ${pattern} or p.number ilike ${pattern} or c.display_name ilike ${pattern}
              or concat_ws(' ', p.site_street, p.site_postal_code, p.site_city) ilike ${pattern})
-      order by p.archived_at is not null, p.updated_at desc limit 8`,
+      order by ${rank('p.name')}, p.archived_at is not null, p.updated_at desc limit 8`,
   )
   if (may('contacts.read')) {
     add(
@@ -153,7 +159,7 @@ async function search(tx: Tx, auth: AuthContext, q: string): Promise<SearchResul
         from contact c
         where c.display_name ilike ${pattern} or c.number ilike ${pattern}
            or exists (select 1 from contact_channel ch where ch.contact_id = c.id and ch.value ilike ${pattern})
-        order by c.archived_at is not null, lower(c.display_name) limit 8`,
+        order by ${rank('c.display_name')}, c.archived_at is not null, lower(c.display_name) limit 8`,
     )
   }
   if (may('document.read')) {
@@ -170,7 +176,7 @@ async function search(tx: Tx, auth: AuthContext, q: string): Promise<SearchResul
       where ${projectVisibility(tx, auth)}
         and (d.number ilike ${pattern} or d.subject ilike ${pattern}
              or coalesce(d.recipient_snapshot ->> 'name', c.display_name) ilike ${pattern})
-      order by d.document_date desc, d.created_at desc limit 8`
+      order by ${rank("coalesce(d.number, '')")}, ${rank("coalesce(d.subject, '')")}, d.document_date desc, d.created_at desc limit 8`
     add(
       'document',
       docs.map(({ type, number, subject, ...hit }) => ({
@@ -189,7 +195,7 @@ async function search(tx: Tx, auth: AuthContext, q: string): Promise<SearchResul
                null as "projectId"
         from catalog_item
         where archived_at is null and (short_text ilike ${pattern} or article_no ilike ${pattern})
-        order by short_text limit 8`,
+        order by ${rank('short_text')}, short_text limit 8`,
     )
   }
   if (may('incoming_invoice.read')) {
@@ -204,6 +210,38 @@ async function search(tx: Tx, auth: AuthContext, q: string): Promise<SearchResul
         order by i.received_at desc limit 8`,
     )
   }
+  // Baustelle: Aufmaßblätter, Berichte (auch ihr Inhalt) und Dateien der sichtbaren Projekte.
+  add(
+    'sheet',
+    await tx<Omit<SearchHit, 'kind'>[]>`
+      select s.id, s.title as label,
+             concat_ws(' · ', p.number, p.name, to_char(s.measured_on, 'DD.MM.YYYY')) as detail,
+             p.id as "projectId"
+      from measurement_sheet s join project p on p.id = s.project_id
+      where ${projectVisibility(tx, auth)} and not s.is_inline and s.title ilike ${pattern}
+      order by ${rank('s.title')}, s.measured_on desc limit 8`,
+  )
+  add(
+    'report',
+    await tx<Omit<SearchHit, 'kind'>[]>`
+      select r.id, concat_ws(' · ', t.name, to_char(r.report_date, 'DD.MM.YYYY')) as label,
+             concat_ws(' · ', p.number, p.name) as detail, p.id as "projectId"
+      from report r join report_template t on t.id = r.template_id join project p on p.id = r.project_id
+      where ${projectVisibility(tx, auth)}
+        and (t.name ilike ${pattern} or exists (
+              select 1 from jsonb_path_query(r.data, 'strict $.**') v
+              where jsonb_typeof(v) = 'string' and v #>> '{}' ilike ${pattern}))
+      order by ${rank('t.name')}, r.report_date desc limit 8`,
+  )
+  add(
+    'file',
+    await tx<Omit<SearchHit, 'kind'>[]>`
+      select f.id, f.filename as label,
+             concat_ws(' · ', p.number, p.name, nullif(f.caption, '')) as detail, p.id as "projectId"
+      from file f join project p on p.id = f.project_id
+      where ${projectVisibility(tx, auth)} and (f.filename ilike ${pattern} or f.caption ilike ${pattern})
+      order by ${rank('f.filename')}, f.created_at desc limit 8`,
+  )
   return { q, groups }
 }
 

@@ -19,6 +19,12 @@ export async function purgeReadNotifications(
   // Rate-limit windows are at most a day long; old rows (one per person and day for the
   // overdue check) are only clutter.
   const stale = await sql`delete from rate_limit where window_start < now() - interval '2 days'`
-  logger.info({ removed, days, staleRateLimits: stale.count }, 'read notifications purged')
+  // Protokoll je E-Mail im Rechnungseingang: sender addresses are personal data, 90 days.
+  const [mails] = await sql<{ removed: number }[]>`
+    select purge_incoming_mail_log(${days}) as removed`
+  logger.info(
+    { removed, days, staleRateLimits: stale.count, mailLog: mails?.removed ?? 0 },
+    'read notifications purged',
+  )
   return removed
 }

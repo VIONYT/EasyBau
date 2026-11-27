@@ -16,10 +16,10 @@ import { z } from 'zod'
 import { inTenant, publicOrigin, requirePermission, type Services } from '../context.js'
 import { HttpError, notFound, parse } from '../http.js'
 import { randomToken, sha256 } from '../security/crypto.js'
-import { hashPassword, verifyPassword } from '../security/passwords.js'
 import { audit, finishLogin, rateLimit } from './auth-common.js'
 import { queueEmail } from './email.js'
 import { todayOf } from './receivables.js'
+import { noticeTime, securityNotice } from './security-notices.js'
 import { eraseOrphanLogin, registerUserPrivacyRoutes } from './user-privacy.js'
 
 const userParam = z.object({ userId: z.uuid('Ungültige ID.') })
@@ -183,6 +183,11 @@ export function registerUserRoutes(app: FastifyInstance, services: Services) {
     await sql`delete from webauthn_credential where user_id = ${userId}`
     await sql`delete from user_session where user_id = ${userId}`
     await audit(services, auth.tenantId, auth.userId, 'mfa_reset', userId)
+    await securityNotice(services, userId, 'Zweiter Faktor zurückgesetzt', [
+      `${auth.displayName} hat am ${noticeTime()} alle zweiten Faktoren Ihrer Anmeldung bei ${services.config.APP_NAME} entfernt (Authenticator-App, Sicherheitsschlüssel, Passkeys). Alle Sitzungen wurden beendet; bitte richten Sie nach der nächsten Anmeldung wieder einen zweiten Faktor ein.`,
+      '',
+      'Wenn Sie das nicht veranlasst haben, wenden Sie sich bitte sofort an die Administration Ihrer Firma.',
+    ])
     return reply.status(204).send()
   })
 
@@ -331,7 +336,7 @@ export function registerUserRoutes(app: FastifyInstance, services: Services) {
       // Existing login: joining another company requires its password (no account takeover).
       if (
         !existing.passwordHash ||
-        !(await verifyPassword(existing.passwordHash, input.password))
+        !(await services.passwords.verify(existing.passwordHash, input.password))
       ) {
         throw new HttpError(403, 'Das Passwort Ihres bestehenden Zugangs ist falsch.', {
           password: 'Passwort ist falsch.',
@@ -344,7 +349,7 @@ export function registerUserRoutes(app: FastifyInstance, services: Services) {
         throw new HttpError(400, 'Bitte Ihren Namen angeben.', { displayName: 'Pflichtfeld.' })
       const [created] = await sql<{ id: string }[]>`
         insert into app_user (email, display_name, password_hash, email_verified_at)
-        values (${invitation.email}, ${displayName}, ${await hashPassword(input.password)}, now())
+        values (${invitation.email}, ${displayName}, ${await services.passwords.hash(input.password)}, now())
         returning id`
       userId = (created as { id: string }).id
     }

@@ -1,7 +1,15 @@
 import type { EmailChangeInfo, EmailChangeRequested, Me } from '@easybau/schemas'
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
 import { deviceLabel } from './routes/security-notices.js'
+import { base32Decode, hotp, totpStep } from './security/crypto.js'
+import {
+  PasswordHasher,
+  parseStoredHash,
+  pepperKeyId,
+  unusablePasswordHashes,
+} from './security/passwords.js'
 import { Client, createHarness, type Harness } from './testing/harness.js'
+import { SoftAuthenticator } from './testing/soft-authenticator.js'
 
 /** Konto: eigene E-Mail-Adresse ändern, Sicherheitshinweise (Passwort geändert, neues Gerät). */
 describe.skipIf(!process.env.DATABASE_URL)(
@@ -75,6 +83,63 @@ describe.skipIf(!process.env.DATABASE_URL)(
       expect(res.statusCode, res.body).toBe(204)
       const notices = await mails('security_notice', 'chef@sicher.test')
       expect(notices.at(-1)?.subject).toMatch(/Passwort wurde geändert/)
+    })
+
+    it('tells the person when a security key or the authenticator app is added or removed', async () => {
+      const subjects = async () =>
+        (await mails('security_notice', 'chef@sicher.test')).map((m) => m.subject)
+      const before = (await subjects()).length
+
+      const key = new SoftAuthenticator('http://localhost:80')
+      const options = (await admin.post('/api/v1/auth/webauthn/register/options')).json()
+      const created = await admin.post('/api/v1/auth/webauthn/register/verify', {
+        response: key.register(options),
+        name: 'YubiKey Büro',
+      })
+      expect(created.statusCode, created.body).toBe(201)
+      const { id } = created.json<{ id: string }>()
+      expect((await admin.delete(`/api/v1/auth/webauthn/credentials/${id}`)).statusCode).toBe(204)
+
+      const setup = (await admin.post('/api/v1/auth/totp/setup')).json<{ secret: string }>()
+      const code = (offset = 0) => hotp(base32Decode(setup.secret), totpStep(h.clock.now) + offset)
+      expect((await admin.post('/api/v1/auth/totp/enable', { code: code() })).statusCode).toBe(204)
+      h.clock.now += 30_000
+      const disabled = await admin.post('/api/v1/auth/totp/disable', {
+        password: 'ein-neues-sehr-langes-passwort',
+        code: code(),
+      })
+      expect(disabled.statusCode, disabled.body).toBe(204)
+
+      const notices = await mails('security_notice', 'chef@sicher.test')
+      expect(notices.slice(before).map((m) => m.subject)).toEqual([
+        'Test-ERP: Neuer Sicherheitsschlüssel oder Passkey',
+        'Test-ERP: Sicherheitsschlüssel oder Passkey entfernt',
+        'Test-ERP: Authenticator-App eingerichtet',
+        'Test-ERP: Authenticator-App entfernt',
+      ])
+      expect(notices[before]?.body).toMatch(/„YubiKey Büro“ hinzugefügt/)
+      expect(notices[before + 1]?.body).toMatch(/„YubiKey Büro“ wurde von Ihrer Anmeldung entfernt/)
+    })
+
+    it('tells a person when an admin resets the second factor', async () => {
+      const invite = await admin.post('/api/v1/invitations', {
+        email: 'polier@sicher.test',
+        displayName: 'Paula Polier',
+        roleKey: 'team_member',
+      })
+      expect(invite.statusCode, invite.body).toBe(201)
+      const token = new URL(invite.json().acceptUrl).hash.slice(1)
+      const member = new Client(h.app)
+      const joined = await member.post('/api/v1/invitations/accept', {
+        token,
+        password: 'monteur-passwort-1',
+      })
+      expect(joined.statusCode, joined.body).toBe(200)
+      const memberId = joined.json<{ me: Me }>().me.user.id
+      expect((await admin.post(`/api/v1/users/${memberId}/reset-mfa`)).statusCode).toBe(204)
+      const notices = await mails('security_notice', 'polier@sicher.test')
+      expect(notices.at(-1)?.subject).toBe('Test-ERP: Zweiter Faktor zurückgesetzt')
+      expect(notices.at(-1)?.body).toMatch(/Chef hat am .* alle zweiten Faktoren/)
     })
 
     it('changes the own address only after the link to the new address is confirmed', async () => {
@@ -185,3 +250,59 @@ describe.skipIf(!process.env.DATABASE_URL)(
     })
   },
 )
+
+describe.skipIf(!process.env.DATABASE_URL)('Passwort-Pepper (integration)', () => {
+  const PEPPER = 'p'.repeat(40)
+  let h: Harness
+
+  beforeAll(async () => {
+    h = await createHarness({ requireAdminMfa: false, passwordPepper: PEPPER })
+  })
+
+  afterAll(async () => {
+    await h?.close()
+  })
+
+  const storedHash = async (email: string) =>
+    (
+      await h.adminSql<{ hash: string }[]>`
+      select password_hash as hash from app_user where email = ${email}`
+    )[0]?.hash
+
+  it('stores new passwords with the pepper and upgrades old hashes at the next login', async () => {
+    const admin = new Client(h.app)
+    await admin.post('/api/v1/setup', {
+      setupToken: h.setupToken,
+      company: { name: 'Pfeffer Bau GmbH' },
+      admin: {
+        email: 'chef@pfeffer.test',
+        password: 'ein-sehr-langes-passwort',
+        displayName: 'Chef',
+      },
+    })
+    expect(await storedHash('chef@pfeffer.test')).toMatch(
+      new RegExp(`^pepper:${pepperKeyId(PEPPER)}:\\$argon2id\\$`),
+    )
+
+    // A hash from before the pepper was switched on still works and is upgraded.
+    await h.adminSql`update app_user set password_hash = ${await new PasswordHasher().hash('ein-sehr-langes-passwort')}
+                     where email = 'chef@pfeffer.test'`
+    const login = await new Client(h.app).post('/api/v1/auth/login', {
+      email: 'chef@pfeffer.test',
+      password: 'ein-sehr-langes-passwort',
+    })
+    expect(login.statusCode, login.body).toBe(200)
+    expect(parseStoredHash((await storedHash('chef@pfeffer.test')) as string).keyId).toBe(
+      pepperKeyId(PEPPER),
+    )
+    expect(
+      await unusablePasswordHashes({
+        sql: h.adminSql,
+        passwords: new PasswordHasher({ pepper: PEPPER }),
+      }),
+    ).toBe(0)
+    expect(await unusablePasswordHashes({ sql: h.adminSql, passwords: new PasswordHasher() })).toBe(
+      1,
+    )
+  })
+})

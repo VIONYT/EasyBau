@@ -9,6 +9,8 @@ import type {
   DunningSettings,
   EmailTemplateSettings,
   HolidayList,
+  IncomingMailLogEntry,
+  IncomingMailLogPage,
   IncomingMailRun,
   IncomingMailSettings,
   Me,
@@ -22,6 +24,7 @@ import type {
   WorkingDay,
 } from '@easybau/schemas'
 import { COST_KINDS, DOCUMENT_TYPES, FEDERAL_STATES } from '@easybau/schemas/constants'
+import { Button } from '@easybau/ui'
 import { type ReactNode, useCallback, useEffect, useId, useRef, useState } from 'react'
 import { ApiError, api, uploadFile } from '../api'
 import { formatCents, formatInputNumber, parseEuro } from '../format'
@@ -312,9 +315,9 @@ function CompanySettings({ canEdit }: { canEdit: boolean }) {
         </div>
       </Panel>
       <div className="button-row">
-        <button type="button" className="button primary auto" disabled={save.busy} onClick={submit}>
+        <Button type="button" variant="primary" disabled={save.busy} onClick={submit}>
           {t('common.save')}
-        </button>
+        </Button>
         {save.message}
       </div>
     </fieldset>
@@ -404,15 +407,17 @@ function NumberSequenceCard({
       </div>
       <div className="button-row">
         {NUMBER_TOKENS.map((token) => (
-          <button
+          <Button
             key={token}
             type="button"
-            className="button ghost small"
+            variant="ghost"
+            width="natural"
+            size="small"
             aria-label={`${t('s.n.insert')} ${token}`}
             onClick={() => insert(token)}
           >
             {token}
-          </button>
+          </Button>
         ))}
       </div>
       <div className="row four">
@@ -435,9 +440,11 @@ function NumberSequenceCard({
           checked={seq.resetYearly}
           onChange={(v) => set({ resetYearly: v })}
         />
-        <button
+        <Button
           type="button"
-          className="button ghost small"
+          variant="ghost"
+          width="natural"
+          size="small"
           disabled={save.busy || problem !== null}
           onClick={() =>
             save.run(async () => {
@@ -453,7 +460,7 @@ function NumberSequenceCard({
           }
         >
           {t('common.save')}
-        </button>
+        </Button>
       </div>
       {save.message}
     </li>
@@ -486,9 +493,11 @@ function PaymentTermSettings() {
             <span className="actions">
               {!term.isDefault ? (
                 <>
-                  <button
+                  <Button
                     type="button"
-                    className="button ghost small"
+                    variant="ghost"
+                    width="natural"
+                    size="small"
                     onClick={() =>
                       save
                         .run(() =>
@@ -500,10 +509,13 @@ function PaymentTermSettings() {
                     }
                   >
                     {t('s.pt.makeDefault')}
-                  </button>
-                  <button
+                  </Button>
+                  <Button
                     type="button"
-                    className="button ghost icon danger"
+                    variant="ghost"
+                    width="natural"
+                    size="icon"
+                    danger
                     aria-label={`${t('common.delete')}: ${term.name}`}
                     onClick={() =>
                       save
@@ -512,7 +524,7 @@ function PaymentTermSettings() {
                     }
                   >
                     ✕
-                  </button>
+                  </Button>
                 </>
               ) : null}
             </span>
@@ -545,9 +557,10 @@ function PaymentTermSettings() {
         />
       </div>
       <div className="button-row">
-        <button
+        <Button
           type="button"
-          className="button ghost"
+          variant="ghost"
+          width="natural"
           disabled={save.busy}
           onClick={() =>
             save
@@ -566,7 +579,7 @@ function PaymentTermSettings() {
           }
         >
           {t('s.add')}
-        </button>
+        </Button>
         {save.message}
       </div>
     </Panel>
@@ -595,9 +608,11 @@ function TaxRateSettings() {
             </span>
             {!rate.isDefault ? (
               <span className="actions">
-                <button
+                <Button
                   type="button"
-                  className="button ghost small"
+                  variant="ghost"
+                  width="natural"
+                  size="small"
                   onClick={() =>
                     save
                       .run(() =>
@@ -607,7 +622,7 @@ function TaxRateSettings() {
                   }
                 >
                   {t('s.pt.makeDefault')}
-                </button>
+                </Button>
               </span>
             ) : null}
           </li>
@@ -642,9 +657,10 @@ function TaxRateSettings() {
         </div>
       </div>
       <div className="button-row">
-        <button
+        <Button
           type="button"
-          className="button ghost"
+          variant="ghost"
+          width="natural"
           onClick={() =>
             save
               .run(() =>
@@ -658,7 +674,7 @@ function TaxRateSettings() {
           }
         >
           {t('s.add')}
-        </button>
+        </Button>
         {save.message}
       </div>
     </Panel>
@@ -687,9 +703,9 @@ function SurchargeSettings() {
         ))}
       </div>
       <div className="button-row">
-        <button
+        <Button
           type="button"
-          className="button primary auto"
+          variant="primary"
           disabled={save.busy}
           onClick={() =>
             save.run(async () =>
@@ -704,7 +720,7 @@ function SurchargeSettings() {
           }
         >
           {t('common.save')}
-        </button>
+        </Button>
         {save.message}
       </div>
     </Panel>
@@ -769,9 +785,10 @@ function WageGroupSettings() {
         />
       </div>
       <div className="button-row">
-        <button
+        <Button
           type="button"
-          className="button ghost"
+          variant="ghost"
+          width="natural"
           onClick={() =>
             save
               .run(() => {
@@ -791,7 +808,7 @@ function WageGroupSettings() {
           }
         >
           {t('s.add')}
-        </button>
+        </Button>
         {save.message}
       </div>
     </Panel>
@@ -907,9 +924,10 @@ function UnitSettings() {
         />
       </div>
       <div className="button-row">
-        <button
+        <Button
           type="button"
-          className="button ghost"
+          variant="ghost"
+          width="natural"
           onClick={() =>
             save
               .run(() =>
@@ -925,7 +943,7 @@ function UnitSettings() {
           }
         >
           {t('s.add')}
-        </button>
+        </Button>
         {save.message}
       </div>
     </Panel>
@@ -974,14 +992,14 @@ function WorkingHourSettings() {
         ))}
       </ul>
       <div className="button-row">
-        <button
+        <Button
           type="button"
-          className="button primary auto"
+          variant="primary"
           disabled={save.busy}
           onClick={() => save.run(() => api('PUT', '/api/v1/settings/working-hours', data))}
         >
           {t('common.save')}
-        </button>
+        </Button>
         {save.message}
       </div>
     </Panel>
@@ -1018,9 +1036,12 @@ function TextSettings() {
                 <span className="hint pre block">{tpl.body}</span>
               </span>
               <span className="actions">
-                <button
+                <Button
                   type="button"
-                  className="button ghost icon danger"
+                  variant="ghost"
+                  width="natural"
+                  size="icon"
+                  danger
                   aria-label={`${t('common.delete')}: ${tpl.name}`}
                   onClick={() =>
                     save
@@ -1029,7 +1050,7 @@ function TextSettings() {
                   }
                 >
                   ✕
-                </button>
+                </Button>
               </span>
             </li>
           ))}
@@ -1086,9 +1107,10 @@ function TextSettings() {
         onChange={(v) => setDraft({ ...draft, isDefault: v })}
       />
       <div className="button-row">
-        <button
+        <Button
           type="button"
-          className="button ghost"
+          variant="ghost"
+          width="natural"
           onClick={() =>
             save
               .run(() => api('POST', '/api/v1/settings/text-templates', draft))
@@ -1099,7 +1121,7 @@ function TextSettings() {
           }
         >
           {t('s.add')}
-        </button>
+        </Button>
         {save.message}
       </div>
     </Panel>
@@ -1129,9 +1151,9 @@ function FilingSettings() {
         <p className="hint">{t('s.f.hint')}</p>
       </div>
       <div className="button-row">
-        <button
+        <Button
           type="button"
-          className="button primary auto"
+          variant="primary"
           disabled={save.busy}
           onClick={() =>
             save.run(async () =>
@@ -1144,7 +1166,7 @@ function FilingSettings() {
           }
         >
           {t('common.save')}
-        </button>
+        </Button>
         {save.message}
       </div>
     </Panel>
@@ -1247,10 +1269,15 @@ function DatevSettingsForm() {
           onChange={(v) => setData({ ...data, creditorAccount: nullable(v) })}
         />
       </div>
+      <Check
+        label={t('s.d.autoCreditor')}
+        checked={data.autoCreditorNumbers}
+        onChange={(v) => setData({ ...data, autoCreditorNumbers: v })}
+      />
       <div className="button-row">
-        <button
+        <Button
           type="button"
-          className="button primary auto"
+          variant="primary"
           disabled={save.busy}
           onClick={() =>
             save.run(async () =>
@@ -1259,7 +1286,7 @@ function DatevSettingsForm() {
           }
         >
           {t('common.save')}
-        </button>
+        </Button>
         {save.message}
       </div>
     </Panel>
@@ -1327,9 +1354,9 @@ function EmailTemplateForm() {
         </p>
       </div>
       <div className="button-row">
-        <button
+        <Button
           type="button"
-          className="button primary auto"
+          variant="primary"
           disabled={save.busy}
           onClick={() =>
             save.run(async () => {
@@ -1352,11 +1379,11 @@ function EmailTemplateForm() {
           }
         >
           {t('common.save')}
-        </button>
+        </Button>
         {current.custom ? (
-          <button
+          <Button
             type="button"
-            className="button ghost auto"
+            variant="ghost"
             onClick={() =>
               setData({
                 ...data,
@@ -1365,7 +1392,7 @@ function EmailTemplateForm() {
             }
           >
             {t('s.mail.reset')}
-          </button>
+          </Button>
         ) : null}
         {save.message}
       </div>
@@ -1392,9 +1419,11 @@ function BusinessAreaSettings() {
               {area.archived ? <span className="tag">{t('s.areas.archived')}</span> : null}
             </span>
             <span className="actions">
-              <button
+              <Button
                 type="button"
-                className="button ghost small"
+                variant="ghost"
+                width="natural"
+                size="small"
                 onClick={() =>
                   save
                     .run(() =>
@@ -1406,7 +1435,7 @@ function BusinessAreaSettings() {
                 }
               >
                 {t(area.archived ? 's.areas.restore' : 's.areas.archive')}
-              </button>
+              </Button>
             </span>
           </li>
         ))}
@@ -1415,9 +1444,10 @@ function BusinessAreaSettings() {
         <Input label={t('s.areas.new')} value={name} onChange={setName} />
       </div>
       <div className="button-row">
-        <button
+        <Button
           type="button"
-          className="button ghost"
+          variant="ghost"
+          width="natural"
           disabled={!name.trim()}
           onClick={() =>
             save
@@ -1429,7 +1459,7 @@ function BusinessAreaSettings() {
           }
         >
           {t('s.add')}
-        </button>
+        </Button>
         {save.message}
       </div>
     </Panel>
@@ -1460,9 +1490,9 @@ function DunningSettingsForm() {
           onChange={(v) => setData({ ...data, flatFeeBusiness: v })}
         />
         <div className="button-row">
-          <button
+          <Button
             type="button"
-            className="button primary auto"
+            variant="primary"
             disabled={save.busy}
             onClick={() =>
               save.run(async () =>
@@ -1471,7 +1501,7 @@ function DunningSettingsForm() {
             }
           >
             {t('common.save')}
-          </button>
+          </Button>
           {save.message}
         </div>
       </Panel>
@@ -1553,9 +1583,9 @@ function BaseRateSettings() {
               {r.own ? <span className="muted"> · {t('sys.baseRateOwn')}</span> : null}
             </span>
             {r.own ? (
-              <button
+              <Button
                 type="button"
-                className="button ghost auto"
+                variant="ghost"
                 onClick={() =>
                   save.run(async () =>
                     setData(
@@ -1568,7 +1598,7 @@ function BaseRateSettings() {
                 }
               >
                 {t('common.delete')}
-              </button>
+              </Button>
             ) : null}
           </li>
         ))}
@@ -1583,9 +1613,9 @@ function BaseRateSettings() {
         <Input label={t('sys.baseRateValue')} inputMode="decimal" value={rate} onChange={setRate} />
       </div>
       <div className="button-row">
-        <button
+        <Button
           type="button"
-          className="button ghost auto"
+          variant="ghost"
           disabled={save.busy || !validFrom || !rate}
           onClick={() =>
             save.run(async () => {
@@ -1601,7 +1631,7 @@ function BaseRateSettings() {
           }
         >
           {t('sys.baseRateAdd')}
-        </button>
+        </Button>
         {save.message}
       </div>
     </Panel>
@@ -1660,6 +1690,7 @@ function DocumentDefaultsForm() {
           progressBillingMode: data.progressBillingMode,
           fileNamePattern: data.fileNamePattern,
           attachments: data.attachments,
+          retiredAttachments: data.retiredAttachments,
         }),
       ),
     )
@@ -1698,13 +1729,14 @@ function DocumentDefaultsForm() {
         progressBillingMode: data.progressBillingMode,
         fileNamePattern: data.fileNamePattern,
         attachments: data.attachments,
+        retiredAttachments: data.retiredAttachments,
       })
     })
   const saveButton = (
     <div className="button-row">
-      <button type="button" className="button primary auto" disabled={save.busy} onClick={store}>
+      <Button type="button" variant="primary" disabled={save.busy} onClick={store}>
         {t('common.save')}
-      </button>
+      </Button>
       {save.message}
     </div>
   )
@@ -1750,39 +1782,58 @@ function DocumentDefaultsForm() {
             example: data.example,
           })}
         />
-        <button
+        <Button
           type="button"
-          className="button ghost small"
+          variant="ghost"
+          width="natural"
+          size="small"
           onClick={() => setData({ ...data, fileNamePattern: data.defaultFileNamePattern })}
         >
           {t('sd.patternReset')}
-        </button>
+        </Button>
       </Panel>
       <Panel title={t('sd.attachments')}>
         <p className="hint">{t('sd.attachmentsHint')}</p>
         {data.files.length === 0 ? <p className="muted">{t('sd.noFiles')}</p> : null}
         <ul className="list">
-          {data.files.map((file) => (
-            <li key={file.id} className="list-row attachment-row">
-              <span>
-                <strong>{file.name}</strong>{' '}
-                <a href={`/api/v1/assets/${file.id}`} target="_blank" rel="noreferrer">
-                  {t('sd.view')}
-                </a>
-              </span>
-              <fieldset className="plain attachment-types">
-                <legend>{t('sd.attachTo')}</legend>
-                {DOCUMENT_TYPES.map((type) => (
-                  <Check
-                    key={type}
-                    label={typeLabel(type)}
-                    checked={(data.attachments[type] ?? []).includes(file.id)}
-                    onChange={(v) => toggleAttachment(type, file.id, v)}
-                  />
-                ))}
-              </fieldset>
-            </li>
-          ))}
+          {data.files.map((file) => {
+            const retired = data.retiredAttachments.includes(file.id)
+            return (
+              <li key={file.id} className={`list-row attachment-row${retired ? ' muted' : ''}`}>
+                <span>
+                  <strong>{file.name}</strong>{' '}
+                  <a href={`/api/v1/assets/${file.id}`} target="_blank" rel="noreferrer">
+                    {t('sd.view')}
+                  </a>
+                </span>
+                <Check
+                  label={t('sd.retired')}
+                  checked={retired}
+                  onChange={(v) =>
+                    setData({
+                      ...data,
+                      retiredAttachments: v
+                        ? [...data.retiredAttachments, file.id]
+                        : data.retiredAttachments.filter((id) => id !== file.id),
+                    })
+                  }
+                />
+                {retired ? null : (
+                  <fieldset className="plain attachment-types">
+                    <legend>{t('sd.attachTo')}</legend>
+                    {[...DOCUMENT_TYPES, 'dunning_notice' as const].map((type) => (
+                      <Check
+                        key={type}
+                        label={type === 'dunning_notice' ? t('sd.dunningNotices') : typeLabel(type)}
+                        checked={(data.attachments[type] ?? []).includes(file.id)}
+                        onChange={(v) => toggleAttachment(type, file.id, v)}
+                      />
+                    ))}
+                  </fieldset>
+                )}
+              </li>
+            )
+          })}
         </ul>
         <div className="row">
           <Input label={t('sd.uploadName')} value={name} onChange={setName} />
@@ -1863,9 +1914,11 @@ function HolidaySettings({ canWrite }: { canWrite: boolean }) {
               {day.custom ? <span className="muted"> · {t('hol.own')}</span> : null}
             </span>
             {day.custom && day.id && canWrite ? (
-              <button
+              <Button
                 type="button"
-                className="button ghost small"
+                variant="ghost"
+                width="natural"
+                size="small"
                 onClick={() => {
                   if (!window.confirm(t('hol.removeConfirm'))) return
                   void save.run(async () => {
@@ -1875,7 +1928,7 @@ function HolidaySettings({ canWrite }: { canWrite: boolean }) {
                 }}
               >
                 {t('hol.remove')}
-              </button>
+              </Button>
             ) : null}
           </li>
         ))}
@@ -1895,9 +1948,9 @@ function HolidaySettings({ canWrite }: { canWrite: boolean }) {
         />
       </div>
       <div className="button-row">
-        <button
+        <Button
           type="button"
-          className="button primary auto"
+          variant="primary"
           disabled={save.busy || !draft.date || !draft.name.trim()}
           onClick={() =>
             void save.run(async () => {
@@ -1908,7 +1961,7 @@ function HolidaySettings({ canWrite }: { canWrite: boolean }) {
           }
         >
           {t('hol.add')}
-        </button>
+        </Button>
         {save.message}
       </div>
     </Panel>
@@ -2087,9 +2140,9 @@ function IncomingMailForm() {
           : t('im.never')}
       </p>
       <div className="button-row">
-        <button
+        <Button
           type="button"
-          className="button primary auto"
+          variant="primary"
           disabled={save.busy}
           onClick={() =>
             save.run(async () => {
@@ -2118,11 +2171,11 @@ function IncomingMailForm() {
           }
         >
           {t('common.save')}
-        </button>
+        </Button>
         {data.available ? (
-          <button
+          <Button
             type="button"
-            className="button ghost auto"
+            variant="ghost"
             disabled={fetchNow.busy}
             onClick={() =>
               fetchNow.run(async () => {
@@ -2136,11 +2189,80 @@ function IncomingMailForm() {
             }
           >
             {t('im.run')}
-          </button>
+          </Button>
         ) : null}
         {save.message}
         {fetchNow.message}
       </div>
+      <IncomingMailLog refreshKey={run?.at ?? null} />
     </Panel>
+  )
+}
+
+/** Protokoll je E-Mail: the last fetched messages and what happened to each attachment. */
+function IncomingMailLog({ refreshKey }: { refreshKey: string | null }) {
+  const [items, setItems] = useState<IncomingMailLogEntry[] | null>(null)
+  const [next, setNext] = useState<string | null>(null)
+  const [error, setError] = useState<string | null>(null)
+  const load = useCallback(async (cursor: string | null) => {
+    try {
+      const page = await api<IncomingMailLogPage>(
+        'GET',
+        `/api/v1/settings/incoming-mail/log${cursor ? `?cursor=${encodeURIComponent(cursor)}` : ''}`,
+      )
+      setItems((current) => (cursor ? [...(current ?? []), ...page.items] : page.items))
+      setNext(page.nextCursor)
+    } catch (err) {
+      setError((err as ApiError).message)
+    }
+  }, [])
+  // biome-ignore lint/correctness/useExhaustiveDependencies: reload after each manual fetch
+  useEffect(() => {
+    void load(null)
+  }, [load, refreshKey])
+  if (error) return <FormError>{error}</FormError>
+  if (!items?.length) return null
+  return (
+    <section className="mail-log" aria-label={t('im.log')}>
+      <h3>{t('im.log')}</h3>
+      <p className="hint">{t('im.logHint')}</p>
+      <ul className="mail-log-list">
+        {items.map((entry) => (
+          <li key={entry.id} className="mail-log-entry">
+            <div>
+              <strong>{entry.subject || t('im.noSubject')}</strong>{' '}
+              <span className="muted">
+                {entry.from ?? ''} · {new Date(entry.fetchedAt).toLocaleString('de-DE')}
+                {entry.outcome === 'retry' ? ` · ${t('im.retry')}` : ''}
+              </span>
+            </div>
+            {entry.attachments.length ? (
+              <ul className="mail-log-files muted">
+                {entry.attachments.map((a, index) => (
+                  // biome-ignore lint/suspicious/noArrayIndexKey: attachments of one logged mail
+                  <li key={index}>
+                    {a.filename}: {t(`im.result.${a.result}` as TextKey)}
+                    {a.reason ? ` (${a.reason})` : ''}
+                    {a.incomingInvoiceId ? (
+                      <>
+                        {' '}
+                        <a href={`/eingangsrechnungen/${a.incomingInvoiceId}`}>{t('im.open')}</a>
+                      </>
+                    ) : null}
+                  </li>
+                ))}
+              </ul>
+            ) : (
+              <p className="muted">{t('im.noAttachments')}</p>
+            )}
+          </li>
+        ))}
+      </ul>
+      {next ? (
+        <Button type="button" variant="ghost" size="small" onClick={() => load(next)}>
+          {t('im.more')}
+        </Button>
+      ) : null}
+    </section>
   )
 }

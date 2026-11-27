@@ -37,6 +37,8 @@ export interface ArchiveStore {
   ): Promise<{ versionId: string | null }>
   get(key: string): Promise<Buffer | null>
   head(key: string): Promise<ArchivedObject | null>
+  /** Keys below `prefix` (newest versions only), in key order. */
+  list(prefix: string): Promise<string[]>
 }
 
 export class ArchiveError extends Error {
@@ -158,7 +160,34 @@ export class S3ArchiveStore implements ArchiveStore {
       sha256: h.get('x-amz-meta-sha256'),
     }
   }
+
+  async list(prefix: string): Promise<string[]> {
+    const keys: string[] = []
+    let token: string | null = null
+    do {
+      const response = await this.client.request({
+        method: 'GET',
+        query: { 'list-type': '2', prefix, ...(token ? { 'continuation-token': token } : {}) },
+      })
+      const text = await response.text()
+      for (const match of text.matchAll(/<Key>([^<]*)<\/Key>/g))
+        keys.push(unescapeXml(match[1] ?? ''))
+      token = /<IsTruncated>true<\/IsTruncated>/.test(text)
+        ? (/<NextContinuationToken>([^<]*)<\/NextContinuationToken>/.exec(text)?.[1] ?? null)
+        : null
+      if (token) token = unescapeXml(token)
+    } while (token)
+    return keys
+  }
 }
+
+const unescapeXml = (value: string) =>
+  value
+    .replace(/&lt;/g, '<')
+    .replace(/&gt;/g, '>')
+    .replace(/&quot;/g, '"')
+    .replace(/&apos;/g, "'")
+    .replace(/&amp;/g, '&')
 
 /**
  * Retention of an archived document original: the whole day of `lockedUntil` (end of the 10-year

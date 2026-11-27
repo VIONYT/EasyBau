@@ -142,7 +142,12 @@ describe.skipIf(!process.env.DATABASE_URL)(
         ['change_order', 'sent', 45_000],
       ])
       expect(dashboard.todaysSites).toMatchObject([
-        { id: projectId, site: 'Lindenweg 4, 30159 Hannover', endDate: '2026-12-20' },
+        {
+          id: projectId,
+          site: 'Lindenweg 4, 30159 Hannover',
+          startDate: '2026-11-01',
+          endDate: '2026-12-20',
+        },
       ])
     })
 
@@ -183,6 +188,52 @@ describe.skipIf(!process.env.DATABASE_URL)(
       // The site team finds its project, but neither contacts nor documents.
       expect((await search(worker, 'wohnbau')).groups.map((g) => g.kind)).toEqual(['project'])
       expect((await admin.get('/api/v1/search?q=a')).statusCode).toBe(400)
+    })
+
+    it('finds Aufmaßblätter, report contents and files, best matches first', async () => {
+      const search = async (client: Client, q: string) =>
+        (await client.get(`/api/v1/search?q=${encodeURIComponent(q)}`)).json() as SearchResult
+      const sheet = (
+        await admin.post(`/api/v1/projects/${projectId}/measurement-sheets`, {
+          kind: 'survey',
+          title: 'Treppenhaus Bestand',
+        })
+      ).json()
+      const report = (
+        await admin.post(`/api/v1/projects/${projectId}/reports`, {
+          templateKey: 'concern_notice',
+          reportDate: '2026-11-18',
+        })
+      ).json() as ReportDetail
+      const etag = (await admin.get(`/api/v1/reports/${report.id}`)).headers.etag as string
+      await admin.patch(
+        `/api/v1/reports/${report.id}`,
+        { data: { concern: { text: 'Riss im Treppenhaus, Putz löst sich.' } } },
+        { 'if-match': etag },
+      )
+      const file = (
+        await admin.upload(
+          `/api/v1/projects/${projectId}/files?filename=Treppenhaus-Plan.pdf`,
+          Buffer.from('%PDF-1.4\n%%EOF\n'),
+        )
+      ).json()
+      // The site team (project member) finds them; keys of the report data are not searched.
+      const result = await search(worker, 'treppenhaus')
+      expect(result.groups.map((g) => [g.kind, g.hits.map((h) => h.id)])).toEqual([
+        ['sheet', [sheet.id]],
+        ['report', [report.id]],
+        ['file', [file.id]],
+      ])
+      expect(result.groups[2]?.hits[0]?.projectId).toBe(projectId)
+      expect((await search(admin, 'concern')).groups.map((g) => g.kind)).not.toContain('report')
+      // Rangfolge: exact name before a match inside the name.
+      await admin.post('/api/v1/contacts', {
+        kind: 'organization',
+        organizationName: 'Bau Meier KG',
+      })
+      await admin.post('/api/v1/contacts', { kind: 'organization', organizationName: 'Meier' })
+      const contacts = (await search(admin, 'meier')).groups.find((g) => g.kind === 'contact')
+      expect(contacts?.hits.map((h) => h.label)).toEqual(['Meier', 'Bau Meier KG'])
     })
 
     it('notifies about decided change orders, signed reports and overdue invoices', async () => {

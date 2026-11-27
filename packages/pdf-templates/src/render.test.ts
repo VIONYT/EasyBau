@@ -34,6 +34,7 @@ function sampleDocument(items = 3): DocumentDetail {
     project: { id: 'p', number: 'P-00101', name: 'Sanierung Lindenweg' },
     contact: { id: 'c', displayName: 'Wohnbau Nord eG' },
     contactPerson: null,
+    recipientAddressId: null,
     placeOfPerformance: 'Lindenweg 4, 30159 Hannover',
     serviceFrom: '2026-10-01',
     serviceTo: '2026-11-20',
@@ -72,6 +73,7 @@ function sampleDocument(items = 3): DocumentDetail {
     },
     recipient: { name: 'Wohnbau Nord eG', lines: ['Lindenweg 4', '30159 Hannover'] },
     finalizedAt: '2026-11-21T10:00:00.000Z',
+    purgedAt: null,
     changeOrderInfo: null,
     canConvertToChangeOrder: false,
     items: Array.from({ length: items }, (_, i) => ({

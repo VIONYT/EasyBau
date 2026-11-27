@@ -44,6 +44,8 @@ export interface DashboardDto {
     number: string | null
     name: string
     site: string | null
+    /** Projektzeitraum: Zeitbalken „Tag x von y“ (start is always set for today's sites). */
+    startDate: string | null
     endDate: string | null
   }[]
 }
@@ -56,7 +58,15 @@ export const searchQuery = z.object({
   q: z.string().trim().min(2, 'Bitte mindestens 2 Zeichen eingeben.').max(200),
 })
 
-export type SearchKind = 'project' | 'contact' | 'document' | 'catalog' | 'incoming'
+export type SearchKind =
+  | 'project'
+  | 'contact'
+  | 'document'
+  | 'catalog'
+  | 'incoming'
+  | 'sheet'
+  | 'report'
+  | 'file'
 
 export interface SearchHit {
   kind: SearchKind

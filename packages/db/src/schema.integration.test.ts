@@ -96,6 +96,22 @@ describe.skipIf(!testDatabaseUrl)('database schema (integration)', () => {
       )
     })
 
+    it('keeps the e-mail log of the Rechnungseingang per company (0046)', async () => {
+      await a.run(
+        (tx) => tx`insert into incoming_mail_log (tenant_id, mail_from, subject, outcome)
+                   values (${a.tenantId}, 'lieferant@example.test', 'Rechnung', 'done')`,
+      )
+      expect(await b.run((tx) => tx`select id from incoming_mail_log`)).toHaveLength(0)
+      expect(await a.run((tx) => tx`select id from incoming_mail_log`)).toHaveLength(1)
+      await expectDbError(
+        b.run(
+          (tx) =>
+            tx`insert into incoming_mail_log (tenant_id, outcome) values (${a.tenantId}, 'done')`,
+        ),
+        /row-level security/,
+      )
+    })
+
     it('without tenant context no tenant data is visible', async () => {
       const rows = await db.app`select id from contact`
       expect(rows).toHaveLength(0)
@@ -129,7 +145,7 @@ describe.skipIf(!testDatabaseUrl)('database schema (integration)', () => {
                (select count(*)::int from report_template where billable) as billable,
                (select count(*)::int from number_sequence) as seqs`,
       )
-      expect(counts).toEqual({ roles: 6, templates: 11, billable: 4, seqs: 8 })
+      expect(counts).toEqual({ roles: 6, templates: 11, billable: 4, seqs: 9 })
     })
 
     it('protects system units', async () => {

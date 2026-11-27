@@ -1,7 +1,14 @@
 import { randomInt } from 'node:crypto'
-import { buildApi } from '@easybau/api'
+import { buildApi, reencryptLegacyFields } from '@easybau/api'
 import { ConfigError, loadConfig, runsApi, runsWorker } from '@easybau/config'
-import { createSql, migrate, pingDatabase, type Sql } from '@easybau/db'
+import {
+  createSql,
+  ensureJobsLogin,
+  ensureRuntimeLogin,
+  migrate,
+  pingDatabase,
+  type Sql,
+} from '@easybau/db'
 import { startWorker, type Worker } from '@easybau/worker'
 import { type Logger, pino } from 'pino'
 
@@ -12,7 +19,14 @@ import { type Logger, pino } from 'pino'
  *   APP_ROLE=worker → jobs only; still serves /healthz and /readyz for Docker
  */
 async function main(): Promise<void> {
-  const config = loadConfig()
+  let config = loadConfig()
+  // Reset, invitation and e-mail links and the WebAuthn origin come from PUBLIC_URL; without it
+  // they would follow the request's (forwarded) host header (security audit run-1).
+  if (config.NODE_ENV === 'production' && runsApi(config.APP_ROLE) && !config.PUBLIC_URL) {
+    throw new ConfigError(
+      'Invalid configuration:\n  - PUBLIC_URL: Adresse der Installation fehlt (z. B. https://erp.meine-firma.de)',
+    )
+  }
   const logger = pino({ level: config.LOG_LEVEL, base: { role: config.APP_ROLE } })
 
   // Migrations run with the admin login, before anything else touches the schema (ADR 0003).
@@ -25,12 +39,40 @@ async function main(): Promise<void> {
         { applied: result.applied.length, total: result.alreadyApplied + result.applied.length },
         'database schema up to date',
       )
+      // Encrypted fields written before the field binding get it now (ADR 0013, audit run-1).
+      const reencrypted = await reencryptLegacyFields(admin, config.APP_SECRET)
+      if (reencrypted) logger.info({ count: reencrypted }, 'encrypted fields bound to their column')
     } finally {
       await admin.end({ timeout: 5 })
     }
   }
 
-  // Application queries use the restricted runtime role, so row level security always applies.
+  // Application queries use their own login without superuser rights (and switch to the
+  // restricted role opc_app), so row level security always applies and cannot be switched off.
+  // The job queue gets its own login too, owner of its schema only (ADR 0013).
+  const needsJobsLogin = runsWorker(config.APP_ROLE) && !config.DATABASE_JOBS_URL
+  if (!config.DATABASE_RUNTIME_URL || needsJobsLogin) {
+    const admin = createSql({ ...config, DATABASE_POOL_MAX: 1 }, { mode: 'admin' })
+    try {
+      if (!config.DATABASE_RUNTIME_URL) {
+        const url = await ensureRuntimeLogin(admin, config.DATABASE_URL, config.APP_SECRET)
+        config = { ...config, DATABASE_RUNTIME_URL: url }
+      }
+      if (needsJobsLogin) {
+        const url = await ensureJobsLogin(admin, config.DATABASE_URL, config.APP_SECRET)
+        config = { ...config, DATABASE_JOBS_URL: url }
+      }
+    } catch (error) {
+      // E.g. an external database whose administrator may not create roles: keep working as
+      // before (administrator login, role switch only) and say so.
+      logger.warn(
+        { err: (error as Error).message },
+        'could not create the database logins; set DATABASE_RUNTIME_URL and DATABASE_JOBS_URL',
+      )
+    } finally {
+      await admin.end({ timeout: 5 })
+    }
+  }
   const sql = createSql(config)
 
   const setupToken = runsApi(config.APP_ROLE)

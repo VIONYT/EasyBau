@@ -2,7 +2,7 @@ import { createSql, migrate, type Sql, withTenant } from '@easybau/db'
 import { ensureAppRole } from '@easybau/db/test-support'
 import type { FastifyInstance, LightMyRequestResponse } from 'fastify'
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
-import { buildApi, hashPassword } from './index.js'
+import { buildApi, PasswordHasher } from './index.js'
 import { base32Decode, hotp, totpStep } from './security/crypto.js'
 
 const baseUrl = process.env.DATABASE_URL
@@ -40,6 +40,7 @@ describe.skipIf(!baseUrl)('API: setup, login, contacts, projects (integration)',
   let app: FastifyInstance
   let clock = Date.parse('2026-11-08T10:00:00Z')
   let session = ''
+  let totpCode = (): string => ''
 
   const request = (
     method: 'GET' | 'POST' | 'PATCH' | 'DELETE',
@@ -246,6 +247,7 @@ describe.skipIf(!baseUrl)('API: setup, login, contacts, projects (integration)',
       const { secret, uri } = setup.json()
       expect(uri).toMatch(/^otpauth:\/\/totp\/Test-ERP/)
       const code = (offsetSteps = 0) => hotp(base32Decode(secret), totpStep(clock) + offsetSteps)
+      totpCode = () => code()
 
       expect(
         (await as(session).post('/api/v1/auth/totp/enable', { code: '000000' })).statusCode,
@@ -273,6 +275,44 @@ describe.skipIf(!baseUrl)('API: setup, login, contacts, projects (integration)',
       })
       expect(ok.statusCode).toBe(200)
       session = sessionOf(ok)
+    })
+
+    it('limits wrong TOTP codes per person across logins and challenges', async () => {
+      const statuses: number[] = []
+      for (let i = 0; i < 5; i++) {
+        const res = await request('POST', '/api/v1/auth/login', {
+          body: { email: ADMIN.email, password: ADMIN.password, totp: '000000' },
+        })
+        statuses.push(res.statusCode)
+      }
+      for (let i = 0; i < 2; i++) {
+        const start = await request('POST', '/api/v1/auth/login', {
+          body: { email: ADMIN.email, password: ADMIN.password },
+        })
+        expect(start.json()).toEqual({ status: 'mfa_required', methods: ['totp'] })
+        const cookie = start.cookies.map((c) => `${c.name}=${c.value}`).join('; ')
+        for (let j = 0; j < 3; j++) {
+          const res = await request('POST', '/api/v1/auth/login/totp', {
+            body: { code: '000000' },
+            headers: { cookie },
+          })
+          statuses.push(res.statusCode)
+        }
+      }
+      // A correct password used to reset every limit; now 10 wrong codes in total, then 429.
+      expect(statuses.slice(0, 10)).toEqual(Array(10).fill(401))
+      expect(statuses[10]).toBe(429)
+      clock += 30_000
+      const blocked = await request('POST', '/api/v1/auth/login', {
+        body: { email: ADMIN.email, password: ADMIN.password, totp: totpCode() },
+      })
+      expect(blocked.statusCode).toBe(429)
+      await sql`delete from rate_limit` // keys are hashed; this ends the lockout window
+      clock += 30_000
+      const ok = await request('POST', '/api/v1/auth/login', {
+        body: { email: ADMIN.email, password: ADMIN.password, totp: totpCode() },
+      })
+      expect(ok.statusCode).toBe(200)
     })
   })
 
@@ -528,7 +568,7 @@ describe.skipIf(!baseUrl)('API: setup, login, contacts, projects (integration)',
     beforeAll(async () => {
       const [tenant] = await adminSql<{ id: string }[]>`select id from tenant limit 1`
       tenantId = tenant?.id as string
-      const passwordHash = await hashPassword('monteur-passwort-123')
+      const passwordHash = await new PasswordHasher().hash('monteur-passwort-123')
       const [user] = await adminSql<{ id: string }[]>`
         insert into app_user (email, display_name, password_hash)
         values ('monteur@example.test', 'Max Monteur', ${passwordHash}) returning id`
@@ -568,7 +608,7 @@ describe.skipIf(!baseUrl)('API: setup, login, contacts, projects (integration)',
     it('never shows data of another company', async () => {
       const [ids] = await adminSql<{ tenant: string }[]>`select uuid_v7() as tenant`
       const otherTenant = ids?.tenant as string
-      const passwordHash = await hashPassword('fremd-passwort-1234')
+      const passwordHash = await new PasswordHasher().hash('fremd-passwort-1234')
       const [user] = await adminSql<{ id: string }[]>`
         insert into app_user (email, display_name, password_hash)
         values ('fremd@example.test', 'Fremd', ${passwordHash}) returning id`

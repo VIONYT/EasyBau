@@ -60,6 +60,17 @@ const ALIASES: Record<string, (typeof CONTACT_CSV_COLUMNS)[number]> = {
   erechnungemail: 'E-Mail für E-Rechnungen',
   notiz: 'Beschreibung',
   bemerkung: 'Beschreibung',
+  zahlungsziel: 'Zahlungsbedingung',
+  zahlungsbedingungen: 'Zahlungsbedingung',
+  rechnungsempfanger: 'Rechnung Empfänger',
+  rechnungsempfänger: 'Rechnung Empfänger',
+  rechnungsadresse: 'Rechnung Straße',
+  rechnungsstrasse: 'Rechnung Straße',
+  rechnungsplz: 'Rechnung PLZ',
+  rechnungsort: 'Rechnung Ort',
+  rechnungsland: 'Rechnung Land',
+  position: 'Funktion',
+  rolle: 'Funktion',
 }
 
 function taxModeOf(value: string): CreateContactRequest['taxMode'] {
@@ -100,6 +111,9 @@ function requestOf(get: (column: (typeof CONTACT_CSV_COLUMNS)[number]) => string
     ...(get('Mobil') ? [{ kind: 'mobile', value: get('Mobil'), isPrimary: !get('Telefon') }] : []),
   ]
   const hasAddress = ['Straße', 'Adresszusatz', 'PLZ', 'Ort'].some((c) => get(c as never))
+  const hasBilling = ['Rechnung Empfänger', 'Rechnung Straße', 'Rechnung PLZ', 'Rechnung Ort'].some(
+    (c) => get(c as never),
+  )
   const empty = (v: string) => v || null
   return {
     kind,
@@ -115,20 +129,42 @@ function requestOf(get: (column: (typeof CONTACT_CSV_COLUMNS)[number]) => string
     buyerReference: empty(get('Leitweg-ID')),
     einvoiceEmail: empty(get('E-Mail für E-Rechnungen')),
     description: empty(get('Beschreibung')),
+    color: get('Farbe') ? colorOf(get('Farbe')) : null,
     channels,
-    addresses: hasAddress
-      ? [
-          {
-            kind: 'main',
-            street: empty(get('Straße')),
-            streetExtra: empty(get('Adresszusatz')),
-            postalCode: empty(get('PLZ')),
-            city: empty(get('Ort')),
-            countryCode: countryOf(get('Land')),
-          },
-        ]
-      : [],
+    addresses: [
+      ...(hasAddress
+        ? [
+            {
+              kind: 'main',
+              street: empty(get('Straße')),
+              streetExtra: empty(get('Adresszusatz')),
+              postalCode: empty(get('PLZ')),
+              city: empty(get('Ort')),
+              countryCode: countryOf(get('Land')),
+            },
+          ]
+        : []),
+      // Abweichender Rechnungsempfänger (lines of the recipient block separated by „|“ or line breaks).
+      ...(hasBilling
+        ? [
+            {
+              kind: 'billing',
+              recipientBlock: empty(get('Rechnung Empfänger').replace(/\s*\|\s*/g, '\n')),
+              street: empty(get('Rechnung Straße')),
+              postalCode: empty(get('Rechnung PLZ')),
+              city: empty(get('Rechnung Ort')),
+              countryCode: countryOf(get('Rechnung Land') || get('Land')),
+            },
+          ]
+        : []),
+    ],
   }
+}
+
+/** „#1a2b3c“ or „1A2B3C“ → #1a2b3c; anything else stays (and fails validation). */
+function colorOf(value: string): string {
+  const v = value.trim()
+  return /^#?[0-9a-fA-F]{6}$/.test(v) ? `#${v.replace('#', '').toLowerCase()}` : v
 }
 
 const displayNameOf = (r: {
@@ -176,6 +212,11 @@ async function importContacts(
         select id, lower(display_name) as name from contact where kind = 'organization'`
     ).map((o) => [o.name, o.id as string | null]),
   )
+  const paymentTerms = new Map(
+    (
+      await tx<{ id: string; name: string }[]>`select id, lower(name) as name from payment_term`
+    ).map((t) => [t.name, t.id]),
+  )
   const drawNumber = async (given: string | null) =>
     given || !input.assignCustomerNumbers
       ? given
@@ -206,8 +247,21 @@ async function importContacts(
       row('error', `Unbekannter Steuerfall „${get('Steuerfall')}“.`)
       continue
     }
+    const termName = get('Zahlungsbedingung')
+    const paymentTermId = termName ? paymentTerms.get(termName.toLowerCase()) : null
+    if (termName && !paymentTermId) {
+      row(
+        'error',
+        `Unbekannte Zahlungsbedingung „${termName}“ (Einstellungen › Zahlungsbedingungen).`,
+      )
+      continue
+    }
     const { company: _, ...fields } = raw
-    const parsed = createContactRequest.safeParse({ ...fields, assignCustomerNumber: false })
+    const parsed = createContactRequest.safeParse({
+      ...fields,
+      paymentTermId: paymentTermId ?? null,
+      assignCustomerNumber: false,
+    })
     if (!parsed.success) {
       const issue = parsed.error.issues[0]
       row('error', `${issue?.path.join('.') || 'Zeile'}: ${issue?.message ?? 'ungültig'}`)
@@ -227,6 +281,10 @@ async function importContacts(
     keys.add(key)
     if (!input.dryRun) {
       const contactId = await insertContact(tx, auth, parsed.data, await drawNumber(number))
+      // Persons of the same company in later rows are linked to it, not to a new organization.
+      if (parsed.data.kind === 'organization' && parsed.data.organizationName) {
+        organizations.set(parsed.data.organizationName.toLowerCase(), contactId)
+      }
       if (company && input.createOrganizations) {
         let organizationId = organizations.get(company.toLowerCase()) ?? null
         if (!organizationId) {
@@ -243,10 +301,12 @@ async function importContacts(
           )
           organizations.set(company.toLowerCase(), organizationId)
         }
-        await tx`insert into contact_link (tenant_id, person_id, organization_id)
-                 values (${auth.tenantId}, ${contactId}, ${organizationId})
+        await tx`insert into contact_link (tenant_id, person_id, organization_id, role)
+                 values (${auth.tenantId}, ${contactId}, ${organizationId}, ${get('Funktion') || null})
                  on conflict (person_id, organization_id) do nothing`
       }
+    } else if (parsed.data.kind === 'organization' && parsed.data.organizationName) {
+      organizations.set(parsed.data.organizationName.toLowerCase(), null)
     } else if (company && !known) {
       // Preview: the same company in later rows is linked, not created twice.
       organizations.set(company.toLowerCase(), null)
@@ -274,7 +334,12 @@ export function registerContactCsvRoutes(app: FastifyInstance, services: Service
         select c.kind, c.number, c.organization_name as org, c.salutation, c.title, c.first_name as first,
                c.last_name as last, a.street, a.street_extra as extra, a.postal_code as zip, a.city,
                a.country_code as country, c.website, c.vat_id as vat, c.tax_mode as tax,
-               c.buyer_reference as leitweg, c.einvoice_email as einvoice, c.description,
+               c.buyer_reference as leitweg, c.einvoice_email as einvoice, c.description, c.color,
+               (select name from payment_term t where t.id = c.payment_term_id) as term,
+               b.recipient_block as "billingBlock", b.street as "billingStreet",
+               b.postal_code as "billingZip", b.city as "billingCity", b.country_code as "billingCountry",
+               (select l.role from contact_link l where l.person_id = c.id and l.role is not null
+                order by l.organization_id limit 1) as role,
                (select value from contact_channel ch where ch.contact_id = c.id and ch.kind = 'email'
                 order by ch.is_primary desc, ch.id limit 1) as email,
                (select value from contact_channel ch where ch.contact_id = c.id and ch.kind = 'phone'
@@ -284,6 +349,8 @@ export function registerContactCsvRoutes(app: FastifyInstance, services: Service
         from contact c
         left join lateral (select * from contact_address x where x.contact_id = c.id
                            order by (x.kind = 'main') desc limit 1) a on true
+        left join lateral (select * from contact_address x where x.contact_id = c.id
+                           and x.kind = 'billing' limit 1) b on true
         where (c.archived_at is not null) = ${query.archived === 'true'}
           and (${query.kind ?? null}::text is null or c.kind = ${query.kind ?? null})
           and (${query.color ?? null}::text is null or c.color = ${query.color ?? null})
@@ -314,7 +381,16 @@ export function registerContactCsvRoutes(app: FastifyInstance, services: Service
         r.leitweg,
         r.einvoice,
         r.description,
+        r.term,
+        r.color,
+        r.billingBlock?.replace(/\n/g, ' | ') ?? null,
+        r.billingStreet,
+        r.billingZip,
+        r.billingCity,
+        r.billingBlock || r.billingStreet || r.billingCity ? r.billingCountry : null,
+        r.role,
       ]),
+      { spreadsheet: true },
     )
     return reply
       .header('content-type', 'text/csv; charset=utf-8')

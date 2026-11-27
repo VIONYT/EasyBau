@@ -3,6 +3,7 @@
   "globalPassThroughEnv": [
     "BASE_URL",
     "CHROMIUM_PATH",
+    "DATABASE_URL",
     "E2E_DEVICE",
     "SCREENSHOT_DIR",
     "SETUP_TOKEN"

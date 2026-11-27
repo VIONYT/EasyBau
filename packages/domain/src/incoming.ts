@@ -205,3 +205,78 @@ export function allocationTax(
   }
   return result
 }
+
+/** Document-level allowance (BG-20) or charge (BG-21) of an incoming e-invoice. */
+export interface DocumentAllowanceCharge {
+  charge: boolean
+  amountCents: bigint
+  /** VAT rate of the allowance/charge (BT-96/BT-103); null = not given. */
+  ratePercent: string | null
+}
+
+export interface DistributedLines {
+  /** Net amount per line including its share of the allowances/charges of its rate. */
+  netCents: bigint[]
+  /** Allowances/charges that fit no line (rate without lines): + = charge, − = allowance. */
+  rest: { ratePercent: string | null; netCents: bigint }[]
+}
+
+/**
+ * Spreads document-level allowances and charges (BG-20/21) over the invoice lines of the same
+ * VAT rate, proportional to the line net amounts; rounding differences go to the largest
+ * remainders, so each rate sums up exactly. Only lines with a positive net amount take part
+ * (they are the ones allocated „je Rechnungsposition“). An allowance/charge without a rate
+ * belongs to the only rate of the lines; otherwise, like one whose rate has no line, it is
+ * returned as `rest` to be allocated by hand.
+ */
+export function distributeAllowanceCharges(
+  lines: readonly { netCents: bigint; ratePercent: string | null }[],
+  allowanceCharges: readonly DocumentAllowanceCharge[],
+): DistributedLines {
+  const netCents = lines.map((l) => l.netCents)
+  const keyOf = (rate: string | null) => (rate === null || rate === '' ? null : rateKey(rate))
+  const lineRates = [
+    ...new Set(lines.filter((l) => l.netCents > 0n).map((l) => keyOf(l.ratePercent))),
+  ]
+  const perRate = new Map<string | null, bigint>()
+  for (const item of allowanceCharges) {
+    let key = keyOf(item.ratePercent)
+    if (key === null && lineRates.length === 1) key = lineRates[0] as string | null
+    perRate.set(
+      key,
+      (perRate.get(key) ?? 0n) + (item.charge ? item.amountCents : -item.amountCents),
+    )
+  }
+  const rest: DistributedLines['rest'] = []
+  for (const [key, amount] of perRate) {
+    if (amount === 0n) continue
+    const members = lines
+      .map((line, index) => ({ line, index }))
+      .filter(({ line }) => line.netCents > 0n && keyOf(line.ratePercent) === key)
+    const base = members.reduce((s, m) => s + m.line.netCents, 0n)
+    if (key === null || !members.length || base === 0n) {
+      rest.push({ ratePercent: key, netCents: amount })
+      continue
+    }
+    const sign = amount < 0n ? -1n : 1n
+    const absolute = amount * sign
+    let distributed = 0n
+    const remainders = members.map(({ line, index }) => {
+      const exact = absolute * line.netCents
+      const share = exact / base
+      netCents[index] = (netCents[index] as bigint) + share * sign
+      distributed += share
+      return { index, remainder: exact % base }
+    })
+    remainders.sort((a, b) =>
+      b.remainder > a.remainder ? 1 : b.remainder < a.remainder ? -1 : a.index - b.index,
+    )
+    let left = absolute - distributed
+    for (const { index } of remainders) {
+      if (left === 0n) break
+      netCents[index] = (netCents[index] as bigint) + sign
+      left -= 1n
+    }
+  }
+  return { netCents, rest }
+}

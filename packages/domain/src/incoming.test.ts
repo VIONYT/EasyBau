@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import {
   allocationTax,
+  distributeAllowanceCharges,
   type IncomingAllocation,
   type IncomingCheckInput,
   incomingProblems,
@@ -228,5 +229,61 @@ describe('Vorsteuer je Zuweisung', () => {
       ),
     ).toEqual([0n, 0n])
     expect(rateKey('19.00')).toBe('19')
+  })
+})
+
+describe('Zu- und Abschläge auf Belegebene verteilen (BG-20/21)', () => {
+  const line = (netCents: bigint, ratePercent: string | null = '19') => ({ netCents, ratePercent })
+
+  it('spreads an allowance over the lines of its rate, exactly to the cent', () => {
+    const result = distributeAllowanceCharges(
+      [line(10000n), line(20000n), line(5000n, '7'), line(1n)],
+      [{ charge: false, amountCents: 1000n, ratePercent: '19.00' }],
+    )
+    // 1000 over 10000/20000/1: 3,33 / 6,66 / 0,00 € plus the rounding cent for the largest remainder.
+    expect(result.netCents).toEqual([9667n, 19333n, 5000n, 1n])
+    expect(result.netCents.reduce((a, b) => a + b, 0n)).toBe(35001n - 1000n)
+    expect(result.rest).toEqual([])
+  })
+
+  it('adds charges, nets allowances and charges of a rate and keeps rates apart', () => {
+    const result = distributeAllowanceCharges(
+      [line(10000n), line(10000n, '7')],
+      [
+        { charge: true, amountCents: 500n, ratePercent: '19' },
+        { charge: false, amountCents: 200n, ratePercent: '19' },
+        { charge: true, amountCents: 300n, ratePercent: '7' },
+        { charge: true, amountCents: 400n, ratePercent: '19' },
+        { charge: false, amountCents: 400n, ratePercent: '19' },
+      ],
+    )
+    expect(result.netCents).toEqual([10300n, 10300n])
+  })
+
+  it('uses the only rate for an allowance without rate, otherwise leaves it as rest', () => {
+    expect(
+      distributeAllowanceCharges(
+        [line(3000n), line(1000n)],
+        [{ charge: false, amountCents: 100n, ratePercent: null }],
+      ).netCents,
+    ).toEqual([2925n, 975n])
+    const mixed = distributeAllowanceCharges(
+      [line(3000n), line(1000n, '7'), line(-500n, '0')],
+      [
+        { charge: false, amountCents: 100n, ratePercent: '' },
+        { charge: true, amountCents: 250n, ratePercent: '0' },
+        { charge: true, amountCents: 50n, ratePercent: '19' },
+        { charge: false, amountCents: 50n, ratePercent: '19' },
+      ],
+    )
+    expect(mixed.netCents).toEqual([3000n, 1000n, -500n])
+    expect(mixed.rest).toEqual([
+      { ratePercent: null, netCents: -100n },
+      { ratePercent: '0', netCents: 250n },
+    ])
+  })
+
+  it('leaves everything unchanged without allowances or charges', () => {
+    expect(distributeAllowanceCharges([line(100n)], [])).toEqual({ netCents: [100n], rest: [] })
   })
 })

@@ -152,6 +152,26 @@ describe('Reading received e-invoices', () => {
     })
   })
 
+  it.each(['zugferd', 'xrechnung_ubl'] as const)(
+    'reads document-level allowances with their VAT rate (%s)',
+    (format) => {
+      const discounted = invoice(standardItems(), { number: 'R2026-00043', discountPercent: '3' })
+      const model = einvoiceFromDocument(discounted, ctx, format)
+      expect(model.allowancesCharges.length).toBeGreaterThan(0)
+      const read = readIncomingEinvoice(buildEinvoice(discounted, ctx, format).xml)
+      expect(read.allowanceCharges).toEqual(
+        model.allowancesCharges.map((a) => ({
+          charge: a.charge,
+          amountCents: a.amountCents,
+          reason: a.reason,
+          vatCategory: a.vatCategory,
+          vatRate: String(Number(a.vatRate)),
+        })),
+      )
+      expect(readIncomingEinvoice(buildEinvoice(doc, ctx, format).xml).allowanceCharges).toEqual([])
+    },
+  )
+
   it('reads a UBL credit note and a CII Storno as credit note / reverse charge as AE', () => {
     const credit = invoice(
       [item({ oz: '1', text: 'Gutschrift', quantity: '1', unit: 'stk', priceCents: 10000 })],
@@ -285,6 +305,25 @@ describe('ZUGFeRD: XML embedded in the PDF', () => {
       'latin1',
     )
     expect(extractPdfEinvoice(indirect)?.xml).toBe(`${xml}\n`)
+  })
+
+  it('scans crafted PDFs in linear time (many objects without streams)', () => {
+    const shapes = [
+      `%PDF-1.4\n${'9 0 obj\nnull\nendobj\n'.repeat(120_000)}`,
+      `%PDF-1.4\n${'9 0 obj\n'.repeat(250_000)}stream\n`,
+      `%PDF-1.4\n${'9 0 obj\n<< >>\nstream\n'.repeat(100_000)}`,
+    ]
+    for (const shape of shapes) {
+      const started = performance.now()
+      expect(extractPdfEinvoice(Buffer.from(shape, 'latin1'))).toBeNull()
+      expect(performance.now() - started).toBeLessThan(1500)
+    }
+    // An embedded invoice after many empty objects is still found.
+    const padded = Buffer.concat([
+      Buffer.from(`%PDF-1.7\n${'8 0 obj\nnull\nendobj\n'.repeat(10_000)}`, 'latin1'),
+      pdfWith('/Type /EmbeddedFile', Buffer.from(xml)).subarray(9),
+    ])
+    expect(extractPdfEinvoice(padded)?.xml).toBe(xml)
   })
 
   it('returns null for PDFs without e-invoice, encrypted, broken or other files', () => {
