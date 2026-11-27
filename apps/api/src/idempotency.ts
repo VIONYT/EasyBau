@@ -10,7 +10,7 @@ import { sha256 } from './security/crypto.js'
  * key and the same body get the stored response (Idempotency-Replayed: true). The same key with
  * a different body is rejected. Failed requests (5xx) release the key so the client can retry,
  * and so does a request left without answer for 5 minutes (server restarted mid-request).
- * Keys are kept for 24 hours (worker job `notification.purge`).
+ * Keys are kept for 7 days (worker job `notification.purge`).
  */
 export function idempotencyHooks(services: Services) {
   const preHandler = async (request: FastifyRequest, reply: FastifyReply) => {

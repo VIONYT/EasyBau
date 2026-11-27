@@ -38,13 +38,13 @@ describe.skipIf(!testDatabaseUrl)('Benachrichtigungen aufräumen (integration)',
     )
   })
 
-  it('forgets Idempotency-Keys and their stored answers after a day', async () => {
+  it('forgets Idempotency-Keys and their stored answers after a week', async () => {
     const tenant = await createTenant(db, 'Schlüssel')
     await tenant.run(
       (tx) => tx`
         insert into idempotency_key (tenant_id, key, request_hash, response_status, response_body, created_at)
-        values (${tenant.tenantId}, 'alter-schluessel', '\\x00', 201, '{"name":"Erna Muster"}', now() - interval '25 hours'),
-               (${tenant.tenantId}, 'neuer-schluessel', '\\x00', 201, '{}', now())`,
+        values (${tenant.tenantId}, 'alter-schluessel', '\\x00', 201, '{"name":"Erna Muster"}', now() - interval '8 days'),
+               (${tenant.tenantId}, 'neuer-schluessel', '\\x00', 201, '{}', now() - interval '6 days')`,
     )
     await purgeReadNotifications(db.app, { info: () => undefined })
     const left = await tenant.run((tx) => tx<{ key: string }[]>`select key from idempotency_key`)

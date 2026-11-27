@@ -7,7 +7,7 @@ Alle wesentlichen Änderungen, vor allem solche, die Betreiber betreffen (neue V
 ### Behoben
 - **Baustelle/Offline:** Eine Änderung, deren erster Versuch wegen eines Server-Neustarts (z. B. Update) ohne Antwort blieb, wurde danach für immer mit „wird bereits verarbeitet“ abgelehnt und ging im Postausgang verloren; nach 5 Minuten wird sie jetzt neu ausgeführt. Ein Foto, dessen Antwort bei schlechtem Netz verloren ging, wird nicht mehr doppelt gespeichert.
 - **Rechnungsliste:** „Mehr laden“ fing wieder bei Seite 1 an, wenn die letzte Rechnung der Seite inzwischen aus dem Filter fiel (z. B. bezahlt bei Filter „überfällig“).
-- **Datenschutz/Speicher:** Die gespeicherten Antworten zu Wiederholungsschlüsseln (Idempotency-Key, oft ganze Dokumente mit Empfänger) werden nach 24 Stunden gelöscht (Migration 0053, nächtlicher Job); vorher blieben sie unbegrenzt, auch nach einer DSGVO-Löschung.
+- **Datenschutz/Speicher:** Die gespeicherten Antworten zu Wiederholungsschlüsseln (Idempotency-Key, oft ganze Dokumente mit Empfänger) werden nach 7 Tagen gelöscht (Migration 0053, nächtlicher Job); vorher blieben sie unbegrenzt, auch nach einer DSGVO-Löschung.
 
 ## 0.1.0 – 2026-11-27
 
