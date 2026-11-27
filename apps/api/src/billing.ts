@@ -51,6 +51,18 @@ const cumulative = (doc: BillingDoc) =>
  * Drafts: the earlier invoices a cumulative invoice deducts are refreshed on every change, so the
  * draft always shows the current state. Finalized documents keep their rows (child guard).
  */
+/**
+ * Serialises finalising and cancelling within one project (transaction-scoped advisory lock).
+ * Deductions and previously billed quantities are derived from the other invoices of the
+ * project; without the lock a final invoice could miss a progress invoice that is being
+ * finalized at the same moment (security audit run-1). Take it before any document row lock.
+ */
+export async function lockProjectBilling(tx: Tx, documentId: string): Promise<void> {
+  await tx`
+    select pg_advisory_xact_lock(hashtextextended('billing:' || project_id::text, 0))
+    from document where id = ${documentId}`
+}
+
 export async function refreshDeductions(tx: Tx, doc: BillingDoc): Promise<void> {
   if (doc.type !== 'invoice' || doc.status !== 'draft' || doc.invoiceKind === 'cancellation') return
   await tx`delete from document_deduction where document_id = ${doc.id}`

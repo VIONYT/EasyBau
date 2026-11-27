@@ -8,7 +8,7 @@ import {
 } from '@easybau/schemas'
 import type { FastifyInstance } from 'fastify'
 import { z } from 'zod'
-import { billingDoc, invoiceFinalizeCheck, legalNotesOf } from '../billing.js'
+import { billingDoc, invoiceFinalizeCheck, legalNotesOf, lockProjectBilling } from '../billing.js'
 import { type AuthContext, inTenant, requirePermission, type Services } from '../context.js'
 import { issueEinvoices } from '../einvoice.js'
 import { HttpError, notFound, parse } from '../http.js'
@@ -84,6 +84,7 @@ export async function finalizeInvoice(
   if (!auth.permissions.has('document.finalize')) {
     throw new HttpError(403, 'Ihnen fehlt die Berechtigung, Rechnungen festzuschreiben.')
   }
+  await lockProjectBilling(tx, id)
   const current = await lockDraft(tx, auth, id)
   await recalculate(tx, id)
   const check = await checkInvoice(tx, auth, id)
@@ -153,6 +154,7 @@ export async function cancelInvoice(
 ): Promise<CancelInvoiceResult> {
   const original = await loadDocument(tx, auth, id)
   if (!original) throw notFound('Die Rechnung')
+  await lockProjectBilling(tx, id)
   await tx`select id from document where id = ${id} for update`
   if (original.type !== 'invoice' || original.invoiceKind === 'cancellation') {
     throw new HttpError(409, 'Stornieren lässt sich nur eine Rechnung, keine Stornorechnung.')

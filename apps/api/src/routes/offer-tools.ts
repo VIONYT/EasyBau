@@ -12,6 +12,7 @@ import type { FastifyInstance } from 'fastify'
 import { z } from 'zod'
 import { inTenant, requirePermission, type Services } from '../context.js'
 import { HttpError, notFound, parse } from '../http.js'
+import { restrictedContact, usableContact } from './contacts.js'
 import { copyItems, loadDocument, lockDraft, recalculate, sendDocument } from './documents.js'
 
 /**
@@ -147,6 +148,12 @@ export function registerOfferToolRoutes(app: FastifyInstance, services: Services
         )
       }
       await tx`select id from document where id = ${id} for update`
+      // DSGVO: no new document for a blocked, erased or merged contact (also as „z. Hd.“).
+      const [contacts] = await tx<{ contactId: string | null; personId: string | null }[]>`
+        select contact_id as "contactId", contact_person_id as "personId" from document where id = ${id}`
+      for (const contactId of [contacts?.contactId, contacts?.personId]) {
+        if (contactId && !(await usableContact(tx, contactId))) throw restrictedContact()
+      }
       const [newer] = await tx<{ id: string }[]>`
         select id from document where previous_version_id = ${id}`
       if (newer) {

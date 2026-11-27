@@ -1847,7 +1847,8 @@ const de = {
   'im.secure': 'TLS-Verschlüsselung (Port 993)',
   'im.user': 'Benutzername',
   'im.password': 'Passwort',
-  'im.passwordStored': 'Gespeichert – leer lassen, um es zu behalten.',
+  'im.passwordStored':
+    'Gespeichert – leer lassen, um es zu behalten. Bei geändertem Server, Port oder Benutzer bitte neu eingeben.',
   'im.mailbox': 'Ordner',
   'im.processed': 'Verarbeitete E-Mails verschieben nach (leer: nur als gelesen markieren)',
   'im.run': 'Jetzt abrufen',

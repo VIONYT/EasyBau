@@ -547,10 +547,25 @@ export function registerIncomingMailboxRoutes(
     const input = parse(incomingMailSettingsRequest, request.body)
     return inTenant(services, auth, async (tx) => {
       const current = await storedMailbox(tx)
+      // A stored secret is only ever sent to the destination and identity it was entered for:
+      // changing server, port, TLS, sign-in method or account drops it, so it must be entered
+      // again (security audit run-1: otherwise settings.write could redirect it to any host).
+      const same = (a: string | undefined | null, b: string | undefined | null) =>
+        (a ?? '').trim().toLowerCase() === (b ?? '').trim().toLowerCase()
+      const destinationChanged =
+        (current.auth ?? 'password') !== input.auth ||
+        !same(current.host, input.host) ||
+        (current.port ?? 993) !== input.port ||
+        (current.secure ?? true) !== input.secure ||
+        !same(current.user, input.user) ||
+        !same(current.tenantId, input.tenantId) ||
+        !same(current.clientId, input.clientId)
       // undefined keeps the stored secret, '' or null removes it.
       const secret = (value: string | null | undefined, stored: string | undefined) =>
         value === undefined
-          ? stored
+          ? destinationChanged
+            ? undefined
+            : stored
           : value
             ? services.cipher.encrypt(value).toString('base64')
             : undefined
@@ -564,7 +579,7 @@ export function registerIncomingMailboxRoutes(
         : null
       const googleKeyEnc = googleKey
         ? services.cipher.encrypt(JSON.stringify(googleKey)).toString('base64')
-        : input.googleServiceAccountKey === undefined
+        : input.googleServiceAccountKey === undefined && !destinationChanged
           ? current.googleKeyEnc
           : undefined
       const googleClientEmail =

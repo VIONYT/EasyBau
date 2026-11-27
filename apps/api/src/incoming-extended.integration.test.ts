@@ -159,6 +159,28 @@ describe.skipIf(!process.env.DATABASE_URL)('Eingangsrechnungen ausbauen (integra
       processedMailbox: 'Verarbeitet',
     })
     expect(kept.json().hasPassword).toBe(true)
+    // Another server, port, TLS mode or account: the stored password is not sent there.
+    for (const change of [
+      { host: 'imap.fremd.example' },
+      { port: 143, secure: false },
+      { user: 'chef@eingang.example' },
+    ]) {
+      const moved = await admin.put('/api/v1/settings/incoming-mail', {
+        enabled: false,
+        host: 'imap.example.test',
+        user: 'rechnungen@eingang.example',
+        processedMailbox: 'Verarbeitet',
+        ...change,
+      })
+      expect(moved.json().hasPassword, JSON.stringify(change)).toBe(false)
+      await admin.put('/api/v1/settings/incoming-mail', {
+        enabled: true,
+        host: 'imap.example.test',
+        user: 'rechnungen@eingang.example',
+        password: 'geheim-123',
+        processedMailbox: 'Verarbeitet',
+      })
+    }
   })
 
   it('takes invoice attachments of unread e-mails into the review', async () => {
@@ -293,7 +315,8 @@ describe.skipIf(!process.env.DATABASE_URL)('Eingangsrechnungen ausbauen (integra
       auth: 'microsoft365',
       clientId: '6a7b8c9d-0e1f-4a2b-8c3d-abcdef012345',
       hasClientSecret: true,
-      hasPassword: true,
+      // Switching the sign-in method drops the stored password (it belongs to the old server).
+      hasPassword: false,
     } satisfies Partial<IncomingMailSettings>)
     expect(JSON.stringify(saved.json())).not.toContain('client-geheim')
     const [row] = await h.adminSql<{ settings: string }[]>`select settings::text from tenant`
@@ -338,14 +361,19 @@ describe.skipIf(!process.env.DATABASE_URL)('Eingangsrechnungen ausbauen (integra
         .failedRuns,
     ).toBe(0)
     expect((await notices()).map((n) => n.key)).toEqual(['incoming_mail_secret_expiring'])
-    // Back to the password login of the first test (kept encrypted meanwhile).
+    // Back to the password login: the password must be entered again.
     const back = await admin.put('/api/v1/settings/incoming-mail', {
       enabled: true,
       host: 'imap.example.test',
       user: 'rechnungen@eingang.example',
+      password: 'geheim-123',
       processedMailbox: 'Verarbeitet',
     })
-    expect(back.json()).toMatchObject({ auth: 'password', hasPassword: true })
+    expect(back.json()).toMatchObject({
+      auth: 'password',
+      hasPassword: true,
+      hasClientSecret: false,
+    })
   })
 
   it('logs in to Google Workspace with a service account (domain-wide delegation)', async () => {
@@ -399,10 +427,18 @@ describe.skipIf(!process.env.DATABASE_URL)('Eingangsrechnungen ausbauen (integra
       user: 'rechnungen@eingang.example',
     })
     expect(kept.json().googleClientEmail).toBe('eingang@rechnungen.iam.gserviceaccount.com')
+    // Another mailbox of the domain needs the key file again (it would mint a token for it).
+    const other = await admin.put('/api/v1/settings/incoming-mail', {
+      enabled: true,
+      auth: 'google',
+      user: 'chefin@eingang.example',
+    })
+    expect(other.statusCode).toBe(400)
     await admin.put('/api/v1/settings/incoming-mail', {
       enabled: true,
       host: 'imap.example.test',
       user: 'rechnungen@eingang.example',
+      password: 'geheim-123',
       processedMailbox: 'Verarbeitet',
     })
   })

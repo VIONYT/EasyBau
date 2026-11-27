@@ -42,7 +42,13 @@ import {
 import type { FastifyInstance, FastifyReply } from 'fastify'
 import { z } from 'zod'
 import { archiveSummary } from '../artifacts.js'
-import { billingDoc, legalNotesOf, loadDeductions, refreshDeductions } from '../billing.js'
+import {
+  billingDoc,
+  legalNotesOf,
+  loadDeductions,
+  lockProjectBilling,
+  refreshDeductions,
+} from '../billing.js'
 import {
   type AuthContext,
   inTenant,
@@ -1616,13 +1622,26 @@ export function registerDocumentRoutes(app: FastifyInstance, services: Services)
     const auth = requirePermission(request, 'document.write')
     const { id } = parse(documentParam, request.params)
     const doc = await inTenant(services, auth, async (tx) => {
+      await lockProjectBilling(tx, id)
       const current = await lockDraft(tx, auth, id)
       const [d] = await tx<
-        { type: string; contactId: string | null; documentDate: string; version: number }[]
+        {
+          type: string
+          contactId: string | null
+          contactPersonId: string | null
+          documentDate: string
+          version: number
+        }[]
       >`
-        select type, contact_id as "contactId", to_char(document_date, 'YYYY-MM-DD') as "documentDate", version
+        select type, contact_id as "contactId", contact_person_id as "contactPersonId",
+               to_char(document_date, 'YYYY-MM-DD') as "documentDate", version
         from document where id = ${id}`
       if (!d) throw notFound('Das Dokument')
+      // DSGVO: a contact blocked or erased after the draft was created must not be frozen into a
+      // new finalized document (security audit run-1).
+      for (const contactId of [d.contactId, d.contactPersonId]) {
+        if (contactId && !(await usableContact(tx, contactId))) throw restrictedContact()
+      }
       if (d.type === 'invoice' || d.type === 'credit_note') {
         await finalizeInvoice(tx, auth, id, parse(finalizeRequest, request.body ?? {}))
         return loadDocument(tx, auth, id)
