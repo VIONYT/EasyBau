@@ -65,6 +65,12 @@ const envSchema = z.object({
     .url({ protocol: /^https?$/ })
     .transform((v) => v.replace(/\/+$/, ''))
     .optional(),
+  /**
+   * Proxies whose X-Forwarded-For/-Proto/-Host are believed (client IP for rate limits, HTTPS).
+   * Addresses, CIDR ranges or the presets loopback, linklocal, uniquelocal (private networks such as
+   * the Docker network of the bundled Caddy). Clients outside these cannot forge their IP.
+   */
+  TRUST_PROXY: z.string().min(1).default('loopback,linklocal,uniquelocal'),
   /** Admins must use a second factor (TOTP or security key) before they can work. */
   REQUIRE_ADMIN_MFA: z
     .enum(['true', 'false'])

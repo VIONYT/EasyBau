@@ -9,6 +9,7 @@ import {
 import type { FastifyInstance } from 'fastify'
 import { inTenant, requirePermission, type Services } from '../context.js'
 import { decodeCursor, encodeCursor, parse } from '../http.js'
+import { MASK, maskSecrets } from '../security/mask.js'
 import { rateLimit } from './auth-common.js'
 
 /** Hours after which the Betriebs-Check warns that the nightly check did not run. */
@@ -23,8 +24,9 @@ function changesOf(
   after: Record<string, unknown> | null,
 ): AuditEventItem['changes'] {
   const fields = [...new Set([...Object.keys(before ?? {}), ...Object.keys(after ?? {})])]
+  // Nested secrets (e.g. the encrypted mailbox password in tenant.settings) are masked too.
   const mask = (field: string, value: unknown) =>
-    value !== null && value !== undefined && SECRET.test(field) ? '••••' : (value ?? null)
+    value !== null && value !== undefined && SECRET.test(field) ? MASK : maskSecrets(value ?? null)
   return fields
     .filter((field) => !HIDDEN.has(field))
     .filter(

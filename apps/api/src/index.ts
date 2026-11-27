@@ -71,6 +71,7 @@ export interface ApiDeps {
         | 'SESSION_IDLE_HOURS'
         | 'COOKIE_SECURE'
         | 'PUBLIC_URL'
+        | 'TRUST_PROXY'
         | 'REQUIRE_ADMIN_MFA'
         | 'STORAGE_DIR'
         | 'UPLOAD_MAX_MB'
@@ -125,7 +126,13 @@ export function buildApi({
   pollMailboxes = false,
   mailboxConnector,
 }: ApiDeps): FastifyInstance {
-  const app = Fastify({ logger, trustProxy: true, bodyLimit: 1024 * 1024 })
+  // Only the configured proxies may set X-Forwarded-* (default: loopback and private networks,
+  // i.e. the bundled Caddy); trusting every hop made IP rate limits forgeable (security audit).
+  const app = Fastify({
+    logger,
+    trustProxy: config.TRUST_PROXY ?? 'loopback,linklocal,uniquelocal',
+    bodyLimit: 1024 * 1024,
+  })
 
   app.setErrorHandler((error: FastifyError | HttpError, request, reply) => {
     if (error instanceof HttpError)

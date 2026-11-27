@@ -26,6 +26,7 @@ import { z } from 'zod'
 import { openArtifact } from '../artifacts.js'
 import { type AuthContext, inTenant, requirePermission, type Services } from '../context.js'
 import { HttpError, parse } from '../http.js'
+import { maskSecrets } from '../security/mask.js'
 import { audit } from './auth-common.js'
 import { archiveDocumentPdf } from './pdf.js'
 import { DATEV_DEFAULTS, datevSettings } from './settings.js'
@@ -985,12 +986,14 @@ export function registerExportRoutes(app: FastifyInstance, services: Services) {
       for (const table of TABLES) {
         const [row] = await tx<{ rows: unknown[] }[]>`
           select coalesce(json_agg(t), '[]'::json) as rows from ${tx(table)} t`
-        tables[table] = row?.rows ?? []
+        // Secrets (also nested ones such as the encrypted mailbox password) never leave the
+        // instance, not even encrypted – e.g. in audit_event payloads of the tenant row.
+        tables[table] = maskSecrets(row?.rows ?? [])
       }
       // Company without encrypted bank data; people only with name and e-mail (no password hashes).
       const [company] = await tx<{ row: unknown }[]>`
         select to_jsonb(t) - 'iban_enc' as row from tenant t where id = current_tenant_id()`
-      tables.tenant = [company?.row]
+      tables.tenant = [maskSecrets(company?.row)]
       tables.member = [
         ...(await tx`
         select u.display_name, u.email, r.key as role from membership m

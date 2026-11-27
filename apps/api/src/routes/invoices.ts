@@ -286,7 +286,9 @@ export function registerInvoiceRoutes(app: FastifyInstance, services: Services) 
     const auth = requirePermission(request, 'document.read')
     const { id } = parse(documentParam, request.params)
     return inTenant(services, auth, async (tx) => {
-      await recalculateIfDraft(tx, id)
+      // Recalculating writes the draft: only for people who may change documents (a read-only
+      // role such as the Prüfer sees the check of the stored state).
+      if (auth.permissions.has('document.write')) await recalculateIfDraft(tx, id)
       return checkInvoice(tx, auth, id)
     })
   })
