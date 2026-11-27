@@ -72,7 +72,7 @@ TRAEFIK_ENTRYPOINT=websecure       # HTTPS-Entrypoint
 TRAEFIK_CERTRESOLVER=letsencrypt   # Zertifikats-Resolver
 ```
 
-Dann `docker compose up -d` (Web-Image neuer als 0.1.0, z. B. `APP_VERSION=edge`). Details und andere Reverse Proxys (nginx, HAProxy): [Betriebsdokumentation, Abschnitt 1a](docs/self-hosting/README.md#1a-hinter-traefik-oder-einem-anderen-vorhandenen-reverse-proxy).
+Dann `docker compose up -d` (ab Version 0.2.0). Details und andere Reverse Proxys (nginx, HAProxy): [Betriebsdokumentation, Abschnitt 1a](docs/self-hosting/README.md#1a-hinter-traefik-oder-einem-anderen-vorhandenen-reverse-proxy).
 
 Alles Weitere: [Betriebsdokumentation](docs/self-hosting/README.md).
 

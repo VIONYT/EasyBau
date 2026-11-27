@@ -4,6 +4,10 @@ Alle wesentlichen Änderungen, vor allem solche, die Betreiber betreffen (neue V
 
 ## Unveröffentlicht
 
+## 0.2.0 – 2026-11-27
+
+Datenbankstand Migration 0053 (läuft beim Start automatisch). Images: `ghcr.io/vionyt/easybau-app|web|kosit|backup:0.2.0` und `latest`. Update von 0.1.0: `APP_VERSION=0.2.0` (oder `latest`) in der `.env`, dann `docker compose pull && docker compose up -d`.
+
 ### Neu
 - **Betrieb hinter Traefik:** `compose.traefik.yaml` stellt EasyBau hinter einen vorhandenen Traefik (HTTPS und Zertifikat über Traefik, Caddy ohne Host-Ports nur noch intern). Caddy übernimmt die Client-IP aus `X-Forwarded-For` nur von Adressen in `TRUSTED_PROXIES` (Standard: niemand außer loopback). Anleitung in README und Betriebsdokumentation (Abschnitt 1a).
 

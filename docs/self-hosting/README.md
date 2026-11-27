@@ -63,7 +63,7 @@ Dann wie gewohnt `docker compose up -d`. Prüfen: `https://<APP_DOMAIN>/healthz`
 - `PUBLIC_URL` bleibt `https://<APP_DOMAIN>` (Standard). Läuft Traefik auf einem anderen Port als 443, `PUBLIC_URL` mit Port setzen.
 - Die Weiterleitung von HTTP auf HTTPS ist Sache von Traefik (Entrypoint `web` mit Redirect).
 - Die Overlay-Datei lässt Caddy die Adresse aus `X-Forwarded-For` übernehmen (`TRUSTED_PROXIES=private_ranges`), damit die Anmeldesperren je Client-IP greifen. Das ist nur sicher, weil Caddy dabei keine Ports am Host hat; sonst könnte jeder im lokalen Netz eine falsche Adresse vortäuschen.
-- Benötigt das Web-Image ab der ersten Version nach 0.1.0 (`APP_VERSION=edge` oder selbst bauen); 0.1.0 kennt `TRUSTED_PROXIES` noch nicht.
+- Benötigt das Web-Image ab Version 0.2.0; 0.1.0 kennt `TRUSTED_PROXIES` noch nicht.
 - **Anderer Reverse Proxy** (nginx, HAProxy, Caddy auf dem Host …): statt `compose.traefik.yaml` eine eigene kleine Override-Datei, die Caddy nur lokal veröffentlicht, z. B. `compose.override.yaml`:
   ```yaml
   services:
