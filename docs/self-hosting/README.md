@@ -226,6 +226,8 @@ docker compose exec backup backup.sh offsite-fetch <Name>  # Stand zurückholen 
 
 Auf einem neuen Server: Repository klonen, `.env` (mit `APP_SECRET` und `RESTIC_*`) einrichten, `docker compose up -d db backup`, `offsite-list`, `offsite-fetch <Name>`, dann `sh infra/restore.sh <Name>`.
 
+**Datenschutz nach einer Wiederherstellung:** Eine ältere Sicherung bringt Belege zurück, die danach anonymisiert wurden, und Kontakte, die danach gelöscht wurden (die Sicherung enthält ja deren Stand). Der Archiv-Abgleich schreibt dabei auch deren Originale wieder ins Belegarchiv. Deshalb nach jeder Wiederherstellung unter *Prüfung › Aufbewahrung* die fälligen Belege erneut freigeben, gelöschte Kontakte erneut löschen (Löschprotokoll der Verfahrensdokumentation) und anschließend `sh infra/archive-purge.sh` ausführen; `restore.sh` erinnert daran.
+
 **Wiederherstellen** (z. B. nach einem Fehler oder auf einem neuen Server mit derselben `.env`):
 
 ```bash

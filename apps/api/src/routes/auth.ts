@@ -150,7 +150,7 @@ export function registerAuthRoutes(app: FastifyInstance, services: Services) {
     if (input.totp && user.totpSecret) {
       await rateLimit(services, totpKey(user.id), MAX_TOTP_FAILURES)
       const step = verifyTotp(
-        services.cipher.decrypt(user.totpSecret),
+        services.cipher.decrypt(user.totpSecret, 'app_user.totp'),
         input.totp,
         services.now(),
         user.totpLastStep === null ? null : Number(user.totpLastStep),
@@ -184,7 +184,7 @@ export function registerAuthRoutes(app: FastifyInstance, services: Services) {
       throw new HttpError(400, 'Für diesen Zugang ist keine App-Bestätigung eingerichtet.')
     await rateLimit(services, totpKey(challenge.userId as string), MAX_TOTP_FAILURES)
     const step = verifyTotp(
-      services.cipher.decrypt(user.secret),
+      services.cipher.decrypt(user.secret, 'app_user.totp'),
       code,
       services.now(),
       user.lastStep === null ? null : Number(user.lastStep),
@@ -265,7 +265,7 @@ export function registerAuthRoutes(app: FastifyInstance, services: Services) {
     if (auth.totpEnabled) throw new HttpError(409, 'Die Zwei-Faktor-Anmeldung ist bereits aktiv.')
     await requireRecentLogin(services, auth.sessionId)
     const secret = generateTotpSecret()
-    await sql`update app_user set totp_pending_secret_enc = ${services.cipher.encrypt(secret)} where id = ${auth.userId}`
+    await sql`update app_user set totp_pending_secret_enc = ${services.cipher.encrypt(secret, 'app_user.totp')} where id = ${auth.userId}`
     return { secret, uri: totpUri(secret, auth.email, services.config.APP_NAME) }
   })
 
@@ -275,7 +275,7 @@ export function registerAuthRoutes(app: FastifyInstance, services: Services) {
     const [user] = await sql<{ pending: Buffer | null }[]>`
       select totp_pending_secret_enc as pending from app_user where id = ${auth.userId}`
     if (!user?.pending) throw new HttpError(409, 'Bitte zuerst die Einrichtung starten.')
-    const secret = services.cipher.decrypt(user.pending)
+    const secret = services.cipher.decrypt(user.pending, 'app_user.totp')
     const step = verifyTotp(secret, code, services.now())
     if (step === null)
       throw new HttpError(400, 'Der Code passt nicht. Bitte Uhrzeit des Telefons prüfen.', {
@@ -307,7 +307,7 @@ export function registerAuthRoutes(app: FastifyInstance, services: Services) {
     const passwordOk =
       !!user.passwordHash && (await services.passwords.verify(user.passwordHash, input.password))
     const step = verifyTotp(
-      services.cipher.decrypt(user.secret),
+      services.cipher.decrypt(user.secret, 'app_user.totp'),
       input.code,
       services.now(),
       user.lastStep === null ? null : Number(user.lastStep),

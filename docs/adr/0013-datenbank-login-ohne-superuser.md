@@ -26,5 +26,7 @@ alle Firmen lesen, Trigger abschalten, festgeschriebene Belege ändern.
 
 - Kein neuer Container, keine neue Pflichtvariable. Die Rolle gilt clusterweit; der Name enthält
   den Datenbanknamen, damit mehrere Installationen auf einem Cluster sich nicht stören.
-- Die Job-Queue läuft weiter mit dem Administrator (sie legt ihr Schema selbst an). Ein eigener
-  Login dafür wäre der nächste Schritt.
+- Die Job-Queue (pg-boss) hat seit 2026-11-27 ebenfalls einen eigenen Login `opc_jobs_<datenbank>`,
+  Besitzer nur des Schemas `jobs` (bestehende Objekte werden beim Start übergeben), ohne Rechte auf
+  Firmendaten; `DATABASE_JOBS_URL` überschreibt. Migrationen und das Anlegen der Logins bleiben
+  beim Administrator aus `DATABASE_URL`.

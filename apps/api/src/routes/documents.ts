@@ -468,7 +468,9 @@ export async function liveIssuer(tx: Tx): Promise<Issuer> {
   if (!t) return { name: '', lines: [], contact: [], legal: [] }
   const cipher = servicesOf(tx)?.cipher
   const iban =
-    t.ibanEnc && cipher ? cipher.decrypt(t.ibanEnc).replace(/\s+/g, '').toUpperCase() : null
+    t.ibanEnc && cipher
+      ? cipher.decrypt(t.ibanEnc, 'tenant.iban').replace(/\s+/g, '').toUpperCase()
+      : null
   const place = [t.postalCode, t.city].filter(Boolean).join(' ')
   return {
     // Briefpapier and its placeholder values; frozen with the document (rule 4).

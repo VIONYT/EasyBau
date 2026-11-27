@@ -113,9 +113,11 @@ export const todayOf = (tx: Tx) => todayIn(servicesOf(tx)?.now() ?? Date.now())
 
 /** Locks the invoice and loads it with its receivable; only finalized, not cancelled invoices. */
 async function lockedReceivable(tx: Tx, auth: AuthContext, id: string, forNewEntry = true) {
+  // Lock first, then read: the open amount and retention used for the limit checks below must
+  // include every entry committed by a concurrent request (security audit run-1).
+  await tx`select id from document where id = ${id} for update`
   const doc = await loadDocument(tx, auth, id)
   if (!doc) throw notFound('Die Rechnung')
-  await tx`select id from document where id = ${id} for update`
   if (!isBilled(doc) || !doc.finalizedAt || !doc.receivable) {
     throw new HttpError(
       409,
@@ -384,18 +386,22 @@ export function registerReceivableRoutes(app: FastifyInstance, services: Service
       const { id } = parse(idParam, request.params)
       const { reason } = parse(reverseEntryRequest, request.body ?? {})
       const receivable = await inTenant(services, auth, async (tx) => {
-        const [entry] =
+        const read = () =>
           table === 'payments'
-            ? await tx<{ invoiceId: string; original: string | null; reversed: boolean }[]>`
+            ? tx<{ invoiceId: string; original: string | null; reversed: boolean }[]>`
                 select invoice_id as "invoiceId", reverses_payment_id as original,
                        exists (select 1 from payment r where r.reverses_payment_id = p.id) as reversed
                 from payment p where p.id = ${id}`
-            : await tx<{ invoiceId: string; original: string | null; reversed: boolean }[]>`
+            : tx<{ invoiceId: string; original: string | null; reversed: boolean }[]>`
                 select invoice_id as "invoiceId", reverses_adjustment_id as original,
                        exists (select 1 from receivable_adjustment r where r.reverses_adjustment_id = a.id) as reversed
                 from receivable_adjustment a where a.id = ${id}`
+        const [found] = await read()
+        if (!found) throw notFound('Der Eintrag')
+        await lockedReceivable(tx, auth, found.invoiceId, false)
+        // Read again under the lock: a concurrent reversal is seen (409 instead of a 500).
+        const [entry] = await read()
         if (!entry) throw notFound('Der Eintrag')
-        await lockedReceivable(tx, auth, entry.invoiceId, false)
         if (entry.original)
           throw new HttpError(409, 'Eine Gegenbuchung kann nicht selbst storniert werden.')
         if (entry.reversed) throw new HttpError(409, 'Der Eintrag ist bereits storniert.')

@@ -58,6 +58,7 @@ import { PasswordHasher, unusablePasswordHashes } from './security/passwords.js'
 
 export { HttpError } from './http.js'
 export { PasswordHasher } from './security/passwords.js'
+export { reencryptLegacyFields } from './security/reencrypt.js'
 
 export interface ApiDeps {
   config: Pick<Config, 'APP_NAME' | 'APP_VERSION' | 'APP_ROLE' | 'PROFILE'> &

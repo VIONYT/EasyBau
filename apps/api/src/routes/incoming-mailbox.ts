@@ -15,6 +15,7 @@ import { ImapFlow } from 'imapflow'
 import { simpleParser } from 'mailparser'
 import { inTenant, requirePermission, type Services } from '../context.js'
 import { decodeCursor, encodeCursor, HttpError, parse } from '../http.js'
+import type { CipherField } from '../security/crypto.js'
 import { ingestIncomingInvoice } from './incoming-invoices.js'
 
 /**
@@ -312,8 +313,8 @@ function view(services: Services, stored: StoredMailbox): IncomingMailSettings {
   }
 }
 
-const decrypt = (services: Services, value: string) =>
-  services.cipher.decrypt(Buffer.from(value, 'base64'))
+const decrypt = (services: Services, value: string, field: CipherField) =>
+  services.cipher.decrypt(Buffer.from(value, 'base64'), field)
 
 function accessOf(services: Services, stored: StoredMailbox): MailboxAccess | null {
   if (!stored.user) return null
@@ -334,13 +335,15 @@ function accessOf(services: Services, stored: StoredMailbox): MailboxAccess | nu
       oauth: {
         tenantId: stored.tenantId,
         clientId: stored.clientId,
-        clientSecret: decrypt(services, stored.clientSecretEnc),
+        clientSecret: decrypt(services, stored.clientSecretEnc, 'incoming_mail.client_secret'),
       },
     }
   }
   if (stored.auth === 'google') {
     if (!stored.googleKeyEnc) return null
-    const key = JSON.parse(decrypt(services, stored.googleKeyEnc)) as GoogleServiceAccount
+    const key = JSON.parse(
+      decrypt(services, stored.googleKeyEnc, 'incoming_mail.google_key'),
+    ) as GoogleServiceAccount
     return {
       ...common,
       host: stored.host ?? GOOGLE_IMAP_HOST,
@@ -353,7 +356,7 @@ function accessOf(services: Services, stored: StoredMailbox): MailboxAccess | nu
   return {
     ...common,
     host: stored.host,
-    password: decrypt(services, stored.passwordEnc),
+    password: decrypt(services, stored.passwordEnc, 'incoming_mail.password'),
     oauth: null,
     google: null,
   }
@@ -589,16 +592,24 @@ export function registerIncomingMailboxRoutes(
         !same(current.tenantId, input.tenantId) ||
         !same(current.clientId, input.clientId)
       // undefined keeps the stored secret, '' or null removes it.
-      const secret = (value: string | null | undefined, stored: string | undefined) =>
+      const secret = (
+        value: string | null | undefined,
+        stored: string | undefined,
+        field: CipherField,
+      ) =>
         value === undefined
           ? destinationChanged
             ? undefined
             : stored
           : value
-            ? services.cipher.encrypt(value).toString('base64')
+            ? services.cipher.encrypt(value, field).toString('base64')
             : undefined
-      const passwordEnc = secret(input.password, current.passwordEnc)
-      const clientSecretEnc = secret(input.clientSecret, current.clientSecretEnc)
+      const passwordEnc = secret(input.password, current.passwordEnc, 'incoming_mail.password')
+      const clientSecretEnc = secret(
+        input.clientSecret,
+        current.clientSecretEnc,
+        'incoming_mail.client_secret',
+      )
       const m365 = input.auth === 'microsoft365'
       const google = input.auth === 'google'
       // The JSON key of the service account: checked, then stored encrypted as a whole.
@@ -606,7 +617,9 @@ export function registerIncomingMailboxRoutes(
         ? parseGoogleServiceAccountKey(input.googleServiceAccountKey)
         : null
       const googleKeyEnc = googleKey
-        ? services.cipher.encrypt(JSON.stringify(googleKey)).toString('base64')
+        ? services.cipher
+            .encrypt(JSON.stringify(googleKey), 'incoming_mail.google_key')
+            .toString('base64')
         : input.googleServiceAccountKey === undefined && !destinationChanged
           ? current.googleKeyEnc
           : undefined

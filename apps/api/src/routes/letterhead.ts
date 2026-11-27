@@ -44,7 +44,7 @@ export async function companyValues(tx: Tx): Promise<LetterheadValues> {
     from tenant where id = current_tenant_id()`
   if (!t) return {}
   const cipher = servicesOf(tx)?.cipher
-  const iban = t.ibanEnc && cipher ? cipher.decrypt(t.ibanEnc) : null
+  const iban = t.ibanEnc && cipher ? cipher.decrypt(t.ibanEnc, 'tenant.iban') : null
   return {
     Firma: t.name,
     Straße: t.street,

@@ -24,6 +24,8 @@ const envSchema = z.object({
    * migrations and the job queue.
    */
   DATABASE_RUNTIME_URL: z.url({ protocol: /^postgres(ql)?$/ }).optional(),
+  /** Login of the job queue (owner of the schema `jobs` only); created at start if not set. */
+  DATABASE_JOBS_URL: z.url({ protocol: /^postgres(ql)?$/ }).optional(),
   /** Apply pending database migrations on start (API roles only). */
   MIGRATE_ON_START: z
     .enum(['true', 'false'])

@@ -64,6 +64,7 @@ export async function startWorker(
     | 'APP_NAME'
     | 'DATABASE_URL'
     | 'DATABASE_RUNTIME_URL'
+    | 'DATABASE_JOBS_URL'
     | 'DATABASE_POOL_MAX'
     | 'PROFILE'
     | 'SMTP_HOST'
@@ -91,7 +92,8 @@ export async function startWorker(
   logger: Logger,
 ): Promise<Worker> {
   const boss = new PgBoss({
-    connectionString: config.DATABASE_URL,
+    // Own login that owns only the schema `jobs` (ADR 0013); the administrator as fallback.
+    connectionString: config.DATABASE_JOBS_URL ?? config.DATABASE_URL,
     schema: 'jobs',
     // Keep the footprint small in the compact profile.
     max: config.PROFILE === 'compact' ? 2 : 5,

@@ -5,7 +5,12 @@ export type Sql = postgres.Sql
 export type Tx = postgres.TransactionSql
 
 export { MIGRATIONS_DIR, type MigrateOptions, type MigrationResult, migrate } from './migrate.js'
-export { ensureRuntimeLogin, runtimeLoginName } from './runtime-login.js'
+export {
+  ensureJobsLogin,
+  ensureRuntimeLogin,
+  jobsLoginName,
+  runtimeLoginName,
+} from './runtime-login.js'
 
 /**
  * Restricted runtime role created by migration 0001. It is no superuser and has no BYPASSRLS,

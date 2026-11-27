@@ -160,7 +160,7 @@ export function registerSettingsRoutes(app: FastifyInstance, services: Services)
       from tenant where id = current_tenant_id()`
     if (!row) throw notFound('Die Firma')
     const { ibanEnc, ...company } = row
-    return { ...company, iban: ibanEnc ? services.cipher.decrypt(ibanEnc) : null }
+    return { ...company, iban: ibanEnc ? services.cipher.decrypt(ibanEnc, 'tenant.iban') : null }
   }
 
   app.get('/api/v1/settings/company', async (request) => {
@@ -179,7 +179,7 @@ export function registerSettingsRoutes(app: FastifyInstance, services: Services)
       }
       if (input.iban !== undefined) {
         // Bank details are encrypted at rest (AES-256-GCM, APP_SECRET).
-        columns.iban_enc = input.iban ? services.cipher.encrypt(input.iban) : null
+        columns.iban_enc = input.iban ? services.cipher.encrypt(input.iban, 'tenant.iban') : null
       }
       if (Object.keys(columns).length) {
         await tx`update tenant set ${tx(columns)} where id = current_tenant_id()`

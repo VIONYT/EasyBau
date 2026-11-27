@@ -328,6 +328,37 @@ describe.skipIf(!process.env.DATABASE_URL)('Zahlungen und Forderungen (integrati
     expect(lines[1]).toMatch(/"überfällig";"";"Zahlungserinnerung ab \d{2}\.\d{2}\.2026"$/)
   })
 
+  it('lets concurrent entries see each other (no more deducted than open, one reversal)', async () => {
+    const third = await invoice('2026-11-04')
+    const open = (await receivableOf(third.id)).openCents
+    const statuses = (
+      await Promise.all(
+        [1, 2].map((n) =>
+          admin.post(
+            `/api/v1/documents/${third.id}/adjustments`,
+            { kind: 'short_payment', amountCents: open, reason: `Kürzung ${n}` },
+            { 'idempotency-key': `parallel-kuerzung-${n}` },
+          ),
+        ),
+      )
+    ).map((r) => r.statusCode)
+    expect(statuses.filter((s) => s === 201)).toHaveLength(1)
+    expect((await receivableOf(third.id)).openCents).toBe(0)
+    const adjustment = (await receivableOf(third.id)).adjustments[0]?.id as string
+    const reversals = (
+      await Promise.all(
+        [1, 2].map((n) =>
+          admin.post(
+            `/api/v1/adjustments/${adjustment}/reverse`,
+            {},
+            { 'idempotency-key': `parallel-storno-${n}` },
+          ),
+        ),
+      )
+    ).map((r) => r.statusCode)
+    expect(reversals.sort()).toEqual([201, 409])
+  })
+
   it('takes no new payments on a cancelled invoice, but reversals of earlier ones', async () => {
     const third = await invoice('2026-11-04')
     const paid = await admin.post(`/api/v1/documents/${third.id}/payments`, {

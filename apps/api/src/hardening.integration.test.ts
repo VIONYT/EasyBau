@@ -1,4 +1,7 @@
+import { createCipheriv, hkdfSync, randomBytes } from 'node:crypto'
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
+import { FieldCipher } from './security/crypto.js'
+import { reencryptLegacyFields } from './security/reencrypt.js'
 import { Client, createHarness, type Harness } from './testing/harness.js'
 
 /** Hardening after the security audit run-1: proxy trust and idempotency keys. */
@@ -101,6 +104,24 @@ describe.skipIf(!process.env.DATABASE_URL)('Härtung (integration)', () => {
       expect(res.statusCode).toBe(403)
       expect(res.json().detail).toMatch(/neu an/)
     }
+  })
+
+  it('binds encrypted values written before the field binding at start', async () => {
+    const secret = 'z'.repeat(40) // APP_SECRET of the test harness
+    const key = Buffer.from(
+      hkdfSync('sha256', secret, 'opc-field-encryption', 'aes-256-gcm/v1', 32),
+    )
+    const iv = randomBytes(12)
+    const c = createCipheriv('aes-256-gcm', key, iv)
+    const body = Buffer.concat([c.update('DE02120300000000202051', 'utf8'), c.final()])
+    const v1 = Buffer.concat([Buffer.from([1]), iv, c.getAuthTag(), body])
+    await h.adminSql`update tenant set iban_enc = ${v1}`
+    expect(await reencryptLegacyFields(h.adminSql, secret)).toBe(1)
+    expect(await reencryptLegacyFields(h.adminSql, secret)).toBe(0)
+    const [row] = await h.adminSql<{ iban: Buffer }[]>`select iban_enc as iban from tenant`
+    const cipher = new FieldCipher(secret)
+    expect(cipher.isLegacy(row?.iban as Buffer)).toBe(false)
+    expect(cipher.decrypt(row?.iban as Buffer, 'tenant.iban')).toBe('DE02120300000000202051')
   })
 
   it('puts pg_temp last for every SECURITY DEFINER function', async () => {
