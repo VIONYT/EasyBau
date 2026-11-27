@@ -1745,6 +1745,8 @@ function FinalizeInvoice({
 
 function InternalCalculation({ doc }: { doc: Doc }) {
   const totals = doc.totals
+  // The server leaves costs out for roles without price.view.
+  if (totals.costCents === null || totals.marginCents === null) return null
   const percent =
     totals.netCents > 0
       ? ((totals.marginCents / totals.netCents) * 100).toFixed(1).replace('.', ',')

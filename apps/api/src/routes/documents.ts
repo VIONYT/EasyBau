@@ -817,7 +817,16 @@ export function sendDocument(
 ) {
   if (!doc) throw notFound('Das Dokument')
   const { etag, ...body } = doc
-  return reply.status(status).header('etag', etag).send(body)
+  // Kalkulation (costs, markups, margin) only for roles with price.view (security audit run-1).
+  const priceView = reply.request.auth?.permissions.has('price.view') ?? false
+  const out: DocumentDetail = priceView
+    ? body
+    : {
+        ...body,
+        items: body.items.map((item) => ({ ...item, costLines: [], calculation: null })),
+        totals: { ...body.totals, costCents: null, marginCents: null },
+      }
+  return reply.status(status).header('etag', etag).send(out)
 }
 
 // ---- Creating documents -------------------------------------------------------------------------

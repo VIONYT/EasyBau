@@ -176,6 +176,15 @@ describe.skipIf(!process.env.DATABASE_URL)('Aufbewahrung und Anonymisieren (inte
   })
 
   it('anonymises approved documents and keeps number and amounts', async () => {
+    // A notification about the invoice (customer name, open amount) goes with it.
+    await h.adminSql`
+      insert into notification (tenant_id, user_id, kind, ref_id, title, body, route)
+      select ${tenantId}, id, 'invoice_overdue', ${old.id}, 'Rechnung überfällig',
+             'Kunde, Karl · offen 595,00 €', '/dokumente/x'
+      from app_user limit 1`
+    const notified = async () =>
+      (await h.adminSql`select 1 from notification where ref_id = ${old.id}`).length
+    expect(await notified()).toBe(1)
     const res = await admin.post('/api/v1/retention/purge', {
       documentIds: [old.id, current.id],
       confirm: true,
@@ -187,6 +196,7 @@ describe.skipIf(!process.env.DATABASE_URL)('Aufbewahrung und Anonymisieren (inte
       { id: current.id, message: 'Die Aufbewahrungsfrist ist noch nicht abgelaufen.' },
     ])
 
+    expect(await notified()).toBe(0)
     const doc = (await admin.get(`/api/v1/documents/${old.id}`)).json() as DocumentDetail
     expect(doc.purgedAt).not.toBeNull()
     expect(doc.number).toBe(old.number)

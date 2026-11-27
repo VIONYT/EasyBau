@@ -33,7 +33,8 @@ const VERSIONED_TYPES = ['quote', 'cost_estimate']
 
 export function registerOfferToolRoutes(app: FastifyInstance, services: Services) {
   app.post('/api/v1/documents/:id/target-price', async (request): Promise<TargetPriceResult> => {
-    const auth = requirePermission(request, 'document.write')
+    // The preview shows costs and margins: Kalkulation is for roles with price.view.
+    const auth = requirePermission(request, 'document.write', 'price.view')
     const { id } = parse(idParam, request.params)
     const input = parse(targetPriceRequest, request.body)
     return inTenant(services, auth, async (tx) => {

@@ -275,6 +275,22 @@ describe.skipIf(!process.env.DATABASE_URL)('Eingangsrechnungen ausbauen (integra
       await admin.get('/api/v1/settings/incoming-mail')
     ).json() as IncomingMailSettings
     expect(settings.lastRun?.duplicates).toBe(2)
+    // An XML file that is not an e-invoice is unusable for good: ignored and marked as read,
+    // so such e-mails cannot block the mailbox (security audit run-1).
+    inbox.done = [11, 12, 13]
+    inbox.messages.push({
+      uid: 14,
+      from: 'unbekannt@example.test',
+      subject: 'Keine Rechnung',
+      attachments: [
+        { filename: 'daten.xml', content: Buffer.from('<?xml version="1.0"?><notaninvoice/>') },
+      ],
+    })
+    const unusable = (
+      await admin.post('/api/v1/settings/incoming-mail/run', {})
+    ).json() as IncomingMailRun
+    expect(unusable).toMatchObject({ messages: 1, ignored: 1, failed: 0 })
+    expect(inbox.done).toContain(14)
     // A broken login is reported, nothing is marked as read
     inbox.fail = true
     const failed = (

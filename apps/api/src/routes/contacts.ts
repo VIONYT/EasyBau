@@ -13,7 +13,13 @@ import {
 } from '@easybau/schemas'
 import type { FastifyInstance } from 'fastify'
 import { z } from 'zod'
-import { inTenant, requirePermission, type Services } from '../context.js'
+import {
+  type AuthContext,
+  inTenant,
+  projectVisibility,
+  requirePermission,
+  type Services,
+} from '../context.js'
 import {
   checkIfMatch,
   decodeCursor,
@@ -90,7 +96,11 @@ async function replaceChildren(
   }
 }
 
-async function loadContact(tx: Tx, id: string): Promise<(ContactDetail & { etag: string }) | null> {
+async function loadContact(
+  tx: Tx,
+  auth: AuthContext,
+  id: string,
+): Promise<(ContactDetail & { etag: string }) | null> {
   const [c] = await tx<
     (Omit<ContactDetail, 'channels' | 'addresses' | 'links' | 'projects'> & { updatedRaw: Date })[]
   >`
@@ -122,7 +132,8 @@ async function loadContact(tx: Tx, id: string): Promise<(ContactDetail & { etag:
     order by other.display_name`
   const projects = await tx<ContactDetail['projects']>`
     select id, number, name, to_char(updated_at at time zone 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS.MS"Z"') as "updatedAt"
-    from project where customer_id = ${id} order by updated_at desc limit 50`
+    from project where customer_id = ${id} and ${projectVisibility(tx, auth, 'project')}
+    order by updated_at desc limit 50`
   const { updatedRaw, ...rest } = c
   return { ...rest, channels, addresses, links, projects, etag: etagOf(updatedRaw) }
 }
@@ -273,7 +284,7 @@ export function registerContactRoutes(app: FastifyInstance, services: Services) 
         ? await tx<{ n: string }[]>`select next_number('contact') as n`
         : [{ n: null }]
       const id = await insertContact(tx, auth, input, number?.n ?? null)
-      return loadContact(tx, id)
+      return loadContact(tx, auth, id)
     })
     const { etag, ...body } = contact as ContactDetail & { etag: string }
     return reply
@@ -286,7 +297,7 @@ export function registerContactRoutes(app: FastifyInstance, services: Services) 
   app.get('/api/v1/contacts/:id', async (request, reply) => {
     const auth = requirePermission(request, 'contacts.read')
     const { id } = parse(idParam, request.params)
-    const contact = await inTenant(services, auth, (tx) => loadContact(tx, id))
+    const contact = await inTenant(services, auth, (tx) => loadContact(tx, auth, id))
     if (!contact) throw notFound('Der Kontakt')
     const { etag, ...body } = contact
     return reply.header('etag', etag).send(body)
@@ -333,7 +344,7 @@ export function registerContactRoutes(app: FastifyInstance, services: Services) 
         await tx`update contact set ${tx(columns)} where id = ${id}`.catch(creditorTaken)
       else await tx`update contact set updated_at = now() where id = ${id}`
       await replaceChildren(tx, auth.tenantId, id, input)
-      return loadContact(tx, id)
+      return loadContact(tx, auth, id)
     })
     const { etag, ...body } = contact as ContactDetail & { etag: string }
     return reply.header('etag', etag).send(body)

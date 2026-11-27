@@ -88,8 +88,9 @@ export interface CatalogItem {
   shortText: string
   longText: string | null
   unit: UnitRef
-  costCents: number
-  markupPercent: string
+  /** Purchase cost and markup; null for roles without price.view. */
+  costCents: number | null
+  markupPercent: string | null
   priceCents: number
   packSize: string | null
   calcMode: 'unit_price' | 'total_price'

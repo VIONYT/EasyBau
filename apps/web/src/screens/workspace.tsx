@@ -444,6 +444,9 @@ function Contacts({
           id={selected}
           canWrite={canWrite}
           canReadSettings={me.permissions.includes('settings.read')}
+          canReport={
+            me.permissions.includes('project.read_all') && me.permissions.includes('document.read')
+          }
           onSaved={() => list.reload()}
           onClose={() => setSelected(null)}
           onOpenProject={(projectId) =>

@@ -161,9 +161,24 @@ function pricesOf(
   }
 }
 
-export async function loadItem(tx: Tx, id: string): Promise<CatalogItem | null> {
+/** Catalog item as stored (with purchase cost); see `forViewer()` before sending it out. */
+export type StoredCatalogItem = Omit<CatalogItem, 'costCents' | 'markupPercent'> & {
+  costCents: number
+  markupPercent: string
+}
+
+/**
+ * Purchase cost, markup and the calculation lines are only for roles with price.view (DESIGN.md
+ * §5.2); others (Teamleitung, Prüfer) get the selling price only (security audit run-1).
+ */
+export function forViewer(item: StoredCatalogItem, auth: AuthContext): CatalogItem {
+  if (auth.permissions.has('price.view')) return item
+  return { ...item, costCents: null, markupPercent: null, components: [] }
+}
+
+export async function loadItem(tx: Tx, id: string): Promise<StoredCatalogItem | null> {
   const [row] = await tx<
-    (Omit<CatalogItem, 'components' | 'laborHours'> & { calcModeRaw: string })[]
+    (Omit<StoredCatalogItem, 'components' | 'laborHours'> & { calcModeRaw: string })[]
   >`
     select i.id, i.kind, i.folder_id as "folderId", i.article_no as "articleNo", i.manufacturer, i.ean,
            i.short_text as "shortText", i.long_text as "longText",
@@ -519,7 +534,9 @@ export function registerCatalogRoutes(app: FastifyInstance, services: Services) 
         order by lower(i.short_text), i.id
         limit ${query.limit} offset ${query.offset}`
       const items: CatalogItem[] = []
-      for (const row of rows) items.push((await loadItem(tx, row.id)) as CatalogItem)
+      for (const row of rows) {
+        items.push(forViewer((await loadItem(tx, row.id)) as StoredCatalogItem, auth))
+      }
       return items
     })
   })
@@ -529,7 +546,7 @@ export function registerCatalogRoutes(app: FastifyInstance, services: Services) 
     const { id } = parse(idParam, request.params)
     const item = await inTenant(services, auth, (tx) => loadItem(tx, id))
     if (!item) throw notFound('Der Eintrag')
-    return item
+    return forViewer(item, auth)
   })
 
   app.post('/api/v1/catalog/items', async (request, reply) => {
@@ -798,6 +815,8 @@ export function registerCatalogRoutes(app: FastifyInstance, services: Services) 
 
   app.get('/api/v1/supplier-articles', async (request): Promise<SupplierArticle[]> => {
     const auth = requirePermission(request, 'catalog.read')
+    // Supplier articles are purchase prices (Einkauf).
+    requirePermission(request, 'price.view')
     const query = parse(supplierArticleQuery, request.query)
     const rows = await inTenant(services, auth, (tx) => {
       const like = `%${query.q.toLowerCase().replace(/[%_\\]/g, '\\$&')}%`

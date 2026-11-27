@@ -11,9 +11,11 @@ import { t, tf } from '../i18n'
  */
 export function ContactPrivacyPanel({
   contact,
+  canReport,
   onChanged,
 }: {
   contact: ContactDetail
+  canReport: boolean
   onChanged: () => void
 }) {
   const [plan, setPlan] = useState<ContactPrivacy | null>(null)
@@ -108,7 +110,7 @@ export function ContactPrivacyPanel({
       ) : null}
       <FormError>{error}</FormError>
       <div className="button-row">
-        <Button onClick={report}>{t('privacy.report')}</Button>
+        {canReport ? <Button onClick={report}>{t('privacy.report')}</Button> : null}
         {!contact.erasedAt && !contact.blockedUntil && !plan ? (
           <Button onClick={prepare}>{t('privacy.erase')}</Button>
         ) : null}

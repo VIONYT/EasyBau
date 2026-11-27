@@ -448,7 +448,9 @@ export async function pollMailbox(
                 result: 'duplicate',
                 ...(existing ? { incomingInvoiceId: existing } : {}),
               })
-            } else if (status === 415 || status === 400 || status === 413) {
+            } else if (status >= 400 && status < 500) {
+              // The file itself is unusable (wrong type, too large, unreadable e-invoice): retrying
+              // cannot help, and 25 such e-mails would otherwise block the mailbox for good.
               run.ignored += 1
               results.push({ filename, result: 'ignored', reason })
             } else {

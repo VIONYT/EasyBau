@@ -122,6 +122,9 @@ export function registerPrivacyRoutes(app: FastifyInstance, services: Services) 
   app.get('/api/v1/contacts/:id/privacy-report', async (request, reply) => {
     const auth = requirePermission(request, 'contacts.write')
     requirePermission(request, 'document.read')
+    // The Auskunft lists all projects, documents and incoming invoices of the person; it must be
+    // complete, so only roles that may see every project get it (security audit run-1).
+    requirePermission(request, 'project.read_all')
     const { id } = parse(idParam, request.params)
     const report = await inTenant(services, auth, async (tx) => {
       const [contact] = await tx<Record<string, unknown>[]>`

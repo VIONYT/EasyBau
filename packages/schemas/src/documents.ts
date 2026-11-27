@@ -398,8 +398,9 @@ export interface DocumentTotals {
   /** Title id → subtotal of the positions below it. */
   titleSubtotals: Record<string, number>
   /** Kalkulation of the counted positions: cost, margin and planned labor hours (Soll-Stunden). */
-  costCents: number
-  marginCents: number
+  /** Soll-Kosten and margin; null for roles without price.view. */
+  costCents: number | null
+  marginCents: number | null
   laborHours: string
   /** Counted positions without calculation (price entered directly). */
   uncalculatedCount: number

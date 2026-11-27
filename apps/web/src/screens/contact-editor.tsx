@@ -43,6 +43,7 @@ export function ContactEditor({
   id,
   canWrite,
   canReadSettings,
+  canReport = false,
   onSaved,
   onClose,
   onOpenProject,
@@ -51,6 +52,8 @@ export function ContactEditor({
   id: string
   canWrite: boolean
   canReadSettings?: boolean
+  /** Auskunft (Art. 15) lists every project: only for roles that see all of them. */
+  canReport?: boolean
   onSaved: (contact: ContactDetail) => void
   onClose: () => void
   onOpenProject?: (projectId: string) => void
@@ -580,6 +583,7 @@ export function ContactEditor({
       {canWrite ? (
         <ContactPrivacyPanel
           contact={c}
+          canReport={canReport}
           onChanged={async () => {
             const result = await apiWithEtag<ContactDetail>('GET', `/api/v1/contacts/${id}`)
             apply(result)
