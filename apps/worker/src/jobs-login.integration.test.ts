@@ -41,6 +41,23 @@ describe.skipIf(!testDatabaseUrl)('job queue login (integration)', () => {
     }
   })
 
+  it('starts on a fresh database where the login may not create schemas', async () => {
+    const fresh = await openTestDb({ isolated: true })
+    try {
+      const freshJobs = await ensureJobsLogin(fresh.admin, fresh.url, SECRET)
+      const boss = new PgBoss({ connectionString: freshJobs, schema: 'jobs', createSchema: false })
+      try {
+        await boss.start()
+        await boss.createQueue('heartbeat')
+        expect(await boss.send('heartbeat', {})).toBeTruthy()
+      } finally {
+        await boss.stop({ graceful: false })
+      }
+    } finally {
+      await fresh.close()
+    }
+  })
+
   it('has no rights on company data and is no superuser', async () => {
     const jobs = createSql({ DATABASE_URL: jobsUrl, DATABASE_POOL_MAX: 1 }, { mode: 'admin' })
     try {

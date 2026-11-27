@@ -97,6 +97,8 @@ export async function startWorker(
     // Own login that owns only the schema `jobs` (ADR 0013); the administrator as fallback.
     connectionString: config.DATABASE_JOBS_URL ?? config.DATABASE_URL,
     schema: 'jobs',
+    // The own login may not create schemas; ensureJobsLogin (or the operator) created `jobs`.
+    createSchema: !config.DATABASE_JOBS_URL,
     // Keep the footprint small in the compact profile.
     max: config.PROFILE === 'compact' ? 2 : 5,
   })

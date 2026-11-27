@@ -69,7 +69,7 @@ Danach `https://<APP_DOMAIN>` öffnen, den Code eingeben, die Firma und das erst
 
 ## 4. Dateien (Projektablage)
 
-- Anwendungsabfragen laufen über einen eigenen Datenbank-Login ohne Superuser-Rechte (`opc_runtime_<datenbank>`), den der Server beim Start anlegt; das Passwort wird aus `APP_SECRET` abgeleitet. Bei einer externen Datenbank, deren Administrator keine Rollen anlegen darf, den Login selbst anlegen (Mitglied von `opc_app`) und als `DATABASE_RUNTIME_URL` angeben ([ADR 0013](../adr/0013-datenbank-login-ohne-superuser.md)).
+- Anwendungsabfragen laufen über einen eigenen Datenbank-Login ohne Superuser-Rechte (`opc_runtime_<datenbank>`), den der Server beim Start anlegt; das Passwort wird aus `APP_SECRET` abgeleitet. Bei einer externen Datenbank, deren Administrator keine Rollen anlegen darf, den Login selbst anlegen (Mitglied von `opc_app`) und als `DATABASE_RUNTIME_URL` angeben ([ADR 0013](../adr/0013-datenbank-login-ohne-superuser.md)). Ebenso für die Job-Warteschlange: Login `opc_jobs_<datenbank>` mit eigenem Schema (`CREATE SCHEMA jobs AUTHORIZATION …`) als `DATABASE_JOBS_URL`.
 - Hochgeladene Dateien liegen im Docker-Volume `files` (im Container `/data/files`), die Datenbank kennt Name, Größe und Prüfsumme (SHA-256). Siehe [ADR 0004](../adr/0004-dateiablage.md).
 - **Das Volume `files` gehört zur Sicherung**, zusammen mit der Datenbank. Der Dienst `backup` sichert beides gemeinsam (Abschnitt 6).
 - Größte erlaubte Datei: `UPLOAD_MAX_MB` (Standard 50). Erlaubt sind PDF, Bilder (JPG, PNG, GIF, WebP, HEIC), Videos (MP4, MOV), Office-Dateien, ZIP, Pläne (DWG, DXF), Text/CSV/XML und GAEB (X31, X81–X86). Der Inhalt muss zur Dateiendung passen.
