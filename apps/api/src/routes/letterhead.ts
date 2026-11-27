@@ -1,7 +1,12 @@
 import { Readable } from 'node:stream'
 import type { Tx } from '@easybau/db'
 import { defaultLetterhead, formatIban, type LetterheadValues } from '@easybau/domain'
-import { type LetterheadLayout, type LetterheadSettings, letterheadRequest } from '@easybau/schemas'
+import {
+  type DocumentDetail,
+  type LetterheadLayout,
+  type LetterheadSettings,
+  letterheadRequest,
+} from '@easybau/schemas'
 import { TooLargeError } from '@easybau/storage'
 import type { FastifyInstance } from 'fastify'
 import { z } from 'zod'
@@ -70,6 +75,77 @@ export async function loadLetterhead(tx: Tx): Promise<LetterheadLayout> {
 }
 
 /** Image type by content (magic numbers); SVG is not accepted (scripts). */
+type Issuer = DocumentDetail['issuer']
+
+/** Live issuer block (company data + letterhead); frozen into `issuer_snapshot` on finalize. */
+export async function liveIssuer(tx: Tx): Promise<Issuer> {
+  const [t] = await tx<
+    {
+      name: string
+      street: string | null
+      postalCode: string | null
+      city: string | null
+      email: string | null
+      phone: string | null
+      website: string | null
+      vatId: string | null
+      taxNumber: string | null
+      registerCourt: string | null
+      registerNumber: string | null
+      managerTitle: string | null
+      managerName: string | null
+      ibanEnc: Buffer | null
+      bic: string | null
+      countryCode: string
+    }[]
+  >`
+    select name, street, postal_code as "postalCode", city, email, phone, website, vat_id as "vatId",
+           tax_number as "taxNumber", register_court as "registerCourt", register_number as "registerNumber",
+           manager_title as "managerTitle", manager_name as "managerName", iban_enc as "ibanEnc", bic,
+           country_code as "countryCode"
+    from tenant where id = current_tenant_id()`
+  if (!t) return { name: '', lines: [], contact: [], legal: [] }
+  const cipher = servicesOf(tx)?.cipher
+  const iban =
+    t.ibanEnc && cipher
+      ? cipher.decrypt(t.ibanEnc, 'tenant.iban').replace(/\s+/g, '').toUpperCase()
+      : null
+  const place = [t.postalCode, t.city].filter(Boolean).join(' ')
+  return {
+    // Briefpapier and its placeholder values; frozen with the document (rule 4).
+    letterhead: await loadLetterhead(tx),
+    values: (await companyValues(tx)) as Record<string, string | null>,
+    name: t.name,
+    lines: [t.street, place].filter((v): v is string => !!v),
+    contact: [t.phone ? `Tel. ${t.phone}` : null, t.email, t.website].filter(
+      (v): v is string => !!v,
+    ),
+    legal: [
+      t.managerName ? `${t.managerTitle ?? 'Geschäftsführung'}: ${t.managerName}` : null,
+      t.registerCourt && t.registerNumber ? `${t.registerCourt} ${t.registerNumber}` : null,
+      t.vatId ? `USt-IdNr. ${t.vatId}` : null,
+      t.taxNumber ? `Steuernummer ${t.taxNumber}` : null,
+    ].filter((v): v is string => !!v),
+    // Structured data for the e-invoice (EN 16931), frozen with the document (rule 4).
+    address: {
+      street: t.street,
+      streetExtra: null,
+      postalCode: t.postalCode,
+      city: t.city,
+      countryCode: t.countryCode.trim().toUpperCase(),
+    },
+    einvoice: {
+      vatId: t.vatId,
+      taxNumber: t.taxNumber,
+      email: t.email,
+      phone: t.phone,
+      contactName: t.managerName,
+      iban,
+      bic: t.bic,
+    },
+  }
+}
+
 function imageType(head: Buffer): 'image/png' | 'image/jpeg' | 'image/webp' | null {
   if (head.subarray(0, 8).equals(Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]))) {
     return 'image/png'

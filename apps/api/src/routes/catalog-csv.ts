@@ -14,7 +14,7 @@ import type { FastifyInstance } from 'fastify'
 import { inTenant, requirePermission, type Services } from '../context.js'
 import { HttpError, parse } from '../http.js'
 import { saveItem } from './catalog.js'
-import { todayIn } from './receivables.js'
+import { todayIn } from './receivable-state.js'
 
 /**
  * Stammdaten als CSV (P2.12): export of Leistungen/Materialien and import with preview (like

@@ -1,5 +1,5 @@
 import { createHash } from 'node:crypto'
-import { type Sql, withTenant } from '@easybau/db'
+import { deletePurgedWorkingCopies, type Sql, withTenant } from '@easybau/db'
 import type { ArchiveStore, ObjectStore } from '@easybau/storage'
 import type { Logger } from 'pino'
 
@@ -132,36 +132,9 @@ export async function reapplyErasures(
       )
     }
   }
-  for (const tenantId of tenants) await deleteWorkingCopies(sql, files, tenantId)
+  for (const tenantId of tenants) await deletePurgedWorkingCopies(sql, { tenantId }, files)
   if (run.documents || run.contacts) {
     logger.info({ ...run }, 'erasures repeated after restore')
   }
   return run
-}
-
-/** Working copies of anonymised originals (as after an approval in the API). */
-async function deleteWorkingCopies(sql: Sql, files: ObjectStore, tenantId: string) {
-  const rows = await withTenant(
-    sql,
-    { tenantId },
-    (tx) => tx<{ artifact_id: string; storage_key: string }[]>`
-      select artifact_id, storage_key from artifact_purge where file_deleted_at is null`,
-  )
-  const done: string[] = []
-  for (const row of rows) {
-    try {
-      await files.delete(row.storage_key)
-      done.push(row.artifact_id)
-    } catch {
-      // Stays pending (Löschprotokoll), retried with the next run.
-    }
-  }
-  if (done.length) {
-    await withTenant(
-      sql,
-      { tenantId },
-      (tx) => tx`update artifact_purge set file_deleted_at = now()
-                 where artifact_id in ${tx(done)} and file_deleted_at is null`,
-    )
-  }
 }

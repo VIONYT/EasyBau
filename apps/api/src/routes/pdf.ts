@@ -24,7 +24,8 @@ import {
 } from '../context.js'
 import { notFound, parse } from '../http.js'
 import { documentFileName, patternFileName } from './document-settings.js'
-import { liveIssuer, liveRecipient, loadDocument } from './documents.js'
+import { liveRecipient, loadDocument } from './documents.js'
+import { liveIssuer } from './letterhead.js'
 import { loadSheet } from './measurements.js'
 import { loadReport } from './reports.js'
 

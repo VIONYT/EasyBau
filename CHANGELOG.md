@@ -2,6 +2,16 @@
 
 Alle wesentlichen Änderungen, vor allem solche, die Betreiber betreffen (neue Variablen, Container, Volumes).
 
+## Unveröffentlicht
+
+### Neu
+- **Betrieb hinter Traefik:** `compose.traefik.yaml` stellt EasyBau hinter einen vorhandenen Traefik (HTTPS und Zertifikat über Traefik, Caddy ohne Host-Ports nur noch intern). Caddy übernimmt die Client-IP aus `X-Forwarded-For` nur von Adressen in `TRUSTED_PROXIES` (Standard: niemand außer loopback). Anleitung in README und Betriebsdokumentation (Abschnitt 1a).
+
+### Behoben
+- **Baustelle/Offline:** Eine Änderung, deren erster Versuch wegen eines Server-Neustarts (z. B. Update) ohne Antwort blieb, wurde danach für immer mit „wird bereits verarbeitet“ abgelehnt und ging im Postausgang verloren; nach 5 Minuten wird sie jetzt neu ausgeführt. Ein Foto, dessen Antwort bei schlechtem Netz verloren ging, wird nicht mehr doppelt gespeichert.
+- **Rechnungsliste:** „Mehr laden“ fing wieder bei Seite 1 an, wenn die letzte Rechnung der Seite inzwischen aus dem Filter fiel (z. B. bezahlt bei Filter „überfällig“).
+- **Datenschutz/Speicher:** Die gespeicherten Antworten zu Wiederholungsschlüsseln (Idempotency-Key, oft ganze Dokumente mit Empfänger) werden nach 7 Tagen gelöscht (Migration 0053, nächtlicher Job); vorher blieben sie unbegrenzt, auch nach einer DSGVO-Löschung.
+
 ## 0.1.0 – 2026-11-27
 
 Erste veröffentlichte Version (Datenbankstand Migration 0052). Images: `ghcr.io/vionyt/easybau-app|web|kosit|backup:0.1.0` und `latest`.

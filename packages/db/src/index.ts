@@ -83,3 +83,38 @@ export async function pingDatabase(sql: Sql, timeoutMs = 2000): Promise<boolean>
     clearTimeout(timer)
   }
 }
+
+/**
+ * Removes the working copies of anonymised originals (ADR 0012); the WORM copy is the operator's
+ * task. A copy that cannot be deleted stays pending (Löschprotokoll) and is retried next time.
+ */
+export async function deletePurgedWorkingCopies(
+  sql: Sql,
+  context: TenantContext,
+  files: { delete(key: string): Promise<void> },
+): Promise<void> {
+  const rows = await withTenant(
+    sql,
+    context,
+    (tx) => tx<{ artifactId: string; storageKey: string }[]>`
+      select artifact_id as "artifactId", storage_key as "storageKey"
+      from artifact_purge where file_deleted_at is null order by purged_at limit 1000`,
+  )
+  const done: string[] = []
+  for (const row of rows) {
+    try {
+      await files.delete(row.storageKey)
+      done.push(row.artifactId)
+    } catch {
+      // stays pending
+    }
+  }
+  if (done.length) {
+    await withTenant(
+      sql,
+      context,
+      (tx) => tx`update artifact_purge set file_deleted_at = now()
+                 where artifact_id in ${tx(done)} and file_deleted_at is null`,
+    )
+  }
+}

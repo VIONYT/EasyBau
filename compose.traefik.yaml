@@ -1,0 +1,32 @@
+# Traefik (oder ein anderer vorhandener Reverse Proxy) vor EasyBau statt Caddy direkt im Netz.
+# Traefik übernimmt TLS und die Domain; Caddy läuft dahinter nur noch per HTTP im Docker-Netz
+# und setzt weiter Sicherheitsheader, Frame-Ausnahme und Cache-Regeln.
+# Aktivieren in der .env:
+#   COMPOSE_FILE=compose.yaml:compose.traefik.yaml
+#   APP_DOMAIN=erp.meine-firma.de            (Domain, unter der Traefik EasyBau ausliefert)
+#   TRAEFIK_NETWORK=traefik                  (externes Docker-Netz, in dem Traefik läuft)
+#   TRAEFIK_ENTRYPOINT=websecure             (HTTPS-Entrypoint von Traefik)
+#   TRAEFIK_CERTRESOLVER=letsencrypt         (Zertifikats-Resolver von Traefik)
+services:
+  proxy:
+    # Keine Ports am Host: nur Traefik erreicht Caddy über das gemeinsame Netz.
+    ports: !reset []
+    environment:
+      # Caddy lauscht nur auf HTTP :80 und holt kein eigenes Zertifikat.
+      APP_DOMAIN: ":80"
+      # X-Forwarded-For von Traefik übernehmen (private Netze = Docker-Netze).
+      TRUSTED_PROXIES: private_ranges
+    networks: [default, traefik]
+    labels:
+      traefik.enable: "true"
+      traefik.docker.network: ${TRAEFIK_NETWORK:-traefik}
+      traefik.http.routers.easybau.rule: Host(`${APP_DOMAIN:?APP_DOMAIN setzen}`)
+      traefik.http.routers.easybau.entrypoints: ${TRAEFIK_ENTRYPOINT:-websecure}
+      traefik.http.routers.easybau.tls: "true"
+      traefik.http.routers.easybau.tls.certresolver: ${TRAEFIK_CERTRESOLVER:-letsencrypt}
+      traefik.http.services.easybau.loadbalancer.server.port: "80"
+
+networks:
+  traefik:
+    external: true
+    name: ${TRAEFIK_NETWORK:-traefik}

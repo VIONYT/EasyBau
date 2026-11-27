@@ -32,7 +32,7 @@ import { checkIfMatch, etagOf, HttpError, notFound, parse } from '../http.js'
 import { holidayDates } from './document-settings.js'
 import { storeUploadedFile } from './files.js'
 import { notify, projectMembersExcept } from './notifications.js'
-import { todayOf } from './receivables.js'
+import { todayOf } from './receivable-state.js'
 import { ownSignature } from './signatures.js'
 
 const projectParam = z.object({ id: z.uuid('Ungültige ID.') })

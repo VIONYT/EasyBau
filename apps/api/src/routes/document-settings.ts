@@ -31,8 +31,8 @@ import { TooLargeError } from '@easybau/storage'
 import type { FastifyInstance } from 'fastify'
 import { inTenant, requireAuth, requirePermission, type Services } from '../context.js'
 import { HttpError, notFound, parse } from '../http.js'
-import { liveIssuer } from './documents.js'
-import { todayOf } from './receivables.js'
+import { liveIssuer } from './letterhead.js'
+import { todayOf } from './receivable-state.js'
 
 /**
  * Einstellungen ergänzen (P2.11): Dokument-Vorgaben (Lohnkostenanteil § 35a, Abschlagsart,

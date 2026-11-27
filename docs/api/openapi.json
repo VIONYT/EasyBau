@@ -2951,7 +2951,7 @@
       "post": {
         "operationId": "postApiV1DocumentsIdFinalize",
         "tags": [
-          "documents"
+          "document-finalize"
         ],
         "description": "Recht: `document.write`",
         "parameters": [

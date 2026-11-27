@@ -18,7 +18,7 @@ import { HttpError, notFound, parse } from '../http.js'
 import { randomToken, sha256 } from '../security/crypto.js'
 import { audit, finishLogin, rateLimit } from './auth-common.js'
 import { queueEmail } from './email.js'
-import { todayOf } from './receivables.js'
+import { todayOf } from './receivable-state.js'
 import { noticeTime, securityNotice } from './security-notices.js'
 import { eraseOrphanLogin, registerUserPrivacyRoutes } from './user-privacy.js'
 

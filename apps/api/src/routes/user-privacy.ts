@@ -3,7 +3,7 @@ import type { FastifyInstance, FastifyReply } from 'fastify'
 import { z } from 'zod'
 import { inTenant, requireAuth, requirePermission, type Services } from '../context.js'
 import { notFound, parse } from '../http.js'
-import { todayOf } from './receivables.js'
+import { todayOf } from './receivable-state.js'
 
 const userParam = z.object({ userId: z.uuid('Ungültige ID.') })
 const TS = `'YYYY-MM-DD HH24:MI'`

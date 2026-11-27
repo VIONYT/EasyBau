@@ -2,6 +2,7 @@ import { createHash } from 'node:crypto'
 import { type Sql, withTenant } from '@easybau/db'
 import { type ArchiveStore, type ObjectStore, retainUntilOf } from '@easybau/storage'
 import type { Logger } from 'pino'
+import { isoDate, readAll } from './files.js'
 
 interface Candidate {
   id: string
@@ -33,15 +34,10 @@ export interface VerifyOptions {
   before?: Date
 }
 
-const isoDate = (value: Date | string) =>
-  typeof value === 'string' ? value.slice(0, 10) : value.toISOString().slice(0, 10)
 const sha256Of = (data: Buffer) => createHash('sha256').update(data).digest()
 
 async function readWorkingCopy(files: ObjectStore, key: string): Promise<Buffer | null> {
-  if ((await files.size(key)) === null) return null
-  const chunks: Buffer[] = []
-  for await (const chunk of files.read(key)) chunks.push(chunk as Buffer)
-  return Buffer.concat(chunks)
+  return (await files.size(key)) === null ? null : readAll(files, key)
 }
 
 /**

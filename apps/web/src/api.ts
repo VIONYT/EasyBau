@@ -43,6 +43,7 @@ export async function apiWithEtag<T>(
   path: string,
   body?: unknown,
   ifMatch?: string | null,
+  idempotencyKey: string = crypto.randomUUID(),
 ): Promise<{ data: T; etag: string | null }> {
   if (method === 'GET') {
     // Local changes still waiting for the server: show them, not the older server state.
@@ -64,7 +65,7 @@ export async function apiWithEtag<T>(
   }
   const headers: Record<string, string> = { accept: 'application/json' }
   if (body !== undefined) headers['content-type'] = 'application/json'
-  if (method === 'POST') headers['idempotency-key'] = crypto.randomUUID()
+  if (method === 'POST') headers['idempotency-key'] = idempotencyKey
   if (ifMatch) headers['if-match'] = ifMatch
   return send<T>(path, {
     method,
@@ -81,6 +82,8 @@ export async function apiWithEtag<T>(
 export async function mutate<T>(
   change: QueuedChange<T>,
 ): Promise<{ data: T; etag: string | null; queued: boolean }> {
+  // One key for both ways: a send whose answer got lost is not applied twice from the outbox.
+  const key = crypto.randomUUID()
   if (navigator.onLine && !(await hasWaitingChanges())) {
     try {
       const result = change.blob
@@ -89,11 +92,11 @@ export async function mutate<T>(
             headers: {
               accept: 'application/json',
               'content-type': 'application/octet-stream',
-              'idempotency-key': crypto.randomUUID(),
+              'idempotency-key': key,
             },
             body: change.blob,
           })
-        : await apiWithEtag<T>(change.method, change.path, change.json)
+        : await apiWithEtag<T>(change.method, change.path, change.json, null, key)
       markServerReachable()
       await storeGet(change.resource, result.data, result.etag)
       return { ...result, queued: false }
@@ -101,7 +104,7 @@ export async function mutate<T>(
       if (!(error instanceof ApiError && error.status === 0)) throw error
     }
   }
-  const data = await queueChange(change)
+  const data = await queueChange(change, key)
   void syncNow()
   return { data, etag: null, queued: true }
 }

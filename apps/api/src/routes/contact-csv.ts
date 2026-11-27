@@ -14,7 +14,7 @@ import { z } from 'zod'
 import { inTenant, requirePermission, type Services } from '../context.js'
 import { HttpError, parse } from '../http.js'
 import { insertContact } from './contacts.js'
-import { todayIn } from './receivables.js'
+import { todayIn } from './receivable-state.js'
 
 /**
  * Kontakte als CSV (P2.9): Export of the (filtered) list and import with preview. Columns:

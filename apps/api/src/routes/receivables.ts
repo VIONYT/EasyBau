@@ -1,6 +1,5 @@
 import type { Tx } from '@easybau/db'
 import {
-  addDays,
   type DunningLevel,
   nextDunningDue,
   type ReceivableState,
@@ -8,14 +7,11 @@ import {
 } from '@easybau/domain'
 import { csvLine, germanAmount, germanDate } from '@easybau/exports'
 import {
-  type AdjustmentEntry,
   type AdjustmentKind,
-  type DocumentDetail,
   type InvoiceList,
   type InvoiceListItem,
   type InvoiceListQuery,
   invoiceListQuery,
-  type PaymentEntry,
   type Receivable,
   recordAdjustmentRequest,
   recordPaymentRequest,
@@ -31,86 +27,12 @@ import {
   projectVisibility,
   requirePermission,
   type Services,
-  servicesOf,
 } from '../context.js'
 import { decodeCursor, encodeCursor, HttpError, notFound, parse } from '../http.js'
 import { loadDocument } from './documents.js'
+import { isBilled, todayIn, todayOf } from './receivable-state.js'
 
 const idParam = z.object({ id: z.uuid('Ungültige ID.') })
-const ISO = (tx: Tx, column: string) =>
-  tx.unsafe(`to_char(${column} at time zone 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS.MS"Z"')`)
-
-/** Today in Germany (due dates are calendar days of the company). */
-export function todayIn(now: number, timeZone = 'Europe/Berlin'): string {
-  return new Intl.DateTimeFormat('en-CA', { timeZone }).format(new Date(now))
-}
-
-const isBilled = (doc: Pick<DocumentDetail, 'type'>) =>
-  doc.type === 'invoice' || doc.type === 'credit_note'
-
-/** Payments, deductions, open amount and status of a finalized invoice or credit note. */
-export async function loadReceivable(
-  tx: Tx,
-  doc: DocumentDetail,
-  today: string,
-): Promise<Receivable | null> {
-  if (!isBilled(doc) || !doc.finalizedAt) return null
-  const payments = await tx<(Omit<PaymentEntry, 'amountCents'> & { amount: string })[]>`
-    select p.id, to_char(p.paid_on, 'YYYY-MM-DD') as "paidOn", p.amount_cents::text as amount, p.method,
-           p.reference, p.reverses_payment_id as "reversesId",
-           (select r.id from payment r where r.reverses_payment_id = p.id) as "reversedById",
-           ${ISO(tx, 'p.created_at')} as "createdAt", u.display_name as "createdBy"
-    from payment p left join app_user u on u.id = p.created_by
-    where p.invoice_id = ${doc.id} order by p.paid_on, p.created_at`
-  const adjustments = await tx<(Omit<AdjustmentEntry, 'amountCents'> & { amount: string })[]>`
-    select a.id, a.kind, a.amount_cents::text as amount, a.reason, a.disputed,
-           a.reverses_adjustment_id as "reversesId",
-           (select r.id from receivable_adjustment r where r.reverses_adjustment_id = a.id) as "reversedById",
-           ${ISO(tx, 'a.created_at')} as "createdAt", u.display_name as "createdBy"
-    from receivable_adjustment a left join app_user u on u.id = a.created_by
-    where a.invoice_id = ${doc.id} order by a.created_at`
-  const [dunning] = await tx<{ dunned: boolean }[]>`
-    select exists (select 1 from dunning_notice where invoice_id = ${doc.id} and sent_at is not null) as dunned`
-  const state = receivableState({
-    grossCents: BigInt(doc.totals.grossCents),
-    paidCents: payments.reduce((s, p) => s + BigInt(p.amount), 0n),
-    adjustments: adjustments.map((a) => ({ kind: a.kind, amountCents: BigInt(a.amount) })),
-    dueDate: doc.dueDate,
-    today,
-    cancelled: doc.status === 'cancelled' || doc.invoiceKind === 'cancellation',
-    dunned: dunning?.dunned ?? false,
-  })
-  const n = (v: bigint) => Number(v)
-  return {
-    status: state.status,
-    grossCents: doc.totals.grossCents,
-    payableCents: doc.totals.payableCents,
-    paidCents: n(payments.reduce((s, p) => s + BigInt(p.amount), 0n)),
-    adjustedCents: n(state.adjustedCents),
-    openCents: n(state.openCents),
-    creditCents: n(state.creditCents),
-    retentionHeldCents: n(state.retentionHeldCents),
-    dueDate: doc.dueDate,
-    overdueDays: state.overdueDays,
-    cashDiscount:
-      doc.cashDiscountPercent && doc.cashDiscountDays !== null
-        ? {
-            percent: doc.cashDiscountPercent,
-            days: doc.cashDiscountDays,
-            until: addDays(doc.documentDate, doc.cashDiscountDays),
-            amountCents: doc.totals.cashDiscountCents,
-          }
-        : null,
-    retentionCents: doc.totals.retentionCents,
-    constructionLevyCents: doc.totals.constructionLevyCents,
-    payments: payments.map(({ amount, ...p }) => ({ ...p, amountCents: Number(amount) })),
-    adjustments: adjustments.map(({ amount, ...a }) => ({ ...a, amountCents: Number(amount) })),
-  }
-}
-
-/** Today for the current request (injectable clock of the services). */
-export const todayOf = (tx: Tx) => todayIn(servicesOf(tx)?.now() ?? Date.now())
-
 /** Locks the invoice and loads it with its receivable; only finalized, not cancelled invoices. */
 async function lockedReceivable(tx: Tx, auth: AuthContext, id: string, forNewEntry = true) {
   // Lock first, then read: the open amount and retention used for the limit checks below must
@@ -170,6 +92,24 @@ interface ListRow {
   notices: { level: DunningLevel; dueDate: string }[]
 }
 
+/**
+ * Index of the first invoice after the cursor (date, number, id) in the list order. Works also
+ * when the invoice of the cursor left the filter meanwhile (e.g. paid while filtering "overdue").
+ */
+export function startAfter(
+  items: readonly Pick<InvoiceListItem, 'documentDate' | 'number' | 'id'>[],
+  [date, number, id]: readonly [string, string | null, string],
+): number {
+  const index = items.findIndex((i) =>
+    i.documentDate !== date
+      ? i.documentDate < date
+      : i.number !== number
+        ? i.number !== null && (number === null || i.number < number)
+        : i.id < id,
+  )
+  return index === -1 ? items.length : index
+}
+
 export async function listInvoices(
   tx: Tx,
   auth: AuthContext,
@@ -208,7 +148,8 @@ export async function listInvoices(
                   or coalesce(d.recipient_snapshot ->> 'name', c.display_name) ilike ${q})`
           : tx``
       }
-    order by d.document_date desc, d.number desc nulls first, d.id desc`
+    -- "C" collation: byte order, the same as the string comparison in startAfter()
+    order by d.document_date desc, d.number collate "C" desc nulls first, d.id desc`
   const items: InvoiceListItem[] = []
   const sums = { count: 0, netCents: 0, grossCents: 0, paidCents: 0, openCents: 0, overdueCents: 0 }
   for (const row of rows) {
@@ -446,14 +387,23 @@ export function registerReceivableRoutes(app: FastifyInstance, services: Service
     const { items, sums } = await inTenant(services, auth, (tx) =>
       listInvoices(tx, auth, query, todayIn(services.now())),
     )
-    const cursor = decodeCursor(query.cursor, 1)
-    const start = cursor ? items.findIndex((i) => i.id === cursor[0]) + 1 : 0
+    const cursor = decodeCursor(query.cursor, 3)
+    const start = cursor
+      ? startAfter(items, [
+          String(cursor[0]),
+          cursor[1] === '' ? null : String(cursor[1]),
+          String(cursor[2]),
+        ])
+      : 0
     const page = items.slice(start, start + query.limit)
     const last = page.at(-1)
     return {
       items: page,
       sums,
-      nextCursor: last && start + query.limit < items.length ? encodeCursor([last.id]) : null,
+      nextCursor:
+        last && start + query.limit < items.length
+          ? encodeCursor([last.documentDate, last.number ?? '', last.id])
+          : null,
     }
   })
 

@@ -73,6 +73,21 @@ describe.skipIf(!process.env.DATABASE_URL)('Härtung (integration)', () => {
     expect(other.statusCode).toBe(422)
   })
 
+  it('runs a request again whose first try never got an answer (server restarted)', async () => {
+    const body = { kind: 'organization', organizationName: 'Neustart eG' }
+    const headers = { 'idempotency-key': 'neustart-schluessel-1' }
+    expect((await admin.post('/api/v1/contacts', body, headers)).statusCode).toBe(201)
+    // As if the process had died before storing the answer.
+    await h.adminSql`update idempotency_key set response_status = null, response_body = null
+                     where key = 'neustart-schluessel-1'`
+    expect((await admin.post('/api/v1/contacts', body, headers)).statusCode).toBe(409)
+    await h.adminSql`update idempotency_key set created_at = now() - interval '10 minutes'
+                     where key = 'neustart-schluessel-1'`
+    const again = await admin.post('/api/v1/contacts', body, headers)
+    expect(again.headers['idempotency-replayed']).toBeUndefined()
+    expect(again.statusCode).not.toBe(409)
+  })
+
   it('masks nested secrets in the Änderungsprotokoll', async () => {
     await h.adminSql`
       update tenant set settings = jsonb_set(settings, '{incomingMail}',

@@ -52,7 +52,7 @@ import {
 import { ValidatorUnavailableError } from '../kosit.js'
 import { assignCreditorNumber, usableContact } from './contacts.js'
 import { contentDisposition } from './files.js'
-import { todayOf } from './receivables.js'
+import { todayOf } from './receivable-state.js'
 import { datevSettings } from './settings.js'
 
 /**

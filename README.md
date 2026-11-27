@@ -60,6 +60,20 @@ Wichtig für den Echtbetrieb:
 - Die **Sicherung außer Haus** einrichten (`RESTIC_REPOSITORY` in der `.env`). Der Betriebs-Check warnt, solange sie fehlt.
 - Optional: E-Mail-Versand (SMTP), Rechnungseingang per E-Mail, externer S3 für das Belegarchiv.
 
+### Hinter Traefik betreiben
+
+Läuft auf dem Server schon Traefik, übernimmt Traefik HTTPS und Zertifikat; der mitgelieferte Caddy belegt dann keine Ports und läuft nur noch intern weiter. In der `.env` zusätzlich:
+
+```bash
+COMPOSE_FILE=compose.yaml:compose.traefik.yaml
+APP_DOMAIN=erp.meine-firma.de      # Domain, die Traefik an EasyBau weiterleitet
+TRAEFIK_NETWORK=traefik            # externes Docker-Netz von Traefik
+TRAEFIK_ENTRYPOINT=websecure       # HTTPS-Entrypoint
+TRAEFIK_CERTRESOLVER=letsencrypt   # Zertifikats-Resolver
+```
+
+Dann `docker compose up -d` (Web-Image neuer als 0.1.0, z. B. `APP_VERSION=edge`). Details und andere Reverse Proxys (nginx, HAProxy): [Betriebsdokumentation, Abschnitt 1a](docs/self-hosting/README.md#1a-hinter-traefik-oder-einem-anderen-vorhandenen-reverse-proxy).
+
 Alles Weitere: [Betriebsdokumentation](docs/self-hosting/README.md).
 
 ## Dokumentation

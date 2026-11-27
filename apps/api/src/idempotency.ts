@@ -8,7 +8,9 @@ import { sha256 } from './security/crypto.js'
  * Idempotency-Key support for POST requests (CLAUDE.md rule 10).
  * The first request with a key is executed and its response stored; repeats with the same
  * key and the same body get the stored response (Idempotency-Replayed: true). The same key with
- * a different body is rejected. Failed requests (5xx) release the key so the client can retry.
+ * a different body is rejected. Failed requests (5xx) release the key so the client can retry,
+ * and so does a request left without answer for 5 minutes (server restarted mid-request).
+ * Keys are kept for 7 days (worker job `notification.purge`).
  */
 export function idempotencyHooks(services: Services) {
   const preHandler = async (request: FastifyRequest, reply: FastifyReply) => {
@@ -28,7 +30,11 @@ export function idempotencyHooks(services: Services) {
     const result = await withTenant(services.sql, { tenantId, userId }, async (tx) => {
       const inserted = await tx`
         insert into idempotency_key (tenant_id, key, request_hash) values (${tenantId}, ${key}, ${requestHash})
-        on conflict do nothing returning key`
+        on conflict (tenant_id, key) do update set created_at = now()
+          where idempotency_key.response_status is null
+            and idempotency_key.request_hash = excluded.request_hash
+            and idempotency_key.created_at < now() - interval '5 minutes'
+        returning key`
       if (inserted.length) return { state: 'new' as const }
       const [row] = await tx<{ requestHash: Buffer; status: number | null; body: unknown }[]>`
         select request_hash as "requestHash", response_status as status, response_body as body

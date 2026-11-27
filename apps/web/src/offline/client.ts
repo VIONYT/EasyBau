@@ -164,7 +164,10 @@ export interface QueuedChange<T> {
 }
 
 /** Puts a change into the outbox and shows it locally right away. */
-export async function queueChange<T>(change: QueuedChange<T>): Promise<T> {
+export async function queueChange<T>(
+  change: QueuedChange<T>,
+  idempotencyKey: string = crypto.randomUUID(),
+): Promise<T> {
   if (!owner) throw new Error('not signed in')
   const current = await readCache<T>(db(), change.resource)
   const next = change.optimistic(current?.data as T | undefined)
@@ -179,7 +182,7 @@ export async function queueChange<T>(change: QueuedChange<T>): Promise<T> {
     path: change.path,
     ...(change.json === undefined ? {} : { json: change.json }),
     ...(change.blob ? { blob: change.blob } : {}),
-    idempotencyKey: crypto.randomUUID(),
+    idempotencyKey,
     resource: change.resource,
     label: change.label,
     createdAt: Date.now(),
