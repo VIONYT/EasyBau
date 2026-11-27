@@ -5,7 +5,14 @@ import { type LetterheadLayout, type LetterheadSettings, letterheadRequest } fro
 import { TooLargeError } from '@easybau/storage'
 import type { FastifyInstance } from 'fastify'
 import { z } from 'zod'
-import { inTenant, requireAuth, requirePermission, type Services, servicesOf } from '../context.js'
+import {
+  inTenant,
+  projectVisibility,
+  requireAuth,
+  requirePermission,
+  type Services,
+  servicesOf,
+} from '../context.js'
 import { HttpError, notFound, parse } from '../http.js'
 
 const LOGO_MAX_BYTES = 2 * 1024 * 1024
@@ -155,14 +162,24 @@ export function registerLetterheadRoutes(app: FastifyInstance, services: Service
     }
   })
 
-  // Company assets (logo) for every member: used in documents and their print view.
+  // Company assets: the logo and attachments for every member. A handwritten signature only for
+  // the person who drew it and for people who can see a report or Aufmaßblatt signed with it
+  // (security audit run-1: before, every member could download every signature).
   app.get('/api/v1/assets/:id', async (request, reply) => {
     const auth = requireAuth(request)
     const { id } = parse(assetParam, request.params)
     const asset = await inTenant(services, auth, async (tx) => {
       const [row] = await tx<{ key: string; mime: string; size: string }[]>`
-        select storage_key as key, mime_type as mime, size_bytes::text as size
-        from tenant_asset where id = ${id}`
+        select a.storage_key as key, a.mime_type as mime, a.size_bytes::text as size
+        from tenant_asset a
+        where a.id = ${id}
+          and (a.kind <> 'signature' or a.created_by = ${auth.userId}
+               or exists (select 1 from report_signature s join report r on r.id = s.report_id
+                          join project p on p.id = r.project_id
+                          where s.image_asset_id = a.id and ${projectVisibility(tx, auth)})
+               or exists (select 1 from measurement_sheet m join project p on p.id = m.project_id
+                          where a.id in (m.contractor_signature_asset_id, m.client_signature_asset_id)
+                            and ${projectVisibility(tx, auth)}))`
       return row
     })
     if (!asset) throw notFound('Das Bild')

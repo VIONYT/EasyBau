@@ -1,7 +1,7 @@
 import { randomInt } from 'node:crypto'
 import { buildApi } from '@easybau/api'
 import { ConfigError, loadConfig, runsApi, runsWorker } from '@easybau/config'
-import { createSql, migrate, pingDatabase, type Sql } from '@easybau/db'
+import { createSql, ensureRuntimeLogin, migrate, pingDatabase, type Sql } from '@easybau/db'
 import { startWorker, type Worker } from '@easybau/worker'
 import { type Logger, pino } from 'pino'
 
@@ -12,7 +12,7 @@ import { type Logger, pino } from 'pino'
  *   APP_ROLE=worker → jobs only; still serves /healthz and /readyz for Docker
  */
 async function main(): Promise<void> {
-  const config = loadConfig()
+  let config = loadConfig()
   // Reset, invitation and e-mail links and the WebAuthn origin come from PUBLIC_URL; without it
   // they would follow the request's (forwarded) host header (security audit run-1).
   if (config.NODE_ENV === 'production' && runsApi(config.APP_ROLE) && !config.PUBLIC_URL) {
@@ -37,7 +37,24 @@ async function main(): Promise<void> {
     }
   }
 
-  // Application queries use the restricted runtime role, so row level security always applies.
+  // Application queries use their own login without superuser rights (and switch to the
+  // restricted role opc_app), so row level security always applies and cannot be switched off.
+  if (!config.DATABASE_RUNTIME_URL) {
+    const admin = createSql({ ...config, DATABASE_POOL_MAX: 1 }, { mode: 'admin' })
+    try {
+      const url = await ensureRuntimeLogin(admin, config.DATABASE_URL, config.APP_SECRET)
+      config = { ...config, DATABASE_RUNTIME_URL: url }
+    } catch (error) {
+      // E.g. an external database whose administrator may not create roles: keep working as
+      // before (role switch only) and say so.
+      logger.warn(
+        { err: (error as Error).message },
+        'could not create the runtime database login; set DATABASE_RUNTIME_URL',
+      )
+    } finally {
+      await admin.end({ timeout: 5 })
+    }
+  }
   const sql = createSql(config)
 
   const setupToken = runsApi(config.APP_ROLE)

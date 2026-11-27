@@ -33,6 +33,7 @@ import {
   finishLogin,
   mfaMethodsOf,
   rateLimit,
+  requireRecentLogin,
   setSessionCookie,
   useChallenge,
 } from './auth-common.js'
@@ -262,6 +263,7 @@ export function registerAuthRoutes(app: FastifyInstance, services: Services) {
   app.post('/api/v1/auth/totp/setup', async (request): Promise<TotpSetupResponse> => {
     const auth = requireAuth(request)
     if (auth.totpEnabled) throw new HttpError(409, 'Die Zwei-Faktor-Anmeldung ist bereits aktiv.')
+    await requireRecentLogin(services, auth.sessionId)
     const secret = generateTotpSecret()
     await sql`update app_user set totp_pending_secret_enc = ${services.cipher.encrypt(secret)} where id = ${auth.userId}`
     return { secret, uri: totpUri(secret, auth.email, services.config.APP_NAME) }

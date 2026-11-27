@@ -5,6 +5,7 @@ import { Client, createHarness, type Harness } from './testing/harness.js'
 describe.skipIf(!process.env.DATABASE_URL)('Härtung (integration)', () => {
   let h: Harness
   let admin: Client
+  let office: Client
 
   beforeAll(async () => {
     h = await createHarness({ requireAdminMfa: false, smtp: true })
@@ -58,7 +59,7 @@ describe.skipIf(!process.env.DATABASE_URL)('Härtung (integration)', () => {
       email: 'buero@example.test',
       roleKey: 'office_lead',
     })
-    const office = new Client(h.app)
+    office = new Client(h.app)
     await office.post('/api/v1/invitations/accept', {
       token: new URL(invite.json().acceptUrl).hash.slice(1),
       displayName: 'Büro',
@@ -77,6 +78,29 @@ describe.skipIf(!process.env.DATABASE_URL)('Härtung (integration)', () => {
     expect(res.statusCode, res.body).toBe(200)
     expect(res.body).toContain('imap.example.test')
     expect(res.body).not.toContain('GEHEIM-CIPHERTEXT')
+  })
+
+  it('hands out a drawn signature only to its owner and to readers of what it signs', async () => {
+    const png = Buffer.from(
+      'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==',
+      'base64',
+    )
+    const signature = (await admin.upload('/api/v1/signatures', png)).json().assetId as string
+    expect((await admin.get(`/api/v1/assets/${signature}`)).statusCode).toBe(200)
+    expect((await office.get(`/api/v1/assets/${signature}`)).statusCode).toBe(404)
+  })
+
+  it('needs a fresh sign-in to add or remove a second factor', async () => {
+    expect((await office.post('/api/v1/auth/totp/setup')).statusCode).toBe(200)
+    // The same session an hour later (e.g. left open on a shared computer).
+    await h.adminSql`update user_session set created_at = now() - interval '1 hour'`
+    for (const res of [
+      await office.post('/api/v1/auth/totp/setup'),
+      await office.post('/api/v1/auth/webauthn/register/options'),
+    ]) {
+      expect(res.statusCode).toBe(403)
+      expect(res.json().detail).toMatch(/neu an/)
+    }
   })
 
   it('puts pg_temp last for every SECURITY DEFINER function', async () => {

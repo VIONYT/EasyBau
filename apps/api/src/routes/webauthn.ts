@@ -23,6 +23,7 @@ import {
   deleteChallenge,
   finishLogin,
   rateLimit,
+  requireRecentLogin,
   setChallengeValue,
   useChallenge,
 } from './auth-common.js'
@@ -109,6 +110,7 @@ export function registerWebauthnRoutes(app: FastifyInstance, services: Services)
 
   app.post('/api/v1/auth/webauthn/register/options', async (request, reply) => {
     const auth = requireAuth(request)
+    await requireRecentLogin(services, auth.sessionId)
     const { rpID, rpName } = relyingParty(services, request)
     const existing = await credentialsOf(services, auth.userId)
     const options = await generateRegistrationOptions({
@@ -185,6 +187,7 @@ export function registerWebauthnRoutes(app: FastifyInstance, services: Services)
   app.delete('/api/v1/auth/webauthn/credentials/:id', async (request, reply) => {
     const auth = requireAuth(request)
     const { id } = parse(idParam, request.params)
+    await requireRecentLogin(services, auth.sessionId)
     if (mfaSetupRequired(services, { ...auth, webauthnCount: auth.webauthnCount - 1 })) {
       throw new HttpError(
         409,

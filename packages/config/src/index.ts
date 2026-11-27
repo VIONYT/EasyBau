@@ -18,6 +18,12 @@ const envSchema = z.object({
   PORT: z.coerce.number().int().min(1).max(65535).default(3000),
   DATABASE_URL: z.url({ protocol: /^postgres(ql)?$/ }),
   DATABASE_POOL_MAX: z.coerce.number().int().min(1).max(100).default(10),
+  /**
+   * Login for application queries (no superuser). Optional: by default the server creates its own
+   * login role at start (password derived from APP_SECRET) and DATABASE_URL is only used for
+   * migrations and the job queue.
+   */
+  DATABASE_RUNTIME_URL: z.url({ protocol: /^postgres(ql)?$/ }).optional(),
   /** Apply pending database migrations on start (API roles only). */
   MIGRATE_ON_START: z
     .enum(['true', 'false'])

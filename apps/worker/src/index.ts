@@ -63,6 +63,7 @@ export async function startWorker(
     Config,
     | 'APP_NAME'
     | 'DATABASE_URL'
+    | 'DATABASE_RUNTIME_URL'
     | 'DATABASE_POOL_MAX'
     | 'PROFILE'
     | 'SMTP_HOST'
