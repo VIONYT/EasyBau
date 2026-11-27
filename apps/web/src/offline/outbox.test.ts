@@ -45,6 +45,7 @@ const json = (status: number, body: unknown, etag?: string) =>
 beforeEach(async () => {
   db = new OfflineDb(`test-${Math.random()}`)
   await db.open()
+  await db.meta.put({ key: 'owner', value: OWNER })
 })
 
 describe('Offline cache', () => {
@@ -169,5 +170,17 @@ describe('Outbox', () => {
     expect(seen).toEqual([OWNER])
     expect(await waiting(db, 'other:tenant')).toHaveLength(1)
     expect(await readCache(db, SHEET)).toBeUndefined()
+  })
+
+  it('sends nothing from a tab whose account signed out or was replaced in another tab', async () => {
+    await db.outbox.add(entry())
+    const send = async () => new Response(null, { status: 204 })
+    await db.meta.put({ key: 'owner', value: 'user-2:tenant-1' })
+    expect(await flushOutbox(db, OWNER, send)).toMatchObject({ sent: 0 })
+    await db.meta.delete('owner')
+    expect(await flushOutbox(db, OWNER, send)).toMatchObject({ sent: 0 })
+    expect(await waiting(db, OWNER)).toHaveLength(1)
+    await db.meta.put({ key: 'owner', value: OWNER })
+    expect(await flushOutbox(db, OWNER, send)).toMatchObject({ sent: 1 })
   })
 })

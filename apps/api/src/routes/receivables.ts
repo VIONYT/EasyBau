@@ -500,6 +500,7 @@ export function registerReceivableRoutes(app: FastifyInstance, services: Service
               : '',
           ],
           true,
+          { spreadsheet: true },
         ),
       ),
     ]

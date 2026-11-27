@@ -2,6 +2,7 @@
 export * from './document.js'
 export * from './dunning.js'
 export * from './frame.js'
+export * from './image-size.js'
 export * from './render.js'
 export * from './site.js'
 export * from './types.js'

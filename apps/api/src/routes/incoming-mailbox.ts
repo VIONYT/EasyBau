@@ -42,11 +42,16 @@ export interface MailMessage {
   from: string | null
   subject: string | null
   attachments: MailAttachment[]
+  /** Larger than allowed: not downloaded (no attachments), only logged and marked as done. */
+  tooLarge?: boolean
 }
 
 export interface MailboxConnection {
-  /** Unread messages, oldest first, at most `limit`. */
-  unread(limit: number): Promise<MailMessage[]>
+  /**
+   * Unread messages, oldest first, at most `limit`. Messages above `maxBytes` are not downloaded
+   * (`tooLarge`); the batch stops early once twice that size has been read, the rest comes next run.
+   */
+  unread(limit: number, maxBytes?: number): Promise<MailMessage[]>
   /** Processed: mark as read or move to the processed folder. */
   done(uid: number): Promise<void>
   close(): Promise<void>
@@ -217,12 +222,22 @@ export const imapConnector: MailboxConnector = async (access) => {
   await client.connect()
   const lock = await client.getMailboxLock(access.mailbox)
   return {
-    async unread(limit) {
+    async unread(limit, maxBytes = Number.POSITIVE_INFINITY) {
       const uids = ((await client.search({ seen: false }, { uid: true })) || []).slice(0, limit)
       const messages: MailMessage[] = []
+      let read = 0
       for (const uid of uids) {
+        // Size first: a sender must not make the server download and parse any amount of data.
+        const head = await client.fetchOne(String(uid), { size: true }, { uid: true })
+        if (head === false) continue
+        if ((head.size ?? 0) > maxBytes) {
+          messages.push({ uid, from: null, subject: null, attachments: [], tooLarge: true })
+          continue
+        }
+        if (messages.length > 0 && read + (head.size ?? 0) > 2 * maxBytes) break
         const message = await client.fetchOne(String(uid), { source: true }, { uid: true })
         if (message === false || !message.source) continue
+        read += message.source.length
         const parsed = await simpleParser(message.source)
         messages.push({
           uid,
@@ -411,12 +426,23 @@ export async function pollMailbox(
     let connection: MailboxConnection | null = null
     try {
       connection = await connector(access)
-      for (const message of await connection.unread(MESSAGES_PER_RUN)) {
+      // The same limit as for uploads; a whole e-mail may be larger (base64, text, signature).
+      const maxFileBytes = services.config.UPLOAD_MAX_MB * 1024 * 1024
+      for (const message of await connection.unread(MESSAGES_PER_RUN, 2 * maxFileBytes)) {
         run.messages += 1
         let retry = false
         const results: IncomingMailLogAttachment[] = []
+        if (message.tooLarge) {
+          run.ignored += 1
+          results.push({ filename: '(E-Mail)', result: 'ignored', reason: 'E-Mail zu groß' })
+        }
         for (const attachment of message.attachments) {
           const filename = attachment.filename.slice(0, 255)
+          if (attachment.content.length > maxFileBytes) {
+            run.ignored += 1
+            results.push({ filename, result: 'ignored', reason: 'Datei zu groß' })
+            continue
+          }
           // Pictures embedded in the text (signature logos) are no invoices; PDFs/XML always count.
           const embeddedPicture = attachment.inline && !/\.(pdf|xml)$/i.test(attachment.filename)
           if (!INVOICE_EXTENSIONS.test(attachment.filename) || embeddedPicture) {

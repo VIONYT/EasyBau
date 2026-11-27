@@ -5,6 +5,7 @@ import {
   detectEncoding,
   joinLongText,
   LineSplitter,
+  MAX_DATANORM_LINE,
   mapDatanormUnit,
   parseDatanormLine,
   parseDatanormPrice,
@@ -238,6 +239,17 @@ describe('DATANORM helpers', () => {
     expect(splitter.push('2\r\nA;3')).toEqual([{ text: 'A;2\r', line: 2 }])
     expect(splitter.end()).toEqual([{ text: 'A;3', line: 3 }])
     expect(splitter.end()).toEqual([])
+  })
+
+  it('refuses lines longer than any DATANORM record (no quadratic growth)', () => {
+    const splitter = new LineSplitter()
+    expect(splitter.push('A;1\n')).toEqual([{ text: 'A;1', line: 1 }])
+    const chunk = 'T;'.padEnd(16 * 1024, 'x')
+    expect(() => {
+      for (let i = 0; i < 10; i++) splitter.push(chunk)
+    }).toThrow(/Zeile 2: Die Zeile ist zu lang/)
+    const long = new LineSplitter()
+    expect(() => long.push(`${'x'.repeat(MAX_DATANORM_LINE + 1)}\nA;1`)).toThrow(DatanormError)
   })
 })
 

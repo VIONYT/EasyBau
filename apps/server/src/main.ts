@@ -13,6 +13,13 @@ import { type Logger, pino } from 'pino'
  */
 async function main(): Promise<void> {
   const config = loadConfig()
+  // Reset, invitation and e-mail links and the WebAuthn origin come from PUBLIC_URL; without it
+  // they would follow the request's (forwarded) host header (security audit run-1).
+  if (config.NODE_ENV === 'production' && runsApi(config.APP_ROLE) && !config.PUBLIC_URL) {
+    throw new ConfigError(
+      'Invalid configuration:\n  - PUBLIC_URL: Adresse der Installation fehlt (z. B. https://erp.meine-firma.de)',
+    )
+  }
   const logger = pino({ level: config.LOG_LEVEL, base: { role: config.APP_ROLE } })
 
   // Migrations run with the admin login, before anything else touches the schema (ADR 0003).

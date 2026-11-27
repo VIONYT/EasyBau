@@ -1,19 +1,45 @@
 /** CSV for German tools (Excel, IDEA, DATEV): semicolon, CRLF, quotes doubled. */
 export type CsvValue = string | number | null | undefined
 
-export function csvField(value: CsvValue, quoteAlways = false): string {
+export interface CsvOptions {
+  /**
+   * For files opened in a spreadsheet (contacts, invoice list, catalog): text starting with
+   * = + - @ (or tab/CR) is prefixed with an apostrophe so it is never evaluated as a formula
+   * (CSV injection, OWASP). Plain numbers such as "-12,50" stay as they are. Not for DATEV and
+   * GoBD files, which must contain the data unchanged.
+   */
+  spreadsheet?: boolean
+}
+
+const FORMULA_START = /^[=+\-@\t\r]/
+const PLAIN_NUMBER = /^[+-]?\d[\d.,]*$/
+
+export function neutralizeFormula(text: string): string {
+  return FORMULA_START.test(text) && !PLAIN_NUMBER.test(text) ? `'${text}` : text
+}
+
+export function csvField(value: CsvValue, quoteAlways = false, options: CsvOptions = {}): string {
   if (value === null || value === undefined) return ''
-  const text = String(value)
+  const raw = String(value)
+  const text = options.spreadsheet && typeof value === 'string' ? neutralizeFormula(raw) : raw
   if (quoteAlways || /[";\r\n]/.test(text)) return `"${text.replace(/"/g, '""')}"`
   return text
 }
 
-export function csvLine(values: readonly CsvValue[], quoteText = false): string {
-  return values.map((v) => csvField(v, quoteText && typeof v === 'string')).join(';')
+export function csvLine(
+  values: readonly CsvValue[],
+  quoteText = false,
+  options: CsvOptions = {},
+): string {
+  return values.map((v) => csvField(v, quoteText && typeof v === 'string', options)).join(';')
 }
 
-export function csv(header: readonly string[], rows: readonly (readonly CsvValue[])[]): string {
-  return `${[csvLine(header), ...rows.map((r) => csvLine(r))].join('\r\n')}\r\n`
+export function csv(
+  header: readonly string[],
+  rows: readonly (readonly CsvValue[])[],
+  options: CsvOptions = {},
+): string {
+  return `${[csvLine(header), ...rows.map((r) => csvLine(r, false, options))].join('\r\n')}\r\n`
 }
 
 /** Cents as German amount without thousands separator: 123456 → "1234,56", -5 → "-0,05". */
@@ -93,5 +119,6 @@ export function parseCsv(text: string): string[][] {
   }
   row.push(field)
   if (row.some((v) => v !== '')) rows.push(row)
-  return rows
+  // Own exports neutralise formulas with a leading apostrophe; a re-import restores the text.
+  return rows.map((r) => r.map((v) => (/^'[=+\-@\t\r]/.test(v) ? v.slice(1) : v)))
 }

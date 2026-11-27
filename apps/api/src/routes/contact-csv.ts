@@ -390,6 +390,7 @@ export function registerContactCsvRoutes(app: FastifyInstance, services: Service
         r.billingBlock || r.billingStreet || r.billingCity ? r.billingCountry : null,
         r.role,
       ]),
+      { spreadsheet: true },
     )
     return reply
       .header('content-type', 'text/csv; charset=utf-8')

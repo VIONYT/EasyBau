@@ -273,6 +273,7 @@ export function registerCatalogCsvRoutes(app: FastifyInstance, services: Service
         germanAmount(r.price ?? '0'),
         r.pack?.replace('.', ',') ?? null,
       ]),
+      { spreadsheet: true },
     )
     return reply
       .header('content-type', 'text/csv; charset=utf-8')

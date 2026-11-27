@@ -71,6 +71,10 @@ export async function flushOutbox(
   send: Sender,
 ): Promise<FlushResult> {
   const result: FlushResult = { sent: 0, failed: 0, interrupted: false, needsLogin: false }
+  // Another tab may have signed out or in as someone else since this tab learned its owner: the
+  // browser's session cookie then belongs to that account, so nothing is sent on behalf of the
+  // old one (security audit run-1). The stored owner always follows the latest sign-in.
+  if ((await storedOwner(db)) !== owner) return result
   const entries = (await waiting(db, owner)).filter((e) => e.status === 'pending')
   for (const entry of entries) {
     const seq = entry.seq as number

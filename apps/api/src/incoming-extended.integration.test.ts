@@ -70,6 +70,7 @@ const inbox: {
   done: number[]
   access: MailboxAccess | null
   fail: boolean
+  maxBytes?: number | undefined
 } = {
   messages: [],
   done: [],
@@ -90,8 +91,10 @@ describe.skipIf(!process.env.DATABASE_URL)('Eingangsrechnungen ausbauen (integra
         if (inbox.fail) throw Object.assign(new Error('auth'), { authenticationFailed: true })
         inbox.access = access
         return {
-          unread: async (limit) =>
-            inbox.messages.filter((m) => !inbox.done.includes(m.uid)).slice(0, limit),
+          unread: async (limit, maxBytes) => {
+            inbox.maxBytes = maxBytes
+            return inbox.messages.filter((m) => !inbox.done.includes(m.uid)).slice(0, limit)
+          },
           done: async (uid) => {
             inbox.done.push(uid)
           },
@@ -291,6 +294,22 @@ describe.skipIf(!process.env.DATABASE_URL)('Eingangsrechnungen ausbauen (integra
     ).json() as IncomingMailRun
     expect(unusable).toMatchObject({ messages: 1, ignored: 1, failed: 0 })
     expect(inbox.done).toContain(14)
+    // Too large: the e-mail is not downloaded at all, a single file above UPLOAD_MAX_MB is skipped.
+    inbox.messages.push(
+      { uid: 15, from: null, subject: null, attachments: [], tooLarge: true },
+      {
+        uid: 16,
+        from: 'gross@example.test',
+        subject: 'Riesig',
+        attachments: [{ filename: 'scan.pdf', content: Buffer.alloc(50 * 1024 * 1024 + 1) }],
+      },
+    )
+    const large = (
+      await admin.post('/api/v1/settings/incoming-mail/run', {})
+    ).json() as IncomingMailRun
+    expect(large).toMatchObject({ messages: 2, ignored: 2, failed: 0, imported: 0 })
+    expect(inbox.maxBytes).toBe(100 * 1024 * 1024)
+    expect(inbox.done).toEqual(expect.arrayContaining([15, 16]))
     // A broken login is reported, nothing is marked as read
     inbox.fail = true
     const failed = (

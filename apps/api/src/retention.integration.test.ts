@@ -274,6 +274,25 @@ describe.skipIf(!process.env.DATABASE_URL)('Aufbewahrung und Anonymisieren (inte
     expect(log[0]?.purgedAt).not.toBeNull()
   })
 
+  it('keeps the WORM purge list bound to the originals of anonymised documents', async () => {
+    // The runtime role cannot point an entry at another object (e.g. of the current invoice).
+    const [other] = await h.adminSql<{ key: string }[]>`
+      select storage_key as key from document_artifact where document_id = ${current.id} limit 1`
+    await expect(
+      withTenant(
+        h.sql,
+        { tenantId },
+        (tx) => tx`update artifact_purge set storage_key = ${other?.key as string},
+                    locked_until = '2000-01-01' where document_id = ${old.id}`,
+      ),
+    ).rejects.toThrow(/only the done timestamps/)
+    // Only real originals of the anonymised document come out of the operator's list.
+    const due = await h.adminSql<
+      { key: string }[]
+    >`select storage_key as key from archive_purge_due()`
+    for (const row of due) expect(oldKeys).toContain(row.key)
+  })
+
   it('keeps approvals and the log away from other companies (RLS)', async () => {
     const rows = await withTenant(
       h.sql,
