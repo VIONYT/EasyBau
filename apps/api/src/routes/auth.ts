@@ -42,6 +42,10 @@ export { buildMe } from './auth-common.js'
 
 const LOGIN_FAILED = 'E-Mail-Adresse oder Passwort ist falsch.'
 const TOTP_INVALID = 'Der Bestätigungscode ist ungültig oder abgelaufen.'
+// TOTP guesses are counted per person across all logins and challenges: a correct password
+// yields a fresh challenge, so the per-challenge limit alone would allow unlimited guessing.
+const MAX_TOTP_FAILURES = 10
+const totpKey = (userId: string) => `totp:${userId}`
 
 export function registerAuthRoutes(app: FastifyInstance, services: Services) {
   const { sql } = services
@@ -143,6 +147,7 @@ export function registerAuthRoutes(app: FastifyInstance, services: Services) {
     }
     // One-shot variant for API clients: password and TOTP code in the same request.
     if (input.totp && user.totpSecret) {
+      await rateLimit(services, totpKey(user.id), MAX_TOTP_FAILURES)
       const step = verifyTotp(
         services.cipher.decrypt(user.totpSecret),
         input.totp,
@@ -151,6 +156,7 @@ export function registerAuthRoutes(app: FastifyInstance, services: Services) {
       )
       if (step === null) throw new HttpError(401, TOTP_INVALID, { totp: 'Code ungültig.' })
       await sql`update app_user set totp_last_step = ${step} where id = ${user.id}`
+      await resetRateLimit(sql, totpKey(user.id))
       return finishLogin(services, request, reply, {
         userId: user.id,
         requestedTenantId: input.tenantId,
@@ -175,6 +181,7 @@ export function registerAuthRoutes(app: FastifyInstance, services: Services) {
       from app_user where id = ${challenge.userId as string} and is_active`
     if (!user?.secret)
       throw new HttpError(400, 'Für diesen Zugang ist keine App-Bestätigung eingerichtet.')
+    await rateLimit(services, totpKey(challenge.userId as string), MAX_TOTP_FAILURES)
     const step = verifyTotp(
       services.cipher.decrypt(user.secret),
       code,
@@ -183,6 +190,7 @@ export function registerAuthRoutes(app: FastifyInstance, services: Services) {
     )
     if (step === null) throw new HttpError(401, TOTP_INVALID, { code: 'Code ungültig.' })
     await sql`update app_user set totp_last_step = ${step} where id = ${challenge.userId as string}`
+    await resetRateLimit(sql, totpKey(challenge.userId as string))
     await deleteChallenge(services, challenge.id)
     return finishLogin(services, request, reply, {
       userId: challenge.userId as string,

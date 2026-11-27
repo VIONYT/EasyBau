@@ -40,6 +40,7 @@ describe.skipIf(!baseUrl)('API: setup, login, contacts, projects (integration)',
   let app: FastifyInstance
   let clock = Date.parse('2026-11-08T10:00:00Z')
   let session = ''
+  let totpCode = (): string => ''
 
   const request = (
     method: 'GET' | 'POST' | 'PATCH' | 'DELETE',
@@ -246,6 +247,7 @@ describe.skipIf(!baseUrl)('API: setup, login, contacts, projects (integration)',
       const { secret, uri } = setup.json()
       expect(uri).toMatch(/^otpauth:\/\/totp\/Test-ERP/)
       const code = (offsetSteps = 0) => hotp(base32Decode(secret), totpStep(clock) + offsetSteps)
+      totpCode = () => code()
 
       expect(
         (await as(session).post('/api/v1/auth/totp/enable', { code: '000000' })).statusCode,
@@ -273,6 +275,44 @@ describe.skipIf(!baseUrl)('API: setup, login, contacts, projects (integration)',
       })
       expect(ok.statusCode).toBe(200)
       session = sessionOf(ok)
+    })
+
+    it('limits wrong TOTP codes per person across logins and challenges', async () => {
+      const statuses: number[] = []
+      for (let i = 0; i < 5; i++) {
+        const res = await request('POST', '/api/v1/auth/login', {
+          body: { email: ADMIN.email, password: ADMIN.password, totp: '000000' },
+        })
+        statuses.push(res.statusCode)
+      }
+      for (let i = 0; i < 2; i++) {
+        const start = await request('POST', '/api/v1/auth/login', {
+          body: { email: ADMIN.email, password: ADMIN.password },
+        })
+        expect(start.json()).toEqual({ status: 'mfa_required', methods: ['totp'] })
+        const cookie = start.cookies.map((c) => `${c.name}=${c.value}`).join('; ')
+        for (let j = 0; j < 3; j++) {
+          const res = await request('POST', '/api/v1/auth/login/totp', {
+            body: { code: '000000' },
+            headers: { cookie },
+          })
+          statuses.push(res.statusCode)
+        }
+      }
+      // A correct password used to reset every limit; now 10 wrong codes in total, then 429.
+      expect(statuses.slice(0, 10)).toEqual(Array(10).fill(401))
+      expect(statuses[10]).toBe(429)
+      clock += 30_000
+      const blocked = await request('POST', '/api/v1/auth/login', {
+        body: { email: ADMIN.email, password: ADMIN.password, totp: totpCode() },
+      })
+      expect(blocked.statusCode).toBe(429)
+      await sql`delete from rate_limit` // keys are hashed; this ends the lockout window
+      clock += 30_000
+      const ok = await request('POST', '/api/v1/auth/login', {
+        body: { email: ADMIN.email, password: ADMIN.password, totp: totpCode() },
+      })
+      expect(ok.statusCode).toBe(200)
     })
   })
 

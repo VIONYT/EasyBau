@@ -35,7 +35,7 @@ export async function storeArtifact(
     sourceArtifactId?: string | null
     /** Mahnung: the notice the PDF belongs to. */
     dunningNoticeId?: string | null
-    /** Start of the retention period (default: the document date) and its length in years. */
+    /** Start of the retention period (default: the document date, never before finalisation) and its length in years. */
     retentionFrom?: string
     retentionYears?: number
   },
@@ -56,7 +56,9 @@ export async function storeArtifact(
       select ${artifactId}, tenant_id, id, ${artifact.kind}, ${key}, ${pending.sha256}, ${pending.sizeBytes},
              ${artifact.mime}, ${artifact.format ?? null}, ${validatedAt}::timestamptz,
              ${artifact.sourceArtifactId ?? null}, ${artifact.dunningNoticeId ?? null},
-             (date_trunc('year', coalesce(${artifact.retentionFrom ?? null}::date, document_date))
+             (date_trunc('year', greatest(
+                 coalesce(${artifact.retentionFrom ?? null}::date, document_date),
+                 (coalesce(finalized_at, now()) at time zone 'Europe/Berlin')::date))
                + make_interval(years => 1 + coalesce(${artifact.retentionYears ?? null}::int,
                    case when type in ('invoice', 'credit_note')
                         then (select retention_years from tenant t where t.id = document.tenant_id)

@@ -460,22 +460,45 @@ export function extractPdfEinvoice(pdf: Buffer): { filename: string | null; xml:
     KNOWN_NAMES.find((name) => text.includes(`(${name})`)) ??
     /\/UF?\s*\(([^()]{1,100}\.xml)\)/i.exec(text)?.[1] ??
     null
+  // Keyword positions are memoised and the scan position only moves forward, so every byte is
+  // searched at most once per keyword: crafted PDFs (many objects without streams) stay linear.
+  const finder = (word: string) => {
+    let pos = -1
+    let gone = false
+    return (from: number): number => {
+      if (gone) return -1
+      if (pos >= from) return pos
+      pos = text.indexOf(word, from)
+      if (pos < 0) gone = true
+      return pos
+    }
+  }
+  const nextStream = finder('stream')
+  const nextEndobj = finder('endobj')
+  const nextEndstream = finder('endstream')
   const objectStart = /\b\d+\s+\d+\s+obj\b/g
   let match: RegExpExecArray | null
   for (;;) {
     match = objectStart.exec(text)
     if (!match) break
     const from = match.index + match[0].length
-    const streamAt = text.indexOf('stream', from)
-    const endobjAt = text.indexOf('endobj', from)
-    if (streamAt < 0 || (endobjAt >= 0 && endobjAt < streamAt)) continue
+    const streamAt = nextStream(from)
+    if (streamAt < 0) break
+    const endobjAt = nextEndobj(from)
+    if (endobjAt >= 0 && endobjAt < streamAt) {
+      objectStart.lastIndex = endobjAt + 6
+      continue
+    }
     const dict = text.slice(from, streamAt)
     let start = streamAt + 6
     if (text[start] === '\r') start++
     if (text[start] === '\n') start++
     const length = /\/Length\s+(\d+)(?!\s+\d+\s+R)/.exec(dict)?.[1]
-    const end = length ? start + Number(length) : text.indexOf('endstream', start)
-    if (end <= start || end > pdf.length) continue
+    const end = length ? start + Number(length) : nextEndstream(start)
+    if (end <= start || end > pdf.length) {
+      objectStart.lastIndex = start
+      continue
+    }
     objectStart.lastIndex = end
     if (
       !/\/Type\s*\/EmbeddedFile\b/.test(dict) &&

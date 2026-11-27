@@ -307,6 +307,25 @@ describe('ZUGFeRD: XML embedded in the PDF', () => {
     expect(extractPdfEinvoice(indirect)?.xml).toBe(`${xml}\n`)
   })
 
+  it('scans crafted PDFs in linear time (many objects without streams)', () => {
+    const shapes = [
+      `%PDF-1.4\n${'9 0 obj\nnull\nendobj\n'.repeat(120_000)}`,
+      `%PDF-1.4\n${'9 0 obj\n'.repeat(250_000)}stream\n`,
+      `%PDF-1.4\n${'9 0 obj\n<< >>\nstream\n'.repeat(100_000)}`,
+    ]
+    for (const shape of shapes) {
+      const started = performance.now()
+      expect(extractPdfEinvoice(Buffer.from(shape, 'latin1'))).toBeNull()
+      expect(performance.now() - started).toBeLessThan(1500)
+    }
+    // An embedded invoice after many empty objects is still found.
+    const padded = Buffer.concat([
+      Buffer.from(`%PDF-1.7\n${'8 0 obj\nnull\nendobj\n'.repeat(10_000)}`, 'latin1'),
+      pdfWith('/Type /EmbeddedFile', Buffer.from(xml)).subarray(9),
+    ])
+    expect(extractPdfEinvoice(padded)?.xml).toBe(xml)
+  })
+
   it('returns null for PDFs without e-invoice, encrypted, broken or other files', () => {
     expect(extractPdfEinvoice(Buffer.from('not a pdf'))).toBeNull()
     expect(

@@ -19,8 +19,10 @@ describe.skipIf(!process.env.DATABASE_URL)('Aufbewahrung und Anonymisieren (inte
   let old: DocumentDetail
   let current: DocumentDetail
   let oldKeys: string[]
+  let backdated: DocumentDetail
 
-  async function invoice(projectId: string, unitId: string, date: string) {
+  /** `issuedAt` simulates an invoice that really was finalized back then (test setup only). */
+  async function invoice(projectId: string, unitId: string, date: string, issuedAt?: string) {
     const draft = (
       await admin.post(`/api/v1/projects/${projectId}/documents`, {
         type: 'invoice',
@@ -46,6 +48,14 @@ describe.skipIf(!process.env.DATABASE_URL)('Aufbewahrung und Anonymisieren (inte
       acknowledgeWarnings: true,
     })
     expect(done.statusCode, done.body).toBe(200)
+    if (issuedAt) {
+      const until = `${Number(issuedAt.slice(0, 4)) + 10}-12-31`
+      await h.adminSql.begin(async (tx) => {
+        await tx`set local session_replication_role = replica`
+        await tx`update document set finalized_at = ${issuedAt}::date where id = ${draft.id}`
+        await tx`update document_artifact set locked_until = ${until}::date where document_id = ${draft.id}`
+      })
+    }
     // The PDF original is archived on first download.
     expect((await admin.get(`/api/v1/documents/${draft.id}/pdf`)).statusCode).toBe(200)
     return (await admin.get(`/api/v1/documents/${draft.id}`)).json() as DocumentDetail
@@ -80,7 +90,7 @@ describe.skipIf(!process.env.DATABASE_URL)('Aufbewahrung und Anonymisieren (inte
     ).json().id
     const units = (await admin.get('/api/v1/units')).json() as { id: string; symbol: string }[]
     const m2 = units.find((u) => u.symbol === 'm²')?.id as string
-    old = await invoice(projectId, m2, '2010-03-01')
+    old = await invoice(projectId, m2, '2010-03-01', '2010-03-02')
     // A Zahlungserinnerung to the old invoice, issued in 2011 (Handelsbrief: 6 years).
     const now = h.clock.now
     h.clock.now = Date.parse('2011-06-01T10:00:00Z')
@@ -88,6 +98,8 @@ describe.skipIf(!process.env.DATABASE_URL)('Aufbewahrung und Anonymisieren (inte
     expect(notice.statusCode, notice.body).toBeLessThan(300)
     h.clock.now = now
     current = await invoice(projectId, m2, '2026-11-05')
+    // Back-dated draft finalized today: the period counts from today, not from 2014.
+    backdated = await invoice(projectId, m2, '2014-06-01')
     oldKeys = (
       await h.adminSql<{ key: string }[]>`
         select storage_key as key from document_artifact where document_id = ${old.id}`
@@ -107,6 +119,21 @@ describe.skipIf(!process.env.DATABASE_URL)('Aufbewahrung und Anonymisieren (inte
       retentionEnd: '2020-12-31',
       recipient: 'Kunde, Karl',
       originals: oldKeys.length,
+    })
+  })
+
+  it('counts the period from finalisation for back-dated documents', async () => {
+    const [row] = await h.adminSql<{ end: string; until: string }[]>`
+      select to_char(document_retention_end(${backdated.id}), 'YYYY-MM-DD') as end,
+             to_char(min(locked_until), 'YYYY-MM-DD') as until
+      from document_artifact where document_id = ${backdated.id}`
+    expect(row).toEqual({ end: '2036-12-31', until: '2036-12-31' })
+    const res = (
+      await admin.post('/api/v1/retention/purge', { documentIds: [backdated.id], confirm: true })
+    ).json() as PurgeDocumentsResult
+    expect(res).toEqual({
+      purged: 0,
+      failed: [{ id: backdated.id, message: 'Die Aufbewahrungsfrist ist noch nicht abgelaufen.' }],
     })
   })
 
