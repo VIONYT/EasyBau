@@ -1,4 +1,4 @@
-import type { Tx } from '@easybau/db'
+import { deletePurgedWorkingCopies, type Tx } from '@easybau/db'
 import {
   type PurgeDocumentsResult,
   type PurgeLogEntry,
@@ -8,7 +8,7 @@ import {
   retentionSettingsRequest,
 } from '@easybau/schemas'
 import type { FastifyInstance } from 'fastify'
-import { type AuthContext, inTenant, requirePermission, type Services } from '../context.js'
+import { inTenant, requirePermission, type Services } from '../context.js'
 import { HttpError, parse } from '../http.js'
 
 /**
@@ -20,34 +20,6 @@ import { HttpError, parse } from '../http.js'
 const DUE_LIMIT = 500
 
 const ISO = `'YYYY-MM-DD"T"HH24:MI:SS.MS"Z"'`
-
-/** Removes the working copies of anonymised originals; the WORM copy is the operator's task. */
-async function deleteWorkingCopies(services: Services, auth: AuthContext): Promise<void> {
-  const files = await inTenant(
-    services,
-    auth,
-    (tx) => tx<{ artifactId: string; storageKey: string }[]>`
-      select artifact_id as "artifactId", storage_key as "storageKey"
-      from artifact_purge where file_deleted_at is null order by purged_at limit 1000`,
-  )
-  const done: string[] = []
-  for (const file of files) {
-    try {
-      await services.storage.delete(file.storageKey)
-      done.push(file.artifactId)
-    } catch {
-      // Stays pending and is retried with the next approval (Löschprotokoll shows it).
-    }
-  }
-  if (done.length) {
-    await inTenant(
-      services,
-      auth,
-      (tx) => tx`update artifact_purge set file_deleted_at = now()
-                 where artifact_id in ${tx(done)} and file_deleted_at is null`,
-    )
-  }
-}
 
 async function dueDocuments(tx: Tx): Promise<RetentionDueDocument[]> {
   return tx<RetentionDueDocument[]>`
@@ -120,7 +92,7 @@ export function registerRetentionRoutes(app: FastifyInstance, services: Services
         result.failed.push({ id: documentId, message })
       }
     }
-    await deleteWorkingCopies(services, auth)
+    await deletePurgedWorkingCopies(services.sql, auth, services.storage)
     return result
   })
 

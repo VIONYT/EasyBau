@@ -170,6 +170,24 @@ interface ListRow {
   notices: { level: DunningLevel; dueDate: string }[]
 }
 
+/**
+ * Index of the first invoice after the cursor (date, number, id) in the list order. Works also
+ * when the invoice of the cursor left the filter meanwhile (e.g. paid while filtering "overdue").
+ */
+export function startAfter(
+  items: readonly Pick<InvoiceListItem, 'documentDate' | 'number' | 'id'>[],
+  [date, number, id]: readonly [string, string | null, string],
+): number {
+  const index = items.findIndex((i) =>
+    i.documentDate !== date
+      ? i.documentDate < date
+      : i.number !== number
+        ? i.number !== null && (number === null || i.number < number)
+        : i.id < id,
+  )
+  return index === -1 ? items.length : index
+}
+
 export async function listInvoices(
   tx: Tx,
   auth: AuthContext,
@@ -208,7 +226,8 @@ export async function listInvoices(
                   or coalesce(d.recipient_snapshot ->> 'name', c.display_name) ilike ${q})`
           : tx``
       }
-    order by d.document_date desc, d.number desc nulls first, d.id desc`
+    -- "C" collation: byte order, the same as the string comparison in startAfter()
+    order by d.document_date desc, d.number collate "C" desc nulls first, d.id desc`
   const items: InvoiceListItem[] = []
   const sums = { count: 0, netCents: 0, grossCents: 0, paidCents: 0, openCents: 0, overdueCents: 0 }
   for (const row of rows) {
@@ -446,14 +465,23 @@ export function registerReceivableRoutes(app: FastifyInstance, services: Service
     const { items, sums } = await inTenant(services, auth, (tx) =>
       listInvoices(tx, auth, query, todayIn(services.now())),
     )
-    const cursor = decodeCursor(query.cursor, 1)
-    const start = cursor ? items.findIndex((i) => i.id === cursor[0]) + 1 : 0
+    const cursor = decodeCursor(query.cursor, 3)
+    const start = cursor
+      ? startAfter(items, [
+          String(cursor[0]),
+          cursor[1] === '' ? null : String(cursor[1]),
+          String(cursor[2]),
+        ])
+      : 0
     const page = items.slice(start, start + query.limit)
     const last = page.at(-1)
     return {
       items: page,
       sums,
-      nextCursor: last && start + query.limit < items.length ? encodeCursor([last.id]) : null,
+      nextCursor:
+        last && start + query.limit < items.length
+          ? encodeCursor([last.documentDate, last.number ?? '', last.id])
+          : null,
     }
   })
 

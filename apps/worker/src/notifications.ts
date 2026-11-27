@@ -22,8 +22,16 @@ export async function purgeReadNotifications(
   // Protokoll je E-Mail im Rechnungseingang: sender addresses are personal data, 90 days.
   const [mails] = await sql<{ removed: number }[]>`
     select purge_incoming_mail_log(${days}) as removed`
+  // Wiederholungsschlüssel (Idempotency-Key) with their stored answers: one day (migration 0053).
+  const [keys] = await sql<{ removed: number }[]>`select purge_idempotency_keys(24) as removed`
   logger.info(
-    { removed, days, staleRateLimits: stale.count, mailLog: mails?.removed ?? 0 },
+    {
+      removed,
+      days,
+      staleRateLimits: stale.count,
+      mailLog: mails?.removed ?? 0,
+      idempotencyKeys: keys?.removed ?? 0,
+    },
     'read notifications purged',
   )
   return removed
