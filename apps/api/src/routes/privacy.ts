@@ -5,7 +5,7 @@ import type { FastifyInstance } from 'fastify'
 import { z } from 'zod'
 import { inTenant, requirePermission, type Services } from '../context.js'
 import { HttpError, notFound, parse } from '../http.js'
-import { todayOf } from './receivables.js'
+import { todayOf } from './receivable-state.js'
 
 const idParam = z.object({ id: z.uuid('Ungültige ID.') })
 

@@ -12,7 +12,8 @@ import { billingDoc, invoiceFinalizeCheck, legalNotesOf, lockProjectBilling } fr
 import { type AuthContext, inTenant, requirePermission, type Services } from '../context.js'
 import { issueEinvoices } from '../einvoice.js'
 import { HttpError, notFound, parse } from '../http.js'
-import { copyItems, liveIssuer, loadDocument, lockDraft, recalculate } from './documents.js'
+import { copyItems, loadDocument, lockDraft, recalculate } from './documents.js'
+import { liveIssuer } from './letterhead.js'
 import { archiveDocumentPdf } from './pdf.js'
 import { markReportsBilled } from './report-billing.js'
 

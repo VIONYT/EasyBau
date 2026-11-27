@@ -30,9 +30,7 @@ import {
 } from '../context.js'
 import { decodeCursor, encodeCursor, HttpError, notFound, parse } from '../http.js'
 import { loadDocument } from './documents.js'
-import { isBilled, loadReceivable, todayIn, todayOf } from './receivable-state.js'
-
-export { loadReceivable, todayIn, todayOf }
+import { isBilled, todayIn, todayOf } from './receivable-state.js'
 
 const idParam = z.object({ id: z.uuid('Ungültige ID.') })
 /** Locks the invoice and loads it with its receivable; only finalized, not cancelled invoices. */

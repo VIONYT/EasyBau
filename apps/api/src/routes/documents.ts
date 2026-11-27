@@ -48,13 +48,12 @@ import {
   requirePermission,
   requireVisibleProject,
   type Services,
-  servicesOf,
 } from '../context.js'
 import { checkIfMatch, etagOf, HttpError, notFound, parse } from '../http.js'
 import { restrictedContact, usableContact } from './contacts.js'
 import { documentSettings, laborShareDefault } from './document-settings.js'
 import { checkEvidence, resolveEvidence } from './evidence.js'
-import { companyValues, loadLetterhead } from './letterhead.js'
+import { liveIssuer } from './letterhead.js'
 import { notify, projectMembersExcept } from './notifications.js'
 import { loadReceivable, todayOf } from './receivable-state.js'
 
@@ -427,74 +426,6 @@ function totalsOf(
 // ---- Letter header: Firma and Empfänger ---------------------------------------------------------
 
 type Issuer = DocumentDetail['issuer']
-
-export async function liveIssuer(tx: Tx): Promise<Issuer> {
-  const [t] = await tx<
-    {
-      name: string
-      street: string | null
-      postalCode: string | null
-      city: string | null
-      email: string | null
-      phone: string | null
-      website: string | null
-      vatId: string | null
-      taxNumber: string | null
-      registerCourt: string | null
-      registerNumber: string | null
-      managerTitle: string | null
-      managerName: string | null
-      ibanEnc: Buffer | null
-      bic: string | null
-      countryCode: string
-    }[]
-  >`
-    select name, street, postal_code as "postalCode", city, email, phone, website, vat_id as "vatId",
-           tax_number as "taxNumber", register_court as "registerCourt", register_number as "registerNumber",
-           manager_title as "managerTitle", manager_name as "managerName", iban_enc as "ibanEnc", bic,
-           country_code as "countryCode"
-    from tenant where id = current_tenant_id()`
-  if (!t) return { name: '', lines: [], contact: [], legal: [] }
-  const cipher = servicesOf(tx)?.cipher
-  const iban =
-    t.ibanEnc && cipher
-      ? cipher.decrypt(t.ibanEnc, 'tenant.iban').replace(/\s+/g, '').toUpperCase()
-      : null
-  const place = [t.postalCode, t.city].filter(Boolean).join(' ')
-  return {
-    // Briefpapier and its placeholder values; frozen with the document (rule 4).
-    letterhead: await loadLetterhead(tx),
-    values: (await companyValues(tx)) as Record<string, string | null>,
-    name: t.name,
-    lines: [t.street, place].filter((v): v is string => !!v),
-    contact: [t.phone ? `Tel. ${t.phone}` : null, t.email, t.website].filter(
-      (v): v is string => !!v,
-    ),
-    legal: [
-      t.managerName ? `${t.managerTitle ?? 'Geschäftsführung'}: ${t.managerName}` : null,
-      t.registerCourt && t.registerNumber ? `${t.registerCourt} ${t.registerNumber}` : null,
-      t.vatId ? `USt-IdNr. ${t.vatId}` : null,
-      t.taxNumber ? `Steuernummer ${t.taxNumber}` : null,
-    ].filter((v): v is string => !!v),
-    // Structured data for the e-invoice (EN 16931), frozen with the document (rule 4).
-    address: {
-      street: t.street,
-      streetExtra: null,
-      postalCode: t.postalCode,
-      city: t.city,
-      countryCode: t.countryCode.trim().toUpperCase(),
-    },
-    einvoice: {
-      vatId: t.vatId,
-      taxNumber: t.taxNumber,
-      email: t.email,
-      phone: t.phone,
-      contactName: t.managerName,
-      iban,
-      bic: t.bic,
-    },
-  }
-}
 
 /** Empfänger: billing address (Rechnungsempfänger) if present, otherwise the main address. */
 export async function liveRecipient(

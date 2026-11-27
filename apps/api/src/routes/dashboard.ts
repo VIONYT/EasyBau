@@ -21,7 +21,8 @@ import {
 import { parse } from '../http.js'
 import { incomingVisibility } from './incoming-invoices.js'
 import { SUMMARY_COLUMNS } from './projects.js'
-import { listInvoices, todayIn } from './receivables.js'
+import { todayIn } from './receivable-state.js'
+import { listInvoices } from './receivables.js'
 
 /**
  * Übersicht und globale Suche (P2.8, DESIGN.md §7.3): each part only with the right to see it;
