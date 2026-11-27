@@ -1,6 +1,6 @@
 import { Readable } from 'node:stream'
 import type { Tx } from '@easybau/db'
-import type { DocumentArchive } from '@easybau/schemas'
+import type { DocumentArchive, EinvoiceFormat, EinvoiceSummary } from '@easybau/schemas'
 import { type AuthContext, type Services, servicesOf } from './context.js'
 import { HttpError } from './http.js'
 
@@ -158,5 +158,26 @@ export async function archiveSummary(tx: Tx, documentId: string): Promise<Docume
     archived: row.archived,
     retainUntil: row.retainUntil,
     archivedAt: row.archived === row.total ? row.archivedAt : null,
+  }
+}
+
+/** Validated e-invoice XML files of a finalized invoice (ZUGFeRD first). */
+export async function einvoiceSummary(tx: Tx, documentId: string): Promise<EinvoiceSummary | null> {
+  const rows = await tx<
+    { id: string; format: EinvoiceFormat; validatedAt: string; sizeBytes: string; sha256: string }[]
+  >`
+    select id, format, to_char(validated_at at time zone 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS.MS"Z"') as "validatedAt",
+           size_bytes::text as "sizeBytes", encode(sha256, 'hex') as sha256
+    from document_artifact
+    where document_id = ${documentId} and kind in ('zugferd_xml', 'xrechnung_xml')
+    order by kind = 'zugferd_xml' desc, format, created_at`
+  if (!rows.length) return null
+  return {
+    files: rows.map((r) => ({
+      format: r.format,
+      validatedAt: r.validatedAt,
+      sizeBytes: Number(r.sizeBytes),
+      sha256: r.sha256,
+    })),
   }
 }

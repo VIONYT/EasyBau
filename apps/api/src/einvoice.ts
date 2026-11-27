@@ -5,7 +5,7 @@ import {
   einvoiceFormatsOf,
   isEinvoiceDocument,
 } from '@easybau/einvoice'
-import type { DocumentDetail, EinvoiceFormat, EinvoiceSummary } from '@easybau/schemas'
+import type { DocumentDetail, EinvoiceFormat } from '@easybau/schemas'
 import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify'
 import { z } from 'zod'
 import { assertNotPurged, openArtifact, storeArtifact } from './artifacts.js'
@@ -113,26 +113,6 @@ export async function issueEinvoices(
 }
 
 /** E-invoice files of a document for the detail view. */
-export async function einvoiceSummary(tx: Tx, documentId: string): Promise<EinvoiceSummary | null> {
-  const rows = await tx<
-    { id: string; format: EinvoiceFormat; validatedAt: string; sizeBytes: string; sha256: string }[]
-  >`
-    select id, format, to_char(validated_at at time zone 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS.MS"Z"') as "validatedAt",
-           size_bytes::text as "sizeBytes", encode(sha256, 'hex') as sha256
-    from document_artifact
-    where document_id = ${documentId} and kind in ('zugferd_xml', 'xrechnung_xml')
-    order by kind = 'zugferd_xml' desc, format, created_at`
-  if (!rows.length) return null
-  return {
-    files: rows.map((r) => ({
-      format: r.format,
-      validatedAt: r.validatedAt,
-      sizeBytes: Number(r.sizeBytes),
-      sha256: r.sha256,
-    })),
-  }
-}
-
 const downloadParams = z.object({
   id: z.uuid('Ungültige ID.'),
   format: z.enum(['zugferd', 'xrechnung_ubl', 'xrechnung_cii'], 'Unbekanntes E-Rechnungsformat.'),
